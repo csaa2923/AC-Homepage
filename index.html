@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alpine Concierge Tirol · Premium Concierge Service</title>
+<meta name="description" content="Alpine Concierge Tirol – exklusiver Concierge-Service in Tirol. Persönlich, diskret und 24/7 erreichbar.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#home" aria-label="Alpine Concierge Tirol"><img src="images/logo/logo.jpg" alt="Alpine Concierge Tirol Logo"></a>
+  <nav>
+    <a href="#home" data-i18n="navHome">Home</a>
+    <a href="#services" data-i18n="navServices">Leistungen</a>
+    <a href="#about" data-i18n="navAbout">Über uns</a>
+    <a href="#contact" data-i18n="navContact">Kontakt</a>
+  </nav>
+  <div class="lang-switch" aria-label="Sprache wählen">
+    <button type="button" data-lang="de">DE</button>
+    <button type="button" data-lang="en">EN</button>
+    <button type="button" data-lang="it">IT</button>
+    <button type="button" data-lang="fr">FR</button>
+  </div>
+  <button class="burger" type="button" aria-label="Menü öffnen" aria-expanded="false"><span></span><span></span><span></span></button>
+</header>
+
+<main>
+<section class="hero" id="home">
+  <div class="hero-content">
+    <div class="kicker" data-i18n="heroKicker">Your personal concierge in Tirol – 24/7</div>
+    <div class="gold-line"></div>
+    <h1 data-i18n="heroTitle">Exklusive Erlebnisse. Persönlich organisiert.</h1>
+    <p data-i18n="heroText">Wir kümmern uns um jedes Detail – diskret, zuverlässig und mit Leidenschaft.</p>
+    <div class="hero-buttons">
+      <a class="btn primary" href="https://wa.me/4367761410679" target="_blank" data-i18n="ctaWhatsapp">Jetzt per WhatsApp anfragen</a>
+      <a class="btn ghost" href="#services" data-i18n="ctaServices">Unsere Leistungen</a>
+    </div>
+  </div>
+</section>
+
+<section class="intro" id="about">
+  <div class="section-head">
+    <div class="section-label">Alpine Concierge Tirol</div>
+    <h2 data-i18n="introTitle">Mehr Zeit für das, was wirklich zählt.</h2>
+    <p data-i18n="introText">Wir schaffen unvergessliche Erlebnisse und nehmen Ihnen alles ab, was Zeit kostet.</p>
+  </div>
+</section>
+
+<section class="services" id="services">
+  <div class="section-head dark">
+    <div class="section-label" data-i18n="servicesLabel">Unsere Leistungen</div>
+    <h2 data-i18n="servicesTitle">Ausgewählte Services für Tirol.</h2>
+  </div>
+  <div class="service-grid" id="serviceGrid"></div>
+</section>
+
+<section class="contact" id="contact">
+  <div class="contact-grid">
+    <a class="contact-card" href="https://wa.me/4367761410679" target="_blank" style="background-image:url('images/contact/whatsapp.jpg')">
+      <div><h3>WhatsApp / Kontakt</h3><p data-i18n="contactWa">Wir sind für Sie da.</p><span data-i18n="writeNow">Jetzt schreiben</span></div>
+    </a>
+    <div class="contact-card" style="background-image:url('images/contact/standort.jpg')">
+      <div><h3 data-i18n="locationTitle">Standort</h3><p data-i18n="locationText">Innsbruck, Tirol</p><span data-i18n="learnMore">Mehr erfahren</span></div>
+    </div>
+    <a class="contact-card" href="#request" style="background-image:url('images/contact/erreichbarkeit.jpg')">
+      <div><h3 data-i18n="availabilityTitle">Erreichbarkeit</h3><p data-i18n="availabilityText">24/7 für Sie erreichbar</p><span data-i18n="learnMore2">Mehr erfahren</span></div>
+    </a>
+  </div>
+</section>
+
+<section class="request" id="request">
+  <div class="section-head dark">
+    <div class="section-label" data-i18n="requestLabel">Anfrage</div>
+    <h2 data-i18n="requestTitle">Womit dürfen wir helfen?</h2>
+  </div>
+  <div class="request-panel">
+    <div class="formgrid">
+      <label><span data-i18n="fieldService">Leistung</span><select id="service"></select></label>
+      <label><span data-i18n="fieldRegion">Region</span><input id="region" placeholder="Innsbruck, Kitzbühel, Ötztal"></label>
+      <label><span data-i18n="fieldDate">Datum / Zeitraum</span><input id="date" placeholder="Wochenende, morgen, 12.–15. August"></label>
+      <label><span data-i18n="fieldGuests">Personen</span><input id="guests" placeholder="2 Erwachsene, 2 Kinder"></label>
+      <label class="full"><span data-i18n="fieldMessage">Wunsch / Nachricht</span><textarea id="message" placeholder="Beschreiben Sie kurz, was organisiert werden soll."></textarea></label>
+    </div>
+    <button class="btn primary fullbtn" onclick="sendWhatsApp()" data-i18n="sendWa">WhatsApp-Nachricht erstellen</button>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="footer-grid">
+    <div><img src="images/logo/logo.jpg" alt="Alpine Concierge Tirol"><p>Your personal concierge in Tirol – 24/7</p></div>
+    <div><h4>Navigation</h4><a href="#home">Home</a><a href="#services">Leistungen</a><a href="#about">Über uns</a><a href="#contact">Kontakt</a><a href="#impressum">Impressum</a></div>
+    <div><h4>Kontakt</h4><p>+43 677 614 10 679<br>office@alpineconcierge.info<br>Innsbruck, Tirol</p></div>
+  </div>
+  <div class="legal" id="impressum">
+    <p><strong>Impressum:</strong> Dipl.-Ing. Nadja Holzer, BSc. · Michael-Gaismair-Straße 120 · 6410 Telfs · Österreich</p>
+  </div>
+</footer>
+
+<div class="mobile-actions">
+  <a href="https://wa.me/4367761410679" target="_blank">WhatsApp</a>
+  <a href="tel:+4367761410679">Anrufen</a>
+</div>
+
+<script src="js/script.js"></script>
+</body>
+</html>

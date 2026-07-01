@@ -152,8 +152,7 @@ function dateSummary(){
   return formatDate(value("singleDate"));
 }
 
-function sendWhatsApp(){
-  if(!validateForm())return;
+function buildWhatsAppMessage(){
   const adults=value("adults");
   const children=Number(value("children")||0);
   const childAges=Array.from(document.querySelectorAll(".child-age")).map((select,index)=>`Alter Kind ${index+1}: ${select.value}`);
@@ -173,7 +172,17 @@ function sendWhatsApp(){
   addLine(lines,"Besondere W\u00fcnsche",checkedValues("specialWishes").join(", "));
   addLine(lines,"Stil",selectedText("experienceStyle"));
   addLine(lines,"Nachricht",value("message"));
-  window.open(`https://wa.me/4367761410679?text=${encodeURIComponent(lines.join("\n"))}`,"_blank");
+  return lines.join("\n").trim();
+}
+
+function buildWhatsAppUrl(message){
+  return `https://api.whatsapp.com/send?phone=4367761410679&text=${encodeURIComponent(message)}`;
+}
+
+function sendWhatsApp(){
+  if(!validateForm())return;
+  const message=buildWhatsAppMessage();
+  window.open(buildWhatsAppUrl(message),"_blank","noopener");
 }
 
 function setLang(lang){

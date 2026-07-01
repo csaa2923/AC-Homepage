@@ -58,8 +58,8 @@
 </section>
 
 <section class="contact" id="contact">
-   <div class="contact-grid" style="grid-template-columns:minmax(0,760px);justify-content:center">
-    <a class="contact-card" href="https://wa.me/4367761410679" target="_blank" style="background-image:url('images/contact/whatsapp.jpg')">
+   <div class="contact-grid contact-grid-single">
+    <a class="contact-card contact-card-whatsapp" href="https://wa.me/4367761410679" target="_blank">
       <div><h3>WhatsApp / Kontakt</h3><p data-i18n="contactWa">Wir sind für Sie da.</p><span data-i18n="writeNow">Jetzt schreiben</span></div>
     </a>
    
@@ -79,7 +79,7 @@
       <label><span data-i18n="fieldGuests">Personen</span><input id="guests" placeholder="2 Erwachsene, 2 Kinder"></label>
       <label class="full"><span data-i18n="fieldMessage">Wunsch / Nachricht</span><textarea id="message" placeholder="Beschreiben Sie kurz, was organisiert werden soll."></textarea></label>
     </div>
-    <button class="btn primary fullbtn" onclick="sendWhatsApp()" data-i18n="sendWa">WhatsApp-Nachricht erstellen</button>
+    <button class="btn primary fullbtn" id="sendWhatsappButton" type="button" data-i18n="sendWa">WhatsApp-Nachricht erstellen</button>
   </div>
 </section>
 </main>

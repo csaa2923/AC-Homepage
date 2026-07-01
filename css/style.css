@@ -27,3 +27,23 @@ section{padding:90px clamp(24px,5vw,74px)}.intro{background:var(--cream);color:#
 .cookie-actions .btn{min-height:46px;padding:12px 18px;font-size:12px}
 @media(max-width:920px){.legal-page{padding-top:112px}.legal-hero{padding-top:62px}.cookie-notice{grid-template-columns:1fr;bottom:94px}.cookie-actions{justify-content:flex-start}}
 @media(max-width:520px){.legal-page{padding-top:104px}.legal-block{padding:22px}.footer-legal-links{display:grid;gap:8px}.cookie-notice{left:12px;right:12px}.cookie-actions{display:grid;grid-template-columns:1fr}.cookie-actions .btn{width:100%}}
+.form-error{margin:0 0 18px;padding:14px 16px;border:1px solid rgba(216,183,106,.70);border-radius:9px;background:rgba(216,183,106,.14);color:#fff3d6;font-size:15px;line-height:1.45}
+fieldset{margin:0;padding:0;border:0}
+legend{display:block;width:100%;color:var(--gold2);text-transform:uppercase;font-weight:900;font-size:12px;letter-spacing:.08em}
+.date-options,.checkbox-group{padding:16px;border:1px solid rgba(216,183,106,.22);border-radius:12px;background:rgba(255,255,255,.035)}
+.option-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.choice,.check-choice{display:flex;align-items:center;gap:8px;margin:0;color:#fff3d6;text-transform:none;font-size:15px;letter-spacing:0;line-height:1.35}
+.choice input,.check-choice input{width:auto;margin:0;accent-color:#d8b76a}
+.date-fields{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:14px}
+#singleDateWrap{grid-column:1/-1}
+.child-ages{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.more-details{border:1px solid rgba(216,183,106,.26);border-radius:12px;background:rgba(255,255,255,.035);overflow:hidden}
+.more-details summary{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px;color:var(--gold2);text-transform:uppercase;font-weight:900;font-size:12px;letter-spacing:.08em;cursor:pointer;list-style:none}
+.more-details summary::-webkit-details-marker{display:none}
+.more-details summary:after{content:"+";font-size:24px;line-height:1;color:var(--gold)}
+.more-details[open] summary{border-bottom:1px solid rgba(216,183,106,.22)}
+.more-details[open] summary:after{content:"-"}
+.details-grid{padding:16px}
+.checkbox-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 14px;margin-top:12px}
+@media(max-width:920px){.date-fields,.child-ages,.checkbox-grid{grid-template-columns:1fr}.option-row{display:grid;grid-template-columns:1fr}.details-grid{padding:14px}}
+@media(max-width:520px){.request-panel{padding:22px}.date-options,.checkbox-group{padding:14px}.more-details summary{align-items:flex-start}.choice,.check-choice{font-size:14px}}

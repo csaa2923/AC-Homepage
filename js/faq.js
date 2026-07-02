@@ -70,6 +70,49 @@ fr:{label:"FAQ",title:"Questions fréquentes",intro:"Réponses aux questions les
 ]}
 };
 
+ACT_FAQ.de.items=[
+["Was ist Alpine Concierge Tirol?","Alpine Concierge Tirol ist ein persoenlicher Concierge Service Tirol fuer hochwertige Aufenthalte, Luxusurlaub, private Erlebnisse, Transfers, Restaurants, Wellness, Kultur und individuelle Reiseplanung in Tirol."],
+["Fuer wen ist der Concierge Service gedacht?","Der Service richtet sich an Urlaubsgaeste, Familien, Paare, Unternehmen, Gruppen, Zweitwohnsitzbesitzer und internationale Gaeste, die Tirol komfortabel, exklusiv und ohne organisatorischen Aufwand erleben moechten."],
+["Was unterscheidet Alpine Concierge Tirol von einem Reisebuero?","Ein Reisebuero plant meist vor der Reise. Alpine Concierge Tirol begleitet Sie auch waehrend Ihres Aufenthalts, reagiert flexibel auf Wetter, Stimmung und spontane Wuensche und bleibt als persoenlicher Ansprechpartner erreichbar."],
+["In welchen Regionen Tirols sind Sie taetig?","Wir betreuen Gaeste in ganz Tirol, unter anderem in Innsbruck, Seefeld, Kitzbuehel, Achensee, Stubaital, Oetztal, Zillertal, Arlberg und weiteren alpinen Regionen."],
+["Kann ich eine Anfrage unverbindlich stellen?","Ja. Ihre Anfrage per WhatsApp oder Formular ist unverbindlich. Eine Beauftragung erfolgt erst, wenn Umfang, Verfuegbarkeit und Kosten transparent geklaert und von Ihnen bestaetigt wurden."],
+["Wie kurzfristig kann ein Concierge Service in Tirol organisiert werden?","Viele Wuensche lassen sich kurzfristig oder sogar am selben Tag organisieren. In der Hochsaison, bei exklusiven Restaurants, Guides oder privaten Transfers empfehlen wir eine moeglichst fruehe Anfrage."],
+["Welche Leistungen bietet Alpine Concierge Tirol an?","Wir organisieren Erlebnisse, Kulinarik, Wellness, Familienprogramme, Romantik, Kunst und Kultur, Sport, Naturmomente, exklusive Services, Gruppen, Events, Urlaub mit Hund und persoenliche Concierge-Leistungen."],
+["Organisieren Sie individuelle Reiseplanung in Tirol?","Ja. Individuelle Reiseplanung ist ein zentraler Teil unseres Angebots. Wir erstellen Tagesprogramme, Wochenplaene, wettergerechte Alternativen und Empfehlungen, die zu Region, Anlass, Personen und Budget passen."],
+["Kann ich Alpine Concierge Tirol fuer Luxusurlaub buchen?","Ja. Wir unterstuetzen Gaeste, die einen Luxusurlaub Tirol mit diskreter Betreuung, hochwertigen Empfehlungen, privaten Erlebnissen, komfortablen Transfers und persoenlicher Organisation planen."],
+["Bieten Sie einen Private Concierge fuer Familien an?","Ja. Wir planen familienfreundliche Ausfluege, kindgerechte Programme, Restaurants, Naturerlebnisse, Schlechtwetteralternativen und entspannte Ablaeufe fuer Eltern, Kinder und Mehrgenerationenreisen."],
+["Planen Sie romantische Erlebnisse fuer Paare?","Ja. Wir organisieren romantische Dinner, Wellness, Chalets, Ueberraschungen, Jahrestage, Heiratsantraege, private Naturmomente und stilvolle Auszeiten fuer Paare in Tirol."],
+["Unterstuetzen Sie Unternehmen und Gruppen?","Ja. Wir organisieren Rahmenprogramme, Incentives, Transfers, kulinarische Abende, private Guides, Kultur- und Naturerlebnisse sowie diskrete Betreuung fuer Firmen, Teams und internationale Gaeste."],
+["Kann ich Restaurantreservierungen ueber Sie anfragen?","Ja. Wir unterstuetzen bei Restaurantempfehlungen, Reservierungen, Fine Dining, Huetten, privaten Dinner-Erlebnissen und passenden kulinarischen Adressen in Tirol."],
+["Organisieren Sie private Transfers in Tirol?","Ja. Wir koennen private Transfers, Airport-Transfers, Chauffeurservice, Shuttle-Loesungen und Gruppenfahrten koordinieren, sofern passende Partner verfuegbar sind."],
+["Bieten Sie Empfehlungen fuer Innsbruck?","Ja. Fuer Innsbruck planen wir Stadtfuehrungen, Kulinarik, Shopping, Kultur, Nordkette-Erlebnisse, Transfers und Kombinationen aus urbanem Komfort und alpiner Natur."],
+["Was koennen Sie in Seefeld organisieren?","In Seefeld unterstuetzen wir bei Wellness, Langlauf, Naturerlebnissen, Familienprogrammen, Restaurantempfehlungen, ruhigen Auszeiten und stilvollen Tagesplanungen."],
+["Bieten Sie Concierge Service in Kitzbuehel an?","Ja. In Kitzbuehel organisieren wir exklusive Erlebnisse, Wintersport, Events, Restaurantwuensche, Shopping, Transfers und diskrete Betreuung fuer anspruchsvolle Gaeste."],
+["Koennen Sie Erlebnisse am Achensee planen?","Ja. Am Achensee planen wir Ausfluege, Wassermomente, Wellness, Genuss, Familienprogramme, sportliche Aktivitaeten und entspannte Tagesablaeufe rund um Pertisau, Maurach und Achenkirch."],
+["Sind Sie auch im Oetztal und Stubaital taetig?","Ja. Im Oetztal und Stubaital organisieren wir Gletschererlebnisse, Thermen, Wanderungen, Guides, Wintersport, Transfers und wettergerechte Alternativen."],
+["Unterstuetzen Sie Gaeste im Zillertal und am Arlberg?","Ja. Wir helfen bei Ski, Bike, Genuss, Familienprogrammen, privaten Guides, Transfers und besonderen Abenden im Zillertal sowie am Arlberg."],
+["Organisieren Sie Skilehrer, Bergfuehrer oder Wanderfuehrer?","Ja. Je nach Wunsch und Verfuegbarkeit vermitteln wir geeignete Skilehrer, Bergfuehrer, Wanderbegleiter oder Guides fuer private und individuelle Erlebnisse."],
+["Kann Alpine Concierge Tirol Wellness und Spa organisieren?","Ja. Wir unterstuetzen bei Spa-Terminen, Massagen, Retreats, Thermen, ruhigen Orten und Erholungsprogrammen fuer Paare, Familien und Einzelgaeste."],
+["Planen Sie Kultur- und Kunsterlebnisse?","Ja. Wir empfehlen und organisieren Museen, Ausstellungen, Konzerte, private Fuehrungen, regionale Kulturmomente und besondere Veranstaltungen in Tirol."],
+["Gibt es Concierge Services fuer Urlaub mit Hund?","Ja. Wir helfen bei hundefreundlichen Ausfluegen, passenden Restaurants, Spazierwegen, Unterstuetzung vor Ort und Empfehlungen fuer entspannte Tage mit Hund."],
+["Koennen Sie besondere Anlaesse organisieren?","Ja. Wir planen Geburtstage, Jahrestage, Hochzeiten, Heiratsantraege, Firmenanlaesse, Familienfeiern und kleine Ueberraschungen mit diskreter Abstimmung."],
+["Was kostet der Concierge Service Tirol?","Die Kosten haengen von Umfang, Dringlichkeit, Region, Dauer und gewuenschten Leistungen ab. Vor der Beauftragung erhalten Sie ein transparentes Angebot."],
+["Gibt es feste Pakete?","Wir arbeiten bewusst individuell. Je nach Anfrage koennen einfache Einzelwuensche, Tagesplanungen oder umfassende Betreuung fuer mehrere Tage organisiert werden."],
+["Wie laeuft eine Anfrage ab?","Sie senden Ihre Wuensche per WhatsApp oder Formular. Danach klaeren wir Details, pruefen Moeglichkeiten, erstellen Vorschlaege und setzen nach Ihrer Bestaetigung die Organisation um."],
+["Welche Informationen sollte ich bei einer Anfrage angeben?","Hilfreich sind Region, Reisedatum, Personenanzahl, Alter der Kinder, Anlass, Interessen, Budget, Mobilitaet, Unterkunft oder Treffpunkt und besondere Wuensche."],
+["Kann ich auch nur eine einzelne Leistung buchen?","Ja. Sie koennen einzelne Leistungen wie Restaurantreservierung, Transfer, Guide, Wellness, Familienprogramm oder eine konkrete Empfehlung anfragen."],
+["Ist Alpine Concierge Tirol rund um die Uhr erreichbar?","Wir bemuehen uns um sehr schnelle und persoenliche Kommunikation. Bei laufenden Betreuungen stimmen wir Erreichbarkeit und Dringlichkeit individuell ab."],
+["Welche Sprachen sprechen Sie?","Wir kommunizieren auf Deutsch, Englisch, Italienisch und Franzoesisch, damit internationale Gaeste ihre Wuensche klar und komfortabel abstimmen koennen."],
+["Werden meine Daten und Wuensche vertraulich behandelt?","Ja. Diskretion, vertrauliche Kommunikation und sorgsamer Umgang mit persoenlichen Informationen sind fuer Alpine Concierge Tirol selbstverstaendlich."],
+["Kann ich direkt per WhatsApp buchen?","Ja. Viele Abstimmungen koennen direkt per WhatsApp erfolgen. Fuer komplexere Anfragen nutzen wir WhatsApp oft als schnellen Einstieg und klaeren Details danach persoenlich."],
+["Koennen Leistungen garantiert werden?","Wir geben keine pauschalen Garantien, da Verfuegbarkeit von Partnern, Wetter, Saison und Region abhaengt. Wir pruefen Moeglichkeiten sorgfaeltig und schlagen passende Alternativen vor."],
+["Arbeiten Sie mit lokalen Partnern zusammen?","Ja. Alpine Concierge Tirol nutzt regionale Erfahrung und passende Kontakte, um hochwertige, authentische und verlaessliche Empfehlungen in Tirol zu ermoeglichen."],
+["Kann ich einen kompletten Urlaub in Tirol planen lassen?","Ja. Wir koennen Tagesablauf, Erlebnisse, Transfers, Kulinarik, Wellness, Familienprogramm und besondere Momente zu einer stimmigen individuellen Reiseplanung verbinden."],
+["Was bedeutet Premium Concierge bei Ihnen?","Premium Concierge bedeutet fuer uns persoenliche Aufmerksamkeit, diskrete Organisation, hochwertige Auswahl, klare Kommunikation und Loesungen, die zum Stil des Gastes passen."],
+["Warum sollte ich Tirol mit Concierge erleben?","Ein Concierge spart Zeit, reduziert Abstimmungsaufwand und eroeffnet bessere Optionen. So koennen Sie Tirol erleben, waehrend Organisation, Reservierungen und Details im Hintergrund betreut werden."],
+["Wie starte ich am besten?","Senden Sie eine kurze Anfrage mit Reisedatum, Region und Wunsch. Alpine Concierge Tirol meldet sich persoenlich zurueck und klaert die naechsten Schritte."]
+];
+
 function renderACTFAQ(lang){
   const root=document.getElementById("faqList");
   if(!root||!ACT_FAQ[lang]) return;

@@ -261,7 +261,18 @@ function setLang(lang){
   renderSeoContent(lang);
 }
 
+function initHeroVideo(){
+  const hero=document.querySelector(".hero");
+  const video=document.querySelector(".hero-video");
+  if(!hero||!video)return;
+  const poster=new Image();
+  poster.onload=()=>{video.setAttribute("poster","video/hero-poster.jpg");hero.style.backgroundImage="linear-gradient(rgba(0,12,9,.42),rgba(0,15,12,.72)),url('video/hero-poster.jpg')"};
+  poster.src="video/hero-poster.jpg";
+  video.addEventListener("error",()=>video.remove());
+}
+
 document.addEventListener("DOMContentLoaded",()=>{
+  initHeroVideo();
   document.querySelectorAll(".lang-switch button").forEach(btn=>btn.addEventListener("click",()=>setLang(btn.dataset.lang)));
   const burger=document.querySelector(".burger"),nav=document.querySelector("nav");
   if(burger&&nav)burger.addEventListener("click",()=>{const open=nav.classList.toggle("open");burger.setAttribute("aria-expanded",open?"true":"false")});

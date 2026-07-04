@@ -23,8 +23,20 @@
   </div>
 </header>
 
+<nav class="portal-nav" aria-label="Kundenportal Navigation">
+  <a href="#overview">&Uuml;bersicht</a>
+  <a href="#overall-timeline">Gesamt-Timeline</a>
+  <a href="#day-timeline">Tagesprogramm</a>
+  <a href="#program-details">Details</a>
+  <a href="#accommodation">Unterkunft</a>
+  <a href="#restaurants">Restaurants</a>
+  <a href="#activities">Aktivit&auml;ten</a>
+  <a href="#documents">Dokumente</a>
+  <a href="#contact">Kontakt</a>
+</nav>
+
 <main id="portalRoot">
-  <section class="portal-hero" aria-labelledby="portalTitle">
+  <section class="portal-hero" id="overview" aria-labelledby="portalTitle">
     <div class="hero-panel">
       <p class="eyebrow" id="portalVersion">Version 1.0</p>
       <h1 id="portalTitle">Willkommen</h1>
@@ -37,7 +49,7 @@
     </div>
   </section>
 
-  <section class="portal-section status-section" aria-labelledby="statusTitle">
+  <section class="portal-section status-section" id="status" aria-labelledby="statusTitle">
     <div class="section-head">
       <p class="eyebrow">Reisestatus</p>
       <h2 id="statusTitle">Aktueller Fortschritt</h2>
@@ -52,20 +64,36 @@
     </div>
   </section>
 
-  <section class="portal-section" aria-labelledby="programTitle">
+  <section class="portal-section" id="overall-timeline" aria-labelledby="overallTimelineTitle">
     <div class="section-head">
-      <p class="eyebrow">Tagesprogramm</p>
-      <h2 id="programTitle">Ihre Reise im &Uuml;berblick</h2>
+      <p class="eyebrow">Gesamt-Timeline</p>
+      <h2 id="overallTimelineTitle">Alle Programmpunkte chronologisch</h2>
     </div>
-    <div class="timeline" id="programTimeline"></div>
+    <div class="overall-timeline" id="overallTimeline"></div>
   </section>
 
-  <section class="portal-section split-grid" aria-label="Unterkunft und Wetter">
+  <section class="portal-section" id="day-timeline" aria-labelledby="dayTimelineTitle">
+    <div class="section-head">
+      <p class="eyebrow">Tagesprogramm</p>
+      <h2 id="dayTimelineTitle">Ihre Reise nach Tagen</h2>
+    </div>
+    <div class="day-timelines" id="dayTimelines"></div>
+  </section>
+
+  <section class="portal-section" id="program-details" aria-labelledby="programDetailsTitle">
+    <div class="section-head">
+      <p class="eyebrow">Details</p>
+      <h2 id="programDetailsTitle">Detailinformationen je Programmpunkt</h2>
+    </div>
+    <div class="detail-card-grid" id="programDetails"></div>
+  </section>
+
+  <section class="portal-section split-grid" id="accommodation" aria-label="Unterkunft und Wetter">
     <article class="info-card" id="hotelCard"></article>
     <article class="info-card weather-card" id="weatherCard"></article>
   </section>
 
-  <section class="portal-section" aria-labelledby="restaurantTitle">
+  <section class="portal-section" id="restaurants" aria-labelledby="restaurantTitle">
     <div class="section-head">
       <p class="eyebrow">Reservierungen</p>
       <h2 id="restaurantTitle">Restaurants</h2>
@@ -73,7 +101,7 @@
     <div class="card-grid" id="restaurantGrid"></div>
   </section>
 
-  <section class="portal-section" aria-labelledby="activityTitle">
+  <section class="portal-section" id="activities" aria-labelledby="activityTitle">
     <div class="section-head">
       <p class="eyebrow">Erlebnisse</p>
       <h2 id="activityTitle">Aktivit&auml;ten</h2>
@@ -81,7 +109,7 @@
     <div class="card-grid" id="activityGrid"></div>
   </section>
 
-  <section class="portal-section" aria-labelledby="documentTitle">
+  <section class="portal-section" id="documents" aria-labelledby="documentTitle">
     <div class="section-head">
       <p class="eyebrow">Unterlagen</p>
       <h2 id="documentTitle">Dokumente</h2>
@@ -89,7 +117,7 @@
     <div class="document-grid" id="documentGrid"></div>
   </section>
 
-  <section class="portal-section split-grid" aria-label="Kontakt und Aktionen">
+  <section class="portal-section split-grid" id="contact" aria-label="Kontakt und Aktionen">
     <article class="info-card contact-card" id="contactCard"></article>
     <article class="info-card action-card">
       <p class="eyebrow">Kundenaktionen</p>

@@ -14,9 +14,17 @@
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
   }
 
+  function itemNavigationUrl(item){
+    return item.navigationUrl||mapsLink(item.address||item.meetingPoint||item.title);
+  }
+
   function whatsappLink(number,message){
     const normalized=number.replace(/[^\d]/g,"");
     return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+  }
+
+  function detailId(item){
+    return `detail-${item.id}`;
   }
 
   function daysUntil(dateValue){
@@ -31,7 +39,20 @@
   }
 
   function definitionList(items){
-    return `<dl class="field-list">${items.map(([label,value])=>`<div><dt>${label}</dt><dd>${value}</dd></div>`).join("")}</dl>`;
+    return `<dl class="field-list">${items.map(([label,value])=>`<div><dt>${label}</dt><dd>${value||"-"}</dd></div>`).join("")}</dl>`;
+  }
+
+  function programItems(){
+    return [...customer.program].sort((a,b)=>`${a.dateValue} ${a.startTime}`.localeCompare(`${b.dateValue} ${b.startTime}`));
+  }
+
+  function groupedProgram(){
+    return programItems().reduce((groups,item)=>{
+      const existing=groups.find(group=>group.date===item.date);
+      if(existing)existing.items.push(item);
+      else groups.push({date:item.date,items:[item]});
+      return groups;
+    },[]);
   }
 
   function renderMeta(){
@@ -61,23 +82,61 @@
     `).join("");
   }
 
-  function renderProgram(){
-    document.getElementById("programTimeline").innerHTML=customer.program.map((item,index)=>`
-      <article class="timeline-item">
-        <div class="time-block">${item.date}<br>${item.time} Uhr</div>
-        <div>
-          <h3>${item.title}</h3>
-          <p>${item.description}</p>
-          <div class="detail-list hidden-detail" id="programDetail${index}">
-            <div class="detail-row"><strong>Treffpunkt:</strong> ${item.meetingPoint}</div>
-            <div class="detail-row"><strong>Dauer:</strong> ${item.duration}</div>
-            <div class="detail-row"><strong>Kleidung:</strong> ${item.clothing}</div>
-            <div class="detail-row"><strong>Hinweise:</strong> ${item.notes}</div>
-          </div>
-          <div class="card-actions">
-            <a class="button soft" href="${mapsLink(item.navigation)}" target="_blank" rel="noopener">Navigation öffnen</a>
-            <button class="button soft" type="button" data-toggle="programDetail${index}">Details anzeigen</button>
-          </div>
+  function renderOverallTimeline(){
+    document.getElementById("overallTimeline").innerHTML=programItems().map(item=>`
+      <a class="timeline-link" href="#${detailId(item)}">
+        <span class="timeline-date">${item.date}</span>
+        <span class="timeline-time">${item.startTime}</span>
+        <span class="timeline-title">${item.title}</span>
+        <span class="timeline-place">${item.meetingPoint}</span>
+        <span class="tag">${item.status}</span>
+      </a>
+    `).join("");
+  }
+
+  function renderDayTimelines(){
+    document.getElementById("dayTimelines").innerHTML=groupedProgram().map((day,index)=>`
+      <article class="day-card">
+        <div class="day-head">
+          <p class="eyebrow">${day.date}</p>
+          <h3>Tag ${index+1}</h3>
+        </div>
+        <div class="day-items">
+          ${day.items.map(item=>`
+            <a class="day-item" href="#${detailId(item)}">
+              <span class="timeline-time">${item.startTime}</span>
+              <span>
+                <strong>${item.title}</strong>
+                <small>${item.shortDescription}</small>
+                <small>${item.meetingPoint}</small>
+              </span>
+              <span class="tag">${item.status}</span>
+            </a>
+          `).join("")}
+        </div>
+      </article>
+    `).join("");
+  }
+
+  function renderProgramDetails(){
+    document.getElementById("programDetails").innerHTML=programItems().map(item=>`
+      <article class="program-detail-card" id="${detailId(item)}">
+        <span class="tag">${item.status}</span>
+        <h3>${item.title}</h3>
+        <p>${item.description}</p>
+        ${definitionList([
+          ["Datum",item.date],
+          ["Uhrzeit",`${item.startTime} - ${item.endTime}`],
+          ["Dauer",item.duration],
+          ["Treffpunkt",item.meetingPoint],
+          ["Adresse",item.address],
+          ["Kleidung / Ausrüstung",item.outfit],
+          ["Hinweise",item.notes],
+          ["Kontaktperson",item.contactPerson]
+        ])}
+        <div class="card-actions">
+          <a class="button soft" href="${itemNavigationUrl(item)}" target="_blank" rel="noopener">Navigation öffnen</a>
+          <button class="button soft" type="button" data-calendar-id="${item.id}" ${item.calendarEnabled?"":"disabled"}>In Kalender speichern</button>
         </div>
       </article>
     `).join("");
@@ -199,19 +258,52 @@
     `).join("");
   }
 
+  function icsDate(dateValue,timeValue){
+    return `${dateValue.replaceAll("-","")}T${timeValue.replace(":","")}00`;
+  }
+
+  function icsText(value){
+    return String(value||"").replaceAll("\\","\\\\").replaceAll("\n","\\n").replaceAll(",","\\,").replaceAll(";","\\;");
+  }
+
+  function downloadCalendar(item){
+    const lines=[
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Alpine Concierge Tirol//Customer Portal//DE",
+      "BEGIN:VEVENT",
+      `UID:${item.id}-${customerId}@alpineconcierge.info`,
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z")}`,
+      `DTSTART:${icsDate(item.dateValue,item.startTime)}`,
+      `DTEND:${icsDate(item.dateValue,item.endTime)}`,
+      `SUMMARY:${icsText(item.title)}`,
+      `LOCATION:${icsText(item.address||item.meetingPoint)}`,
+      `DESCRIPTION:${icsText(`${item.description}\nTreffpunkt: ${item.meetingPoint}\nHinweise: ${item.notes}`)}`,
+      "END:VEVENT",
+      "END:VCALENDAR"
+    ];
+    const blob=new Blob([lines.join("\r\n")],{type:"text/calendar;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;
+    link.download=`${item.dateValue}-${item.id}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function bindActions(){
     document.addEventListener("click",event=>{
-      const toggle=event.target.closest("[data-toggle]");
-      if(toggle){
-        const target=document.getElementById(toggle.dataset.toggle);
-        if(target){
-          target.classList.toggle("open");
-          toggle.textContent=target.classList.contains("open")?"Details ausblenden":"Details anzeigen";
-        }
-      }
-
       const placeholder=event.target.closest("[data-placeholder]");
       if(placeholder)window.alert(`${placeholder.dataset.placeholder}: Dokument-Platzhalter für Schritt 1.`);
+
+      const calendarButton=event.target.closest("[data-calendar-id]");
+      if(calendarButton){
+        const item=customer.program.find(entry=>entry.id===calendarButton.dataset.calendarId);
+        if(item)downloadCalendar(item);
+        return;
+      }
 
       const action=event.target.closest("[data-action]");
       if(!action)return;
@@ -222,7 +314,7 @@
       if(type==="change")window.open(whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe einen Änderungswunsch zu meinem Reiseprogramm."),"_blank","noopener");
       if(type==="payment")window.alert("Zahlungsfunktion wird in einem späteren Schritt angebunden.");
       if(type==="pdf")window.alert("PDF-Erstellung wird in einem späteren Schritt angebunden.");
-      if(type==="calendar")window.alert("Kalenderexport wird in einem späteren Schritt angebunden.");
+      if(type==="calendar")window.alert("Bitte wählen Sie einen einzelnen Programmpunkt in den Detailkarten aus.");
     });
   }
 
@@ -235,7 +327,9 @@
     document.getElementById("whatsappHero").href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
     renderMeta();
     renderStatus();
-    renderProgram();
+    renderOverallTimeline();
+    renderDayTimelines();
+    renderProgramDetails();
     renderHotel();
     renderWeather();
     renderRestaurants();

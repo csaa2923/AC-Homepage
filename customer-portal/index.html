@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pers&ouml;nliches Kundenportal | Alpine Concierge Tirol</title>
+<meta name="description" content="Pers&ouml;nliches Kundenportal von Alpine Concierge Tirol.">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<meta name="theme-color" content="#001a14">
+<link rel="icon" href="../favicon.ico">
+<link rel="apple-touch-icon" href="../images/logo/logo.png">
+<link rel="stylesheet" href="customer-portal.css">
+</head>
+<body>
+<header class="portal-header" aria-label="Kundenportal Kopfbereich">
+  <a class="portal-brand" href="../index.html" aria-label="Alpine Concierge Tirol">
+    <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol Logo" width="108" height="80" decoding="async">
+  </a>
+  <div>
+    <p class="eyebrow">Pers&ouml;nliches Kundenportal</p>
+    <p class="secure-note">Diese Seite ist ausschlie&szlig;lich &uuml;ber Ihren pers&ouml;nlichen Link erreichbar.</p>
+  </div>
+</header>
+
+<main id="portalRoot">
+  <section class="portal-hero" aria-labelledby="portalTitle">
+    <div class="hero-panel">
+      <p class="eyebrow" id="portalVersion">Version 1.0</p>
+      <h1 id="portalTitle">Willkommen</h1>
+      <p class="hero-subtitle" id="tripTitle"></p>
+      <div class="hero-meta" id="heroMeta"></div>
+      <div class="hero-actions">
+        <a class="button primary" id="whatsappHero" href="#" target="_blank" rel="noopener">WhatsApp &ouml;ffnen</a>
+        <button class="button soft" type="button" data-action="print">Drucken</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="portal-section status-section" aria-labelledby="statusTitle">
+    <div class="section-head">
+      <p class="eyebrow">Reisestatus</p>
+      <h2 id="statusTitle">Aktueller Fortschritt</h2>
+    </div>
+    <div class="status-card">
+      <div class="status-topline">
+        <span id="publicationStatus">Status: Ver&ouml;ffentlicht</span>
+        <span id="updatedAt">Zuletzt aktualisiert</span>
+      </div>
+      <div class="progress-track" aria-hidden="true"><span id="progressFill"></span></div>
+      <ol class="status-steps" id="statusSteps"></ol>
+    </div>
+  </section>
+
+  <section class="portal-section" aria-labelledby="programTitle">
+    <div class="section-head">
+      <p class="eyebrow">Tagesprogramm</p>
+      <h2 id="programTitle">Ihre Reise im &Uuml;berblick</h2>
+    </div>
+    <div class="timeline" id="programTimeline"></div>
+  </section>
+
+  <section class="portal-section split-grid" aria-label="Unterkunft und Wetter">
+    <article class="info-card" id="hotelCard"></article>
+    <article class="info-card weather-card" id="weatherCard"></article>
+  </section>
+
+  <section class="portal-section" aria-labelledby="restaurantTitle">
+    <div class="section-head">
+      <p class="eyebrow">Reservierungen</p>
+      <h2 id="restaurantTitle">Restaurants</h2>
+    </div>
+    <div class="card-grid" id="restaurantGrid"></div>
+  </section>
+
+  <section class="portal-section" aria-labelledby="activityTitle">
+    <div class="section-head">
+      <p class="eyebrow">Erlebnisse</p>
+      <h2 id="activityTitle">Aktivit&auml;ten</h2>
+    </div>
+    <div class="card-grid" id="activityGrid"></div>
+  </section>
+
+  <section class="portal-section" aria-labelledby="documentTitle">
+    <div class="section-head">
+      <p class="eyebrow">Unterlagen</p>
+      <h2 id="documentTitle">Dokumente</h2>
+    </div>
+    <div class="document-grid" id="documentGrid"></div>
+  </section>
+
+  <section class="portal-section split-grid" aria-label="Kontakt und Aktionen">
+    <article class="info-card contact-card" id="contactCard"></article>
+    <article class="info-card action-card">
+      <p class="eyebrow">Kundenaktionen</p>
+      <h2>N&auml;chste Schritte</h2>
+      <div class="action-grid" id="actionGrid"></div>
+    </article>
+  </section>
+
+  <section class="portal-section" aria-labelledby="historyTitle">
+    <div class="section-head">
+      <p class="eyebrow">Versionierung</p>
+      <h2 id="historyTitle">&Auml;nderungsverlauf</h2>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </section>
+</main>
+
+<template id="notFoundTemplate">
+  <section class="portal-section not-found">
+    <h1>Portal nicht gefunden</h1>
+    <p>Bitte pr&uuml;fen Sie Ihren pers&ouml;nlichen Link oder kontaktieren Sie Alpine Concierge Tirol direkt.</p>
+    <a class="button primary" href="https://wa.me/4367761410679" target="_blank" rel="noopener">WhatsApp &ouml;ffnen</a>
+  </section>
+</template>
+
+<script src="customer-data.js"></script>
+<script src="customer-portal.js"></script>
+</body>
+</html>

@@ -559,7 +559,8 @@ h3{font-size:24px;color:var(--green)}
   .card-grid,.document-grid{grid-template-columns:repeat(2,1fr)}
   .weather-days{grid-template-columns:repeat(4,1fr)}
   .action-grid{display:grid;grid-template-columns:1fr 1fr}
-  .portal-nav{top:109px;justify-content:center;padding-left:34px;padding-right:34px}
+  .portal-nav{top:109px;justify-content:center;flex-wrap:wrap;overflow-x:visible;padding:12px 34px}
+  .portal-nav a{flex:0 1 auto;padding:9px 12px;font-size:10px;min-height:38px}
   .calendar-panel{padding:22px}
   .calendar-toolbar{grid-template-columns:auto minmax(0,1fr);align-items:center}
   .calendar-day-columns{grid-template-columns:repeat(var(--calendar-days),minmax(170px,1fr))}
@@ -583,6 +584,8 @@ h3{font-size:24px;color:var(--green)}
   .document-grid{grid-template-columns:repeat(4,1fr)}
   .detail-card-grid{grid-template-columns:repeat(2,1fr)}
   .next-event-card{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+  .portal-nav{gap:10px;padding-left:42px;padding-right:42px}
+  .portal-nav a{padding:10px 16px;font-size:11px}
 }
 
 @media print{

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interne Verwaltung | Alpine Concierge Tirol</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<meta name="theme-color" content="#001a14">
+<link rel="icon" href="../favicon.ico">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<main>
+  <section class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol Logo" width="118" height="88">
+      <p class="eyebrow">Interne Verwaltung</p>
+      <h1>Kundenportal Admin</h1>
+      <p class="muted">Übergangslösung für Schritt 2. Für echte Kundendaten später Firebase Authentication verwenden.</p>
+      <label>Passwort
+        <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Passwort eingeben">
+      </label>
+      <button class="button primary" id="loginButton" type="button">Öffnen</button>
+      <p class="form-message" id="loginMessage" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section class="admin-shell" id="adminShell" hidden>
+    <header class="admin-header">
+      <div>
+        <p class="eyebrow">Alpine Concierge Tirol</p>
+        <h1>Interne Kundenverwaltung</h1>
+        <p class="muted">localStorage-Version für Schritt 2. Keine echte Authentifizierung, keine Firebase-Anbindung.</p>
+      </div>
+      <div class="header-actions">
+        <button class="button soft" id="newCustomerButton" type="button">Kunde anlegen</button>
+        <button class="button soft" id="logoutButton" type="button">Sperren</button>
+      </div>
+    </header>
+
+    <nav class="admin-nav" aria-label="Adminbereiche">
+      <a href="#customers">Kundenübersicht</a>
+      <a href="#master-data">Stammdaten</a>
+      <a href="#program-items">Programmpunkte</a>
+      <a href="#accommodations">Unterkunft</a>
+      <a href="#restaurants-admin">Restaurants</a>
+      <a href="#activities-admin">Aktivitäten</a>
+      <a href="#documents-admin">Dokumente</a>
+      <a href="#publish">Veröffentlichung</a>
+      <a href="#export-import">Export / Import</a>
+    </nav>
+
+    <section class="admin-section" id="customers">
+      <div class="section-head">
+        <p class="eyebrow">Kundenübersicht</p>
+        <h2>Alle Kunden und Reisen</h2>
+      </div>
+      <div class="customer-list" id="customerList"></div>
+    </section>
+
+    <section class="admin-section" id="master-data">
+      <div class="section-head">
+        <p class="eyebrow">Stammdaten</p>
+        <h2>Kunde bearbeiten</h2>
+      </div>
+      <form class="admin-card form-grid" id="masterForm">
+        <label>Kunden-ID<input name="customerId" required></label>
+        <label>Kundenname<input name="customerName" required></label>
+        <label>Reisebezeichnung<input name="tripName" required></label>
+        <label>Zeitraum von<input name="startDatePlain" type="date"></label>
+        <label>Zeitraum bis<input name="endDatePlain" type="date"></label>
+        <label>Region<input name="region"></label>
+        <label>Sprache<select name="language"><option>DE</option><option>EN</option><option>IT</option></select></label>
+        <label>Persönlicher Concierge<input name="concierge"></label>
+        <label>Telefon<input name="phone"></label>
+        <label>E-Mail<input name="email" type="email"></label>
+        <label>WhatsApp / Nummer<input name="whatsapp"></label>
+        <label>Status<input name="status"></label>
+        <label>Version<input name="version"></label>
+        <label>Zuletzt aktualisiert<input name="updatedAt"></label>
+        <label>Veröffentlichung
+          <select name="publicationState">
+            <option>Entwurf</option>
+            <option>Veröffentlicht</option>
+          </select>
+        </label>
+        <div class="full form-actions">
+          <button class="button primary" type="submit">Stammdaten speichern</button>
+          <button class="button soft" id="generateIdButton" type="button">Kunden-ID erzeugen</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="admin-section" id="program-items">
+      <div class="section-head inline-head">
+        <div>
+          <p class="eyebrow">Programm</p>
+          <h2>Programmpunkte</h2>
+        </div>
+        <button class="button soft" type="button" data-add-list="program">Programmpunkt hinzufügen</button>
+      </div>
+      <div class="editor-list" id="programEditor"></div>
+    </section>
+
+    <section class="admin-section" id="accommodations">
+      <div class="section-head inline-head">
+        <div><p class="eyebrow">Unterkunft</p><h2>Unterkünfte</h2></div>
+        <button class="button soft" type="button" data-add-list="accommodations">Unterkunft hinzufügen</button>
+      </div>
+      <div class="editor-list" id="accommodationsEditor"></div>
+    </section>
+
+    <section class="admin-section" id="restaurants-admin">
+      <div class="section-head inline-head">
+        <div><p class="eyebrow">Reservierungen</p><h2>Restaurants</h2></div>
+        <button class="button soft" type="button" data-add-list="restaurants">Restaurant hinzufügen</button>
+      </div>
+      <div class="editor-list" id="restaurantsEditor"></div>
+    </section>
+
+    <section class="admin-section" id="activities-admin">
+      <div class="section-head inline-head">
+        <div><p class="eyebrow">Erlebnisse</p><h2>Aktivitäten</h2></div>
+        <button class="button soft" type="button" data-add-list="activities">Aktivität hinzufügen</button>
+      </div>
+      <div class="editor-list" id="activitiesEditor"></div>
+    </section>
+
+    <section class="admin-section" id="documents-admin">
+      <div class="section-head inline-head">
+        <div><p class="eyebrow">Dokumente</p><h2>Dokumente</h2></div>
+        <button class="button soft" type="button" data-add-list="documents">Dokument hinzufügen</button>
+      </div>
+      <div class="editor-list" id="documentsEditor"></div>
+    </section>
+
+    <section class="admin-section" id="publish">
+      <div class="section-head">
+        <p class="eyebrow">Veröffentlichung</p>
+        <h2>Link, Vorschau und WhatsApp</h2>
+      </div>
+      <div class="admin-card publish-grid">
+        <label>Persönlicher Portal-Link<input id="portalLink" readonly></label>
+        <div class="form-actions">
+          <button class="button soft" id="copyLinkButton" type="button">Link kopieren</button>
+          <button class="button soft" id="openPreviewButton" type="button">Vorschau öffnen</button>
+          <button class="button soft" id="openLiveButton" type="button">Live-Portal öffnen</button>
+          <button class="button primary" id="markPublishedButton" type="button">Als veröffentlicht markieren</button>
+        </div>
+        <label class="full">WhatsApp-Text<textarea id="whatsappText" rows="5"></textarea></label>
+        <button class="button soft" id="copyWhatsappButton" type="button">WhatsApp-Nachricht erstellen</button>
+      </div>
+    </section>
+
+    <section class="admin-section" id="export-import">
+      <div class="section-head">
+        <p class="eyebrow">Datensicherung</p>
+        <h2>Export / Import</h2>
+      </div>
+      <div class="admin-card export-grid">
+        <button class="button primary" id="exportButton" type="button">Kundendaten als JSON herunterladen</button>
+        <label>JSON importieren<textarea id="importText" rows="9" placeholder="JSON hier einfügen"></textarea></label>
+        <button class="button soft" id="importButton" type="button">JSON laden</button>
+        <p class="muted full">Sicherheitshinweis: localStorage und das Passwort ACT2026 sind nur eine Übergangslösung. Für echte Kundendaten ist später Firebase Authentication oder eine vergleichbare sichere Lösung erforderlich.</p>
+      </div>
+    </section>
+  </section>
+</main>
+
+<script src="customer-data.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

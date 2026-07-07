@@ -1,13 +1,24 @@
 (function(){
   const dataRoot=window.CustomerPortalData||{customers:{}};
+  const STORAGE_KEY="act_customer_portal_customers";
   const params=new URLSearchParams(window.location.search);
   const customerId=params.get("customer")||dataRoot.defaultCustomerId;
-  const customer=dataRoot.customers[customerId];
+  const customer=loadStoredCustomer(customerId)||dataRoot.customers[customerId];
   const root=document.getElementById("portalRoot");
   const calendarState={
     view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
     dayIndex:0
   };
+
+  function loadStoredCustomer(id){
+    try{
+      const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
+      return stored[id]||null;
+    }catch(error){
+      console.warn("Gespeicherte Portaldaten konnten nicht geladen werden.",error);
+      return null;
+    }
+  }
 
   function text(id,value){
     const el=document.getElementById(id);

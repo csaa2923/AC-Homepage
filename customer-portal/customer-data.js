@@ -38,8 +38,13 @@ window.CustomerPortalData={
           outfit:"Reisekleidung",
           notes:"Zimmer und Willkommensmappe sind vorbereitet.",
           contactPerson:"Alpine Concierge Tirol",
+          phone:"+43 677 61410679",
           navigationUrl:"https://www.google.com/maps/search/?api=1&query=Hotel%20Seefeld%20Lodge%2C%20Seefeld%20in%20Tirol",
           status:"Bestätigt",
+          category:"Hotel",
+          colorClass:"type-hotel",
+          images:[],
+          documents:["Voucher"],
           calendarEnabled:true
         },
         {
@@ -57,8 +62,13 @@ window.CustomerPortalData={
           outfit:"Bequeme Schuhe, leichte Jacke",
           notes:"Kinderfreundliches Tempo eingeplant.",
           contactPerson:"Guide Maria",
+          phone:"+43 677 61410679",
           navigationUrl:"https://www.google.com/maps/search/?api=1&query=Goldenes%20Dachl%2C%20Innsbruck",
           status:"Bestätigt",
+          category:"Aktivität",
+          colorClass:"type-activity",
+          images:[],
+          documents:["Reiseunterlagen"],
           calendarEnabled:true
         },
         {
@@ -76,8 +86,13 @@ window.CustomerPortalData={
           outfit:"Outdoor-Schuhe, Sonnenschutz",
           notes:"Schlechtwetteralternative: Spa-Zeit und Kaiserschmarrn-Tasting.",
           contactPerson:"Concierge Team",
+          phone:"+43 677 61410679",
           navigationUrl:"https://www.google.com/maps/search/?api=1&query=Seekirchl%20Seefeld",
           status:"In Planung",
+          category:"Freizeit",
+          colorClass:"type-leisure",
+          images:[],
+          documents:["Voucher"],
           calendarEnabled:true
         },
         {
@@ -95,8 +110,13 @@ window.CustomerPortalData={
           outfit:"Reisekleidung",
           notes:"Late Check-out ist angefragt.",
           contactPerson:"Alpine Concierge Tirol",
+          phone:"+43 677 61410679",
           navigationUrl:"https://www.google.com/maps/search/?api=1&query=Hotel%20Seefeld%20Lodge%2C%20Seefeld%20in%20Tirol",
           status:"Angefragt",
+          category:"Concierge",
+          colorClass:"type-concierge",
+          images:[],
+          documents:["Reiseunterlagen"],
           calendarEnabled:true
         }
       ],

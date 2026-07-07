@@ -4,6 +4,10 @@
   const customerId=params.get("customer")||dataRoot.defaultCustomerId;
   const customer=dataRoot.customers[customerId];
   const root=document.getElementById("portalRoot");
+  const calendarState={
+    view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
+    dayIndex:0
+  };
 
   function text(id,value){
     const el=document.getElementById(id);
@@ -48,11 +52,62 @@
 
   function groupedProgram(){
     return programItems().reduce((groups,item)=>{
-      const existing=groups.find(group=>group.date===item.date);
+      const existing=groups.find(group=>group.dateValue===item.dateValue);
       if(existing)existing.items.push(item);
-      else groups.push({date:item.date,items:[item]});
+      else groups.push({date:item.date,dateValue:item.dateValue,items:[item]});
       return groups;
     },[]);
+  }
+
+  function timeToMinutes(time){
+    if(!time||!time.includes(":"))return null;
+    const [hours,minutes]=time.split(":").map(Number);
+    return hours*60+minutes;
+  }
+
+  function durationToMinutes(duration){
+    const textValue=String(duration||"");
+    const hoursMatch=textValue.match(/(\d+(?:[,.]\d+)?)\s*Stunde/);
+    const minutesMatch=textValue.match(/(\d+)\s*Minute/);
+    const hours=hoursMatch?Number(hoursMatch[1].replace(",","."))*60:0;
+    const minutes=minutesMatch?Number(minutesMatch[1]):0;
+    return Math.max(30,Math.round(hours+minutes)||60);
+  }
+
+  function eventEndMinutes(item){
+    return timeToMinutes(item.endTime)||timeToMinutes(item.startTime)+durationToMinutes(item.duration);
+  }
+
+  function calendarBounds(items){
+    const starts=items.map(item=>timeToMinutes(item.startTime)).filter(Number.isFinite);
+    const ends=items.map(eventEndMinutes).filter(Number.isFinite);
+    const startHour=Math.max(6,Math.floor((Math.min(...starts)-60)/60));
+    const endHour=Math.min(23,Math.ceil((Math.max(...ends)+60)/60));
+    return {startHour,endHour,hours:Math.max(4,endHour-startHour)};
+  }
+
+  function calendarEventStyle(item,bounds){
+    const start=timeToMinutes(item.startTime);
+    const end=eventEndMinutes(item);
+    const top=((start-bounds.startHour*60)/60)*72;
+    const height=Math.max(44,((end-start)/60)*72);
+    return `top:${top}px;height:${height}px`;
+  }
+
+  function hourLabels(bounds){
+    return Array.from({length:bounds.hours+1},(_,index)=>bounds.startHour+index).map((hour,index)=>`
+      <span style="top:${index*72}px">${String(hour).padStart(2,"0")}:00</span>
+    `).join("");
+  }
+
+  function calendarBlock(item,bounds){
+    return `
+      <a class="calendar-event ${item.colorClass||"type-concierge"}" href="#${detailId(item)}" style="${calendarEventStyle(item,bounds)}">
+        <strong>${item.startTime} ${item.title}</strong>
+        <span>${item.meetingPoint}</span>
+        <em>${item.status}</em>
+      </a>
+    `;
   }
 
   function renderMeta(){
@@ -80,6 +135,92 @@
         <span>${step}</span>
       </li>
     `).join("");
+  }
+
+  function renderNextEvent(){
+    const next=programItems()[0];
+    if(!next)return;
+    document.getElementById("nextEventCard").innerHTML=`
+      <div>
+        <p class="eyebrow">Nächster Programmpunkt</p>
+        <h3>${next.startTime} ${next.title}</h3>
+        <p>${next.meetingPoint}</p>
+      </div>
+      <div class="card-actions compact-actions">
+        <a class="button primary" href="#${detailId(next)}">Details anzeigen</a>
+        <a class="button soft" href="${itemNavigationUrl(next)}" target="_blank" rel="noopener">Navigation öffnen</a>
+      </div>
+    `;
+  }
+
+  function renderCalendarControls(){
+    const days=groupedProgram();
+    document.getElementById("calendarDaySelector").innerHTML=days.map((day,index)=>`
+      <button class="${index===calendarState.dayIndex?"active":""}" type="button" data-calendar-day="${index}">
+        <span>Tag ${index+1}</span>
+        <strong>${day.date}</strong>
+      </button>
+    `).join("");
+    document.querySelectorAll("[data-calendar-view]").forEach(button=>{
+      button.classList.toggle("active",button.dataset.calendarView===calendarState.view);
+    });
+  }
+
+  function renderTripCalendar(){
+    const days=groupedProgram();
+    const bounds=calendarBounds(programItems());
+    document.getElementById("tripCalendar").innerHTML=`
+      <div class="calendar-grid" style="--calendar-height:${bounds.hours*72}px;--calendar-days:${days.length}">
+        <div class="calendar-time-axis">${hourLabels(bounds)}</div>
+        <div class="calendar-day-columns">
+          ${days.map(day=>`
+            <section class="calendar-day-column">
+              <header>${day.date}</header>
+              <div class="calendar-day-body">
+                ${day.items.map(item=>calendarBlock(item,bounds)).join("")}
+              </div>
+            </section>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderDayCalendar(){
+    const days=groupedProgram();
+    const day=days[calendarState.dayIndex]||days[0];
+    const bounds=calendarBounds(day.items);
+    document.getElementById("dayCalendar").innerHTML=`
+      <div class="single-day-calendar">
+        <header>
+          <p class="eyebrow">Tagesansicht</p>
+          <h3>${day.date}</h3>
+        </header>
+        <div class="calendar-grid day-only" style="--calendar-height:${bounds.hours*72}px">
+          <div class="calendar-time-axis">${hourLabels(bounds)}</div>
+          <section class="calendar-day-column">
+            <div class="calendar-day-body">
+              ${day.items.map(item=>calendarBlock(item,bounds)).join("")}
+            </div>
+          </section>
+        </div>
+      </div>
+    `;
+  }
+
+  function updateCalendarVisibility(){
+    const trip=document.getElementById("tripCalendar");
+    const day=document.getElementById("dayCalendar");
+    trip.hidden=calendarState.view!=="trip";
+    day.hidden=calendarState.view!=="day";
+  }
+
+  function renderCalendar(){
+    renderNextEvent();
+    renderCalendarControls();
+    renderTripCalendar();
+    renderDayCalendar();
+    updateCalendarVisibility();
   }
 
   function renderOverallTimeline(){
@@ -119,27 +260,38 @@
   }
 
   function renderProgramDetails(){
-    document.getElementById("programDetails").innerHTML=programItems().map(item=>`
-      <article class="program-detail-card" id="${detailId(item)}">
-        <span class="tag">${item.status}</span>
-        <h3>${item.title}</h3>
-        <p>${item.description}</p>
-        ${definitionList([
-          ["Datum",item.date],
-          ["Uhrzeit",`${item.startTime} - ${item.endTime}`],
-          ["Dauer",item.duration],
-          ["Treffpunkt",item.meetingPoint],
-          ["Adresse",item.address],
-          ["Kleidung / Ausrüstung",item.outfit],
-          ["Hinweise",item.notes],
-          ["Kontaktperson",item.contactPerson]
-        ])}
-        <div class="card-actions">
-          <a class="button soft" href="${itemNavigationUrl(item)}" target="_blank" rel="noopener">Navigation öffnen</a>
-          <button class="button soft" type="button" data-calendar-id="${item.id}" ${item.calendarEnabled?"":"disabled"}>In Kalender speichern</button>
-        </div>
-      </article>
-    `).join("");
+    const items=programItems();
+    document.getElementById("programDetails").innerHTML=items.map((item,index)=>{
+      const previous=items[index-1];
+      const next=items[index+1];
+      return `
+        <article class="program-detail-card" id="${detailId(item)}">
+          <span class="tag">${item.category} · ${item.status}</span>
+          <h3>${item.title}</h3>
+          <p>${item.description}</p>
+          ${definitionList([
+            ["Datum",item.date],
+            ["Uhrzeit",`${item.startTime} - ${item.endTime}`],
+            ["Dauer",item.duration],
+            ["Treffpunkt",item.meetingPoint],
+            ["Adresse",item.address],
+            ["Kleidung / Ausrüstung",item.outfit],
+            ["Hinweise",item.notes],
+            ["Kontaktperson",item.contactPerson],
+            ["Telefon",item.phone],
+            ["Dokumente",item.documents&&item.documents.length?item.documents.join(", "):"Platzhalter"]
+          ])}
+          <div class="card-actions">
+            <a class="button soft" href="#calendar">Zurück zum Kalender</a>
+            <a class="button soft" href="#overall-timeline">Zurück zur Gesamt-Timeline</a>
+            ${previous?`<a class="button soft" href="#${detailId(previous)}">Vorheriger Programmpunkt</a>`:""}
+            ${next?`<a class="button soft" href="#${detailId(next)}">Nächster Programmpunkt</a>`:""}
+            <a class="button soft" href="${itemNavigationUrl(item)}" target="_blank" rel="noopener">Navigation öffnen</a>
+            <button class="button soft" type="button" data-calendar-id="${item.id}" ${item.calendarEnabled?"":"disabled"}>In Kalender speichern</button>
+          </div>
+        </article>
+      `;
+    }).join("");
   }
 
   function renderHotel(){
@@ -295,6 +447,22 @@
 
   function bindActions(){
     document.addEventListener("click",event=>{
+      const viewButton=event.target.closest("[data-calendar-view]");
+      if(viewButton){
+        calendarState.view=viewButton.dataset.calendarView;
+        renderCalendarControls();
+        updateCalendarVisibility();
+        return;
+      }
+
+      const dayButton=event.target.closest("[data-calendar-day]");
+      if(dayButton){
+        calendarState.dayIndex=Number(dayButton.dataset.calendarDay);
+        calendarState.view="day";
+        renderCalendar();
+        return;
+      }
+
       const placeholder=event.target.closest("[data-placeholder]");
       if(placeholder)window.alert(`${placeholder.dataset.placeholder}: Dokument-Platzhalter für Schritt 1.`);
 
@@ -327,6 +495,7 @@
     document.getElementById("whatsappHero").href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
     renderMeta();
     renderStatus();
+    renderCalendar();
     renderOverallTimeline();
     renderDayTimelines();
     renderProgramDetails();

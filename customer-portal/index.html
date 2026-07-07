@@ -25,9 +25,10 @@
 
 <nav class="portal-nav" aria-label="Kundenportal Navigation">
   <a href="#overview">&Uuml;bersicht</a>
+  <a href="#calendar">Kalender</a>
   <a href="#overall-timeline">Gesamt-Timeline</a>
   <a href="#day-timeline">Tagesprogramm</a>
-  <a href="#program-details">Details</a>
+  <a href="#program-details">Programmdetails</a>
   <a href="#accommodation">Unterkunft</a>
   <a href="#restaurants">Restaurants</a>
   <a href="#activities">Aktivit&auml;ten</a>
@@ -61,6 +62,25 @@
       </div>
       <div class="progress-track" aria-hidden="true"><span id="progressFill"></span></div>
       <ol class="status-steps" id="statusSteps"></ol>
+    </div>
+  </section>
+
+  <section class="portal-section calendar-section" id="calendar" aria-labelledby="calendarTitle">
+    <div class="section-head">
+      <p class="eyebrow">Kalender</p>
+      <h2 id="calendarTitle">Ihre Reise als Kalender</h2>
+    </div>
+    <div class="calendar-panel">
+      <div class="next-event-card" id="nextEventCard"></div>
+      <div class="calendar-toolbar" aria-label="Kalendersteuerung">
+        <div class="segmented-control" role="group" aria-label="Kalenderansicht">
+          <button class="active" type="button" data-calendar-view="trip">Gesamtreise</button>
+          <button type="button" data-calendar-view="day">Tagesansicht</button>
+        </div>
+        <div class="day-selector" id="calendarDaySelector" aria-label="Tagesauswahl"></div>
+      </div>
+      <div class="calendar-view" id="tripCalendar"></div>
+      <div class="calendar-view" id="dayCalendar" hidden></div>
     </div>
   </section>
 

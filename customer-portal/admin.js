@@ -342,25 +342,38 @@
     return Promise.resolve();
   }
 
+  function normalizePassword(value){
+    return String(value||"").normalize("NFKC").replace(/[^a-z0-9]/gi,"").toUpperCase();
+  }
+
+  function login(){
+    const input=byId("passwordInput");
+    const message=byId("loginMessage");
+    const rawValue=input?input.value:"";
+    const comparisonValue=normalizePassword(rawValue);
+
+    console.log("Login gestartet");
+    console.log("Passwort:", rawValue);
+    console.log("Vergleich:", comparisonValue);
+    console.log("ACTAdminUnlock vorhanden:", typeof window.ACTAdminUnlock);
+
+    if(comparisonValue!==PASSWORD){
+      if(message)message.textContent="Passwort nicht korrekt.";
+      return;
+    }
+
+    console.log("Login erfolgreich");
+    if(message)message.textContent="";
+    sessionStorage.setItem(SESSION_KEY,"1");
+    unlock();
+  }
+
   function bind(){
-    function attemptLogin(){
-      if(byId("passwordInput").value.trim().toUpperCase()===PASSWORD){
-        sessionStorage.setItem(SESSION_KEY,"1");
-        unlock();
-      }else{
-        byId("loginMessage").textContent="Passwort nicht korrekt.";
-      }
-    }
-    function autoLoginIfReady(){
-      if(byId("passwordInput").value.trim().toUpperCase()===PASSWORD)attemptLogin();
-    }
-    byId("loginButton").addEventListener("click",attemptLogin);
-    byId("loginButton").addEventListener("pointerup",attemptLogin);
-    byId("passwordInput").addEventListener("input",autoLoginIfReady);
+    byId("loginButton").addEventListener("click",login);
     byId("passwordInput").addEventListener("keydown",event=>{
       if(event.key==="Enter"){
         event.preventDefault();
-        attemptLogin();
+        login();
       }
     });
     byId("resetLocalDataButton").addEventListener("click",()=>{
@@ -446,6 +459,14 @@
   window.ACTAdminUnlock=unlock;
   window.ACTAdminRender=renderAll;
 
-  bind();
-  if(sessionStorage.getItem(SESSION_KEY)==="1")unlock();
+  function init(){
+    bind();
+    if(sessionStorage.getItem(SESSION_KEY)==="1")unlock();
+  }
+
+  if(document.readyState==="loading"){
+    document.addEventListener("DOMContentLoaded",init);
+  }else{
+    init();
+  }
 })();

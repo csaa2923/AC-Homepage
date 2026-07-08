@@ -57,15 +57,27 @@
     return `<dl class="field-list">${items.map(([label,value])=>`<div><dt>${label}</dt><dd>${value||"-"}</dd></div>`).join("")}</dl>`;
   }
 
+  function formatDateValue(dateValue){
+    if(!dateValue||!dateValue.includes("-"))return dateValue||"";
+    const [year,month,day]=dateValue.split("-");
+    return `${day}.${month}.${year}`;
+  }
+
+  function itemDate(item){
+    if(item.dateValue&&item.endDateValue&&item.endDateValue!==item.dateValue)return `${formatDateValue(item.dateValue)} - ${formatDateValue(item.endDateValue)}`;
+    if(item.date)return item.date;
+    return formatDateValue(item.dateValue);
+  }
+
   function programItems(){
-    return [...customer.program].sort((a,b)=>`${a.dateValue} ${a.startTime}`.localeCompare(`${b.dateValue} ${b.startTime}`));
+    return [...customer.program].sort((a,b)=>`${a.dateValue||a.date} ${a.startTime}`.localeCompare(`${b.dateValue||b.date} ${b.startTime}`));
   }
 
   function groupedProgram(){
     return programItems().reduce((groups,item)=>{
       const existing=groups.find(group=>group.dateValue===item.dateValue);
       if(existing)existing.items.push(item);
-      else groups.push({date:item.date,dateValue:item.dateValue,items:[item]});
+      else groups.push({date:itemDate(item),dateValue:item.dateValue,items:[item]});
       return groups;
     },[]);
   }
@@ -237,7 +249,7 @@
   function renderOverallTimeline(){
     document.getElementById("overallTimeline").innerHTML=programItems().map(item=>`
       <a class="timeline-link" href="#${detailId(item)}">
-        <span class="timeline-date">${item.date}</span>
+        <span class="timeline-date">${itemDate(item)}</span>
         <span class="timeline-time">${item.startTime}</span>
         <span class="timeline-title">${item.title}</span>
         <span class="timeline-place">${item.meetingPoint}</span>
@@ -281,7 +293,7 @@
           <h3>${item.title}</h3>
           <p>${item.description}</p>
           ${definitionList([
-            ["Datum",item.date],
+            ["Datum",itemDate(item)],
             ["Uhrzeit",`${item.startTime} - ${item.endTime}`],
             ["Dauer",item.duration],
             ["Treffpunkt",item.meetingPoint],
@@ -438,7 +450,7 @@
       `UID:${item.id}-${customerId}@alpineconcierge.info`,
       `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z")}`,
       `DTSTART:${icsDate(item.dateValue,item.startTime)}`,
-      `DTEND:${icsDate(item.dateValue,item.endTime)}`,
+      `DTEND:${icsDate(item.endDateValue||item.dateValue,item.endTime)}`,
       `SUMMARY:${icsText(item.title)}`,
       `LOCATION:${icsText(item.address||item.meetingPoint)}`,
       `DESCRIPTION:${icsText(`${item.description}\nTreffpunkt: ${item.meetingPoint}\nHinweise: ${item.notes}`)}`,

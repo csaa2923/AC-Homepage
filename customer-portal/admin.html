@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=12">
+<link rel="stylesheet" href="admin.css?v=14">
 </head>
 <body>
 <main>
@@ -42,6 +42,8 @@
 
     <nav class="admin-nav" aria-label="Adminbereiche">
       <a href="#customers">Kundenübersicht</a>
+      <a href="#data-flow">Datenfluss</a>
+      <a href="#live-preview">Live-Vorschau</a>
       <a href="#master-data">Stammdaten</a>
       <a href="#program-items">Programmpunkte</a>
       <a href="#accommodations">Unterkunft</a>
@@ -58,6 +60,39 @@
         <h2>Alle Kunden und Reisen</h2>
       </div>
       <div class="customer-list" id="customerList"></div>
+    </section>
+
+    <section class="admin-section" id="data-flow">
+      <div class="section-head">
+        <p class="eyebrow">Datenfluss</p>
+        <h2>Von der Eingabe ins Kundenportal</h2>
+      </div>
+      <div class="admin-card flow-card">
+        <div class="flow-steps" aria-label="Datenfluss">
+          <span>Admin-Eingabe</span>
+          <span>Speicherung</span>
+          <span>Kundenportal</span>
+          <span>Kalender</span>
+          <span>Timeline</span>
+          <span>Details</span>
+          <span>Dokumente</span>
+        </div>
+        <p class="muted full">Diese Daten erscheinen automatisch im Kundenportal in Kalender, Timeline, Tagesprogramm und Detailkarten. Programmpunkte werden nur einmal gepflegt und daraus fuer Kalender, Gesamt-Timeline, Tages-Timeline, Detailkarten, ICS-Kalendereintrag und naechsten Programmpunkt verwendet.</p>
+      </div>
+    </section>
+
+    <section class="admin-section" id="live-preview">
+      <div class="section-head inline-head">
+        <div>
+          <p class="eyebrow">Live-Vorschau</p>
+          <h2>So sieht der Kunde die Daten</h2>
+        </div>
+        <div class="form-actions">
+          <button class="button soft" id="refreshPreviewButton" type="button">Vorschau aktualisieren</button>
+          <button class="button primary" id="openPortalPreviewButton" type="button">Portal-Vorschau öffnen</button>
+        </div>
+      </div>
+      <div class="admin-preview" id="adminPreview"></div>
     </section>
 
     <section class="admin-section" id="master-data">
@@ -87,7 +122,7 @@
           </select>
         </label>
         <div class="full form-actions">
-          <button class="button primary" type="submit">Stammdaten speichern</button>
+          <button class="button primary" type="submit">Entwurf speichern</button>
           <button class="button soft" id="generateIdButton" type="button">Kunden-ID erzeugen</button>
         </div>
       </form>
@@ -142,12 +177,15 @@
         <h2>Link, Vorschau und WhatsApp</h2>
       </div>
       <div class="admin-card publish-grid">
-        <label>Persönlicher Portal-Link<input id="portalLink" readonly></label>
+        <label>Diesen Link erhält der Kunde<input id="portalLink" readonly></label>
+        <p class="muted full">Entwürfe dienen zur internen Bearbeitung. Erst veröffentlichte Daten sollen im Kundenportal angezeigt werden. In Schritt 2 wird diese Logik vereinfacht mit localStorage abgebildet.</p>
         <div class="form-actions">
+          <button class="button soft" id="saveDraftButton" type="button">Entwurf speichern</button>
+          <button class="button soft" id="showPreviewButton" type="button">Vorschau anzeigen</button>
           <button class="button soft" id="copyLinkButton" type="button">Link kopieren</button>
           <button class="button soft" id="openPreviewButton" type="button">Vorschau öffnen</button>
           <button class="button soft" id="openLiveButton" type="button">Live-Portal öffnen</button>
-          <button class="button primary" id="markPublishedButton" type="button">Als veröffentlicht markieren</button>
+          <button class="button primary" id="markPublishedButton" type="button">Veröffentlichen</button>
         </div>
         <label class="full">WhatsApp-Text<textarea id="whatsappText" rows="5"></textarea></label>
         <button class="button soft" id="copyWhatsappButton" type="button">WhatsApp-Nachricht erstellen</button>
@@ -170,6 +208,6 @@
 </main>
 
 <script src="customer-data.js"></script>
-<script src="admin.js?v=12"></script>
+<script src="admin.js?v=14"></script>
 </body>
 </html>

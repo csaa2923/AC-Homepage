@@ -5,10 +5,11 @@
   const demoRoot=window.CustomerPortalData||{customers:{}};
   let customers=loadCustomers();
   let activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
+  let pendingScrollItemId="";
 
   const fieldSets={
     program:[
-      ["id","ID"],["date","Datum als Text"],["dateValue","Datum"],["startTime","Beginn"],["endTime","Ende"],["title","Titel"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["category","Kategorie"],["meetingPoint","Treffpunkt"],["address","Adresse"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Status"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"]
+      ["id","ID"],["date","Datum als Text"],["dateValue","Datum von"],["endDateValue","Datum bis"],["startTime","Beginn"],["endTime","Ende"],["title","Titel"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["category","Kategorie"],["meetingPoint","Treffpunkt"],["address","Adresse"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Status"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"]
     ],
     accommodations:[
       ["name","Hotelname"],["address","Adresse"],["checkIn","Check-in"],["checkOut","Check-out"],["contact","Kontakt"],["phone","Telefon"],["navigation","Navigationslink"],["voucherStatus","Voucher-Link"],["notes","Hinweise","textarea"]
@@ -22,6 +23,26 @@
     documents:[
       ["title","Dokumenttitel"],["type","Dokumenttyp"],["url","Link / Datei-URL"],["visible","Sichtbar für Kunden","checkbox"],["note","Hinweis","textarea"]
     ]
+  };
+
+  const fieldHints={
+    customerName:"Erscheint in Begruessung, Reiseuebersicht und Kundenlink.",
+    tripName:"Erscheint in Begruessung, Reiseuebersicht und WhatsApp-Text.",
+    status:"Erscheint in Reiseuebersicht und Statusanzeige.",
+    publicationState:"Steuert Entwurf oder Veroeffentlicht im Adminbereich.",
+    title:"Erscheint im Kalender, in der Timeline und in der Detailkarte.",
+    dateValue:"Startdatum des Programmpunkts. Mehrtaegige Punkte nutzen zusaetzlich Datum bis.",
+    endDateValue:"Optionales Enddatum, wenn der Programmpunkt mehr als einen Tag betrifft.",
+    shortDescription:"Erscheint in Tagesprogramm und kompakter Vorschau.",
+    description:"Erscheint in der Detailkarte.",
+    meetingPoint:"Erscheint im Kalender, in der Timeline und bei Navigation.",
+    address:"Erscheint in Detailkarte und Navigation.",
+    navigationUrl:"Erscheint als Navigationslink im Kundenportal.",
+    documentsText:"Erscheint im Bereich Dokumente und an Programmdetails.",
+    calendarEnabled:"Steuert den Kalender-Download fuer diesen Programmpunkt.",
+    name:"Erscheint in Unterkunft, Restaurants oder Listenbereichen.",
+    url:"Erscheint im Bereich Dokumente.",
+    visible:"Steuert die Sichtbarkeit im Dokumentbereich."
   };
 
   function loadCustomers(){
@@ -40,6 +61,25 @@
 
   function saveCustomers(){
     localStorage.setItem(STORAGE_KEY,JSON.stringify(customers));
+  }
+
+  function escapeHtml(value){
+    return String(value||"").replace(/[&<>"']/g,match=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[match]));
+  }
+
+  function itemDate(item){
+    if(item.dateValue&&item.endDateValue&&item.endDateValue!==item.dateValue)return `${formatDate(item.dateValue)} - ${formatDate(item.endDateValue)}`;
+    if(item.date)return item.date;
+    return item.dateValue?formatDate(item.dateValue):"-";
+  }
+
+  function itemTime(item){
+    return [item.startTime,item.endTime].filter(Boolean).join(" - ")||item.time||"-";
+  }
+
+  function previewList(items,mapper,emptyText){
+    if(!items||!items.length)return `<p class="muted">${emptyText}</p>`;
+    return `<ul>${items.map(mapper).join("")}</ul>`;
   }
 
   function activeCustomer(){
@@ -118,6 +158,7 @@
             <button class="button soft" type="button" data-edit-customer="${id}">Bearbeiten</button>
             <button class="button soft" type="button" data-open-customer="${id}">Vorschau öffnen</button>
             <button class="button soft" type="button" data-open-customer="${id}">Live-Portal öffnen</button>
+            <button class="button soft" type="button" data-copy-customer="${id}">Link kopieren</button>
           </div>
         </article>
       `;
@@ -205,7 +246,7 @@
     const fields=fieldSets[listName];
     const title=item.title||item.name||item.id||`${listName} ${index+1}`;
     return `
-      <article class="editor-card" data-editor="${listName}" data-index="${index}">
+      <article class="editor-card" data-editor="${listName}" data-index="${index}" data-item-id="${escapeHtml(item.id||item.name||`${listName}-${index}`)}">
         <header>
           <strong>${title}</strong>
           <button class="button danger" type="button" data-remove-item="${listName}" data-index="${index}">Löschen</button>
@@ -219,10 +260,11 @@
 
   function fieldMarkup(name,label,type,item){
     const value=name==="documentsText"?(item.documents||[]).join(", "):name==="imagesText"?(item.images||[]).join(", "):(item[name]||"");
-    if(type==="textarea")return `<label class="full">${label}<textarea data-field="${name}">${value}</textarea></label>`;
-    if(type==="checkbox")return `<label>${label}<select data-field="${name}"><option value="true" ${value?"selected":""}>Ja</option><option value="false" ${!value?"selected":""}>Nein</option></select></label>`;
+    const hint=fieldHints[name]?`<small>${fieldHints[name]}</small>`:"";
+    if(type==="textarea")return `<label class="full">${label}<textarea data-field="${name}">${escapeHtml(value)}</textarea>${hint}</label>`;
+    if(type==="checkbox")return `<label>${label}<select data-field="${name}"><option value="true" ${value?"selected":""}>Ja</option><option value="false" ${!value?"selected":""}>Nein</option></select>${hint}</label>`;
     const inputType=name.toLowerCase().includes("datevalue")||name==="date"&&false?"date":"text";
-    return `<label>${label}<input type="${inputType}" data-field="${name}" value="${String(value).replaceAll('"',"&quot;")}"></label>`;
+    return `<label>${label}<input type="${inputType}" data-field="${name}" value="${escapeHtml(value)}">${hint}</label>`;
   }
 
   function readEditors(){
@@ -251,15 +293,29 @@
     readEditors();
     const customer=ensureCollections(activeCustomer());
     const factories={
-      program:()=>({id:`item-${Date.now()}`,date:"",dateValue:"",startTime:"10:00",endTime:"11:00",title:"Neuer Programmpunkt",shortDescription:"",description:"",category:"Concierge",meetingPoint:"",address:"",navigationUrl:"",outfit:"",notes:"",contactPerson:"",phone:"",status:"Entwurf",calendarEnabled:true,colorClass:"type-concierge",images:[],documents:[]}),
+      program:()=>({id:`item-${Date.now()}`,date:"",dateValue:"",endDateValue:"",startTime:"10:00",endTime:"11:00",title:"Neuer Programmpunkt",shortDescription:"",description:"",category:"Concierge",meetingPoint:"",address:"",navigationUrl:"",outfit:"",notes:"",contactPerson:"",phone:"",status:"Entwurf",calendarEnabled:true,colorClass:"type-concierge",images:[],documents:[]}),
       accommodations:()=>({name:"Neue Unterkunft",address:"",checkIn:"",checkOut:"",contact:"",phone:"",navigation:"",voucherStatus:"",notes:""}),
       restaurants:()=>({name:"Neues Restaurant",date:"",time:"",guests:"",address:"",status:"Angefragt",dresscode:"",notes:"",navigation:"",voucherLink:""}),
       activities:()=>({title:"Neue Aktivität",provider:"",date:"",time:"",meetingPoint:"",address:"",contact:"",phone:"",ticketStatus:"",qrStatus:"",status:"Angefragt",notes:""}),
       documents:()=>({title:"Neues Dokument",type:"Sonstiges",url:"",visible:true,note:""})
     };
-    customer[listName].push(factories[listName]());
+    const item=factories[listName]();
+    customer[listName].push(item);
+    if(listName==="program")pendingScrollItemId=item.id;
     saveCustomers();
     renderAll();
+    if(pendingScrollItemId)scrollToEditorItem(pendingScrollItemId);
+  }
+
+  function scrollToEditorItem(itemId){
+    window.setTimeout(()=>{
+      const card=Array.from(document.querySelectorAll("[data-item-id]")).find(element=>element.dataset.itemId===itemId);
+      if(!card)return;
+      card.scrollIntoView({behavior:"smooth",block:"center"});
+      card.classList.add("editor-card-highlight");
+      window.setTimeout(()=>card.classList.remove("editor-card-highlight"),1600);
+      pendingScrollItemId="";
+    },80);
   }
 
   function removeItem(listName,index){
@@ -275,6 +331,64 @@
     byId("whatsappText").value=`Guten Tag, hier finden Sie Ihr persönliches Reiseprogramm von Alpine Concierge Tirol:\n${link}\n\nBei Änderungswünschen können Sie uns jederzeit kontaktieren.`;
   }
 
+  function renderAdminPreview(){
+    const root=byId("adminPreview");
+    if(!root)return;
+    const customer=ensureCollections(activeCustomer());
+    const program=[...(customer.program||[])].sort((a,b)=>`${a.dateValue||a.date} ${a.startTime||""}`.localeCompare(`${b.dateValue||b.date} ${b.startTime||""}`));
+    const grouped=program.reduce((acc,item)=>{
+      const key=itemDate(item);
+      acc[key]=acc[key]||[];
+      acc[key].push(item);
+      return acc;
+    },{});
+    const hotel=customer.accommodations?.[0]||customer.hotel||{};
+    root.innerHTML=`
+      <article class="preview-panel preview-hero">
+        <p class="eyebrow">Begruessung / Reiseuebersicht</p>
+        <h3>${escapeHtml(customer.customerName||"Unbenannter Kunde")}</h3>
+        <p>${escapeHtml(customer.tripName||customer.tripTitle||"Neue Reise")}</p>
+        <div class="preview-meta">
+          <span>Status: <strong>${escapeHtml(customer.status||"Entwurf")}</strong></span>
+          <span>Veroeffentlichung: <strong>${escapeHtml(customer.publicationState||customer.publishStatus||"Entwurf")}</strong></span>
+          <span>Zeitraum: <strong>${escapeHtml(formatPeriod(customer)||"-")}</strong></span>
+        </div>
+      </article>
+      <article class="preview-panel">
+        <p class="eyebrow">Kalendertermine</p>
+        ${previewList(program,item=>`<li><strong>${escapeHtml(itemTime(item))}</strong> ${escapeHtml(item.title)} <span>${escapeHtml(item.meetingPoint||item.address||"")}</span></li>`,"Noch keine Kalendertermine.")}
+      </article>
+      <article class="preview-panel">
+        <p class="eyebrow">Gesamt-Timeline</p>
+        ${previewList(program,item=>`<li><strong>${escapeHtml(itemDate(item))}, ${escapeHtml(itemTime(item))}</strong> ${escapeHtml(item.title)} <span>${escapeHtml(item.status||"")}</span></li>`,"Noch keine Programmpunkte.")}
+      </article>
+      <article class="preview-panel">
+        <p class="eyebrow">Tages-Timeline</p>
+        ${Object.keys(grouped).length?Object.entries(grouped).map(([date,items])=>`<section class="preview-day"><h4>${escapeHtml(date)}</h4>${previewList(items,item=>`<li><strong>${escapeHtml(itemTime(item))}</strong> ${escapeHtml(item.title)} <span>${escapeHtml(item.shortDescription||item.meetingPoint||"")}</span></li>`,"")}</section>`).join(""):`<p class="muted">Noch keine Tagespunkte.</p>`}
+      </article>
+      <article class="preview-panel">
+        <p class="eyebrow">Programmdetails</p>
+        ${previewList(program,item=>`<li><strong>${escapeHtml(item.title)}</strong> <span>${escapeHtml(item.description||item.shortDescription||"Keine Beschreibung")}</span></li>`,"Noch keine Detailkarten.")}
+      </article>
+      <article class="preview-panel">
+        <p class="eyebrow">Unterkunft</p>
+        <p><strong>${escapeHtml(hotel.name||"Keine Unterkunft")}</strong><br>${escapeHtml(hotel.address||hotel.navigation||"")}</p>
+      </article>
+      <article class="preview-panel">
+        <p class="eyebrow">Restaurants</p>
+        ${previewList(customer.restaurants,item=>`<li><strong>${escapeHtml(item.name)}</strong> <span>${escapeHtml(item.time||item.date||"")} ${escapeHtml(item.status||"")}</span></li>`,"Noch keine Restaurants.")}
+      </article>
+      <article class="preview-panel">
+        <p class="eyebrow">Aktivitaeten</p>
+        ${previewList(customer.activities,item=>`<li><strong>${escapeHtml(item.title)}</strong> <span>${escapeHtml(item.time||item.date||"")} ${escapeHtml(item.status||"")}</span></li>`,"Noch keine Aktivitaeten.")}
+      </article>
+      <article class="preview-panel">
+        <p class="eyebrow">Dokumente</p>
+        ${previewList(customer.documents.filter(item=>item.visible!==false),item=>`<li><strong>${escapeHtml(item.title)}</strong> <span>${escapeHtml(item.type||item.status||item.note||"")}</span></li>`,"Noch keine sichtbaren Dokumente.")}
+      </article>
+    `;
+  }
+
   function renderAll(){
     renderCustomers();
     renderMaster();
@@ -284,6 +398,7 @@
     renderEditor("activities","activitiesEditor");
     renderEditor("documents","documentsEditor");
     renderLinks();
+    renderAdminPreview();
   }
 
   function newCustomer(){
@@ -392,18 +507,25 @@
     byId("newCustomerButton").addEventListener("click",newCustomer);
     byId("generateIdButton").addEventListener("click",()=>{byId("masterForm").elements.customerId.value=generateId()});
     byId("masterForm").addEventListener("submit",event=>{event.preventDefault();readMaster()});
-    document.addEventListener("change",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks()}});
+    document.addEventListener("change",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}});
+    document.addEventListener("input",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}});
     document.addEventListener("click",event=>{
       const edit=event.target.closest("[data-edit-customer]");
       if(edit){activeId=edit.dataset.editCustomer;renderAll();}
       const open=event.target.closest("[data-open-customer]");
       if(open)window.open(portalPath(open.dataset.openCustomer),"_blank","noopener");
+      const copy=event.target.closest("[data-copy-customer]");
+      if(copy)copyText(portalPath(copy.dataset.copyCustomer));
       const add=event.target.closest("[data-add-list]");
       if(add)addItem(add.dataset.addList);
       const remove=event.target.closest("[data-remove-item]");
       if(remove)removeItem(remove.dataset.removeItem,Number(remove.dataset.index));
     });
     byId("copyLinkButton").addEventListener("click",()=>copyText(byId("portalLink").value));
+    byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderAdminPreview()});
+    byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
+    byId("saveDraftButton").addEventListener("click",()=>{activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();renderAll()});
+    byId("showPreviewButton").addEventListener("click",()=>document.getElementById("live-preview").scrollIntoView({behavior:"smooth"}));
     byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("openLiveButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("markPublishedButton").addEventListener("click",()=>{activeCustomer().publicationState="Veröffentlicht";activeCustomer().publishStatus="published";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();renderAll()});

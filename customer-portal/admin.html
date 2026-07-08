@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=15">
+<link rel="stylesheet" href="admin.css?v=16">
 </head>
 <body>
 <main>
@@ -106,21 +106,23 @@
         <label>Reisebezeichnung<input name="tripName" required></label>
         <label>Zeitraum von<input name="startDatePlain" type="date"></label>
         <label>Zeitraum bis<input name="endDatePlain" type="date"></label>
-        <label>Region<input name="region"></label>
-        <label>Sprache<select name="language"><option>DE</option><option>EN</option><option>IT</option></select></label>
+        <label>Region<select name="region" data-combo-list="regions"></select><input class="combo-custom" data-combo-custom="region" placeholder="Eigene Region eingeben" hidden><small>Erscheint in Reiseuebersicht und Vorschau.</small></label>
+        <label>Sprache<select name="language" data-combo-list="languages"></select><input class="combo-custom" data-combo-custom="language" placeholder="Eigene Sprache eingeben" hidden><small>Vorbereitung fuer mehrsprachige Portale.</small></label>
         <label>Persönlicher Concierge<input name="concierge"></label>
         <label>Telefon<input name="phone"></label>
         <label>E-Mail<input name="email" type="email"></label>
         <label>WhatsApp / Nummer<input name="whatsapp"></label>
-        <label>Status<input name="status"></label>
+        <label>Status<select name="status" data-combo-list="statuses"></select><input class="combo-custom" data-combo-custom="status" placeholder="Eigenen Status eingeben" hidden><small>Erscheint in Statusanzeige und Vorschau.</small></label>
         <label>Version<input name="version"></label>
         <label>Zuletzt aktualisiert<input name="updatedAt"></label>
         <label>Veröffentlichung
-          <select name="publicationState">
+          <select name="publicationState" data-combo-list="publicationStates">
             <option>Entwurf</option>
             <option>Veröffentlicht</option>
           </select>
+          <input class="combo-custom" data-combo-custom="publicationState" placeholder="Eigenen Veröffentlichungsstatus eingeben" hidden>
         </label>
+        <label class="full">Anforderungen<select name="requirements" multiple data-combo-list="requirements" data-combo-multi="true"></select><input class="combo-custom" data-combo-custom="requirements" placeholder="Eigene Anforderung eingeben" hidden><small>Mehrfachauswahl fuer besondere Wuensche. Eigene Werte bleiben moeglich.</small></label>
         <div class="full form-actions">
           <button class="button primary" type="submit">Entwurf speichern</button>
           <button class="button soft" id="generateIdButton" type="button">Kunden-ID erzeugen</button>
@@ -208,6 +210,6 @@
 </main>
 
 <script src="customer-data.js"></script>
-<script src="admin.js?v=15"></script>
+<script src="admin.js?v=16"></script>
 </body>
 </html>

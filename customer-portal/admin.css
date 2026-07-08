@@ -54,6 +54,8 @@ h3{font-size:25px}
 label{display:grid;gap:7px;color:#8d6b20;text-transform:uppercase;font-size:12px;font-weight:900;letter-spacing:.08em}
 label small{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:0;text-transform:none;line-height:1.4}
 input,select,textarea{width:100%;padding:12px;border:1px solid rgba(16,40,32,.20);border-radius:8px;background:#fff;color:var(--ink)}
+select[multiple]{min-height:150px}
+.combo-custom{border-color:rgba(216,183,106,.65);background:#fffaf0}
 textarea{min-height:92px;resize:vertical;text-transform:none}
 .full{grid-column:1/-1}
 .flow-card{display:grid;gap:16px}

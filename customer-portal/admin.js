@@ -25,6 +25,32 @@
     ]
   };
 
+  const customOptionValue="__custom";
+  const masterData={
+    statuses:["Anfrage eingegangen","Angebot erstellt","Angebot gesendet","Angebot bestätigt","Zahlung offen","Anzahlung erhalten","Vollständig bezahlt","Programm in Bearbeitung","Programm veröffentlicht","Reise läuft","Reise abgeschlossen","Storniert"],
+    publicationStates:["Entwurf","Intern geprüft","Veröffentlicht"],
+    regions:["Achensee","Ganz Tirol","Innsbruck","Kitzbühel","Kufstein","Osttirol","Seefeld","Stubaital","Ötztal","Zillertal"],
+    languages:["Deutsch","Englisch","Französisch","Italienisch"],
+    programCategories:["Aktivität","Concierge-Service","Freizeit","Hotel","Kultur","Natur","Restaurant","Shopping","Sonstiges","Sport","Transfer","Wellness"],
+    outfits:["Abendgarderobe","Badebekleidung","Casual","Elegant","Freizeit","Outdoor","Skibekleidung","Wanderschuhe"],
+    documentTypes:["Angebot","Hotel","PDF","Rechnung","Reiseunterlagen","Restaurant","Sonstiges","Ticket","Versicherung","Voucher"],
+    restaurantStatuses:["Angefragt","Bestätigt","Reserviert","Storniert","Warteliste"],
+    activityStatuses:["Abgeschlossen","Abgesagt","Angefragt","Bestätigt","Geplant"],
+    hotelStatuses:["Angefragt","Bestätigt","Check-in erfolgt","Check-out erfolgt","Reserviert","Storniert"],
+    transportModes:["Bahn","Bus","Fahrrad","Mietwagen","Shuttle","Taxi","Zu Fuß"],
+    paymentStatuses:["Anzahlung bezahlt","Anzahlungsrechnung gesendet","Offen","Restzahlung offen","Rückerstattung","Storniert","Vollständig bezahlt"],
+    requirements:["Barrierefrei","Familienfreundlich","Glutenfrei","Hunde erlaubt","Indoor","Kinderfreundlich","Luxus","Outdoor","Rollstuhlgerecht","Romantisch","Vegan","Vegetarisch"]
+  };
+
+  const fieldOptionMap={
+    master:{region:"regions",language:"languages",status:"statuses",publicationState:"publicationStates",requirements:"requirements"},
+    program:{category:"programCategories",outfit:"outfits",status:"statuses"},
+    restaurants:{status:"restaurantStatuses",dresscode:"outfits"},
+    activities:{status:"activityStatuses"},
+    accommodations:{voucherStatus:"hotelStatuses"},
+    documents:{type:"documentTypes"}
+  };
+
   const fieldHints={
     customerName:"Erscheint in Begruessung, Reiseuebersicht und Kundenlink.",
     tripName:"Erscheint in Begruessung, Reiseuebersicht und WhatsApp-Text.",
@@ -80,6 +106,78 @@
   function previewList(items,mapper,emptyText){
     if(!items||!items.length)return `<p class="muted">${emptyText}</p>`;
     return `<ul>${items.map(mapper).join("")}</ul>`;
+  }
+
+  function upcomingItems(items){
+    const today=new Date();
+    today.setHours(0,0,0,0);
+    const dated=items.filter(item=>item.dateValue);
+    const upcoming=dated.filter(item=>new Date(item.dateValue)>=today);
+    return (upcoming.length?upcoming:items).slice(0,3);
+  }
+
+  function optionKey(listName,name){
+    return (fieldOptionMap[listName]&&fieldOptionMap[listName][name])||(fieldOptionMap.master&&fieldOptionMap.master[name])||"";
+  }
+
+  function comboOptions(key){
+    return masterData[key]||[];
+  }
+
+  function optionMarkup(key,value){
+    const selectedValues=Array.isArray(value)?value.map(String):[String(value||"")];
+    return [
+      `<option value="">Bitte wählen</option>`,
+      ...comboOptions(key).map(option=>`<option value="${escapeHtml(option)}" ${selectedValues.includes(option)?"selected":""}>${escapeHtml(statusIcon(option)+option)}</option>`),
+      `<option value="${customOptionValue}" ${selectedValues.some(item=>item&&!comboOptions(key).includes(item))?"selected":""}>Eigene Eingabe...</option>`
+    ].join("");
+  }
+
+  function statusIcon(value){
+    const text=String(value||"").toLowerCase();
+    if(text.includes("bestätigt")||text.includes("bezahlt")||text.includes("veröffentlicht")||text.includes("abgeschlossen"))return "✓ ";
+    if(text.includes("offen")||text.includes("angefragt")||text.includes("bearbeitung")||text.includes("warteliste"))return "○ ";
+    if(text.includes("storniert")||text.includes("abgesagt"))return "! ";
+    return "";
+  }
+
+  function setupComboSelect(select,value){
+    const key=select.dataset.comboList;
+    const multi=select.dataset.comboMulti==="true";
+    const values=Array.isArray(value)?value:multi?String(value||"").split(",").map(item=>item.trim()).filter(Boolean):[String(value||"")];
+    select._comboValue=multi?values:values[0];
+    select.innerHTML=optionMarkup(key,multi?values:values[0]);
+    Array.from(select.options).forEach(option=>{
+      option.selected=values.includes(option.value)||(!values.length&&option.value==="");
+    });
+    updateComboCustom(select);
+  }
+
+  function updateComboCustom(select){
+    const custom=select.parentElement.querySelector(`[data-combo-custom="${select.name}"]`);
+    if(!custom)return;
+    const selected=Array.from(select.selectedOptions).map(option=>option.value);
+    const show=selected.includes(customOptionValue);
+    custom.hidden=!show;
+    if(show&&!custom.value){
+      const current=Array.isArray(select._comboValue)?select._comboValue:[select._comboValue];
+      custom.value=(current||[]).find(value=>value&&!comboOptions(select.dataset.comboList).includes(value))||"";
+    }
+  }
+
+  function comboValue(select){
+    const custom=select.parentElement.querySelector(`[data-combo-custom="${select.name}"]`);
+    const selected=Array.from(select.selectedOptions).map(option=>option.value).filter(Boolean);
+    const normal=selected.filter(value=>value!==customOptionValue);
+    const customValue=custom&&!custom.hidden&&custom.value.trim()?custom.value.trim():"";
+    if(select.dataset.comboMulti==="true")return customValue?[...normal,customValue]:normal;
+    return customValue||normal[0]||"";
+  }
+
+  function setupMasterCombos(){
+    document.querySelectorAll("select[data-combo-list]").forEach(select=>{
+      if(!select.dataset.field)setupComboSelect(select,select.value);
+    });
   }
 
   function activeCustomer(){
@@ -186,10 +284,13 @@
       status:customer.status||"",
       version:customer.version||"1.0",
       updatedAt:customer.updatedAt||"",
-      publicationState:customer.publicationState||"Entwurf"
+      publicationState:customer.publicationState||"Entwurf",
+      requirements:customer.requirements||[]
     };
     Object.entries(values).forEach(([name,value])=>{
-      if(form.elements[name])form.elements[name].value=value;
+      if(!form.elements[name])return;
+      if(form.elements[name].dataset&&form.elements[name].dataset.comboList)setupComboSelect(form.elements[name],value);
+      else form.elements[name].value=value;
     });
     renderLinks();
   }
@@ -211,16 +312,17 @@
     next.endDatePlain=form.elements.endDatePlain.value;
     next.travelPeriod=next.startDatePlain&&next.endDatePlain?`${formatDate(next.startDatePlain)}-${formatDate(next.endDatePlain)}`:previous.travelPeriod;
     next.startDate=next.startDatePlain?`${next.startDatePlain}T10:00:00+02:00`:previous.startDate;
-    next.region=form.elements.region.value.trim();
-    next.language=form.elements.language.value;
+    next.region=comboValue(form.elements.region);
+    next.language=comboValue(form.elements.language);
     next.concierge=form.elements.concierge.value.trim();
     next.phone=form.elements.phone.value.trim();
     next.email=form.elements.email.value.trim();
     next.whatsapp=form.elements.whatsapp.value.trim();
-    next.status=form.elements.status.value.trim();
+    next.status=comboValue(form.elements.status);
     next.version=form.elements.version.value.trim()||"1.0";
     next.updatedAt=form.elements.updatedAt.value.trim()||new Date().toLocaleDateString("de-DE");
-    next.publicationState=form.elements.publicationState.value;
+    next.publicationState=comboValue(form.elements.publicationState)||"Entwurf";
+    next.requirements=comboValue(form.elements.requirements);
     next.publishStatus=next.publicationState==="Veröffentlicht"?"published":"draft";
     next.contact={...(next.contact||{}),phone:next.phone,whatsapp:next.whatsapp,email:next.email};
     delete customers[activeId];
@@ -255,15 +357,19 @@
           <button class="button danger" type="button" data-remove-item="${listName}" data-index="${index}">Löschen</button>
         </header>
         <div class="editor-grid">
-          ${fields.map(([name,label,type])=>fieldMarkup(name,label,type,item)).join("")}
+          ${fields.map(([name,label,type])=>fieldMarkup(listName,name,label,type,item)).join("")}
         </div>
       </article>
     `;
   }
 
-  function fieldMarkup(name,label,type,item){
+  function fieldMarkup(listName,name,label,type,item){
     const value=name==="documentsText"?(item.documents||[]).join(", "):name==="imagesText"?(item.images||[]).join(", "):(item[name]||"");
     const hint=fieldHints[name]?`<small>${fieldHints[name]}</small>`:"";
+    const optionsKey=optionKey(listName,name);
+    if(optionsKey){
+      return `<label>${label}<select data-field="${name}" data-combo-list="${optionsKey}" data-combo="true">${optionMarkup(optionsKey,value)}</select><input class="combo-custom" data-combo-custom="${name}" value="${comboOptions(optionsKey).includes(String(value||""))?"":escapeHtml(value)}" placeholder="Eigene Eingabe" ${comboOptions(optionsKey).includes(String(value||""))||!value?"hidden":""}>${hint}</label>`;
+    }
     if(type==="textarea")return `<label class="full">${label}<textarea data-field="${name}">${escapeHtml(value)}</textarea>${hint}</label>`;
     if(type==="checkbox")return `<label>${label}<select data-field="${name}"><option value="true" ${value?"selected":""}>Ja</option><option value="false" ${!value?"selected":""}>Nein</option></select>${hint}</label>`;
     const inputType=name.toLowerCase().includes("datevalue")||name==="date"&&false?"date":"text";
@@ -278,7 +384,7 @@
       const next={...(customer[listName][index]||{})};
       card.querySelectorAll("[data-field]").forEach(field=>{
         const name=field.dataset.field;
-        let value=field.value;
+        let value=field.dataset.combo==="true"?comboValue(field):field.value;
         if(value==="true")value=true;
         if(value==="false")value=false;
         next[name]=value;
@@ -339,6 +445,7 @@
     if(!root)return;
     const customer=ensureCollections(activeCustomer());
     const program=[...(customer.program||[])].sort((a,b)=>`${a.dateValue||a.date} ${a.startTime||""}`.localeCompare(`${b.dateValue||b.date} ${b.startTime||""}`));
+    const nextItems=upcomingItems(program);
     const grouped=program.reduce((acc,item)=>{
       const key=itemDate(item);
       acc[key]=acc[key]||[];
@@ -358,8 +465,8 @@
         </div>
       </article>
       <article class="preview-panel">
-        <p class="eyebrow">Kalendertermine</p>
-        ${previewList(program,item=>`<li><strong>${escapeHtml(itemTime(item))}</strong> ${escapeHtml(item.title)} <span>${escapeHtml(item.meetingPoint||item.address||"")}</span></li>`,"Noch keine Kalendertermine.")}
+        <p class="eyebrow">Nächste Termine</p>
+        ${previewList(nextItems,item=>`<li><strong>${escapeHtml(itemDate(item))}, ${escapeHtml(itemTime(item))}</strong> ${escapeHtml(item.title)} <span>${escapeHtml(item.meetingPoint||item.address||"")}</span></li>`,"Noch keine kommenden Termine.")}
       </article>
       <article class="preview-panel">
         <p class="eyebrow">Gesamt-Timeline</p>
@@ -510,7 +617,10 @@
     byId("newCustomerButton").addEventListener("click",newCustomer);
     byId("generateIdButton").addEventListener("click",()=>{byId("masterForm").elements.customerId.value=generateId()});
     byId("masterForm").addEventListener("submit",event=>{event.preventDefault();readMaster()});
-    document.addEventListener("change",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}});
+    document.addEventListener("change",event=>{
+      if(event.target.matches("select[data-combo-list]"))updateComboCustom(event.target);
+      if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}
+    });
     document.addEventListener("input",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}});
     document.addEventListener("click",event=>{
       const edit=event.target.closest("[data-edit-customer]");
@@ -589,6 +699,7 @@
   window.ACTAdminRender=renderAll;
 
   function init(){
+    setupMasterCombos();
     bind();
     sessionStorage.setItem(SESSION_KEY,"1");
     unlock();

@@ -408,12 +408,39 @@
       try{
         renderAll();
       }catch(secondError){
-        byId("loginScreen").hidden=false;
-        byId("adminShell").hidden=true;
-        byId("loginMessage").textContent="Login ok, aber die Verwaltungsoberfläche konnte nicht geladen werden. Bitte Seite neu laden.";
         console.error(secondError);
+        renderRecoveryAdmin(secondError);
       }
     }
+  }
+
+  function renderRecoveryAdmin(error){
+    byId("adminShell").innerHTML=`
+      <header class="admin-header">
+        <div>
+          <p class="eyebrow">Alpine Concierge Tirol</p>
+          <h1>Interne Kundenverwaltung</h1>
+          <p class="muted">Der Login war korrekt. Die gespeicherten lokalen Admin-Daten wurden zurückgesetzt.</p>
+        </div>
+      </header>
+      <section class="admin-section">
+        <div class="admin-card">
+          <h2>Verwaltung wiederherstellen</h2>
+          <p class="muted">Bitte legen Sie einen neuen Demo-Kunden an oder laden Sie die Seite neu. Technischer Hinweis: ${String(error&&error.message||error)}</p>
+          <div class="form-actions">
+            <button class="button primary" type="button" id="rebuildAdminButton">Adminbereich neu aufbauen</button>
+            <button class="button soft" type="button" id="reloadAdminButton">Seite neu laden</button>
+          </div>
+        </div>
+      </section>
+    `;
+    byId("rebuildAdminButton").addEventListener("click",()=>{
+      localStorage.removeItem(STORAGE_KEY);
+      customers=clone(demoRoot.customers||{});
+      activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
+      location.reload();
+    });
+    byId("reloadAdminButton").addEventListener("click",()=>location.reload());
   }
 
   bind();

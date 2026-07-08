@@ -27,7 +27,8 @@
   function loadCustomers(){
     try{
       const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
-      return Object.keys(stored).length?stored:clone(demoRoot.customers||{});
+      if(stored&&typeof stored==="object"&&!Array.isArray(stored)&&Object.keys(stored).length)return stored;
+      return clone(demoRoot.customers||{});
     }catch(error){
       return clone(demoRoot.customers||{});
     }
@@ -43,7 +44,19 @@
 
   function activeCustomer(){
     if(!customers[activeId]){
-      activeId=Object.keys(customers)[0];
+      activeId=Object.keys(customers)[0]||generateId();
+      customers[activeId]=customers[activeId]||{
+        customerId:activeId,
+        customerName:"Neuer Kunde",
+        tripName:"Neue Reise",
+        status:"Entwurf",
+        publicationState:"Entwurf",
+        publishStatus:"draft",
+        version:"1.0",
+        updatedAt:new Date().toLocaleDateString("de-DE"),
+        concierge:"Alpine Concierge Tirol",
+        whatsapp:"+4367761410679"
+      };
     }
     return customers[activeId];
   }
@@ -61,6 +74,7 @@
   }
 
   function ensureCollections(customer){
+    if(!customer||typeof customer!=="object")customer={};
     customer.program=customer.program||customer.programItems||[];
     customer.accommodations=customer.accommodations||[];
     if(!customer.accommodations.length&&customer.hotel)customer.accommodations=[customer.hotel];
@@ -370,7 +384,14 @@
   function unlock(){
     byId("loginScreen").hidden=true;
     byId("adminShell").hidden=false;
-    renderAll();
+    try{
+      renderAll();
+    }catch(error){
+      byId("loginScreen").hidden=false;
+      byId("adminShell").hidden=true;
+      byId("loginMessage").textContent="Login ok, aber die Verwaltungsdaten konnten nicht geladen werden. Bitte Browserdaten/localStorage leeren oder JSON neu importieren.";
+      console.error(error);
+    }
   }
 
   bind();

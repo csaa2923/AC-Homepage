@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=16">
+<link rel="stylesheet" href="admin.css?v=21">
 </head>
 <body>
 <main>
@@ -122,7 +122,11 @@
           </select>
           <input class="combo-custom" data-combo-custom="publicationState" placeholder="Eigenen Veröffentlichungsstatus eingeben" hidden>
         </label>
-        <label class="full">Anforderungen<select name="requirements" multiple data-combo-list="requirements" data-combo-multi="true"></select><input class="combo-custom" data-combo-custom="requirements" placeholder="Eigene Anforderung eingeben" hidden><small>Mehrfachauswahl fuer besondere Wuensche. Eigene Werte bleiben moeglich.</small></label>
+        <label class="full">Anforderungen
+          <div class="choice-grid" id="requirementsPicker"></div>
+          <input class="combo-custom" id="requirementsCustom" placeholder="Eigene Anforderung eingeben" hidden>
+          <small>Mehrfachauswahl fuer besondere Wuensche. Mehrere Kacheln koennen gleichzeitig aktiviert werden.</small>
+        </label>
         <div class="full form-actions">
           <button class="button primary" type="submit">Entwurf speichern</button>
           <button class="button soft" id="generateIdButton" type="button">Kunden-ID erzeugen</button>
@@ -210,6 +214,6 @@
 </main>
 
 <script src="customer-data.js"></script>
-<script src="admin.js?v=16"></script>
+<script src="admin.js?v=21"></script>
 </body>
 </html>

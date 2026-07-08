@@ -9,7 +9,7 @@
 
   const fieldSets={
     program:[
-      ["id","ID"],["date","Datum als Text"],["dateValue","Datum von"],["endDateValue","Datum bis"],["startTime","Beginn"],["endTime","Ende"],["title","Titel"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["category","Kategorie"],["meetingPoint","Treffpunkt"],["address","Adresse"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Status"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"]
+      ["id","ID"],["date","Datum als Text"],["dateValue","Datum von"],["endDateValue","Datum bis"],["startTime","Beginn"],["endTime","Ende"],["title","Titel"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["category","Kategorie"],["meetingPoint","Treffpunkt"],["address","Adresse"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Terminstatus"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"]
     ],
     accommodations:[
       ["name","Hotelname"],["address","Adresse"],["checkIn","Check-in"],["checkOut","Check-out"],["contact","Kontakt"],["phone","Telefon"],["navigation","Navigationslink"],["voucherStatus","Voucher-Link"],["notes","Hinweise","textarea"]
@@ -32,6 +32,7 @@
     regions:["Achensee","Ganz Tirol","Innsbruck","Kitzbühel","Kufstein","Osttirol","Seefeld","Stubaital","Ötztal","Zillertal"],
     languages:["Deutsch","Englisch","Französisch","Italienisch"],
     programCategories:["Aktivität","Concierge-Service","Freizeit","Hotel","Kultur","Natur","Restaurant","Shopping","Sonstiges","Sport","Transfer","Wellness"],
+    programStatuses:["In Planung","Angefragt","Option gehalten","Reserviert","Bestätigt","Geändert","Wetterabhängig","Warteliste","Abgesagt","Abgeschlossen"],
     outfits:["Abendgarderobe","Badebekleidung","Casual","Elegant","Freizeit","Outdoor","Skibekleidung","Wanderschuhe"],
     documentTypes:["Angebot","Hotel","PDF","Rechnung","Reiseunterlagen","Restaurant","Sonstiges","Ticket","Versicherung","Voucher"],
     restaurantStatuses:["Angefragt","Bestätigt","Reserviert","Storniert","Warteliste"],
@@ -44,7 +45,7 @@
 
   const fieldOptionMap={
     master:{region:"regions",language:"languages",status:"statuses",publicationState:"publicationStates",requirements:"requirements"},
-    program:{category:"programCategories",outfit:"outfits",status:"statuses"},
+    program:{category:"programCategories",outfit:"outfits",status:"programStatuses"},
     restaurants:{status:"restaurantStatuses",dresscode:"outfits"},
     activities:{status:"activityStatuses"},
     accommodations:{voucherStatus:"hotelStatuses"},
@@ -54,7 +55,7 @@
   const fieldHints={
     customerName:"Erscheint in Begruessung, Reiseuebersicht und Kundenlink.",
     tripName:"Erscheint in Begruessung, Reiseuebersicht und WhatsApp-Text.",
-    status:"Erscheint in Reiseuebersicht und Statusanzeige.",
+    status:"Bei Stammdaten: Reisestatus. Bei Programmpunkten: Terminstatus fuer Kalender, Timeline und Detailkarte.",
     publicationState:"Steuert Entwurf oder Veroeffentlicht im Adminbereich.",
     title:"Erscheint im Kalender, in der Timeline und in der Detailkarte.",
     dateValue:"Startdatum des Programmpunkts. Mehrtaegige Punkte nutzen zusaetzlich Datum bis.",
@@ -154,7 +155,8 @@
   }
 
   function updateComboCustom(select){
-    const custom=select.parentElement.querySelector(`[data-combo-custom="${select.name}"]`);
+    const key=select.name||select.dataset.field;
+    const custom=select.parentElement.querySelector(`[data-combo-custom="${key}"]`);
     if(!custom)return;
     const selected=Array.from(select.selectedOptions).map(option=>option.value);
     const show=selected.includes(customOptionValue);
@@ -163,10 +165,12 @@
       const current=Array.isArray(select._comboValue)?select._comboValue:[select._comboValue];
       custom.value=(current||[]).find(value=>value&&!comboOptions(select.dataset.comboList).includes(value))||"";
     }
+    if(show)window.setTimeout(()=>custom.focus(),0);
   }
 
   function comboValue(select){
-    const custom=select.parentElement.querySelector(`[data-combo-custom="${select.name}"]`);
+    const key=select.name||select.dataset.field;
+    const custom=select.parentElement.querySelector(`[data-combo-custom="${key}"]`);
     const selected=Array.from(select.selectedOptions).map(option=>option.value).filter(Boolean);
     const normal=selected.filter(value=>value!==customOptionValue);
     const customValue=custom&&!custom.hidden&&custom.value.trim()?custom.value.trim():"";
@@ -178,6 +182,48 @@
     document.querySelectorAll("select[data-combo-list]").forEach(select=>{
       if(!select.dataset.field)setupComboSelect(select,select.value);
     });
+  }
+
+  function renderRequirements(values){
+    const selected=Array.isArray(values)?values:String(values||"").split(",").map(item=>item.trim()).filter(Boolean);
+    const options=comboOptions("requirements");
+    const customValue=selected.find(value=>value&&!options.includes(value))||"";
+    const picker=byId("requirementsPicker");
+    const custom=byId("requirementsCustom");
+    if(!picker||!custom)return;
+    picker.innerHTML=[
+      ...options.map(option=>`
+        <label class="choice-pill">
+          <input type="checkbox" value="${escapeHtml(option)}" ${selected.includes(option)?"checked":""}>
+          <span>${escapeHtml(option)}</span>
+        </label>
+      `),
+      `<label class="choice-pill">
+        <input type="checkbox" value="${customOptionValue}" ${customValue?"checked":""}>
+        <span>Eigene Eingabe...</span>
+      </label>`
+    ].join("");
+    custom.value=customValue;
+    custom.hidden=!customValue;
+  }
+
+  function updateRequirementsCustom(){
+    const picker=byId("requirementsPicker");
+    const custom=byId("requirementsCustom");
+    if(!picker||!custom)return;
+    const customChecked=Boolean(picker.querySelector(`input[value="${customOptionValue}"]:checked`));
+    custom.hidden=!customChecked;
+    if(customChecked)custom.focus();
+    if(!customChecked)custom.value="";
+  }
+
+  function readRequirements(){
+    const picker=byId("requirementsPicker");
+    const custom=byId("requirementsCustom");
+    if(!picker)return [];
+    const values=Array.from(picker.querySelectorAll("input:checked")).map(input=>input.value).filter(value=>value!==customOptionValue);
+    if(custom&&!custom.hidden&&custom.value.trim())values.push(custom.value.trim());
+    return values;
   }
 
   function activeCustomer(){
@@ -292,6 +338,7 @@
       if(form.elements[name].dataset&&form.elements[name].dataset.comboList)setupComboSelect(form.elements[name],value);
       else form.elements[name].value=value;
     });
+    renderRequirements(values.requirements);
     renderLinks();
   }
 
@@ -322,7 +369,7 @@
     next.version=form.elements.version.value.trim()||"1.0";
     next.updatedAt=form.elements.updatedAt.value.trim()||new Date().toLocaleDateString("de-DE");
     next.publicationState=comboValue(form.elements.publicationState)||"Entwurf";
-    next.requirements=comboValue(form.elements.requirements);
+    next.requirements=readRequirements();
     next.publishStatus=next.publicationState==="Veröffentlicht"?"published":"draft";
     next.contact={...(next.contact||{}),phone:next.phone,whatsapp:next.whatsapp,email:next.email};
     delete customers[activeId];
@@ -402,7 +449,7 @@
     readEditors();
     const customer=ensureCollections(activeCustomer());
     const factories={
-      program:()=>({id:`item-${Date.now()}`,date:"",dateValue:"",endDateValue:"",startTime:"10:00",endTime:"11:00",title:"Neuer Programmpunkt",shortDescription:"",description:"",category:"Concierge",meetingPoint:"",address:"",navigationUrl:"",outfit:"",notes:"",contactPerson:"",phone:"",status:"Entwurf",calendarEnabled:true,colorClass:"type-concierge",images:[],documents:[]}),
+      program:()=>({id:`item-${Date.now()}`,date:"",dateValue:"",endDateValue:"",startTime:"10:00",endTime:"11:00",title:"Neuer Programmpunkt",shortDescription:"",description:"",category:"Concierge-Service",meetingPoint:"",address:"",navigationUrl:"",outfit:"",notes:"",contactPerson:"",phone:"",status:"In Planung",calendarEnabled:true,colorClass:"type-concierge",images:[],documents:[]}),
       accommodations:()=>({name:"Neue Unterkunft",address:"",checkIn:"",checkOut:"",contact:"",phone:"",navigation:"",voucherStatus:"",notes:""}),
       restaurants:()=>({name:"Neues Restaurant",date:"",time:"",guests:"",address:"",status:"Angefragt",dresscode:"",notes:"",navigation:"",voucherLink:""}),
       activities:()=>({title:"Neue Aktivität",provider:"",date:"",time:"",meetingPoint:"",address:"",contact:"",phone:"",ticketStatus:"",qrStatus:"",status:"Angefragt",notes:""}),
@@ -424,6 +471,17 @@
       card.classList.add("editor-card-highlight");
       window.setTimeout(()=>card.classList.remove("editor-card-highlight"),1600);
       pendingScrollItemId="";
+    },80);
+  }
+
+  function scrollToMasterForm(){
+    window.setTimeout(()=>{
+      const section=byId("master-data");
+      const form=byId("masterForm");
+      if(!section||!form)return;
+      section.scrollIntoView({behavior:"smooth",block:"start"});
+      form.classList.add("admin-card-highlight");
+      window.setTimeout(()=>form.classList.remove("admin-card-highlight"),1600);
     },80);
   }
 
@@ -619,12 +677,13 @@
     byId("masterForm").addEventListener("submit",event=>{event.preventDefault();readMaster()});
     document.addEventListener("change",event=>{
       if(event.target.matches("select[data-combo-list]"))updateComboCustom(event.target);
+      if(event.target.closest("#requirementsPicker"))updateRequirementsCustom();
       if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}
     });
     document.addEventListener("input",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}});
     document.addEventListener("click",event=>{
       const edit=event.target.closest("[data-edit-customer]");
-      if(edit){activeId=edit.dataset.editCustomer;renderAll();}
+      if(edit){activeId=edit.dataset.editCustomer;renderAll();scrollToMasterForm();}
       const open=event.target.closest("[data-open-customer]");
       if(open)window.open(portalPath(open.dataset.openCustomer),"_blank","noopener");
       const copy=event.target.closest("[data-copy-customer]");

@@ -371,6 +371,9 @@
 
   function bind(){
     byId("loginButton").addEventListener("click",login);
+    byId("passwordInput").addEventListener("input",event=>{
+      if(normalizePassword(event.target.value).includes(PASSWORD))login();
+    });
     byId("passwordInput").addEventListener("keydown",event=>{
       if(event.key==="Enter"){
         event.preventDefault();
@@ -463,6 +466,10 @@
   function init(){
     bind();
     if(sessionStorage.getItem(SESSION_KEY)==="1")unlock();
+    window.setTimeout(()=>{
+      const input=byId("passwordInput");
+      if(input&&normalizePassword(input.value).includes(PASSWORD))login();
+    },250);
   }
 
   if(document.readyState==="loading"){

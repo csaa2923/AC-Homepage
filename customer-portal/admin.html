@@ -13,7 +13,7 @@
 function actAdminInlineLogin(){
   var input=document.getElementById("passwordInput");
   var message=document.getElementById("loginMessage");
-  var ok=input&&input.value&&input.value.trim().toUpperCase()==="";
+  var ok=input&&input.value&&input.value.trim().toUpperCase()==="ACT2026";
   if(!ok){
     if(message)message.textContent="Passwort nicht korrekt.";
     return;
@@ -37,7 +37,7 @@ function actAdminInlineLogin(){
       <h1>Kundenportal Admin</h1>
       <p class="muted">Übergangslösung für Schritt 2. Für echte Kundendaten später Firebase Authentication verwenden.</p>
       <label>Passwort
-        <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Passwort eingeben" oninput="actAdminInlineLogin()" onkeydown="if(event.key==='Enter'){event.preventDefault();actAdminInlineLogin()}">
+        <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Passwort eingeben" onkeydown="if(event.key==='Enter'){event.preventDefault();actAdminInlineLogin()}">
       </label>
       <button class="button primary" id="loginButton" type="button" onclick="actAdminInlineLogin()">Öffnen</button>
       <button class="button soft" id="resetLocalDataButton" type="button">Lokale Admin-Daten zurücksetzen</button>

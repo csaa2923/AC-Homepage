@@ -357,6 +357,11 @@
         byId("loginButton").click();
       }
     });
+    byId("resetLocalDataButton").addEventListener("click",()=>{
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(SESSION_KEY);
+      byId("loginMessage").textContent="Lokale Admin-Daten wurden zurückgesetzt. Bitte Passwort erneut eingeben.";
+    });
     byId("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(SESSION_KEY);location.reload()});
     byId("newCustomerButton").addEventListener("click",newCustomer);
     byId("generateIdButton").addEventListener("click",()=>{byId("masterForm").elements.customerId.value=generateId()});

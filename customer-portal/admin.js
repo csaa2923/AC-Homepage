@@ -360,6 +360,9 @@
     byId("resetLocalDataButton").addEventListener("click",()=>{
       localStorage.removeItem(STORAGE_KEY);
       sessionStorage.removeItem(SESSION_KEY);
+      customers=clone(demoRoot.customers||{});
+      activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
+      byId("passwordInput").value="";
       byId("loginMessage").textContent="Lokale Admin-Daten wurden zurückgesetzt. Bitte Passwort erneut eingeben.";
     });
     byId("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(SESSION_KEY);location.reload()});
@@ -392,10 +395,18 @@
     try{
       renderAll();
     }catch(error){
-      byId("loginScreen").hidden=false;
-      byId("adminShell").hidden=true;
-      byId("loginMessage").textContent="Login ok, aber die Verwaltungsdaten konnten nicht geladen werden. Bitte Browserdaten/localStorage leeren oder JSON neu importieren.";
       console.error(error);
+      localStorage.removeItem(STORAGE_KEY);
+      customers=clone(demoRoot.customers||{});
+      activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
+      try{
+        renderAll();
+      }catch(secondError){
+        byId("loginScreen").hidden=false;
+        byId("adminShell").hidden=true;
+        byId("loginMessage").textContent="Login ok, aber die Verwaltungsoberfläche konnte nicht geladen werden. Bitte Seite neu laden.";
+        console.error(secondError);
+      }
     }
   }
 

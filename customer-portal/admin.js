@@ -152,7 +152,10 @@
               <div><span>Status</span><strong>${customer.status||"-"}</strong></div>
               <div><span>Veröffentlichung</span><strong>${customer.publicationState||customer.publishStatus||"Entwurf"}</strong></div>
             </div>
-            <p class="muted">${link}</p>
+            <div class="customer-link-row">
+              <span>Diesen Link erhält der Kunde</span>
+              <code>${link}</code>
+            </div>
           </div>
           <div class="form-actions">
             <button class="button soft" type="button" data-edit-customer="${id}">Bearbeiten</button>

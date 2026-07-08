@@ -41,11 +41,15 @@ h3{font-size:25px}
 .inline-head{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .admin-card,.customer-card,.editor-card{width:min(1180px,100%);margin:0 auto;border:1px solid var(--line);border-radius:8px;background:var(--paper);box-shadow:var(--shadow);padding:20px}
 .customer-list,.editor-list{width:min(1180px,100%);margin:0 auto;display:grid;gap:14px}
-.customer-card{display:grid;gap:12px}
-.customer-meta{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-.customer-meta div{padding:10px;border:1px solid var(--line);border-radius:8px;background:#fffaf0}
+.customer-card{display:grid;gap:18px}
+.customer-card .form-actions{padding-top:2px}
+.customer-meta{display:grid;grid-template-columns:1fr;gap:10px;margin-top:16px}
+.customer-meta div{min-width:0;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fffaf0}
 .customer-meta span{display:block;color:#8d6b20;text-transform:uppercase;font-size:11px;font-weight:900;letter-spacing:.08em}
-.customer-meta strong{display:block;margin-top:4px}
+.customer-meta strong{display:block;margin-top:4px;overflow-wrap:anywhere;line-height:1.25}
+.customer-link-row{display:grid;gap:6px;margin-top:16px;padding:12px;border:1px solid rgba(16,40,32,.12);border-radius:8px;background:#fff}
+.customer-link-row span{color:#8d6b20;text-transform:uppercase;font-size:11px;font-weight:900;letter-spacing:.08em}
+.customer-link-row code{white-space:normal;overflow-wrap:anywhere;color:var(--muted);font-family:Arial,sans-serif;font-size:13px;line-height:1.45}
 .form-grid,.editor-grid,.publish-grid,.export-grid{display:grid;grid-template-columns:1fr;gap:14px}
 label{display:grid;gap:7px;color:#8d6b20;text-transform:uppercase;font-size:12px;font-weight:900;letter-spacing:.08em}
 label small{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:0;text-transform:none;line-height:1.4}
@@ -72,8 +76,8 @@ textarea{min-height:92px;resize:vertical;text-transform:none}
 @media(min-width:780px){
   .admin-header{grid-template-columns:minmax(0,1fr) auto;align-items:center}
   .form-grid,.editor-grid,.publish-grid,.export-grid{grid-template-columns:repeat(2,1fr)}
-  .customer-card{grid-template-columns:minmax(0,1fr) auto;align-items:center}
-  .customer-meta{grid-template-columns:repeat(4,1fr)}
+  .customer-meta{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .customer-card .form-actions{justify-content:flex-start}
   .flow-steps{grid-template-columns:repeat(7,1fr)}
   .flow-steps span{justify-content:center;text-align:center}
   .flow-steps span:not(:last-child)::after{left:auto;right:-10px;bottom:auto;top:50%;width:10px;height:2px}

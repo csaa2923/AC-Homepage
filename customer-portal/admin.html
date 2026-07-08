@@ -8,7 +8,25 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=5">
+<link rel="stylesheet" href="admin.css?v=6">
+<script>
+function actAdminInlineLogin(){
+  var input=document.getElementById("passwordInput");
+  var message=document.getElementById("loginMessage");
+  var ok=input&&input.value&&input.value.trim().toUpperCase()==="ACT2026";
+  if(!ok){
+    if(message)message.textContent="Passwort nicht korrekt.";
+    return;
+  }
+  try{sessionStorage.setItem("act_customer_portal_admin_unlocked","1")}catch(error){}
+  if(window.ACTAdminUnlock){
+    window.ACTAdminUnlock();
+    return;
+  }
+  document.getElementById("loginScreen").hidden=true;
+  document.getElementById("adminShell").hidden=false;
+}
+</script>
 </head>
 <body>
 <main>
@@ -19,9 +37,9 @@
       <h1>Kundenportal Admin</h1>
       <p class="muted">Übergangslösung für Schritt 2. Für echte Kundendaten später Firebase Authentication verwenden.</p>
       <label>Passwort
-        <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Passwort eingeben">
+        <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Passwort eingeben" oninput="actAdminInlineLogin()" onkeydown="if(event.key==='Enter'){event.preventDefault();actAdminInlineLogin()}">
       </label>
-      <button class="button primary" id="loginButton" type="button">Öffnen</button>
+      <button class="button primary" id="loginButton" type="button" onclick="actAdminInlineLogin()">Öffnen</button>
       <button class="button soft" id="resetLocalDataButton" type="button">Lokale Admin-Daten zurücksetzen</button>
       <p class="form-message" id="loginMessage" aria-live="polite"></p>
     </div>
@@ -170,6 +188,6 @@
 </main>
 
 <script src="customer-data.js"></script>
-<script src="admin.js?v=5"></script>
+<script src="admin.js?v=6"></script>
 </body>
 </html>

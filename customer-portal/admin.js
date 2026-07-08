@@ -443,6 +443,9 @@
     byId("reloadAdminButton").addEventListener("click",()=>location.reload());
   }
 
+  window.ACTAdminUnlock=unlock;
+  window.ACTAdminRender=renderAll;
+
   bind();
   if(sessionStorage.getItem(SESSION_KEY)==="1")unlock();
 })();

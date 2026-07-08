@@ -357,12 +357,13 @@
     console.log("Vergleich:", comparisonValue);
     console.log("ACTAdminUnlock vorhanden:", typeof window.ACTAdminUnlock);
 
-    if(comparisonValue!==PASSWORD){
+    if(!comparisonValue.includes(PASSWORD)){
       if(message)message.textContent="Passwort nicht korrekt.";
       return;
     }
 
     console.log("Login erfolgreich");
+    if(input)input.value=PASSWORD;
     if(message)message.textContent="";
     sessionStorage.setItem(SESSION_KEY,"1");
     unlock();

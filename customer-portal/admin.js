@@ -343,18 +343,24 @@
   }
 
   function bind(){
-    byId("loginButton").addEventListener("click",()=>{
+    function attemptLogin(){
       if(byId("passwordInput").value.trim().toUpperCase()===PASSWORD){
         sessionStorage.setItem(SESSION_KEY,"1");
         unlock();
       }else{
         byId("loginMessage").textContent="Passwort nicht korrekt.";
       }
-    });
+    }
+    function autoLoginIfReady(){
+      if(byId("passwordInput").value.trim().toUpperCase()===PASSWORD)attemptLogin();
+    }
+    byId("loginButton").addEventListener("click",attemptLogin);
+    byId("loginButton").addEventListener("pointerup",attemptLogin);
+    byId("passwordInput").addEventListener("input",autoLoginIfReady);
     byId("passwordInput").addEventListener("keydown",event=>{
       if(event.key==="Enter"){
         event.preventDefault();
-        byId("loginButton").click();
+        attemptLogin();
       }
     });
     byId("resetLocalDataButton").addEventListener("click",()=>{

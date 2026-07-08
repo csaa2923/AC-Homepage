@@ -465,11 +465,8 @@
 
   function init(){
     bind();
-    if(sessionStorage.getItem(SESSION_KEY)==="1")unlock();
-    window.setTimeout(()=>{
-      const input=byId("passwordInput");
-      if(input&&normalizePassword(input.value).includes(PASSWORD))login();
-    },250);
+    sessionStorage.setItem(SESSION_KEY,"1");
+    unlock();
   }
 
   if(document.readyState==="loading"){

@@ -330,11 +330,17 @@
 
   function bind(){
     byId("loginButton").addEventListener("click",()=>{
-      if(byId("passwordInput").value===PASSWORD){
+      if(byId("passwordInput").value.trim().toUpperCase()===PASSWORD){
         sessionStorage.setItem(SESSION_KEY,"1");
         unlock();
       }else{
         byId("loginMessage").textContent="Passwort nicht korrekt.";
+      }
+    });
+    byId("passwordInput").addEventListener("keydown",event=>{
+      if(event.key==="Enter"){
+        event.preventDefault();
+        byId("loginButton").click();
       }
     });
     byId("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(SESSION_KEY);location.reload()});

@@ -19,6 +19,12 @@
     saveCrmRecord:customer=>service().saveCrmRecord(customer),
     loadCrmRecord:id=>service().loadCrmRecord(id),
     loadAllCrmForAdmin:ids=>service().loadAllCrmForAdmin(ids),
-    deleteCrmRecord:id=>service().deleteCrmRecord(id)
+    deleteCrmRecord:id=>service().deleteCrmRecord(id),
+    uploadBookingDocument:(customerId,bookingId,file,meta,onProgress)=>service().uploadBookingDocument(customerId,bookingId,file,meta,onProgress),
+    saveBookingRecord:booking=>service().saveBookingRecord(booking),
+    saveCustomerBookings:customer=>service().saveCustomerBookings(customer),
+    loadBookingsForCustomer:id=>service().loadBookingsForCustomer(id),
+    loadAllBookingsForAdmin:()=>service().loadAllBookingsForAdmin(),
+    deleteBookingRecord:id=>service().deleteBookingRecord(id)
   };
 })();

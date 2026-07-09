@@ -491,6 +491,19 @@
     return [...customer.program].sort((a,b)=>`${a.dateValue||a.date} ${a.startTime}`.localeCompare(`${b.dateValue||b.date} ${b.startTime}`));
   }
 
+  function programStatusLabel(item){
+    if(item?.statusDisplay)return item.statusDisplay;
+    const lib=window.ACTBookingLibrary;
+    if(lib&&Array.isArray(customer.bookings)){
+      return lib.displayStatusForProgramItem(item,customer.bookings)||item.status||"";
+    }
+    return item?.status||"";
+  }
+
+  function portalBookings(){
+    return (customer.bookings||[]).filter(item=>item&&!item.archived);
+  }
+
   function addDays(dateValue,days){
     const [year,month,day]=dateValue.split("-").map(Number);
     const date=new Date(Date.UTC(year,month-1,day+days));
@@ -577,7 +590,7 @@
       <a class="calendar-event ${item.colorClass||"type-concierge"}${continuation?" is-continuation":""}" href="#${detailId(item)}" style="${continuation?"top:0;height:48px":calendarEventStyle(item,bounds)}">
         <strong>${timeLabel} ${titleLabel}</strong>
         <span>${item.meetingPoint||""}</span>
-        <em>${item.status}</em>
+        <em>${programStatusLabel(item)}</em>
       </a>
     `;
   }
@@ -705,7 +718,7 @@
         <span class="timeline-time">${item.startTime}</span>
         <span class="timeline-title">${item.title}</span>
         <span class="timeline-place">${item.meetingPoint}</span>
-        <span class="tag">${item.status}</span>
+        <span class="tag">${programStatusLabel(item)}</span>
       </a>
     `).join("");
   }
@@ -726,7 +739,7 @@
                 <small>${item.shortDescription}</small>
                 <small>${item.meetingPoint}</small>
               </span>
-              <span class="tag">${item.status}</span>
+              <span class="tag">${programStatusLabel(item)}</span>
             </a>
           `).join("")}
         </div>
@@ -734,35 +747,78 @@
     `).join("");
   }
 
+  function linkedBookingForItem(item){
+    return portalBookings().find(booking=>booking.programItemId===item.id);
+  }
+
   function renderProgramDetails(){
     const items=programItems();
     document.getElementById("programDetails").innerHTML=items.map((item,index)=>{
       const previous=items[index-1];
       const next=items[index+1];
+      const linked=linkedBookingForItem(item);
+      const bookingDocs=(linked?.documents||[]).filter(doc=>doc.url&&doc.visible!==false);
       return `
         <article class="program-detail-card" id="${detailId(item)}">
-          <span class="tag">${item.category} · ${item.status}</span>
+          <span class="tag">${item.category} · ${programStatusLabel(item)}</span>
           <h3>${item.title}</h3>
           <p>${item.description}</p>
+          ${linked?.customerNote?`<p class="booking-customer-note"><strong>Hinweis:</strong> ${escapeHtml(linked.customerNote)}</p>`:""}
           ${definitionList([
             ["Datum",itemDate(item)],
             ["Uhrzeit",`${item.startTime} - ${item.endTime}`],
             ["Dauer",item.duration],
             ["Treffpunkt",item.meetingPoint],
             ["Adresse",item.address],
+            ["Anbieter",linked?.provider||""],
             ["Kleidung / Ausrüstung",item.outfit],
             ["Hinweise",item.notes],
             ["Kontaktperson",item.contactPerson],
             ["Telefon",item.phone],
-            ["Dokumente",item.documents&&item.documents.length?item.documents.join(", "):"Platzhalter"]
+            ["Dokumente",item.documents&&item.documents.length?item.documents.join(", "):""]
           ])}
           <div class="card-actions">
             <a class="button soft" href="#calendar">Zurück zum Kalender</a>
             <a class="button soft" href="#overall-timeline">Zurück zur Gesamt-Timeline</a>
             ${previous?`<a class="button soft" href="#${detailId(previous)}">Vorheriger Programmpunkt</a>`:""}
             ${next?`<a class="button soft" href="#${detailId(next)}">Nächster Programmpunkt</a>`:""}
-            <a class="button soft" href="${itemNavigationUrl(item)}" target="_blank" rel="noopener">Navigation öffnen</a>
+            ${(linked?.navigationUrl||itemNavigationUrl(item))?`<a class="button soft" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener">Navigation öffnen</a>`:""}
+            ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener">Dokument öffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
             <button class="button soft" type="button" data-calendar-id="${item.id}" ${item.calendarEnabled?"":"disabled"}>In Kalender speichern</button>
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function renderBookings(){
+    const grid=document.getElementById("bookingGrid");
+    if(!grid)return;
+    const bookings=portalBookings().sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
+    if(!bookings.length){
+      grid.innerHTML=`<p class="muted">Aktuell sind keine Buchungen für Sie sichtbar.</p>`;
+      return;
+    }
+    const lib=window.ACTBookingLibrary;
+    grid.innerHTML=bookings.map(booking=>{
+      const meta=lib?lib.statusMeta(booking.bookingStatus):{icon:"•"};
+      const docs=(booking.documents||[]).filter(doc=>doc.url&&doc.visible!==false);
+      const navUrl=booking.navigationUrl||"";
+      return `
+        <article class="portal-booking-card">
+          <span class="tag">${escapeHtml(booking.type||"")} · ${meta.icon} ${escapeHtml(booking.bookingStatus||"")}</span>
+          <h3>${escapeHtml(booking.title||"Buchung")}</h3>
+          <p class="muted">${escapeHtml(booking.provider||"")}</p>
+          ${definitionList([
+            ["Datum",booking.date?formatDateValue(booking.date):""],
+            ["Uhrzeit",booking.startTime?`${booking.startTime}${booking.endTime?` - ${booking.endTime}`:""}`:""],
+            ["Treffpunkt",booking.meetingPoint||""],
+            ["Adresse",booking.address||""],
+            ["Hinweis",booking.customerNote||""]
+          ])}
+          <div class="card-actions">
+            ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener">Navigation</a>`:""}
+            ${docs.map(doc=>`<a class="button soft" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener">Dokument öffnen</a>`).join("")}
           </div>
         </article>
       `;
@@ -1106,6 +1162,7 @@
     renderOverallTimeline();
     renderDayTimelines();
     renderProgramDetails();
+    renderBookings();
     renderHotel();
     renderWeather();
     renderDocuments();

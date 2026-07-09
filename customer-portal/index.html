@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=9">
+<link rel="stylesheet" href="customer-portal.css?v=10">
 </head>
 <body>
 <header class="portal-header" aria-label="Kundenportal Kopfbereich">
@@ -29,6 +29,7 @@
   <a href="#overall-timeline">Gesamt-Timeline</a>
   <a href="#day-timeline">Tagesprogramm</a>
   <a href="#program-details">Programmdetails</a>
+  <a href="#bookings">Buchungen</a>
   <a href="#accommodation">Unterkunft</a>
   <a href="#documents">Dokumente</a>
   <a href="#contact">Kontakt</a>
@@ -109,6 +110,14 @@
     <div class="detail-card-grid" id="programDetails"></div>
   </section>
 
+  <section class="portal-section" id="bookings" aria-labelledby="bookingsTitle">
+    <div class="section-head">
+      <p class="eyebrow">Buchungen</p>
+      <h2 id="bookingsTitle">Ihre bestätigten Leistungen</h2>
+    </div>
+    <div class="booking-grid" id="bookingGrid"></div>
+  </section>
+
   <section class="portal-section split-grid" id="accommodation" aria-label="Unterkunft und Wetter">
     <article class="info-card" id="hotelCard"></article>
     <article class="info-card weather-card" id="weatherCard"></article>
@@ -158,11 +167,12 @@
 </template>
 
 <script src="customer-data.js?v=2"></script>
+<script src="booking-library.js?v=1"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=10"></script>
+<script src="firebase-service.js?v=14"></script>
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js"></script>
-<script src="customer-portal.js?v=25"></script>
+<script src="customer-portal.js?v=26"></script>
 </body>
 </html>

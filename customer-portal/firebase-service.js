@@ -31,6 +31,12 @@
     delete snapshot.publishMeta;
     delete snapshot.publishHistory;
     delete snapshot.crm;
+    if(window.ACTBookingLibrary){
+      const applied=window.ACTBookingLibrary.applyBookingsToProgram(snapshot);
+      snapshot.program=applied.program;
+      snapshot.programItems=applied.program;
+      snapshot.bookings=window.ACTBookingLibrary.publishedBookings(snapshot);
+    }
     return snapshot;
   }
 
@@ -278,6 +284,7 @@
     if(!existing.exists()||!("publishedData" in (existing.data()||{})))payload.publishedData=null;
     await firestoreModule.setDoc(docRef(id),payload,{merge:true});
     try{await saveCrmRecord(customer);}catch(error){console.warn("[ACT Firebase] CRM-Speicherung:",error);}
+    try{await saveCustomerBookings(customer);}catch(error){console.warn("[ACT Firebase] Buchungs-Speicherung:",error);}
     return draftData;
   }
 
@@ -802,6 +809,65 @@
     }
   }
 
+  async function uploadBookingDocument(customerId,bookingId,file,meta,onProgress){
+    return uploadCustomerDocument(customerId,file,{
+      ...(meta||{}),
+      type:`bookings/${safeSegment(bookingId||"draft")}/${safeSegment(meta&&meta.type||"dokument")}`
+    },onProgress);
+  }
+
+  function bookingsCollectionRef(ready){
+    const ctx=ready||state;
+    const {firestoreModule}=ctx.modules;
+    return firestoreModule.collection(ctx.db,"bookings");
+  }
+
+  async function saveBookingRecord(booking){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const bundle=window.ACTBookingLibrary&&window.ACTBookingLibrary.bundleBookingForFirestore
+      ?window.ACTBookingLibrary.bundleBookingForFirestore(booking)
+      :booking;
+    const bookingId=safeSegment(bundle.bookingId||bundle.id||`booking-${Date.now()}`);
+    await firestoreModule.setDoc(firestoreModule.doc(bookingsCollectionRef(ready),bookingId),{
+      ...bundle,
+      bookingId,
+      updatedAt:new Date().toISOString(),
+      lastUpdated:nowText()
+    },{merge:true});
+    return bookingId;
+  }
+
+  async function saveCustomerBookings(customer){
+    const bookings=Array.isArray(customer?.bookings)?customer.bookings:[];
+    for(const booking of bookings){
+      try{await saveBookingRecord(booking);}catch(error){console.warn("[ACT Firebase] Buchung:",error);}
+    }
+  }
+
+  async function loadBookingsForCustomer(customerId){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const id=safeSegment(customerId);
+    const snap=await firestoreModule.getDocs(
+      firestoreModule.query(bookingsCollectionRef(ready),firestoreModule.where("customerId","==",id))
+    );
+    return snap.docs.map(docSnap=>docSnap.data());
+  }
+
+  async function loadAllBookingsForAdmin(){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const snap=await firestoreModule.getDocs(bookingsCollectionRef(ready));
+    return snap.docs.map(docSnap=>docSnap.data());
+  }
+
+  async function deleteBookingRecord(bookingId){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    await firestoreModule.deleteDoc(firestoreModule.doc(bookingsCollectionRef(ready),safeSegment(bookingId)));
+  }
+
   window.ACTFirebaseService={
     init,
     state:()=>({...state}),
@@ -825,6 +891,12 @@
     loadCrmRecord,
     loadAllCrmForAdmin,
     deleteCrmRecord,
+    uploadBookingDocument,
+    saveBookingRecord,
+    saveCustomerBookings,
+    loadBookingsForCustomer,
+    loadAllBookingsForAdmin,
+    deleteBookingRecord,
     denormalizeFromFirestore,
     normalizeForFirestore
   };

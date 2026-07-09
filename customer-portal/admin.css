@@ -223,4 +223,26 @@ textarea{min-height:92px;resize:vertical;text-transform:none}
 .crm-badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#f4efe2;color:var(--green);font-size:11px;font-weight:700}
 @media(max-width:720px){
   .crm-dashboard-grid{grid-template-columns:1fr}
+  .booking-dashboard-grid{grid-template-columns:1fr}
 }
+
+.booking-dashboard-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));width:min(1180px,100%);margin:0 auto 14px}
+.booking-panel,.booking-card{border:1px solid var(--line);border-radius:8px;background:var(--paper);box-shadow:var(--shadow);padding:16px}
+.booking-panel h3{margin:0 0 10px;font-size:16px}
+.booking-panel ul{margin:0;padding-left:18px;display:grid;gap:6px}
+.booking-list{display:grid;gap:12px;width:min(1180px,100%);margin:0 auto}
+.booking-card{display:grid;gap:14px}
+.booking-type-tabs,.booking-filters{display:flex;flex-wrap:wrap;gap:8px}
+.booking-type-tabs button{min-height:36px;padding:8px 14px;border:1px solid rgba(216,183,106,.45);border-radius:999px;background:#fff;color:var(--green);font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.booking-type-tabs button.active{background:var(--green);color:#f8f1dd;border-color:var(--green)}
+.booking-filters{width:100%;margin-top:10px}
+.booking-status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:color-mix(in srgb,var(--booking-color,#5b6b7a) 16%,#fff);color:var(--green);font-size:12px;font-weight:800}
+.booking-deadlines{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.booking-deadline{padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800}
+.booking-deadline-ok{background:#e8f5ec;color:#1f6b3f}
+.booking-deadline-soon{background:#fff2d8;color:#7a5c1f}
+.booking-deadline-overdue{background:#ffe8e8;color:#8c1f1f}
+.booking-warning-line{color:#7a5c1f;font-size:13px;margin-top:8px}
+.booking-modal-card{max-width:920px;max-height:90vh;overflow:auto}
+.booking-doc-item{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:8px;margin-top:8px}
+.booking-warnings{padding:10px;border-radius:8px;background:#fff8e8;color:#7a5c1f;margin-bottom:10px}

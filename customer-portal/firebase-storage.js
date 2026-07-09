@@ -11,6 +11,10 @@
     uploadTemplateImage:(templateType,templateId,file,meta,onProgress)=>{
       if(!window.ACTFirebaseService)return Promise.reject(new Error("Firebase-Service nicht geladen."));
       return window.ACTFirebaseService.uploadTemplateImage(templateType,templateId,file,meta,onProgress);
+    },
+    uploadBookingDocument:(customerId,bookingId,file,meta,onProgress)=>{
+      if(!window.ACTFirebaseService)return Promise.reject(new Error("Firebase-Service nicht geladen."));
+      return window.ACTFirebaseService.uploadBookingDocument(customerId,bookingId,file,meta,onProgress);
     }
   };
 })();

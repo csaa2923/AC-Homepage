@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=35">
+<link rel="stylesheet" href="admin.css?v=36">
 </head>
 <body>
 <main>
@@ -44,6 +44,7 @@
 
     <nav class="admin-nav admin-nav-main" aria-label="Hauptbereiche">
       <a href="#crm-dashboard">CRM</a>
+      <a href="#bookings-dashboard">Buchungen</a>
       <a href="#customers">Kunden</a>
       <a href="#templates">Vorlagen</a>
     </nav>
@@ -119,6 +120,36 @@
       </div>
       <div class="crm-dashboard-grid" id="crmDashboardGrid"></div>
       <div class="crm-search-results" id="crmSearchResults" hidden></div>
+    </section>
+
+    <section class="admin-section overview-only" id="bookings-dashboard">
+      <div class="section-head inline-head">
+        <div>
+          <p class="eyebrow">Buchungsmanagement</p>
+          <h2>Alle Buchungen zentral verwalten</h2>
+        </div>
+        <div class="form-actions">
+          <button class="button primary" id="newBookingButton" type="button">Buchung anlegen</button>
+          <button class="button soft" id="exportBookingsJsonButton" type="button">JSON exportieren</button>
+          <button class="button soft" id="exportBookingsCsvButton" type="button">CSV exportieren</button>
+          <button class="button soft" id="migrateBookingsFirebaseButton" type="button">Buchungen in Firebase</button>
+        </div>
+      </div>
+      <div class="admin-card booking-toolbar">
+        <div class="booking-type-tabs" id="bookingTypeTabs" role="tablist" aria-label="Buchungskategorien"></div>
+        <div class="form-grid booking-filters">
+          <label>Suche<input id="bookingSearchInput" type="search" placeholder="Titel, Anbieter, Bestätigung ..."></label>
+          <label>Kunde<select id="bookingFilterCustomer"><option value="">Alle Kunden</option></select></label>
+          <label>Status<select id="bookingFilterStatus"><option value="">Alle Status</option></select></label>
+          <label>Typ<select id="bookingFilterType"><option value="">Alle Typen</option></select></label>
+          <label>Datum von<input id="bookingFilterDateFrom" type="date"></label>
+          <label>Datum bis<input id="bookingFilterDateTo" type="date"></label>
+          <label>Anbieter<input id="bookingFilterProvider" type="search" placeholder="Hotel, Restaurant ..."></label>
+        </div>
+        <p class="form-message full" id="bookingStatus" aria-live="polite">Buchungen bereit.</p>
+      </div>
+      <div class="booking-dashboard-grid" id="bookingDashboardGrid"></div>
+      <div class="booking-list" id="bookingList"></div>
     </section>
 
     <section class="admin-section overview-only" id="customers">
@@ -495,6 +526,62 @@
   </div>
 </div>
 
+<div class="admin-modal" id="bookingModal" hidden>
+  <div class="admin-modal-card booking-modal-card" role="dialog" aria-labelledby="bookingModalTitle">
+    <h3 id="bookingModalTitle">Buchung bearbeiten</h3>
+    <p class="muted" id="bookingModalSubtitle">Interne Felder werden nicht im Kundenportal angezeigt.</p>
+    <div id="bookingValidationErrors" class="publish-validation-errors" hidden></div>
+    <div id="bookingWarnings" class="booking-warnings" hidden></div>
+    <form class="form-grid booking-form" id="bookingForm">
+      <label>Buchungs-ID<input name="bookingId" readonly></label>
+      <label>Kunde / Reise<select name="bookingCustomerId" required></select></label>
+      <label>Buchungstyp<select name="bookingType" data-combo-list="bookingTypes"></select><input class="combo-custom" data-combo-custom="bookingType" placeholder="Eigene Eingabe" hidden></label>
+      <label>Titel<input name="bookingTitle" required></label>
+      <label>Anbieter<input name="bookingProvider"></label>
+      <label>Ansprechpartner<input name="bookingContactName"></label>
+      <label>Telefon<input name="bookingPhone"></label>
+      <label>E-Mail<input name="bookingEmail" type="email"></label>
+      <label>Website<input name="bookingWebsite"></label>
+      <label>Datum<input name="bookingDate" type="date" required></label>
+      <label>Uhrzeit Beginn<input name="bookingStartTime" type="time"></label>
+      <label>Uhrzeit Ende<input name="bookingEndTime" type="time"></label>
+      <label>Personenanzahl<input name="bookingPersons"></label>
+      <label>Erwachsene<input name="bookingAdults"></label>
+      <label>Kinder<input name="bookingChildren"></label>
+      <label>Alter der Kinder<input name="bookingChildrenAges"></label>
+      <label class="full">Adresse<textarea name="bookingAddress" rows="2"></textarea></label>
+      <label>Treffpunkt<input name="bookingMeetingPoint"></label>
+      <label>Navigationslink<input name="bookingNavigationUrl"></label>
+      <label>Preis intern<input name="bookingInternalPrice" inputmode="decimal"></label>
+      <label>Preis Kunde<input name="bookingCustomerPrice" inputmode="decimal"></label>
+      <label>Währung<input name="bookingCurrency" value="EUR"></label>
+      <label>Marge<input name="bookingMargin" readonly></label>
+      <label>Zahlungsstatus<select name="bookingPaymentStatus" data-combo-list="bookingPaymentStatuses"></select><input class="combo-custom" data-combo-custom="bookingPaymentStatus" placeholder="Eigene Eingabe" hidden></label>
+      <label>Buchungsstatus<select name="bookingStatus" data-combo-list="bookingStatuses"></select><input class="combo-custom" data-combo-custom="bookingStatus" placeholder="Eigene Eingabe" hidden></label>
+      <label>Bestätigungsnummer<input name="bookingConfirmationNumber"></label>
+      <label>Stornofrist<input name="bookingCancellationDeadline" type="date"></label>
+      <label class="full">Stornobedingungen<textarea name="bookingCancellationTerms" rows="2"></textarea></label>
+      <label>Zahlungsfrist<input name="bookingPaymentDeadline" type="date"></label>
+      <label>Bestätigungsfrist<input name="bookingConfirmationDeadline" type="date"></label>
+      <label>Rückmeldefrist<input name="bookingResponseDeadline" type="date"></label>
+      <label class="full">Zugehöriger Programmpunkt<select name="bookingProgramItemId"><option value="">Kein Programmpunkt</option></select></label>
+      <label class="full">Interne Notiz<textarea name="bookingInternalNote" rows="3"></textarea></label>
+      <label class="full">Sichtbarer Hinweis für Kunden<textarea name="bookingCustomerNote" rows="3"></textarea></label>
+      <label>Sichtbar im Kundenportal<select name="bookingVisibleForCustomer"><option value="false">Nein</option><option value="true">Ja</option></select></label>
+      <label class="full">Dokument hochladen
+        <input type="file" id="bookingDocumentUpload" accept=".pdf,image/*,.jpg,.jpeg,.png,.webp">
+        <select id="bookingDocumentType"></select>
+        <div id="bookingDocumentsList"></div>
+      </label>
+    </form>
+    <div class="form-actions">
+      <button class="button danger" id="archiveBookingButton" type="button">Archivieren</button>
+      <button class="button soft" id="bookingModalCancel" type="button">Abbrechen</button>
+      <button class="button primary" id="bookingModalSave" type="button">Buchung speichern</button>
+    </div>
+  </div>
+</div>
+
 <div class="admin-modal" id="publishDialog" hidden>
   <div class="admin-modal-card" role="dialog" aria-labelledby="publishDialogTitle">
     <h3 id="publishDialogTitle">Änderungen veröffentlichen?</h3>
@@ -530,11 +617,12 @@
 <script src="publish-workflow.js?v=4"></script>
 <script src="template-library.js?v=1"></script>
 <script src="crm-library.js?v=1"></script>
+<script src="booking-library.js?v=1"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=13"></script>
+<script src="firebase-service.js?v=14"></script>
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=3"></script>
-<script src="admin.js?v=58"></script>
+<script src="admin.js?v=59"></script>
 </body>
 </html>

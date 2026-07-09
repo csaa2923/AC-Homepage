@@ -12,6 +12,10 @@
   let templateActiveType="all";
   let templateSearchQuery="";
   let crmSearchQuery="";
+  let bookingTab="all";
+  let bookingFilters={};
+  let editingBookingId="";
+  let editingBookingDocuments=[];
   const PUBLISH_EDITOR="Alpine Concierge Tirol";
   const travelProgressSteps=[
     "Anfrage eingegangen",
@@ -66,6 +70,9 @@
     hotelStatuses:["Angefragt","Bestätigt","Check-in erfolgt","Check-out erfolgt","Reserviert","Storniert"],
     transportModes:["Bahn","Bus","Fahrrad","Mietwagen","Shuttle","Taxi","Zu Fuß"],
     paymentStatuses:["Anzahlung bezahlt","Anzahlungsrechnung gesendet","Offen","Restzahlung offen","Rückerstattung","Storniert","Vollständig bezahlt"],
+    bookingTypes:["Hotel","Restaurant","Aktivität","Transfer","Ticket","Guide","Wellness","Concierge-Service","Sonstiges"],
+    bookingStatuses:["Geplant","Angefragt","In Abstimmung","Reserviert","Bestätigt","Warteliste","Bezahlt","Teilbezahlt","Storniert","Abgeschlossen"],
+    bookingPaymentStatuses:["Offen","Anzahlungsrechnung gesendet","Anzahlung bezahlt","Restzahlung offen","Vollständig bezahlt","Vor Ort zu zahlen","Inklusive","Storniert","Rückerstattet"],
     requirements:["Barrierefrei","Familienfreundlich","Glutenfrei","Hunde erlaubt","Indoor","Kinderfreundlich","Luxus","Outdoor","Rollstuhlgerecht","Romantisch","Vegan","Vegetarisch"]
   };
 
@@ -168,6 +175,7 @@
       restaurants:[],
       activities:[],
       documents:[],
+      bookings:[],
       contact:{
         company:"Alpine Concierge Tirol",
         phone:"+43 677 61410679",
@@ -238,7 +246,10 @@
       const liveHash=workflow.publishContentHash(normalizePublishedSnapshot(next.publishedSnapshot,id));
       if(draftHash===liveHash)next.publishMeta.contentHash=draftHash;
     }
-    if(window.ACTCrmLibrary)return window.ACTCrmLibrary.syncCustomerFromCrm(next);
+    if(window.ACTCrmLibrary)next=window.ACTCrmLibrary.syncCustomerFromCrm(next);
+    if(window.ACTBookingLibrary){
+      next.bookings=Array.isArray(next.bookings)?next.bookings.map(booking=>window.ACTBookingLibrary.normalizeBooking(booking,next)):[];
+    }
     return next;
   }
 
@@ -314,6 +325,22 @@
           }
         }catch(crmError){
           console.warn("[ACT Admin] CRM aus Firebase:",crmError);
+        }
+        try{
+          const bookingMap=await db.loadAllBookingsForAdmin();
+          const bl=bookingLibrary();
+          if(bl&&Array.isArray(bookingMap)){
+            bookingMap.forEach(remote=>{
+              const cid=remote.customerId;
+              if(!customers[cid])return;
+              const existing=(customers[cid].bookings||[]).some(item=>item.bookingId===remote.bookingId);
+              if(!existing){
+                customers[cid].bookings=[...(customers[cid].bookings||[]),bl.normalizeBooking(remote,customers[cid])];
+              }
+            });
+          }
+        }catch(bookingError){
+          console.warn("[ACT Admin] Buchungen aus Firebase:",bookingError);
         }
         activeId=Object.keys(customers)[0]||activeId;
         saveCustomers();
@@ -548,6 +575,10 @@
 
   function crmLibrary(){
     return window.ACTCrmLibrary||null;
+  }
+
+  function bookingLibrary(){
+    return window.ACTBookingLibrary||null;
   }
 
   function portalPath(id,options){
@@ -1021,6 +1052,482 @@
     }
   }
 
+  function setBookingStatus(message,isError){
+    const el=byId("bookingStatus");
+    if(!el)return;
+    el.textContent=message;
+    el.style.color=isError?"#8c1f1f":"#244a3f";
+  }
+
+  function allBookings(){
+    const lib=bookingLibrary();
+    if(!lib)return [];
+    return lib.allBookingsFromCustomers(customers);
+  }
+
+  function currentBookingFilters(){
+    return {
+      tab:bookingTab,
+      query:byId("bookingSearchInput")?.value||bookingFilters.query||"",
+      customerId:byId("bookingFilterCustomer")?.value||bookingFilters.customerId||"",
+      status:byId("bookingFilterStatus")?.value||bookingFilters.status||"",
+      type:byId("bookingFilterType")?.value||bookingFilters.type||"",
+      dateFrom:byId("bookingFilterDateFrom")?.value||bookingFilters.dateFrom||"",
+      dateTo:byId("bookingFilterDateTo")?.value||bookingFilters.dateTo||"",
+      provider:byId("bookingFilterProvider")?.value||bookingFilters.provider||""
+    };
+  }
+
+  function filteredBookingsList(){
+    const lib=bookingLibrary();
+    if(!lib)return [];
+    return lib.filterBookings(allBookings(),currentBookingFilters());
+  }
+
+  function renderBookingTypeTabs(){
+    const tabs=byId("bookingTypeTabs");
+    if(!tabs)return;
+    const items=[
+      {id:"all",label:"Alle Buchungen"},
+      {id:"hotel",label:"Hotelbuchungen"},
+      {id:"restaurant",label:"Restaurantbuchungen"},
+      {id:"activity",label:"Aktivitäten"},
+      {id:"transfer",label:"Transfers"},
+      {id:"other",label:"Sonstige Leistungen"}
+    ];
+    tabs.innerHTML=items.map(item=>`<button type="button" class="${bookingTab===item.id?"active":""}" data-booking-tab="${item.id}">${item.label}</button>`).join("");
+  }
+
+  function renderBookingFilterOptions(){
+    const customerSelect=byId("bookingFilterCustomer");
+    const statusSelect=byId("bookingFilterStatus");
+    const typeSelect=byId("bookingFilterType");
+    const lib=bookingLibrary();
+    if(customerSelect){
+      const current=customerSelect.value;
+      customerSelect.innerHTML=`<option value="">Alle Kunden</option>${Object.values(customers).map(customer=>`<option value="${escapeHtml(customer.customerId)}">${escapeHtml(customer.customerName||customer.customerId)} · ${escapeHtml(customer.tripName||"")}</option>`).join("")}`;
+      customerSelect.value=current;
+    }
+    if(statusSelect&&lib){
+      const current=statusSelect.value;
+      statusSelect.innerHTML=`<option value="">Alle Status</option>${lib.BOOKING_STATUSES.map(status=>`<option>${escapeHtml(status)}</option>`).join("")}`;
+      statusSelect.value=current;
+    }
+    if(typeSelect&&lib){
+      const current=typeSelect.value;
+      typeSelect.innerHTML=`<option value="">Alle Typen</option>${lib.BOOKING_TYPES.map(type=>`<option>${escapeHtml(type)}</option>`).join("")}`;
+      typeSelect.value=current;
+    }
+  }
+
+  function bookingDeadlineBadge(booking,field,label){
+    const lib=bookingLibrary();
+    if(!lib||!booking[field])return "";
+    const tone=lib.deadlineTone(booking[field]);
+    return `<span class="booking-deadline booking-deadline-${tone}">${label}: ${escapeHtml(booking[field])}</span>`;
+  }
+
+  function renderBookingsDashboard(){
+    const grid=byId("bookingDashboardGrid");
+    const lib=bookingLibrary();
+    if(!grid||!lib)return;
+    const dash=lib.buildBookingDashboard(allBookings());
+    const panels=[
+      {title:"Offene Anfragen",items:dash.openRequests},
+      {title:"Warteliste",items:dash.waitlist},
+      {title:"Heute fällig",items:dash.dueToday},
+      {title:"Stornofrist läuft ab",items:dash.cancellationSoon},
+      {title:"Zahlung offen",items:dash.paymentOpen},
+      {title:"Ohne Dokument",items:dash.withoutDocument},
+      {title:"Ohne Programmpunkt",items:dash.withoutProgram},
+      {title:"Bestätigung fehlt",items:dash.missingConfirmation}
+    ];
+    grid.innerHTML=panels.map(panel=>`
+      <article class="booking-panel">
+        <h3>${panel.title} <span class="crm-badge">${panel.items.length}</span></h3>
+        <ul>${panel.items.length?panel.items.slice(0,5).map(item=>{
+          const customer=customers[item.customerId];
+          const meta=lib.statusMeta(item.bookingStatus);
+          return `<li><strong>${escapeHtml(item.title||"")}</strong> · ${escapeHtml(customer?.customerName||"")} <span class="booking-status-pill" style="--booking-color:${meta.color}">${meta.icon} ${escapeHtml(item.bookingStatus||"")}</span></li>`;
+        }).join(""):`<li class="muted">Keine Einträge.</li>`}</ul>
+      </article>
+    `).join("");
+  }
+
+  function renderBookingsList(){
+    const list=byId("bookingList");
+    const lib=bookingLibrary();
+    if(!list||!lib)return;
+    const bookings=filteredBookingsList().sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
+    if(!bookings.length){
+      list.innerHTML=`<article class="customer-card"><p class="muted">Keine Buchungen für die aktuelle Auswahl.</p></article>`;
+      return;
+    }
+    list.innerHTML=bookings.map(booking=>{
+      const customer=customers[booking.customerId];
+      const meta=lib.statusMeta(booking.bookingStatus);
+      const warnings=lib.bookingWarnings(booking);
+      return `
+        <article class="booking-card">
+          <div>
+            <h3><span class="booking-status-pill" style="--booking-color:${meta.color}">${meta.icon} ${escapeHtml(booking.bookingStatus||"")}</span> ${escapeHtml(booking.title||"Buchung")}</h3>
+            <p class="muted">${escapeHtml(booking.type||"")} · ${escapeHtml(customer?.customerName||booking.customerId)} · ${escapeHtml(customer?.tripName||"")}</p>
+            <div class="customer-meta">
+              <div><span>Datum</span><strong>${escapeHtml(booking.date||"-")} ${escapeHtml(booking.startTime||"")}</strong></div>
+              <div><span>Anbieter</span><strong>${escapeHtml(booking.provider||"-")}</strong></div>
+              <div><span>Zahlung</span><strong>${escapeHtml(booking.paymentStatus||"-")}</strong></div>
+              <div><span>Programmpunkt</span><strong>${booking.programItemId?"Verknüpft":"–"}</strong></div>
+            </div>
+            <div class="booking-deadlines">
+              ${bookingDeadlineBadge(booking,"cancellationDeadline","Stornofrist")}
+              ${bookingDeadlineBadge(booking,"paymentDeadline","Zahlungsfrist")}
+              ${bookingDeadlineBadge(booking,"confirmationDeadline","Bestätigung")}
+            </div>
+            ${warnings.length?`<p class="booking-warning-line">${warnings.map(item=>escapeHtml(item)).join(" · ")}</p>`:""}
+          </div>
+          <div class="form-actions">
+            <button class="button soft" type="button" data-edit-booking="${escapeHtml(booking.bookingId)}">Bearbeiten</button>
+            <button class="button soft" type="button" data-open-booking-customer="${escapeHtml(booking.customerId)}">Reise öffnen</button>
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function renderBookings(){
+    renderBookingTypeTabs();
+    renderBookingFilterOptions();
+    renderBookingsDashboard();
+    renderBookingsList();
+  }
+
+  function populateBookingModalSelects(customer){
+    const form=byId("bookingForm");
+    const lib=bookingLibrary();
+    if(!form||!lib)return;
+    const typeSelect=form.elements.bookingType;
+    const statusSelect=form.elements.bookingStatus;
+    const paymentSelect=form.elements.bookingPaymentStatus;
+    const customerSelect=form.elements.bookingCustomerId;
+    const programSelect=form.elements.bookingProgramItemId;
+    const docType=byId("bookingDocumentType");
+    if(typeSelect)typeSelect.innerHTML=optionMarkup("bookingTypes",typeSelect.value);
+    if(statusSelect)statusSelect.innerHTML=optionMarkup("bookingStatuses",statusSelect.value);
+    if(paymentSelect)paymentSelect.innerHTML=optionMarkup("bookingPaymentStatuses",paymentSelect.value);
+    if(customerSelect){
+      customerSelect.innerHTML=Object.values(customers).map(item=>`<option value="${escapeHtml(item.customerId)}">${escapeHtml(item.customerName||item.customerId)} · ${escapeHtml(item.tripName||"")}</option>`).join("");
+      if(customer)customerSelect.value=customer.customerId;
+    }
+    if(programSelect){
+      const program=customer?.program||[];
+      programSelect.innerHTML=`<option value="">Kein Programmpunkt</option>${program.map(item=>`<option value="${escapeHtml(item.id||"")}">${escapeHtml(item.title||item.id||"Programmpunkt")} · ${escapeHtml(item.dateValue||"")}</option>`).join("")}`;
+    }
+    if(docType)docType.innerHTML=lib.DOCUMENT_TYPES.map(type=>`<option>${escapeHtml(type)}</option>`).join("");
+  }
+
+  function renderBookingDocumentsList(){
+    const list=byId("bookingDocumentsList");
+    if(!list)return;
+    if(!editingBookingDocuments.length){
+      list.innerHTML=`<p class="muted">Noch keine Buchungsdokumente.</p>`;
+      return;
+    }
+    list.innerHTML=editingBookingDocuments.map((doc,index)=>`
+      <div class="booking-doc-item">
+        <strong>${escapeHtml(doc.title||doc.fileName||"Dokument")}</strong>
+        <span class="muted">${escapeHtml(doc.type||"")}</span>
+        <button class="button danger" type="button" data-remove-booking-doc="${index}">Entfernen</button>
+      </div>
+    `).join("");
+  }
+
+  function readBookingForm(){
+    const form=byId("bookingForm");
+    const lib=bookingLibrary();
+    if(!form||!lib)return null;
+    const customerId=form.elements.bookingCustomerId.value;
+    const customer=customers[customerId]||ensureCollections(activeCustomer());
+    const booking=lib.normalizeBooking({
+      bookingId:form.elements.bookingId.value||lib.freshId("booking"),
+      customerId,
+      tripId:customerId,
+      programItemId:form.elements.bookingProgramItemId.value,
+      type:comboValue(form.elements.bookingType),
+      title:form.elements.bookingTitle.value.trim(),
+      provider:form.elements.bookingProvider.value.trim(),
+      contactName:form.elements.bookingContactName.value.trim(),
+      phone:form.elements.bookingPhone.value.trim(),
+      email:form.elements.bookingEmail.value.trim(),
+      website:form.elements.bookingWebsite.value.trim(),
+      date:form.elements.bookingDate.value,
+      startTime:form.elements.bookingStartTime.value,
+      endTime:form.elements.bookingEndTime.value,
+      persons:form.elements.bookingPersons.value.trim(),
+      adults:form.elements.bookingAdults.value.trim(),
+      children:form.elements.bookingChildren.value.trim(),
+      childrenAges:form.elements.bookingChildrenAges.value.trim(),
+      address:form.elements.bookingAddress.value.trim(),
+      meetingPoint:form.elements.bookingMeetingPoint.value.trim(),
+      navigationUrl:form.elements.bookingNavigationUrl.value.trim(),
+      internalPrice:form.elements.bookingInternalPrice.value.trim(),
+      customerPrice:form.elements.bookingCustomerPrice.value.trim(),
+      currency:form.elements.bookingCurrency.value.trim()||"EUR",
+      margin:form.elements.bookingMargin.value.trim(),
+      paymentStatus:comboValue(form.elements.bookingPaymentStatus),
+      bookingStatus:comboValue(form.elements.bookingStatus),
+      confirmationNumber:form.elements.bookingConfirmationNumber.value.trim(),
+      cancellationDeadline:form.elements.bookingCancellationDeadline.value,
+      cancellationTerms:form.elements.bookingCancellationTerms.value.trim(),
+      paymentDeadline:form.elements.bookingPaymentDeadline.value,
+      confirmationDeadline:form.elements.bookingConfirmationDeadline.value,
+      responseDeadline:form.elements.bookingResponseDeadline.value,
+      internalNote:form.elements.bookingInternalNote.value.trim(),
+      customerNote:form.elements.bookingCustomerNote.value.trim(),
+      visibleForCustomer:form.elements.bookingVisibleForCustomer.value==="true",
+      documents:editingBookingDocuments,
+      providerRef:{type:comboValue(form.elements.bookingType),name:form.elements.bookingProvider.value.trim(),reusable:true}
+    },customer);
+    booking.margin=lib.computeMargin(booking.internalPrice,booking.customerPrice,booking.margin);
+    return booking;
+  }
+
+  function fillBookingForm(booking){
+    const form=byId("bookingForm");
+    if(!form||!booking)return;
+    const customer=customers[booking.customerId]||ensureCollections(activeCustomer());
+    populateBookingModalSelects(customer);
+    form.elements.bookingId.value=booking.bookingId||"";
+    form.elements.bookingCustomerId.value=booking.customerId||activeId;
+    setupComboSelect(form.elements.bookingType,booking.type||"");
+    form.elements.bookingTitle.value=booking.title||"";
+    form.elements.bookingProvider.value=booking.provider||"";
+    form.elements.bookingContactName.value=booking.contactName||"";
+    form.elements.bookingPhone.value=booking.phone||"";
+    form.elements.bookingEmail.value=booking.email||"";
+    form.elements.bookingWebsite.value=booking.website||"";
+    form.elements.bookingDate.value=booking.date||"";
+    form.elements.bookingStartTime.value=booking.startTime||"";
+    form.elements.bookingEndTime.value=booking.endTime||"";
+    form.elements.bookingPersons.value=booking.persons||"";
+    form.elements.bookingAdults.value=booking.adults||"";
+    form.elements.bookingChildren.value=booking.children||"";
+    form.elements.bookingChildrenAges.value=booking.childrenAges||"";
+    form.elements.bookingAddress.value=booking.address||"";
+    form.elements.bookingMeetingPoint.value=booking.meetingPoint||"";
+    form.elements.bookingNavigationUrl.value=booking.navigationUrl||"";
+    form.elements.bookingInternalPrice.value=booking.internalPrice||"";
+    form.elements.bookingCustomerPrice.value=booking.customerPrice||"";
+    form.elements.bookingCurrency.value=booking.currency||"EUR";
+    form.elements.bookingMargin.value=booking.margin||"";
+    setupComboSelect(form.elements.bookingPaymentStatus,booking.paymentStatus||"");
+    setupComboSelect(form.elements.bookingStatus,booking.bookingStatus||"");
+    form.elements.bookingConfirmationNumber.value=booking.confirmationNumber||"";
+    form.elements.bookingCancellationDeadline.value=booking.cancellationDeadline||"";
+    form.elements.bookingCancellationTerms.value=booking.cancellationTerms||"";
+    form.elements.bookingPaymentDeadline.value=booking.paymentDeadline||"";
+    form.elements.bookingConfirmationDeadline.value=booking.confirmationDeadline||"";
+    form.elements.bookingResponseDeadline.value=booking.responseDeadline||"";
+    form.elements.bookingProgramItemId.value=booking.programItemId||"";
+    form.elements.bookingInternalNote.value=booking.internalNote||"";
+    form.elements.bookingCustomerNote.value=booking.customerNote||"";
+    form.elements.bookingVisibleForCustomer.value=booking.visibleForCustomer?"true":"false";
+    editingBookingDocuments=Array.isArray(booking.documents)?clone(booking.documents):[];
+    renderBookingDocumentsList();
+    updateBookingMarginField();
+  }
+
+  function updateBookingMarginField(){
+    const lib=bookingLibrary();
+    const form=byId("bookingForm");
+    if(!lib||!form)return;
+    form.elements.bookingMargin.value=lib.computeMargin(
+      form.elements.bookingInternalPrice.value,
+      form.elements.bookingCustomerPrice.value,
+      form.elements.bookingMargin.value
+    );
+  }
+
+  function openBookingModal(booking,customerId){
+    const lib=bookingLibrary();
+    if(!lib)return;
+    const customer=customers[customerId||booking?.customerId||activeId]||ensureCollections(activeCustomer());
+    editingBookingId=booking?.bookingId||"";
+    editingBookingDocuments=[];
+    const next=booking||lib.defaultBooking(customer);
+    if(!booking)next.customerId=customer.customerId;
+    fillBookingForm(next);
+    byId("bookingModalTitle").textContent=booking?"Buchung bearbeiten":"Neue Buchung";
+    byId("bookingModal").hidden=false;
+    renderBookingValidation(null,null);
+  }
+
+  function closeBookingModal(){
+    byId("bookingModal").hidden=true;
+    editingBookingId="";
+    editingBookingDocuments=[];
+  }
+
+  function renderBookingValidation(errors,warnings){
+    const errorBox=byId("bookingValidationErrors");
+    const warnBox=byId("bookingWarnings");
+    if(errorBox){
+      if(errors?.length){
+        errorBox.hidden=false;
+        errorBox.innerHTML=errors.map(item=>`<p>${escapeHtml(item)}</p>`).join("");
+      }else{
+        errorBox.hidden=true;
+        errorBox.innerHTML="";
+      }
+    }
+    if(warnBox){
+      if(warnings?.length){
+        warnBox.hidden=false;
+        warnBox.innerHTML=warnings.map(item=>`<p>${escapeHtml(item)}</p>`).join("");
+      }else{
+        warnBox.hidden=true;
+        warnBox.innerHTML="";
+      }
+    }
+  }
+
+  function saveBookingFromModal(){
+    const lib=bookingLibrary();
+    if(!lib)return;
+    const booking=readBookingForm();
+    if(!booking)return;
+    const validation=lib.validateBooking(booking);
+    const warnings=lib.bookingWarnings(booking);
+    renderBookingValidation(validation.errors,warnings);
+    if(!validation.ok)return;
+    const customer=ensureCollections(customers[booking.customerId]||activeCustomer());
+    const bookings=Array.isArray(customer.bookings)?[...customer.bookings]:[];
+    const index=bookings.findIndex(item=>item.bookingId===booking.bookingId);
+    if(index>=0)bookings[index]=booking;
+    else bookings.push(booking);
+    customer.bookings=bookings;
+    customer.program=lib.syncProgramItemFromBooking(customer.program,booking);
+    customer.programItems=customer.program;
+    customers[booking.customerId]=commitCustomer(customer,booking.customerId);
+    saveCustomers();
+    saveDraftToFirebase(customers[booking.customerId]);
+    const db=firebaseDatabase();
+    if(db?.saveBookingRecord)db.saveBookingRecord(booking).catch(error=>console.warn("[ACT Admin] Buchung Firebase:",error));
+    setBookingStatus("Buchung gespeichert.");
+    closeBookingModal();
+    renderBookings();
+    if(adminMode==="edit"&&booking.customerId===activeId){
+      renderEditor("program","programEditor");
+      renderPublishDashboard();
+      renderAdminPreview();
+    }
+  }
+
+  function archiveBooking(bookingId){
+    const lib=bookingLibrary();
+    if(!lib||!bookingId)return;
+    for(const [id,customer] of Object.entries(customers)){
+      const bookings=customer.bookings||[];
+      const index=bookings.findIndex(item=>item.bookingId===bookingId);
+      if(index<0)continue;
+      bookings[index]={...bookings[index],archived:true,updatedAt:new Date().toISOString()};
+      customers[id]=commitCustomer({...customer,bookings},id);
+      saveCustomers();
+      saveDraftToFirebase(customers[id]);
+      break;
+    }
+    closeBookingModal();
+    renderBookings();
+    setBookingStatus("Buchung archiviert.");
+  }
+
+  function createBookingFromProgram(index){
+    const lib=bookingLibrary();
+    if(!lib)return;
+    readEditors();
+    const customer=ensureCollections(activeCustomer());
+    const item=customer.program[index];
+    if(!item)return;
+    openBookingModal(lib.bookingFromProgramItem(customer,item),customer.customerId);
+  }
+
+  function findBookingById(bookingId){
+    for(const customer of Object.values(customers)){
+      const hit=(customer.bookings||[]).find(item=>item.bookingId===bookingId);
+      if(hit)return hit;
+    }
+    return null;
+  }
+
+  function exportBookingsJson(){
+    const lib=bookingLibrary();
+    if(!lib)return;
+    const blob=new Blob([lib.exportBookingsJson(filteredBookingsList())],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;
+    link.download=`act-bookings-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportBookingsCsv(){
+    const lib=bookingLibrary();
+    if(!lib)return;
+    const blob=new Blob([lib.exportBookingsCsv(filteredBookingsList(),customers)],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;
+    link.download=`act-bookings-${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function migrateBookingsToFirebase(){
+    const db=firebaseDatabase();
+    if(!db?.saveCustomerBookings){
+      setBookingStatus("Firebase nicht geladen.",true);
+      return;
+    }
+    try{
+      setBookingStatus("Buchungs-Migration läuft ...");
+      let count=0;
+      for(const customer of Object.values(customers)){
+        await db.saveCustomerBookings(ensureCollections(customer));
+        count+=(customer.bookings||[]).length;
+      }
+      setBookingStatus(`Buchungs-Migration abgeschlossen: ${count} Buchung(en) in Firebase.`);
+    }catch(error){
+      setBookingStatus(`Migration fehlgeschlagen: ${error&&error.message?error.message:error}`,true);
+    }
+  }
+
+  async function uploadBookingDocument(file){
+    const lib=bookingLibrary();
+    const form=byId("bookingForm");
+    if(!lib||!form||!file)return;
+    const customerId=form.elements.bookingCustomerId.value||activeId;
+    const bookingId=form.elements.bookingId.value||lib.freshId("booking");
+    form.elements.bookingId.value=bookingId;
+    const docType=byId("bookingDocumentType")?.value||"PDF";
+    const statusEl=byId("bookingStatus");
+    try{
+      if(statusEl)statusEl.textContent="Dokument wird hochgeladen ...";
+      let uploaded=null;
+      if(window.ACTFirebaseStorage?.uploadBookingDocument){
+        uploaded=await window.ACTFirebaseStorage.uploadBookingDocument(customerId,bookingId,file,{type:docType,title:file.name});
+      }else if(window.ACTFirebaseStorage?.uploadCustomerDocument){
+        uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(customerId,file,{type:`bookings/${bookingId}/${docType}`,title:file.name});
+      }
+      if(uploaded){
+        editingBookingDocuments.push(lib.normalizeDocument({...uploaded,type:docType,visible:true}));
+        renderBookingDocumentsList();
+        if(statusEl)statusEl.textContent="Dokument hochgeladen.";
+      }
+    }catch(error){
+      if(statusEl)statusEl.textContent=`Upload fehlgeschlagen: ${error&&error.message?error.message:""}`;
+    }
+  }
+
   function renderMaster(){
     const customer=ensureCollections(activeCustomer());
     const form=byId("masterForm");
@@ -1120,11 +1627,15 @@
     const fields=fieldSets[listName];
     const title=item.title||item.name||item.id||`${listName} ${index+1}`;
     const uploadMarkup=listName==="documents"?documentUploadMarkup(item,index):"";
+    const bookingButton=listName==="program"?`<button class="button soft" type="button" data-create-booking="${index}">Buchung erstellen</button>`:"";
     return `
       <article class="editor-card" data-editor="${listName}" data-index="${index}" data-item-id="${escapeHtml(item.id||item.name||`${listName}-${index}`)}">
         <header>
           <strong>${title}</strong>
-          <button class="button danger" type="button" data-remove-item="${listName}" data-index="${index}">Löschen</button>
+          <div class="form-actions">
+            ${bookingButton}
+            <button class="button danger" type="button" data-remove-item="${listName}" data-index="${index}">Löschen</button>
+          </div>
         </header>
         <div class="editor-grid">
           ${fields.map(([name,label,type])=>fieldMarkup(listName,name,label,type,item)).join("")}
@@ -1517,6 +2028,7 @@
   function renderAll(){
     setAdminMode(adminMode);
     renderCrmDashboard();
+    renderBookings();
     renderTemplates();
     renderCustomers();
     if(adminMode==="crm"){
@@ -1657,6 +2169,13 @@
     delete snapshot.publishMeta;
     delete snapshot.publishHistory;
     delete snapshot.crm;
+    const bl=bookingLibrary();
+    if(bl){
+      const applied=bl.applyBookingsToProgram(snapshot);
+      snapshot.program=applied.program;
+      snapshot.programItems=applied.program;
+      snapshot.bookings=bl.publishedBookings(snapshot);
+    }
     return snapshot;
   }
 
@@ -2451,6 +2970,16 @@
       if(removeReminder)mutateCrmList(crm=>({...crm,reminders:crm.reminders.filter((_,index)=>index!==Number(removeReminder.dataset.removeCrmReminder))}));
       const removeRating=event.target.closest("[data-remove-crm-rating]");
       if(removeRating)mutateCrmList(crm=>({...crm,ratings:crm.ratings.filter((_,index)=>index!==Number(removeRating.dataset.removeCrmRating))}));
+      const bookingTabButton=event.target.closest("[data-booking-tab]");
+      if(bookingTabButton){bookingTab=bookingTabButton.dataset.bookingTab||"all";renderBookings();}
+      const editBooking=event.target.closest("[data-edit-booking]");
+      if(editBooking){const booking=findBookingById(editBooking.dataset.editBooking);if(booking)openBookingModal(booking,booking.customerId);}
+      const openBookingCustomer=event.target.closest("[data-open-booking-customer]");
+      if(openBookingCustomer){activeId=openBookingCustomer.dataset.openBookingCustomer;adminMode="edit";renderAll();scrollToMasterForm();}
+      const createBooking=event.target.closest("[data-create-booking]");
+      if(createBooking)createBookingFromProgram(Number(createBooking.dataset.createBooking));
+      const removeBookingDoc=event.target.closest("[data-remove-booking-doc]");
+      if(removeBookingDoc){editingBookingDocuments=editingBookingDocuments.filter((_,index)=>index!==Number(removeBookingDoc.dataset.removeBookingDoc));renderBookingDocumentsList();}
     });
     byId("copyLinkButton").addEventListener("click",()=>copyText(byId("portalLink").value));
     byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
@@ -2515,6 +3044,28 @@
       if(crmField("crmRatingComment"))crmField("crmRatingComment").value="";
     });
     populateCrmSelects();
+    byId("newBookingButton")?.addEventListener("click",()=>openBookingModal(null,activeId));
+    byId("bookingModalCancel")?.addEventListener("click",closeBookingModal);
+    byId("bookingModalSave")?.addEventListener("click",saveBookingFromModal);
+    byId("archiveBookingButton")?.addEventListener("click",()=>{if(editingBookingId)archiveBooking(editingBookingId);});
+    byId("exportBookingsJsonButton")?.addEventListener("click",exportBookingsJson);
+    byId("exportBookingsCsvButton")?.addEventListener("click",exportBookingsCsv);
+    byId("migrateBookingsFirebaseButton")?.addEventListener("click",migrateBookingsToFirebase);
+    byId("bookingSearchInput")?.addEventListener("input",()=>renderBookings());
+    ["bookingFilterCustomer","bookingFilterStatus","bookingFilterType","bookingFilterDateFrom","bookingFilterDateTo","bookingFilterProvider"].forEach(id=>{
+      byId(id)?.addEventListener("change",()=>renderBookings());
+      byId(id)?.addEventListener("input",()=>renderBookings());
+    });
+    byId("bookingDocumentUpload")?.addEventListener("change",event=>uploadBookingDocument(event.target.files&&event.target.files[0]));
+    byId("bookingForm")?.addEventListener("change",event=>{
+      if(event.target.name==="bookingCustomerId"){
+        const customer=customers[event.target.value];
+        populateBookingModalSelects(customer);
+      }
+      if(event.target.matches("select[data-combo-list]"))updateComboCustom(event.target);
+      if(event.target.name==="bookingInternalPrice"||event.target.name==="bookingCustomerPrice")updateBookingMarginField();
+    });
+    byId("bookingModal")?.addEventListener("click",event=>{if(event.target===event.currentTarget)closeBookingModal()});
     bindMainNavigation();
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()});
     byId("previewDraftButton").addEventListener("click",()=>{previewMode="draft";renderAdminPreview();renderPublishChanges()});

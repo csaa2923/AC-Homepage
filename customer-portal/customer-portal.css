@@ -612,6 +612,11 @@ h3{font-size:24px;color:var(--green)}
   .portal-section{padding:22px}
 }
 
+.booking-grid,.portal-booking-card{display:grid;gap:14px}
+.booking-grid{width:100%}
+.portal-booking-card{padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--paper);box-shadow:var(--shadow)}
+.booking-customer-note{padding:10px 12px;border-radius:8px;background:#f7f1df;margin:10px 0}
+
 .admin-version-hint{
   margin:0 0 8px;
   font-size:12px;

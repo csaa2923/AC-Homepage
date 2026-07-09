@@ -386,7 +386,7 @@
     next.tripTitle=next.tripName;
     next.startDatePlain=form.elements.startDatePlain.value;
     next.endDatePlain=form.elements.endDatePlain.value;
-    next.travelPeriod=next.startDatePlain&&next.endDatePlain?`${formatDate(next.startDatePlain)}-${formatDate(next.endDatePlain)}`:previous.travelPeriod;
+    next.travelPeriod=next.startDatePlain&&next.endDatePlain?`${formatDate(next.startDatePlain)} - ${formatDate(next.endDatePlain)}`:next.startDatePlain?formatDate(next.startDatePlain):"";
     next.startDate=next.startDatePlain?`${next.startDatePlain}T10:00:00+02:00`:previous.startDate;
     next.region=comboValue(form.elements.region);
     next.language=comboValue(form.elements.language);

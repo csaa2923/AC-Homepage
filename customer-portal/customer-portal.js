@@ -53,6 +53,17 @@
     return "Reisezeitraum liegt in der Vergangenheit";
   }
 
+  function hasDisplayValue(value){
+    return value!==undefined&&value!==null&&String(value).trim()!==""&&String(value).trim()!=="undefined";
+  }
+
+  function tripPeriod(){
+    if(customer.startDatePlain&&customer.endDatePlain)return `${formatDateValue(customer.startDatePlain)} - ${formatDateValue(customer.endDatePlain)}`;
+    if(customer.startDatePlain)return formatDateValue(customer.startDatePlain);
+    if(hasDisplayValue(customer.travelPeriod))return customer.travelPeriod;
+    return "";
+  }
+
   function definitionList(items){
     return `<dl class="field-list">${items.map(([label,value])=>`<div><dt>${label}</dt><dd>${value||"-"}</dd></div>`).join("")}</dl>`;
   }
@@ -135,16 +146,16 @@
 
   function renderMeta(){
     const items=[
-      ["Reisezeitraum",customer.travelPeriod],
+      ["Reisezeitraum",tripPeriod()],
       ["Region",customer.region],
       ["Mitreisende",customer.companions],
-      ["Status",customer.status],
+      ["Reisestatus",customer.status],
       ["Countdown",daysUntil(customer.startDate)],
       ["Concierge",customer.concierge],
       ["Kunden-ID",customerId],
       ["Portal",`Version ${customer.version}`],
       ["Veröffentlichung",customer.publicationState]
-    ];
+    ].filter(([,value])=>hasDisplayValue(value));
     document.getElementById("heroMeta").innerHTML=items.map(([label,value])=>`<div class="meta-item"><span>${label}</span><span>${value}</span></div>`).join("");
   }
 
@@ -514,7 +525,7 @@
     text("portalTitle",`Willkommen ${customer.customerName}`);
     text("tripTitle",customer.tripName);
     text("portalVersion",`Version ${customer.version}`);
-    text("publicationStatus",`Status: ${customer.publicationState}`);
+    text("publicationStatus",`Reisestatus: ${customer.status||"Noch nicht festgelegt"}`);
     text("updatedAt",`Zuletzt aktualisiert: ${customer.updatedAt}`);
     document.getElementById("whatsappHero").href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
     renderMeta();

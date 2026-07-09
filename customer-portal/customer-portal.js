@@ -62,6 +62,15 @@
 
     const stored=loadStoredCustomer(customerId);
     if(stored){
+      if(isAdminPreview){
+        dataSource="local-draft";
+        console.log("[ACT Portal] Admin-Entwurfsvorschau:",{
+          customerId,
+          source:"localStorage draft",
+          documentsTotal:(stored.documents||[]).length
+        });
+        return buildAdminDraftPreview(stored);
+      }
       const published=stored.publishedSnapshot||null;
       if(published){
         dataSource="local";
@@ -93,7 +102,7 @@
 
     dataSource="demo";
     console.log("[ACT Portal] Demo-Kundendaten verwendet:",{customerId});
-    return dataRoot.customers[customerId]||null;
+    return dataRoot.customers[customerId]||window.ACTDemoExamples?.customers?.[customerId]||null;
   }
 
   function text(id,value){
@@ -134,6 +143,22 @@
 
   function isPublishedPortalCustomer(data){
     return Boolean(data&&(data.publishStatus==="published"||data.publicationState==="Veröffentlicht"));
+  }
+
+  function buildAdminDraftPreview(stored){
+    const preview=JSON.parse(JSON.stringify(stored||{}));
+    delete preview.crm;
+    delete preview.publishMeta;
+    delete preview.publishHistory;
+    delete preview.publishedSnapshot;
+    const bl=window.ACTBookingLibrary;
+    if(bl){
+      const applied=bl.applyBookingsToProgram(preview);
+      preview.program=applied.program;
+      preview.programItems=applied.program;
+      preview.bookings=bl.publishedBookings(preview);
+    }
+    return preview;
   }
 
   function isPortalDocument(item){
@@ -1184,14 +1209,14 @@
     hint.hidden=false;
     const stand=customer.updatedAt||customer.publishMeta?.lastPublishedAt||"";
     const standText=stand?new Date(stand).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"}):stand;
-    hint.textContent=`Admin-Ansicht · Version ${customer.version||"1.0"}${standText?` · Stand: ${standText}`:""}`;
+    hint.textContent=`Admin-Vorschau · ${dataSource==="local-draft"?"Entwurf (noch nicht veröffentlicht)":"Entwurf/Live"} · Version ${customer.version||"1.0"}${standText?` · Stand: ${standText}`:""}`;
   }
 
   function renderDataSourceNotice(){
     const target=document.getElementById("publicationStatus");
     if(!target)return;
     const visibleCount=(customer.documents||[]).filter(isPortalDocument).length;
-    const sourceLabel=dataSource==="firebase"?"Firestore publishedData":dataSource==="local"?"localStorage (veroeffentlicht)":"Demo";
+    const sourceLabel=dataSource==="firebase"?"Firestore publishedData":dataSource==="local"?"localStorage (veröffentlicht)":dataSource==="local-draft"?"Admin-Entwurf (localStorage)":"Demo";
     target.textContent=`${target.textContent} · Datenquelle: ${sourceLabel} · ${visibleCount} sichtbare Dokumente`;
   }
 

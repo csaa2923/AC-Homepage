@@ -665,6 +665,12 @@
     return `${href}?customer=${encodeURIComponent(id)}${admin}`;
   }
 
+  function portalPathForCustomer(id){
+    const customer=customers[id];
+    const published=customer&&(customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published");
+    return portalPath(id,{admin:!published});
+  }
+
   function formatPeriod(customer){
     if(customer.startDatePlain&&customer.endDatePlain)return `${formatDate(customer.startDatePlain)} - ${formatDate(customer.endDatePlain)}`;
     if(customer.startDatePlain)return formatDate(customer.startDatePlain);
@@ -767,7 +773,7 @@
           <div class="form-actions">
             <button class="button soft" type="button" data-open-crm="${id}">Kundenakte</button>
             <button class="button soft" type="button" data-edit-customer="${id}">Reise/Kunden bearbeiten</button>
-            <button class="button primary" type="button" data-open-customer="${id}">Kundenseite öffnen</button>
+            <button class="button primary" type="button" data-open-customer="${id}">${published?"Kundenseite öffnen":"Entwurf im Portal ansehen"}</button>
             <button class="button soft" type="button" data-publish-customer="${id}">${published?"Kundenseite aktualisieren":"Kundenseite veröffentlichen"}</button>
             <button class="button soft" type="button" data-copy-trip="${id}">Weitere Reise für diesen Kunden</button>
             <button class="button soft" type="button" data-copy-customer="${id}">Link kopieren</button>
@@ -3060,7 +3066,7 @@
       const openCrm=event.target.closest("[data-open-crm]");
       if(openCrm)openCrmAkte(openCrm.dataset.openCrm);
       const open=event.target.closest("[data-open-customer]");
-      if(open)window.open(portalPath(open.dataset.openCustomer),"_blank","noopener");
+      if(open)window.open(portalPathForCustomer(open.dataset.openCustomer),"_blank","noopener");
       const copy=event.target.closest("[data-copy-customer]");
       if(copy)copyText(portalPath(copy.dataset.copyCustomer));
       const publish=event.target.closest("[data-publish-customer]");

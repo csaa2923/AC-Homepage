@@ -546,6 +546,13 @@
     return normalizeCustomerData(customer,customer&&customer.customerId);
   }
 
+  function commitCustomer(customer,id){
+    const nextId=id||customer?.customerId||activeId;
+    customers[nextId]=normalizeCustomerData(customer,nextId);
+    activeId=nextId;
+    return customers[nextId];
+  }
+
   function documentVisibleValue(item){
     const value=item.visible!==undefined?item.visible:item.visibleForCustomer!==undefined?item.visibleForCustomer:item.customerVisible;
     if(value===undefined)return true;
@@ -824,6 +831,7 @@
     customer.program.sort((a,b)=>`${a.dateValue||a.date} ${a.startTime||""}`.localeCompare(`${b.dateValue||b.date} ${b.startTime||""}`));
     customer.hotel=customer.accommodations[0]||customer.hotel||{};
     customer.updatedAt=new Date().toLocaleDateString("de-DE");
+    commitCustomer(customer);
     saveCustomers();
   }
 
@@ -838,6 +846,7 @@
     const item=factories[listName]();
     customer[listName].push(item);
     if(listName==="program")pendingScrollItemId=item.id;
+    commitCustomer(customer);
     saveCustomers();
     renderAll();
     if(pendingScrollItemId)scrollToEditorItem(pendingScrollItemId);
@@ -899,8 +908,9 @@
       });
       customer.documents[index]=normalizeDocumentItem({...item,...uploaded});
       customer.updatedAt=new Date().toLocaleDateString("de-DE");
+      commitCustomer(customer);
       saveCustomers();
-      saveDraftToFirebase(customer);
+      saveDraftToFirebase(customers[activeId]);
       renderAll();
       setFirebaseStatus("Datei wurde hochgeladen und dem Kunden zugeordnet.");
     }catch(error){
@@ -1220,11 +1230,11 @@
   function openPublishDialog(id){
     if(adminMode==="edit"){
       readMaster();
-      id=activeId;
       readEditors();
+      id=activeId;
     }
     pendingPublishId=id;
-    const customer=ensureCollections(customers[id]);
+    const customer=activeCustomer();
     const workflow=publishWorkflow();
     const comparison=getDraftComparison(customer);
     const validation=workflow?workflow.validateForPublish(customer):{ok:true,errors:[]};
@@ -1349,7 +1359,7 @@
       readMaster();
       readEditors();
     }
-    const customer=ensureCollections(customers[id]);
+    let customer=activeCustomer();
     const validation=workflow?workflow.validateForPublish(customer):{ok:true,errors:[]};
     if(!validation.ok){
       renderPublishValidationErrors(byId("publishValidationErrors"),validation);
@@ -1370,10 +1380,13 @@
     customer.publishStatus="published";
     customer.updatedAt=new Date().toLocaleDateString("de-DE");
     applyLocalPublish(customer,meta);
+    customer=commitCustomer(customer,id);
     saveCustomers();
     console.log("[ACT Admin] Veröffentlichung:",{
       customerId:customer.customerId,
       version:nextVersion,
+      programTotal:(customer.program||[]).length,
+      publishedProgramTotal:(customer.publishedSnapshot?.program||[]).length,
       documentsTotal:(customer.documents||[]).length,
       documentsVisible:(customer.documents||[]).filter(isPortalReadyDocument).length,
       changes:comparison.changes
@@ -1383,9 +1396,11 @@
       try{
         await db.publishCustomer(clone(customer),meta);
         customer.publishMeta.publishError="";
+        commitCustomer(customer,id);
         setFirebaseStatus(`Version ${nextVersion} wurde veröffentlicht.`);
       }catch(error){
         customer.publishMeta.publishError=error&&error.message?error.message:String(error);
+        commitCustomer(customer,id);
         setFirebaseStatus(`Lokal veröffentlicht. Firebase-Fehler: ${customer.publishMeta.publishError}`,true);
       }
       saveCustomers();

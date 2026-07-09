@@ -51,6 +51,8 @@ h3{font-size:25px}
 .admin-card,.customer-card,.editor-card{width:min(1180px,100%);margin:0 auto;border:1px solid var(--line);border-radius:8px;background:var(--paper);box-shadow:var(--shadow);padding:20px}
 .customer-list,.editor-list{width:min(1180px,100%);margin:0 auto;display:grid;gap:14px}
 .customer-card{display:grid;gap:18px}
+.customer-card h3{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.customer-number{display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:34px;padding:0 10px;border:1px solid var(--gold);border-radius:8px;background:linear-gradient(135deg,var(--gold-2),var(--gold));color:#102820;font-family:Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:.08em;box-shadow:0 3px 0 rgba(141,107,32,.22)}
 .customer-card .form-actions{padding-top:2px}
 .customer-meta{display:grid;grid-template-columns:1fr;gap:10px;margin-top:16px}
 .customer-meta div{min-width:0;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fffaf0}

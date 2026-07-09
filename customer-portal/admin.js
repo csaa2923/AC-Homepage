@@ -305,7 +305,7 @@
       list.innerHTML=`<article class="customer-card"><p class="muted">Noch keine Kunden oder Reisen angelegt.</p></article>`;
       return;
     }
-    list.innerHTML=sorted.map(([fallbackId,raw])=>{
+    list.innerHTML=sorted.map(([fallbackId,raw],index)=>{
       const customer=ensureCollections(raw);
       const id=customer.customerId||fallbackId;
       const link=portalPath(id);
@@ -313,7 +313,7 @@
       return `
         <article class="customer-card">
           <div>
-            <h3>${customer.customerName||"Unbenannter Kunde"}</h3>
+            <h3><span class="customer-number">${String(index+1).padStart(2,"0")}</span>${customer.customerName||"Unbenannter Kunde"}</h3>
             <p class="muted">${customer.tripName||customer.tripTitle||""}</p>
             <div class="customer-meta">
               <div><span>Zeitraum</span><strong>${formatPeriod(customer)}</strong></div>
@@ -327,7 +327,7 @@
             </div>
           </div>
           <div class="form-actions">
-            <button class="button soft" type="button" data-edit-customer="${id}">Reise bearbeiten</button>
+            <button class="button soft" type="button" data-edit-customer="${id}">Reise/Kunden bearbeiten</button>
             <button class="button primary" type="button" data-open-customer="${id}">Kundenseite öffnen</button>
             <button class="button soft" type="button" data-publish-customer="${id}">${published?"Informationen erneut auf Kundenseite stellen":"Informationen auf Kundenseite stellen"}</button>
             <button class="button soft" type="button" data-copy-trip="${id}">Weitere Reise für diesen Kunden</button>

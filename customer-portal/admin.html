@@ -245,8 +245,9 @@
 
 <div class="admin-modal" id="notifyDialog" hidden>
   <div class="admin-modal-card" role="dialog" aria-labelledby="notifyDialogTitle">
-    <h3 id="notifyDialogTitle">Kundenbenachrichtigung vorbereiten</h3>
-    <p class="muted">Noch keine automatische Versendung. Texte können kopiert oder vorbereitet werden.</p>
+    <h3 id="notifyDialogTitle">Veröffentlichung abgeschlossen</h3>
+    <p class="publish-success-note" id="notifySuccessNote">Die Live-Version wurde erfolgreich veröffentlicht.</p>
+    <p class="muted">Optional: Kundenbenachrichtigung vorbereiten. Noch keine automatische Versendung.</p>
     <label class="choice-pill"><input type="radio" name="notifyMode" value="whatsapp" checked> WhatsApp vorbereiten</label>
     <label class="choice-pill"><input type="radio" name="notifyMode" value="email"> E-Mail vorbereiten</label>
     <label class="choice-pill"><input type="radio" name="notifyMode" value="none"> Keine Benachrichtigung</label>
@@ -254,7 +255,8 @@
     <div class="form-actions">
       <button class="button soft" id="notifyCopyButton" type="button">Text kopieren</button>
       <button class="button soft" id="notifyWhatsappButton" type="button">WhatsApp öffnen</button>
-      <button class="button primary" id="notifyCloseButton" type="button">Schließen</button>
+      <button class="button soft" id="notifyEmailButton" type="button" hidden>E-Mail öffnen</button>
+      <button class="button primary" id="notifyCloseButton" type="button">Fertig</button>
     </div>
   </div>
 </div>
@@ -266,6 +268,6 @@
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=2"></script>
-<script src="admin.js?v=51"></script>
+<script src="admin.js?v=52"></script>
 </body>
 </html>

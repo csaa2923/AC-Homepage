@@ -1240,24 +1240,49 @@
   function openNotifyDialog(customer,meta){
     const workflow=publishWorkflow();
     const texts=workflow?workflow.buildNotificationTexts(customer,{...meta,portalLink:portalPath(customer.customerId)}):{whatsapp:"",email:""};
+    const success=byId("notifySuccessNote");
+    if(success)success.textContent=`Version ${meta.version||customer.version||"1.0"} wurde veröffentlicht. Das Kundenportal zeigt jetzt die Live-Version.`;
     byId("notifyPreparedText").value=texts.whatsapp;
     byId("notifyDialog").hidden=false;
     byId("notifyDialog").dataset.whatsappText=texts.whatsapp;
     byId("notifyDialog").dataset.emailText=texts.email;
+    byId("notifyDialog").dataset.customerEmail=customer.email||customer.contact?.email||"";
     document.querySelector('input[name="notifyMode"][value="whatsapp"]').checked=true;
+    updateNotifyPreparedText();
   }
 
   function closeNotifyDialog(){
     byId("notifyDialog").hidden=true;
+    setFirebaseStatus("Veröffentlichung abgeschlossen. Sie können weiter am Entwurf arbeiten oder die Kundenseite prüfen.");
+    byId("publish-status")?.scrollIntoView({behavior:"smooth",block:"start"});
   }
 
   function updateNotifyPreparedText(){
     const mode=document.querySelector('input[name="notifyMode"]:checked')?.value||"none";
     const dialog=byId("notifyDialog");
     const target=byId("notifyPreparedText");
-    if(mode==="email")target.value=dialog.dataset.emailText||"";
-    else if(mode==="whatsapp")target.value=dialog.dataset.whatsappText||"";
-    else target.value="Keine Benachrichtigung vorbereitet.";
+    const whatsappButton=byId("notifyWhatsappButton");
+    const emailButton=byId("notifyEmailButton");
+    if(mode==="email"){
+      target.value=dialog.dataset.emailText||"";
+      if(whatsappButton)whatsappButton.hidden=true;
+      if(emailButton)emailButton.hidden=false;
+    }else if(mode==="whatsapp"){
+      target.value=dialog.dataset.whatsappText||"";
+      if(whatsappButton)whatsappButton.hidden=false;
+      if(emailButton)emailButton.hidden=true;
+    }else{
+      target.value="Keine Benachrichtigung vorbereitet. Die Veröffentlichung ist bereits abgeschlossen.";
+      if(whatsappButton)whatsappButton.hidden=true;
+      if(emailButton)emailButton.hidden=true;
+    }
+  }
+
+  function openNotifyEmail(){
+    const dialog=byId("notifyDialog");
+    const text=byId("notifyPreparedText").value;
+    const to=dialog.dataset.customerEmail||"";
+    window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent("Ihr Reiseprogramm wurde aktualisiert")}&body=${encodeURIComponent(text)}`;
   }
 
   function publishCustomer(id){
@@ -1497,6 +1522,9 @@
     byId("notifyCloseButton").addEventListener("click",closeNotifyDialog);
     byId("notifyCopyButton").addEventListener("click",()=>copyText(byId("notifyPreparedText").value));
     byId("notifyWhatsappButton").addEventListener("click",()=>{const text=byId("notifyPreparedText").value;window.open(`https://api.whatsapp.com/send?phone=${whatsappPhoneNumber()}&text=${encodeURIComponent(text)}`,"_blank","noopener")});
+    byId("notifyEmailButton").addEventListener("click",openNotifyEmail);
+    byId("notifyDialog").addEventListener("click",event=>{if(event.target===event.currentTarget)closeNotifyDialog()});
+    document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!byId("notifyDialog").hidden)closeNotifyDialog()});
     document.querySelectorAll('input[name="notifyMode"]').forEach(input=>input.addEventListener("change",updateNotifyPreparedText));
     byId("deleteActiveCustomerButton").addEventListener("click",()=>deleteCustomer(activeId));
     byId("copyWhatsappButton").addEventListener("click",openWhatsappMessage);

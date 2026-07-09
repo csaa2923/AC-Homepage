@@ -143,6 +143,15 @@ textarea{min-height:92px;resize:vertical;text-transform:none}
 .admin-modal-card h3{margin:0;font-size:30px}
 .modal-label{text-transform:none;letter-spacing:0;font-weight:700;color:var(--ink)}
 .publish-validation-errors{display:grid;gap:6px;padding:12px;border:1px solid rgba(140,31,31,.28);border-radius:8px;background:#fff6f6;color:#8c1f1f;font-size:14px;line-height:1.45}
+.publish-success-note{
+  margin:0;
+  padding:12px 14px;
+  border:1px solid rgba(36,120,72,.35);
+  border-radius:8px;
+  background:#f3fbf6;
+  color:#244a3f;
+  font-weight:700;
+}
 .publish-validation-errors .validation-jump{
   width:100%;
   text-align:left;

@@ -513,6 +513,7 @@ h3{font-size:24px;color:var(--green)}
   gap:10px;
   margin-top:18px;
 }
+#weatherLocationLabel span{display:inline-block;margin-top:4px;color:var(--muted);font-size:15px}
 .weather-day{
   display:grid;
   gap:5px;

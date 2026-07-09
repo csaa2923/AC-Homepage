@@ -25,7 +25,7 @@
 
   const fieldSets={
     program:[
-      ["id","ID"],["date","Datum als Text"],["dateValue","Datum von"],["endDateValue","Datum bis"],["startTime","Beginn"],["endTime","Ende"],["title","Titel"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["category","Kategorie"],["meetingPoint","Treffpunkt"],["address","Adresse"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Terminstatus"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"]
+      ["id","ID"],["date","Datum als Text"],["dateValue","Datum von"],["endDateValue","Datum bis"],["startTime","Beginn"],["endTime","Ende"],["title","Titel"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["category","Kategorie"],["meetingPoint","Treffpunkt"],["address","Adresse"],["latitude","Latitude"],["longitude","Longitude"],["weatherLocationName","Wetter-Ort"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Terminstatus"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"]
     ],
     accommodations:[
       ["name","Hotelname"],["address","Adresse"],["checkIn","Check-in"],["checkOut","Check-out"],["contact","Kontakt"],["phone","Telefon"],["navigation","Navigationslink"],["voucherStatus","Voucher-Link"],["notes","Hinweise","textarea"]
@@ -117,6 +117,9 @@
       startDate:"",
       endDate:"",
       region:"",
+      latitude:"",
+      longitude:"",
+      weatherLocationName:"",
       language:"DE",
       status:"Entwurf",
       publicationState:"Entwurf",
@@ -163,6 +166,9 @@
     next.activities=Array.isArray(next.activities)?next.activities:[];
     next.documents=Array.isArray(next.documents)?next.documents.map(normalizeDocumentItem):[];
     next.dropdownCustomValues=next.dropdownCustomValues&&typeof next.dropdownCustomValues==="object"?next.dropdownCustomValues:{};
+    next.latitude=next.latitude||"";
+    next.longitude=next.longitude||"";
+    next.weatherLocationName=next.weatherLocationName||next.region||"";
     next.requirements=Array.isArray(next.requirements)?next.requirements:[];
     next.contact={...base.contact,...(next.contact||{}),phone:next.phone||next.contact?.phone||base.phone,whatsapp:next.whatsapp||next.contact?.whatsapp||base.whatsapp,email:next.email||next.contact?.email||base.email};
     next.weather={...base.weather,...(next.weather||{}),days:Array.isArray(next.weather?.days)?next.weather.days:[]};
@@ -521,6 +527,9 @@
       startDatePlain:customer.startDatePlain||dateOnly(customer.startDate)||"",
       endDatePlain:customer.endDatePlain||"",
       region:customer.region||"",
+      latitude:customer.latitude||"",
+      longitude:customer.longitude||"",
+      weatherLocationName:customer.weatherLocationName||customer.region||"",
       language:customer.language||"DE",
       concierge:customer.concierge||"",
       phone:customer.phone||"",
@@ -560,6 +569,9 @@
     next.travelPeriod=next.startDatePlain&&next.endDatePlain?`${formatDate(next.startDatePlain)} - ${formatDate(next.endDatePlain)}`:next.startDatePlain?formatDate(next.startDatePlain):"";
     next.startDate=next.startDatePlain?`${next.startDatePlain}T10:00:00+02:00`:previous.startDate;
     next.region=comboValue(form.elements.region);
+    next.latitude=form.elements.latitude.value.trim();
+    next.longitude=form.elements.longitude.value.trim();
+    next.weatherLocationName=form.elements.weatherLocationName.value.trim();
     next.language=comboValue(form.elements.language);
     next.concierge=form.elements.concierge.value.trim();
     next.phone=form.elements.phone.value.trim();

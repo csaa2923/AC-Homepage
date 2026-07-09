@@ -514,12 +514,16 @@ h3{font-size:24px;color:var(--green)}
   margin-top:18px;
 }
 .weather-day{
+  display:grid;
+  gap:5px;
   padding:13px;
   border:1px solid var(--line);
   border-radius:8px;
   background:#fffaf0;
 }
 .weather-day strong{display:block;color:var(--green)}
+.weather-day span{color:#415a53;line-height:1.35}
+.weather-day em{margin-top:4px;color:#8d6b20;font-style:normal;font-weight:800;line-height:1.35}
 .contact-card .button,.action-card .button{width:100%}
 .history-list{
   width:min(1120px,100%);

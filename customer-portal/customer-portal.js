@@ -102,6 +102,9 @@
       updatedAt:"",
       concierge:"Alpine Concierge Tirol",
       whatsapp:"+4367761410679",
+      latitude:"",
+      longitude:"",
+      weatherLocationName:"",
       program:[],
       programItems:[],
       accommodations:[],
@@ -130,6 +133,9 @@
     next.restaurants=Array.isArray(next.restaurants)?next.restaurants:[];
     next.activities=Array.isArray(next.activities)?next.activities:[];
     next.documents=Array.isArray(next.documents)?next.documents.map(normalizeDocument):[];
+    next.latitude=next.latitude||"";
+    next.longitude=next.longitude||"";
+    next.weatherLocationName=next.weatherLocationName||next.region||"";
     next.contact={...base.contact,...(next.contact||{})};
     next.weather={...base.weather,...(next.weather||{}),days:Array.isArray(next.weather?.days)?next.weather.days:[]};
     next.history=Array.isArray(next.history)?next.history:[];
@@ -141,6 +147,95 @@
     if(!hasDisplayValue(value))return "";
     const date=new Date(value);
     return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString("de-DE");
+  }
+
+  function numberValue(value){
+    const number=Number(String(value||"").replace(",","."));
+    return Number.isFinite(number)?number:null;
+  }
+
+  function tripForecastDays(){
+    const start=customer.startDatePlain||programItems().find(item=>item.dateValue)?.dateValue;
+    const end=customer.endDatePlain||[...programItems()].reverse().find(item=>item.endDateValue||item.dateValue)?.endDateValue||[...programItems()].reverse().find(item=>item.dateValue)?.dateValue;
+    const startDate=start?new Date(start):null;
+    const endDate=end?new Date(end):startDate;
+    if(!startDate||Number.isNaN(startDate.getTime())||!endDate||Number.isNaN(endDate.getTime()))return 4;
+    return Math.min(Math.max(Math.round((endDate-startDate)/86400000)+1,1),16);
+  }
+
+  function weatherCodeText(code){
+    const labels={
+      0:"Klar",
+      1:"Überwiegend sonnig",
+      2:"Teilweise bewölkt",
+      3:"Bewölkt",
+      45:"Nebel",
+      48:"Reifnebel",
+      51:"Leichter Nieselregen",
+      53:"Nieselregen",
+      55:"Starker Nieselregen",
+      61:"Leichter Regen",
+      63:"Regen",
+      65:"Starker Regen",
+      71:"Leichter Schnee",
+      73:"Schnee",
+      75:"Starker Schnee",
+      80:"Regenschauer",
+      81:"Schauer",
+      82:"Starke Schauer",
+      95:"Gewitter"
+    };
+    return labels[code]||"Wetterdaten";
+  }
+
+  function clothingHint(day){
+    const rain=Number(day.rainProbability||0);
+    const min=Number(day.tempMin||0);
+    const wind=Number(day.wind||0);
+    if(rain>=60)return "Regenjacke und wasserfeste Schuhe einplanen.";
+    if(min<=5)return "Warme Schichten und winddichte Jacke einpacken.";
+    if(wind>=35)return "Windfeste Jacke empfohlen.";
+    if(Number(day.tempMax)>=25)return "Sonnenschutz und leichte Kleidung empfohlen.";
+    return "Bequeme Kleidung in Schichten ist passend.";
+  }
+
+  function openMeteoUrl(){
+    const latitude=numberValue(customer.latitude);
+    const longitude=numberValue(customer.longitude);
+    if(latitude===null||longitude===null)return "";
+    const params=new URLSearchParams({
+      latitude:String(latitude),
+      longitude:String(longitude),
+      daily:"weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max",
+      hourly:"temperature_2m,precipitation_probability,precipitation,wind_speed_10m",
+      timezone:"Europe/Vienna",
+      forecast_days:String(tripForecastDays())
+    });
+    return `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+  }
+
+  async function loadOpenMeteoWeather(){
+    const url=openMeteoUrl();
+    if(!url)throw new Error("Keine Koordinaten für Reisewetter hinterlegt.");
+    const response=await fetch(url);
+    if(!response.ok)throw new Error(`Open-Meteo nicht erreichbar: ${response.status}`);
+    const data=await response.json();
+    const daily=data.daily||{};
+    return (daily.time||[]).map((date,index)=>{
+      const day={
+        date,
+        label:formatDateValue(date),
+        code:daily.weather_code?.[index],
+        tempMin:daily.temperature_2m_min?.[index],
+        tempMax:daily.temperature_2m_max?.[index],
+        rainProbability:daily.precipitation_probability_max?.[index],
+        precipitation:daily.precipitation_sum?.[index],
+        wind:daily.wind_speed_10m_max?.[index]
+      };
+      day.condition=weatherCodeText(day.code);
+      day.outfit=clothingHint(day);
+      return day;
+    });
   }
 
   function mapsLink(destination){
@@ -472,11 +567,48 @@
     document.getElementById("weatherCard").innerHTML=`
       <p class="eyebrow">Wetter</p>
       <h2>Reisewetter</h2>
-      <p>${escapeHtml(weather.summary||"Wetterinformationen werden ergänzt.")}</p>
-      <div class="weather-days">
-        ${(weather.days||[]).filter(day=>[day.day,day.temp,day.condition].some(hasDisplayValue)).map(day=>`<div class="weather-day"><strong>${escapeHtml(day.day)}</strong><span>${escapeHtml(day.temp)}</span><br><span>${escapeHtml(day.condition)}</span></div>`).join("")}
+      <p>${escapeHtml(weather.weatherLocationName||customer.weatherLocationName||customer.region||"Reiseregion")}</p>
+      <div class="weather-days" id="weatherDays">
+        ${fallbackWeatherMarkup(weather)}
       </div>
     `;
+    updateOpenMeteoWeather();
+  }
+
+  function fallbackWeatherMarkup(weather){
+    const days=(weather.days||[]).filter(day=>[day.day,day.temp,day.condition].some(hasDisplayValue));
+    if(!days.length)return `<div class="weather-day"><strong>Wetterdaten werden geladen</strong><span>Falls keine Koordinaten hinterlegt sind, erscheint hier ein Hinweis.</span></div>`;
+    return days.map(day=>`<div class="weather-day"><strong>${escapeHtml(day.day)}</strong><span>${escapeHtml(day.temp)}</span><br><span>${escapeHtml(day.condition)}</span></div>`).join("");
+  }
+
+  function weatherDayMarkup(day){
+    return `
+      <div class="weather-day">
+        <strong>${escapeHtml(day.label)}</strong>
+        <span>${escapeHtml(day.condition)}</span>
+        <span>${escapeHtml(Math.round(day.tempMin))}°C bis ${escapeHtml(Math.round(day.tempMax))}°C</span>
+        <span>Regen: ${escapeHtml(day.rainProbability??0)}%</span>
+        <span>Niederschlag: ${escapeHtml(day.precipitation??0)} mm</span>
+        <span>Wind: ${escapeHtml(Math.round(day.wind||0))} km/h</span>
+        <em>${escapeHtml(day.outfit)}</em>
+      </div>
+    `;
+  }
+
+  async function updateOpenMeteoWeather(){
+    const target=document.getElementById("weatherDays");
+    if(!target)return;
+    try{
+      const days=await loadOpenMeteoWeather();
+      if(!days.length)throw new Error("Keine Wettertage erhalten.");
+      target.innerHTML=days.map(weatherDayMarkup).join("");
+      console.log("[ACT Portal] Open-Meteo geladen:",{customerId,location:customer.weatherLocationName,days});
+    }catch(error){
+      console.warn("[ACT Portal] Open-Meteo nicht verfügbar:",error);
+      if(!(customer.weather?.days||[]).length){
+        target.innerHTML=`<div class="weather-day"><strong>Wetter derzeit nicht verfügbar</strong><span>Bitte Koordinaten beim Kunden hinterlegen oder später erneut öffnen.</span></div>`;
+      }
+    }
   }
 
   function renderRestaurants(){

@@ -125,6 +125,9 @@
     data.conciergeName=data.conciergeName||data.concierge||"";
     data.whatsappLink=data.whatsappLink||data.whatsapp||"";
     data.dropdownCustomValues=data.dropdownCustomValues&&typeof data.dropdownCustomValues==="object"?data.dropdownCustomValues:{};
+    data.latitude=data.latitude||"";
+    data.longitude=data.longitude||"";
+    data.weatherLocationName=data.weatherLocationName||data.region||"";
     data.documents=Array.isArray(data.documents)?data.documents.map(normalizeDocument):[];
     data.contact=data.contact&&typeof data.contact==="object"?data.contact:{};
     data.weather=data.weather&&typeof data.weather==="object"?data.weather:{summary:"",days:[]};

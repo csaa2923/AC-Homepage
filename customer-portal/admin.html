@@ -47,8 +47,6 @@
       <a href="#master-data">Stammdaten</a>
       <a href="#program-items">Programmpunkte</a>
       <a href="#accommodations">Unterkunft</a>
-      <a href="#restaurants-admin">Restaurants</a>
-      <a href="#activities-admin">Aktivitäten</a>
       <a href="#documents-admin">Dokumente</a>
       <a href="#publish">Veröffentlichung</a>
       <a href="#export-import">Export / Import</a>
@@ -148,7 +146,7 @@
         </div>
         <button class="button soft" type="button" data-add-list="program">Programmpunkt hinzufügen</button>
       </div>
-      <p class="muted">Programmpunkte sind die einzige Quelle fuer Kalender, Timeline und Detailkarten. Restaurants und Aktivitaeten als eigene Kategorie (z. B. „Restaurant“, „Aktivitaet“) anlegen – nicht doppelt pflegen.</p>
+      <p class="muted">Programmpunkte sind die zentrale Quelle fuer Kalender, Timeline und Detailkarten. Kategorien wie „Restaurant“ oder „Aktivitaet“ direkt am Programmpunkt waehlen.</p>
       <div class="editor-list" id="programEditor"></div>
     </section>
 
@@ -158,24 +156,6 @@
         <button class="button soft" type="button" data-add-list="accommodations">Unterkunft hinzufügen</button>
       </div>
       <div class="editor-list" id="accommodationsEditor"></div>
-    </section>
-
-    <section class="admin-section edit-only" id="restaurants-admin">
-      <div class="section-head inline-head">
-        <div><p class="eyebrow">Reservierungen</p><h2>Restaurants</h2></div>
-        <button class="button soft" type="button" data-add-list="restaurants">Restaurant hinzufügen</button>
-      </div>
-      <p class="muted">Reservierungsdetails fuer den Kunden – erscheinen nicht im Kalender. Kalender-Eintrag ueber Programmpunkt mit Kategorie „Restaurant“.</p>
-      <div class="editor-list" id="restaurantsEditor"></div>
-    </section>
-
-    <section class="admin-section edit-only" id="activities-admin">
-      <div class="section-head inline-head">
-        <div><p class="eyebrow">Erlebnisse</p><h2>Aktivitäten</h2></div>
-        <button class="button soft" type="button" data-add-list="activities">Aktivität hinzufügen</button>
-      </div>
-      <p class="muted">Ticket- und QR-Infos fuer den Kunden – erscheinen nicht im Kalender. Kalender-Eintrag ueber Programmpunkt mit Kategorie „Aktivitaet“. Mehrtaegige Aktivitaeten mit „Datum bis“.</p>
-      <div class="editor-list" id="activitiesEditor"></div>
     </section>
 
     <section class="admin-section edit-only" id="documents-admin">
@@ -231,6 +211,6 @@
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=2"></script>
-<script src="admin.js?v=40"></script>
+<script src="admin.js?v=41"></script>
 </body>
 </html>

@@ -697,51 +697,6 @@
     }
   }
 
-  function activityDate(item){
-    if(item.date&&item.endDate&&item.endDate!==item.date)return `${formatDateValue(item.date)} - ${formatDateValue(item.endDate)}`;
-    if(item.date)return formatDateValue(item.date);
-    return item.date||"-";
-  }
-
-  function renderRestaurants(){
-    const items=(customer.restaurants||[]).filter(item=>[item.name,item.status,item.time,item.guests,item.dresscode,item.notes].some(hasDisplayValue));
-    document.getElementById("restaurantGrid").innerHTML=items.length?items.map(item=>`
-      <article class="mini-card">
-        <span class="tag">${item.status}</span>
-        <h3>${item.name}</h3>
-        ${definitionList([
-          ["Datum",item.date?formatDateValue(item.date):item.date],
-          ["Reservierung",item.time],
-          ["Personen",item.guests],
-          ["Dresscode",item.dresscode],
-          ["Hinweise",item.notes]
-        ])}
-        <div class="card-actions">
-          <a class="button soft" href="${mapsLink(item.navigation)}" target="_blank" rel="noopener">Navigation öffnen</a>
-        </div>
-      </article>
-    `).join(""):`<article class="mini-card"><h3>Noch keine Restaurants hinterlegt.</h3></article>`;
-  }
-
-  function renderActivities(){
-    const items=(customer.activities||[]).filter(item=>[item.title,item.status,item.meetingPoint,item.time,item.contact,item.ticketStatus,item.qrStatus].some(hasDisplayValue));
-    document.getElementById("activityGrid").innerHTML=items.length?items.map(item=>`
-      <article class="mini-card">
-        <span class="tag">${item.status}</span>
-        <h3>${item.title}</h3>
-        ${definitionList([
-          ["Datum",activityDate(item)],
-          ["Treffpunkt",item.meetingPoint],
-          ["Uhrzeit",item.time],
-          ["Ansprechpartner",item.contact],
-          ["Ticket",item.ticketStatus],
-          ["QR-Code",item.qrStatus]
-        ])}
-        <div class="qr-placeholder">QR-Code<br>Platzhalter</div>
-      </article>
-    `).join(""):`<article class="mini-card"><h3>Noch keine Aktivitäten hinterlegt.</h3></article>`;
-  }
-
   function renderDocuments(){
     const documents=(customer.documents||[]).map(normalizeDocument);
     const visibleDocuments=documents.filter(item=>item.visible!==false&&[item.title,item.type,item.note,item.url,item.fileName,item.uploadedAt,item.status].some(hasDisplayValue));
@@ -893,8 +848,6 @@
     renderProgramDetails();
     renderHotel();
     renderWeather();
-    renderRestaurants();
-    renderActivities();
     renderDocuments();
     renderContact();
     renderActions();

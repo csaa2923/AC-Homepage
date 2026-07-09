@@ -132,46 +132,6 @@ window.CustomerPortalData={
         navigation:"Möserer Straße 18, Seefeld in Tirol",
         voucherStatus:"Voucher-Platzhalter vorbereitet"
       },
-      restaurants:[
-        {
-          name:"Das Tiroler Stüberl",
-          time:"22. Juli 2027, 19:00",
-          guests:"4 Personen",
-          status:"Reservierung bestätigt",
-          dresscode:"Smart casual",
-          notes:"Fensterplatz angefragt, Kinderkarte verfügbar.",
-          navigation:"Seefeld Zentrum"
-        },
-        {
-          name:"Panorama Dinner Innsbruck",
-          time:"23. Juli 2027, 18:30",
-          guests:"4 Personen",
-          status:"Option gehalten",
-          dresscode:"Elegant leger",
-          notes:"Transfer wird separat abgestimmt.",
-          navigation:"Innsbruck Hungerburg"
-        }
-      ],
-      activities:[
-        {
-          title:"Private Stadtführung Innsbruck",
-          meetingPoint:"Goldenes Dachl",
-          time:"23. Juli 2027, 09:30",
-          contact:"Guide Maria",
-          ticketStatus:"Ticket-Platzhalter",
-          qrStatus:"QR-Code-Platzhalter",
-          status:"Bestätigt"
-        },
-        {
-          title:"Alpines Picknick Seefeld",
-          meetingPoint:"Seekirchl Seefeld",
-          time:"24. Juli 2027, 10:00",
-          contact:"Concierge Team",
-          ticketStatus:"Voucher folgt",
-          qrStatus:"QR-Code vorbereitet",
-          status:"In Planung"
-        }
-      ],
       documents:[
         {title:"Angebot",status:"Platzhalter"},
         {title:"Rechnung",status:"Platzhalter"},

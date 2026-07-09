@@ -42,12 +42,6 @@
     accommodations:[
       ["name","Hotelname"],["address","Adresse"],["checkIn","Check-in"],["checkOut","Check-out"],["contact","Kontakt"],["phone","Telefon"],["navigation","Navigationslink"],["voucherStatus","Voucher-Link"],["notes","Hinweise","textarea"]
     ],
-    restaurants:[
-      ["name","Restaurantname"],["date","Datum"],["time","Uhrzeit","time"],["guests","Personenanzahl"],["address","Adresse"],["status","Reservierungsstatus"],["dresscode","Dresscode"],["notes","Hinweise","textarea"],["navigation","Navigationslink"],["voucherLink","Bestätigungs-/Voucher-Link"]
-    ],
-    activities:[
-      ["title","Aktivität"],["provider","Anbieter"],["date","Datum von"],["endDate","Datum bis"],["time","Uhrzeit","time"],["meetingPoint","Treffpunkt"],["address","Adresse"],["contact","Ansprechpartner"],["phone","Telefon"],["ticketStatus","Ticket-Link"],["qrStatus","QR-Code-Link / Platzhalter"],["status","Status"],["notes","Hinweise","textarea"]
-    ],
     documents:[
       ["title","Dokumenttitel"],["type","Dokumenttyp"],["url","Link / Datei-URL"],["visible","Sichtbar für Kunden","checkbox"],["note","Hinweis","textarea"]
     ]
@@ -63,8 +57,6 @@
     programStatuses:["In Planung","Angefragt","Option gehalten","Reserviert","Bestätigt","Geändert","Wetterabhängig","Warteliste","Abgesagt","Abgeschlossen"],
     outfits:["Abendgarderobe","Badebekleidung","Casual","Elegant","Freizeit","Outdoor","Skibekleidung","Wanderschuhe"],
     documentTypes:["Angebot","Hotel","PDF","Rechnung","Reiseunterlagen","Restaurant","Sonstiges","Ticket","Versicherung","Voucher"],
-    restaurantStatuses:["Angefragt","Bestätigt","Reserviert","Storniert","Warteliste"],
-    activityStatuses:["Abgeschlossen","Abgesagt","Angefragt","Bestätigt","Geplant"],
     hotelStatuses:["Angefragt","Bestätigt","Check-in erfolgt","Check-out erfolgt","Reserviert","Storniert"],
     transportModes:["Bahn","Bus","Fahrrad","Mietwagen","Shuttle","Taxi","Zu Fuß"],
     paymentStatuses:["Anzahlung bezahlt","Anzahlungsrechnung gesendet","Offen","Restzahlung offen","Rückerstattung","Storniert","Vollständig bezahlt"],
@@ -74,8 +66,6 @@
   const fieldOptionMap={
     master:{region:"regions",language:"languages",status:"statuses",publicationState:"publicationStates",requirements:"requirements"},
     program:{category:"programCategories",outfit:"outfits",status:"programStatuses"},
-    restaurants:{status:"restaurantStatuses",dresscode:"outfits"},
-    activities:{status:"activityStatuses"},
     accommodations:{voucherStatus:"hotelStatuses"},
     documents:{type:"documentTypes"}
   };
@@ -89,7 +79,6 @@
     title:"Erscheint im Kalender, in der Timeline und in der Detailkarte.",
     dateValue:"Startdatum des Programmpunkts. Mehrtaegige Punkte nutzen zusaetzlich Datum bis.",
     endDateValue:"Optionales Enddatum, wenn der Programmpunkt mehr als einen Tag betrifft.",
-    endDate:"Optionales Enddatum fuer mehrtaegige Aktivitaeten.",
     date:"Datum mit Kalenderauswahl.",
     startTime:"15-Minuten-Raster oder eigene Uhrzeit.",
     endTime:"15-Minuten-Raster oder eigene Uhrzeit.",
@@ -716,13 +705,6 @@
       if(listName==="program"&&next.dateValue){
         next.date=next.date||formatDate(next.dateValue);
       }
-      if(listName==="restaurants"&&next.date){
-        next.date=dateOnly(next.date);
-      }
-      if(listName==="activities"){
-        if(next.date)next.date=dateOnly(next.date);
-        if(next.endDate)next.endDate=dateOnly(next.endDate);
-      }
       if(listName==="program")normalizeProgramItem(next);
       customer[listName][index]=listName==="documents"?normalizeDocumentItem(next):next;
     });
@@ -739,8 +721,6 @@
     const factories={
       program:()=>({id:`item-${Date.now()}`,date:"",dateValue:"",endDateValue:"",startTime:"10:00",endTime:"11:00",title:"Neuer Programmpunkt",shortDescription:"",description:"",category:"Concierge-Service",meetingPoint:"",address:"",navigationUrl:"",outfit:"",notes:"",contactPerson:"",phone:"",status:"In Planung",calendarEnabled:true,colorClass:"type-concierge",images:[],documents:[]}),
       accommodations:()=>({name:"Neue Unterkunft",address:"",checkIn:"",checkOut:"",contact:"",phone:"",navigation:"",voucherStatus:"",notes:""}),
-      restaurants:()=>({name:"Neues Restaurant",date:"",time:"",guests:"",address:"",status:"Angefragt",dresscode:"",notes:"",navigation:"",voucherLink:""}),
-      activities:()=>({title:"Neue Aktivität",provider:"",date:"",endDate:"",time:"",meetingPoint:"",address:"",contact:"",phone:"",ticketStatus:"",qrStatus:"",status:"Angefragt",notes:""}),
       documents:()=>({title:"Neues Dokument",type:"Sonstiges",url:"",storagePath:"",fileName:"",contentType:"",visible:true,note:""})
     };
     const item=factories[listName]();
@@ -892,14 +872,6 @@
         <p><strong>${escapeHtml(hotel.name||"Keine Unterkunft")}</strong><br>${escapeHtml(hotel.address||hotel.navigation||"")}</p>
       </article>
       <article class="preview-panel">
-        <p class="eyebrow">Restaurants</p>
-        ${previewList(customer.restaurants,item=>`<li><strong>${escapeHtml(item.name)}</strong> <span>${escapeHtml(item.time||item.date||"")} ${escapeHtml(item.status||"")}</span></li>`,"Noch keine Restaurants.")}
-      </article>
-      <article class="preview-panel">
-        <p class="eyebrow">Aktivitaeten</p>
-        ${previewList(customer.activities,item=>`<li><strong>${escapeHtml(item.title)}</strong> <span>${escapeHtml(item.time||item.date||"")} ${escapeHtml(item.status||"")}</span></li>`,"Noch keine Aktivitaeten.")}
-      </article>
-      <article class="preview-panel">
         <p class="eyebrow">Dokumente</p>
         ${previewList(customer.documents.filter(item=>item.visible!==false),item=>`<li><strong>${escapeHtml(item.title)}</strong> <span>${escapeHtml(item.type||item.status||item.note||"")}</span></li>`,"Noch keine sichtbaren Dokumente.")}
       </article>
@@ -913,8 +885,6 @@
     renderMaster();
     renderEditor("program","programEditor");
     renderEditor("accommodations","accommodationsEditor");
-    renderEditor("restaurants","restaurantsEditor");
-    renderEditor("activities","activitiesEditor");
     renderEditor("documents","documentsEditor");
     renderLinks();
     renderAdminPreview();
@@ -952,8 +922,6 @@
       program:[],
       programItems:[],
       accommodations:[],
-      restaurants:[],
-      activities:[],
       documents:[],
       dropdownCustomValues:{}
     });

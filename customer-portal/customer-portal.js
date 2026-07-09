@@ -188,6 +188,17 @@
     return labels[code]||"Wetterdaten";
   }
 
+  function weatherSymbol(code){
+    if(code===0)return "☀";
+    if([1,2].includes(code))return "◐";
+    if(code===3)return "☁";
+    if([45,48].includes(code))return "≋";
+    if([51,53,55,61,63,65,80,81,82].includes(code))return "☂";
+    if([71,73,75].includes(code))return "❄";
+    if([95,96,99].includes(code))return "⚡";
+    return "◇";
+  }
+
   function clothingHint(day){
     const rain=Number(day.rainProbability||0);
     const min=Number(day.tempMin||0);
@@ -268,6 +279,7 @@
         wind:daily.wind_speed_10m_max?.[index]
       };
       day.condition=weatherCodeText(day.code);
+      day.symbol=weatherSymbol(day.code);
       day.outfit=clothingHint(day);
       return day;
     });
@@ -620,7 +632,7 @@
   function weatherDayMarkup(day){
     return `
       <div class="weather-day">
-        <strong>${escapeHtml(day.label)}</strong>
+        <strong><span class="weather-symbol" aria-hidden="true">${escapeHtml(day.symbol||"◇")}</span>${escapeHtml(day.label)}</strong>
         <span>${escapeHtml(day.condition)}</span>
         <span>${escapeHtml(Math.round(day.tempMin))}°C bis ${escapeHtml(Math.round(day.tempMax))}°C</span>
         <span>Regen: ${escapeHtml(day.rainProbability??0)}%</span>

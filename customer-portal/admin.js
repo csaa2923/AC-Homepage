@@ -571,7 +571,7 @@
     next.region=comboValue(form.elements.region);
     next.latitude=form.elements.latitude.value.trim();
     next.longitude=form.elements.longitude.value.trim();
-    next.weatherLocationName=form.elements.weatherLocationName.value.trim();
+    next.weatherLocationName=form.elements.weatherLocationName.value.trim()||next.region;
     next.language=comboValue(form.elements.language);
     next.concierge=form.elements.concierge.value.trim();
     next.phone=form.elements.phone.value.trim();
@@ -892,7 +892,11 @@
   }
 
   function publishCustomer(id){
-    if(adminMode==="edit")readEditors();
+    if(adminMode==="edit"){
+      readMaster();
+      id=activeId;
+      readEditors();
+    }
     const customer=ensureCollections(customers[id]);
     customer.publicationState="Veröffentlicht";
     customer.publishStatus="published";
@@ -1041,7 +1045,7 @@
     byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderAdminPreview()});
     byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
-    byId("saveDraftButton").addEventListener("click",()=>{readEditors();activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();saveDraftToFirebase(activeCustomer());renderAll()});
+    byId("saveDraftButton").addEventListener("click",()=>{readMaster();readEditors();activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();saveDraftToFirebase(activeCustomer());renderAll()});
     byId("showPreviewButton").addEventListener("click",()=>document.getElementById("live-preview").scrollIntoView({behavior:"smooth"}));
     byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("openLiveButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));

@@ -522,6 +522,7 @@ h3{font-size:24px;color:var(--green)}
   background:#fffaf0;
 }
 .weather-day strong{display:block;color:var(--green)}
+.weather-symbol{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;margin-right:8px;border:1px solid rgba(216,183,106,.55);border-radius:999px;background:#fff6da;color:#8d6b20;font-family:Arial,sans-serif;font-size:18px;vertical-align:middle}
 .weather-day span{color:#415a53;line-height:1.35}
 .weather-day em{margin-top:4px;color:#8d6b20;font-style:normal;font-weight:800;line-height:1.35}
 .contact-card .button,.action-card .button{width:100%}

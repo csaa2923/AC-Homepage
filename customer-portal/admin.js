@@ -2144,10 +2144,17 @@
     customers[id]=normalizeCustomerData(defaultCustomerData(id),id);
     console.log("[ACT Admin] Neuer Kunde angelegt:",{customerId:id,documents:customers[id].documents});
     activeId=id;
-    adminMode="overview";
+    adminMode="edit";
     saveCustomers();
     renderAll();
-    window.setTimeout(()=>byId("customers")?.scrollIntoView({behavior:"smooth",block:"start"}),0);
+    scrollToMasterForm();
+    window.setTimeout(()=>{
+      const nameField=byId("masterForm")?.elements?.customerName;
+      if(nameField){
+        nameField.focus();
+        nameField.select();
+      }
+    },220);
   }
 
   function copyTripForCustomer(id){

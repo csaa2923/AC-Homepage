@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=33">
+<link rel="stylesheet" href="admin.css?v=34">
 </head>
 <body>
 <main>
@@ -43,6 +43,7 @@
     </header>
 
     <nav class="admin-nav admin-nav-main" aria-label="Hauptbereiche">
+      <a href="#crm-dashboard">CRM</a>
       <a href="#customers">Kunden</a>
       <a href="#templates">Vorlagen</a>
     </nav>
@@ -89,7 +90,38 @@
       </label>
     </section>
 
-    <section class="admin-section" id="customers">
+    <nav class="admin-nav crm-only" aria-label="Kundenakte">
+      <a href="#crm-profile">Stammdaten</a>
+      <a href="#crm-contact">Kontakt</a>
+      <a href="#crm-family">Familie</a>
+      <a href="#crm-preferences">Präferenzen</a>
+      <a href="#crm-history">Reisehistorie</a>
+      <a href="#crm-communication">Kommunikation</a>
+      <a href="#crm-notes">Notizen</a>
+      <a href="#crm-tasks">Aufgaben</a>
+      <a href="#crm-reminders">Erinnerungen</a>
+      <a href="#crm-ratings">Bewertungen</a>
+    </nav>
+
+    <section class="admin-section overview-only" id="crm-dashboard">
+      <div class="section-head inline-head">
+        <div>
+          <p class="eyebrow">CRM</p>
+          <h2>Dashboard und Kundensuche</h2>
+        </div>
+        <button class="button soft" id="migrateCrmFirebaseButton" type="button">CRM in Firebase speichern</button>
+      </div>
+      <div class="admin-card crm-toolbar">
+        <label class="full">Suche (Name, Telefon, E-Mail, Reise, Hotel, Restaurant, Aktivität)
+          <input id="crmSearchInput" type="search" placeholder="z. B. Holzer, +43, Seefeld, Hotel ...">
+        </label>
+        <p class="form-message full" id="crmStatus" aria-live="polite">CRM bereit.</p>
+      </div>
+      <div class="crm-dashboard-grid" id="crmDashboardGrid"></div>
+      <div class="crm-search-results" id="crmSearchResults" hidden></div>
+    </section>
+
+    <section class="admin-section overview-only" id="customers">
       <div class="section-head">
         <p class="eyebrow">Kundenübersicht</p>
         <h2>Alle Kunden und Reisen</h2>
@@ -180,6 +212,127 @@
           <button class="button soft" id="generateIdButton" type="button">Kunden-ID erzeugen</button>
         </div>
       </form>
+    </section>
+
+    <section class="admin-section crm-only" id="crm-akte">
+      <div class="section-head inline-head">
+        <div>
+          <p class="eyebrow">Kundenakte</p>
+          <h2 id="crmAkteTitle">Kunde bearbeiten</h2>
+          <p class="muted" id="crmAkteSubtitle">Interne Daten – nicht im Kundenportal sichtbar.</p>
+        </div>
+        <div class="form-actions">
+          <button class="button soft" id="backFromCrmButton" type="button">Zur Übersicht</button>
+          <button class="button primary" id="saveCrmButton" type="button">Kundenakte speichern</button>
+        </div>
+      </div>
+
+      <form class="admin-card form-grid crm-section" id="crm-profile">
+        <h3 class="full">Stammdaten</h3>
+        <label>Anrede<input name="crmSalutation" placeholder="z. B. Herr, Frau, Familie"></label>
+        <label>Vorname<input name="crmFirstName"></label>
+        <label>Nachname<input name="crmLastName"></label>
+        <label>Sprache<input name="crmLanguage" placeholder="DE"></label>
+        <label>Nationalität<input name="crmNationality"></label>
+        <label>Geburtsdatum<input name="crmBirthDate" type="date"></label>
+        <label>Firma<input name="crmCompany"></label>
+        <label>Beruf (optional)<input name="crmProfession"></label>
+      </form>
+
+      <form class="admin-card form-grid crm-section" id="crm-contact">
+        <h3 class="full">Kontaktdaten</h3>
+        <label>Telefon<input name="crmPhone"></label>
+        <label>Mobil<input name="crmMobile"></label>
+        <label>WhatsApp<input name="crmWhatsapp"></label>
+        <label>E-Mail<input name="crmEmail" type="email"></label>
+        <label class="full">Adresse<textarea name="crmAddress" rows="2"></textarea></label>
+        <label>Land<input name="crmCountry" placeholder="Österreich"></label>
+      </form>
+
+      <section class="admin-card crm-section" id="crm-family">
+        <div class="inline-head">
+          <h3>Familienmitglieder</h3>
+          <button class="button soft" type="button" id="crmAddFamilyButton">Person hinzufügen</button>
+        </div>
+        <div class="editor-list" id="crmFamilyEditor"></div>
+      </section>
+
+      <section class="admin-card crm-section" id="crm-preferences">
+        <h3>Präferenzen</h3>
+        <div class="crm-pref-grid" id="crmPreferencesEditor"></div>
+        <h4>Lieblingsorte</h4>
+        <div class="form-grid">
+          <label>Lieblingshotel<input name="crmFavHotel"></label>
+          <label>Lieblingsrestaurant<input name="crmFavRestaurant"></label>
+          <label>Lieblingsaktivität<input name="crmFavActivity"></label>
+        </div>
+      </section>
+
+      <section class="admin-card crm-section" id="crm-history">
+        <h3>Reisehistorie</h3>
+        <p class="muted">Wird automatisch bei Veröffentlichung ergänzt.</p>
+        <div id="crmHistoryList"></div>
+      </section>
+
+      <section class="admin-card crm-section" id="crm-communication">
+        <h3>Kommunikation</h3>
+        <div class="form-grid crm-quick-add" id="crmCommForm">
+          <label>Typ<select name="crmCommType"></select></label>
+          <label>Betreff<input name="crmCommSubject"></label>
+          <label class="full">Inhalt<textarea name="crmCommContent" rows="3"></textarea></label>
+          <button class="button soft" type="button" id="crmAddCommButton">Eintrag hinzufügen</button>
+        </div>
+        <div id="crmCommList"></div>
+      </section>
+
+      <section class="admin-card crm-section" id="crm-notes">
+        <h3>Interne Notizen</h3>
+        <p class="muted">Nur für Mitarbeiter – niemals im Kundenportal.</p>
+        <div class="form-grid crm-quick-add" id="crmNoteForm">
+          <label>Titel<input name="crmNoteTitle" placeholder="Interne Notiz"></label>
+          <label class="full">Inhalt<textarea name="crmNoteContent" rows="3"></textarea></label>
+          <button class="button soft" type="button" id="crmAddNoteButton">Notiz hinzufügen</button>
+        </div>
+        <div id="crmNotesList"></div>
+      </section>
+
+      <section class="admin-card crm-section" id="crm-tasks">
+        <h3>Aufgaben</h3>
+        <div class="form-grid crm-quick-add" id="crmTaskForm">
+          <label>Typ<select name="crmTaskType"></select></label>
+          <label>Status<select name="crmTaskStatus"></select></label>
+          <label>Fällig<input name="crmTaskDue" type="date"></label>
+          <label class="full">Notiz<textarea name="crmTaskNotes" rows="2"></textarea></label>
+          <button class="button soft" type="button" id="crmAddTaskButton">Aufgabe hinzufügen</button>
+        </div>
+        <div id="crmTasksList"></div>
+      </section>
+
+      <section class="admin-card crm-section" id="crm-reminders">
+        <h3>Erinnerungen</h3>
+        <p class="muted">Vorbereitet – noch ohne Push-Benachrichtigungen.</p>
+        <div class="form-grid crm-quick-add" id="crmReminderForm">
+          <label>Typ<select name="crmReminderType"></select></label>
+          <label>Datum<input name="crmReminderDate" type="date"></label>
+          <label class="full">Titel<input name="crmReminderTitle"></label>
+          <button class="button soft" type="button" id="crmAddReminderButton">Erinnerung hinzufügen</button>
+        </div>
+        <div id="crmRemindersList"></div>
+      </section>
+
+      <section class="admin-card crm-section" id="crm-ratings">
+        <h3>Bewertungen</h3>
+        <div class="form-grid crm-quick-add" id="crmRatingForm">
+          <label>Reise<input name="crmRatingTrip"></label>
+          <label>Hotel (1-5)<input name="crmRatingHotel" type="number" min="0" max="5" step="1"></label>
+          <label>Restaurant (1-5)<input name="crmRatingRestaurant" type="number" min="0" max="5" step="1"></label>
+          <label>Aktivität (1-5)<input name="crmRatingActivity" type="number" min="0" max="5" step="1"></label>
+          <label>Service (1-5)<input name="crmRatingService" type="number" min="0" max="5" step="1"></label>
+          <label class="full">Kommentar<textarea name="crmRatingComment" rows="2"></textarea></label>
+          <button class="button soft" type="button" id="crmAddRatingButton">Bewertung hinzufügen</button>
+        </div>
+        <div id="crmRatingsList"></div>
+      </section>
     </section>
 
     <section class="admin-section edit-only" id="program-items">
@@ -376,11 +529,12 @@
 <script src="customer-data.js?v=2"></script>
 <script src="publish-workflow.js?v=4"></script>
 <script src="template-library.js?v=1"></script>
+<script src="crm-library.js?v=1"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=12"></script>
+<script src="firebase-service.js?v=13"></script>
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=3"></script>
-<script src="admin.js?v=56"></script>
+<script src="admin.js?v=57"></script>
 </body>
 </html>

@@ -15,6 +15,10 @@
     loadTemplatesForAdmin:types=>service().loadTemplatesForAdmin(types),
     saveTemplate:template=>service().saveTemplate(template),
     deleteTemplate:(type,id)=>service().deleteTemplate(type,id),
-    migrateLocalTemplates:(templates,overwrite)=>service().migrateLocalTemplates(templates,overwrite)
+    migrateLocalTemplates:(templates,overwrite)=>service().migrateLocalTemplates(templates,overwrite),
+    saveCrmRecord:customer=>service().saveCrmRecord(customer),
+    loadCrmRecord:id=>service().loadCrmRecord(id),
+    loadAllCrmForAdmin:ids=>service().loadAllCrmForAdmin(ids),
+    deleteCrmRecord:id=>service().deleteCrmRecord(id)
   };
 })();

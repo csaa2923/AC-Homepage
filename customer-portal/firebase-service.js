@@ -30,6 +30,7 @@
     delete snapshot.publishedSnapshot;
     delete snapshot.publishMeta;
     delete snapshot.publishHistory;
+    delete snapshot.crm;
     return snapshot;
   }
 
@@ -276,6 +277,7 @@
     };
     if(!existing.exists()||!("publishedData" in (existing.data()||{})))payload.publishedData=null;
     await firestoreModule.setDoc(docRef(id),payload,{merge:true});
+    try{await saveCrmRecord(customer);}catch(error){console.warn("[ACT Firebase] CRM-Speicherung:",error);}
     return draftData;
   }
 
@@ -373,6 +375,7 @@
     const ready=await ensureDb();
     const {firestoreModule}=ready.modules;
     await firestoreModule.deleteDoc(docRef(id));
+    try{await deleteCrmRecord(id);}catch(error){console.warn("[ACT Firebase] CRM-Löschung:",error);}
   }
 
   async function migrateLocalCustomers(customers,overwrite){
@@ -631,6 +634,174 @@
     };
   }
 
+  function crmCollectionRef(ready){
+    const ctx=ready||state;
+    const {firestoreModule}=ctx.modules;
+    return firestoreModule.collection(ctx.db,"customerCrm");
+  }
+
+  function crmNamedCollection(name,ready){
+    const ctx=ready||state;
+    const {firestoreModule}=ctx.modules;
+    return firestoreModule.collection(ctx.db,name);
+  }
+
+  async function saveCrmRecord(customer){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    if(!customer||!customer.customerId)return null;
+    const bundle=window.ACTCrmLibrary&&window.ACTCrmLibrary.crmBundleForFirestore
+      ?window.ACTCrmLibrary.crmBundleForFirestore(customer)
+      :{customerId:customer.customerId,crm:customer.crm||{}};
+    const customerId=safeSegment(customer.customerId);
+    const now=new Date().toISOString();
+    const main={
+      customerId,
+      profile:bundle.profile||{},
+      contact:bundle.contact||{},
+      family:bundle.family||[],
+      preferences:bundle.preferences||{},
+      favorites:bundle.favorites||{},
+      tripHistory:bundle.tripHistory||[],
+      communications:bundle.communications||[],
+      reminders:bundle.reminders||[],
+      aiContext:bundle.aiContext||{},
+      updatedAt:now,
+      lastUpdated:nowText()
+    };
+    await firestoreModule.setDoc(firestoreModule.doc(crmCollectionRef(ready),customerId),main,{merge:true});
+
+    const notes=bundle.notes||[];
+    for(const note of notes){
+      const nid=safeSegment(note.id||`note-${Date.now()}`);
+      await firestoreModule.setDoc(firestoreModule.doc(crmNamedCollection("customerNotes",ready),nid),{
+        ...note,
+        id:nid,
+        customerId,
+        updatedAt:now
+      },{merge:true});
+    }
+
+    const tasks=bundle.tasks||[];
+    for(const task of tasks){
+      const tid=safeSegment(task.id||`task-${Date.now()}`);
+      await firestoreModule.setDoc(firestoreModule.doc(crmNamedCollection("customerTasks",ready),tid),{
+        ...task,
+        id:tid,
+        customerId,
+        updatedAt:now
+      },{merge:true});
+    }
+
+    const history=bundle.tripHistory||[];
+    for(const entry of history){
+      const hid=safeSegment(entry.id||`hist-${Date.now()}`);
+      await firestoreModule.setDoc(firestoreModule.doc(crmNamedCollection("customerHistory",ready),hid),{
+        ...entry,
+        id:hid,
+        customerId,
+        updatedAt:now
+      },{merge:true});
+    }
+
+    const prefs=bundle.preferences||{};
+    await firestoreModule.setDoc(firestoreModule.doc(crmNamedCollection("customerPreferences",ready),customerId),{
+      customerId,
+      ...prefs,
+      updatedAt:now
+    },{merge:true});
+
+    const ratings=bundle.ratings||[];
+    for(const rating of ratings){
+      const rid=safeSegment(rating.id||`rating-${Date.now()}`);
+      await firestoreModule.setDoc(firestoreModule.doc(crmNamedCollection("customerRatings",ready),rid),{
+        ...rating,
+        id:rid,
+        customerId,
+        updatedAt:now
+      },{merge:true});
+    }
+
+    return {customerId,updatedAt:now};
+  }
+
+  async function loadCrmRecord(customerId){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const id=safeSegment(customerId);
+    const snap=await firestoreModule.getDoc(firestoreModule.doc(crmCollectionRef(ready),id));
+    if(!snap.exists())return null;
+    const data=snap.data()||{};
+    const notesSnap=await firestoreModule.getDocs(
+      firestoreModule.query(
+        crmNamedCollection("customerNotes",ready),
+        firestoreModule.where("customerId","==",id)
+      )
+    );
+    const tasksSnap=await firestoreModule.getDocs(
+      firestoreModule.query(
+        crmNamedCollection("customerTasks",ready),
+        firestoreModule.where("customerId","==",id)
+      )
+    );
+    const ratingsSnap=await firestoreModule.getDocs(
+      firestoreModule.query(
+        crmNamedCollection("customerRatings",ready),
+        firestoreModule.where("customerId","==",id)
+      )
+    );
+    const notes=notesSnap.docs.map(d=>d.data());
+    const tasks=tasksSnap.docs.map(d=>d.data());
+    const ratings=ratingsSnap.docs.map(d=>d.data());
+    return {
+      ...data,
+      notes:notes.length?notes:data.notes||[],
+      tasks:tasks.length?tasks:data.tasks||[],
+      ratings:ratings.length?ratings:data.ratings||[]
+    };
+  }
+
+  async function loadAllCrmForAdmin(customerIds){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const map={};
+    const ids=Array.isArray(customerIds)?customerIds:[];
+    for(const cid of ids){
+      const crm=await loadCrmRecord(cid);
+      if(crm)map[cid]=crm;
+    }
+    if(!ids.length){
+      const allSnap=await firestoreModule.getDocs(crmCollectionRef(ready));
+      allSnap.docs.forEach(doc=>{
+        map[doc.id]=doc.data();
+      });
+    }
+    return map;
+  }
+
+  async function deleteCrmRecord(customerId){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const id=safeSegment(customerId);
+    await firestoreModule.deleteDoc(firestoreModule.doc(crmCollectionRef(ready),id));
+    const collections=["customerNotes","customerTasks","customerHistory","customerPreferences","customerRatings"];
+    for(const col of collections){
+      const q=firestoreModule.query(
+        crmNamedCollection(col,ready),
+        firestoreModule.where("customerId","==",id)
+      );
+      const snap=await firestoreModule.getDocs(q);
+      for(const docSnap of snap.docs){
+        await firestoreModule.deleteDoc(docSnap.ref);
+      }
+      if(col==="customerPreferences"){
+        try{
+          await firestoreModule.deleteDoc(firestoreModule.doc(crmNamedCollection(col,ready),id));
+        }catch(e){/* ignore */}
+      }
+    }
+  }
+
   window.ACTFirebaseService={
     init,
     state:()=>({...state}),
@@ -650,6 +821,10 @@
     deleteTemplate,
     migrateLocalTemplates,
     uploadTemplateImage,
+    saveCrmRecord,
+    loadCrmRecord,
+    loadAllCrmForAdmin,
+    deleteCrmRecord,
     denormalizeFromFirestore,
     normalizeForFirestore
   };

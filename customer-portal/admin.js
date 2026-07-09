@@ -11,6 +11,7 @@
   let templates={};
   let templateActiveType="all";
   let templateSearchQuery="";
+  let crmSearchQuery="";
   const PUBLISH_EDITOR="Alpine Concierge Tirol";
   const travelProgressSteps=[
     "Anfrage eingegangen",
@@ -237,6 +238,7 @@
       const liveHash=workflow.publishContentHash(normalizePublishedSnapshot(next.publishedSnapshot,id));
       if(draftHash===liveHash)next.publishMeta.contentHash=draftHash;
     }
+    if(window.ACTCrmLibrary)return window.ACTCrmLibrary.syncCustomerFromCrm(next);
     return next;
   }
 
@@ -302,6 +304,17 @@
       const firebaseCustomers=await db.loadCustomersForAdmin();
       if(Object.keys(firebaseCustomers).length){
         customers=normalizeCustomersMap(firebaseCustomers);
+        try{
+          const crmMap=await db.loadAllCrmForAdmin(Object.keys(customers));
+          const lib=crmLibrary();
+          if(lib){
+            Object.entries(crmMap||{}).forEach(([id,remote])=>{
+              if(customers[id])customers[id]=lib.mergeCrmFromFirestore(customers[id],remote);
+            });
+          }
+        }catch(crmError){
+          console.warn("[ACT Admin] CRM aus Firebase:",crmError);
+        }
         activeId=Object.keys(customers)[0]||activeId;
         saveCustomers();
         renderAll();
@@ -325,6 +338,9 @@
     });
     db.saveDraftCustomer(clone(customer)).then(()=>{
       setFirebaseStatus("Entwurf wurde in Firestore gespeichert.");
+      db.saveCrmRecord(clone(customer)).catch(error=>{
+        console.warn("[ACT Admin] CRM Firestore:",error);
+      });
     }).catch(error=>{
       setFirebaseStatus(`Entwurf lokal gespeichert. Firebase-Speicherung nicht möglich: ${error&&error.message?error.message:""}`,true);
     });
@@ -522,11 +538,16 @@
   function byId(id){return document.getElementById(id)}
 
   function setAdminMode(mode){
-    adminMode=mode==="edit"?"edit":"overview";
+    adminMode=mode==="edit"?"edit":mode==="crm"?"crm":"overview";
     const shell=byId("adminShell");
     if(!shell)return;
     shell.classList.toggle("is-editing",adminMode==="edit");
     shell.classList.toggle("is-overview",adminMode==="overview");
+    shell.classList.toggle("is-crm",adminMode==="crm");
+  }
+
+  function crmLibrary(){
+    return window.ACTCrmLibrary||null;
   }
 
   function portalPath(id,options){
@@ -600,13 +621,14 @@
 
   function renderCustomers(){
     const list=byId("customerList");
-    const sorted=Object.entries(customers).sort(([,a],[,b])=>{
+    const filtered=filteredCustomersForDisplay();
+    const sorted=filtered.map(customer=>[customer.customerId,customer]).sort(([,a],[,b])=>{
       const dateCompare=sortDate(a).localeCompare(sortDate(b));
       if(dateCompare)return dateCompare;
       return String(a.customerName||"").localeCompare(String(b.customerName||""),"de");
     });
     if(!sorted.length){
-      list.innerHTML=`<article class="customer-card"><p class="muted">Noch keine Kunden oder Reisen angelegt.</p></article>`;
+      list.innerHTML=`<article class="customer-card"><p class="muted">${crmSearchQuery?"Keine Kunden für diese Suche.":"Noch keine Kunden oder Reisen angelegt."}</p></article>`;
       return;
     }
     list.innerHTML=sorted.map(([fallbackId,raw],index)=>{
@@ -614,6 +636,7 @@
       const id=customer.customerId||fallbackId;
       const link=portalPath(id);
       const published=customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published";
+      const openTasks=(customer.crm?.tasks||[]).filter(task=>task.status!=="Erledigt").length;
       return `
         <article class="customer-card">
           <div>
@@ -624,6 +647,7 @@
               <div><span>Region</span><strong>${customer.region||"-"}</strong></div>
               <div><span>Status</span><strong>${customer.status||"-"}</strong></div>
               <div><span>Veröffentlichung</span><strong>${customer.publicationState||customer.publishStatus||"Entwurf"}</strong></div>
+              ${openTasks?`<div><span>Offene Aufgaben</span><strong>${openTasks}</strong></div>`:""}
             </div>
             <div class="customer-link-row">
               <span>Diesen Link erhält der Kunde</span>
@@ -631,6 +655,7 @@
             </div>
           </div>
           <div class="form-actions">
+            <button class="button soft" type="button" data-open-crm="${id}">Kundenakte</button>
             <button class="button soft" type="button" data-edit-customer="${id}">Reise/Kunden bearbeiten</button>
             <button class="button primary" type="button" data-open-customer="${id}">Kundenseite öffnen</button>
             <button class="button soft" type="button" data-publish-customer="${id}">${published?"Kundenseite aktualisieren":"Kundenseite veröffentlichen"}</button>
@@ -641,6 +666,359 @@
         </article>
       `;
     }).join("");
+  }
+
+  function setCrmStatus(message,isError){
+    const el=byId("crmStatus");
+    if(!el)return;
+    el.textContent=message;
+    el.style.color=isError?"#8c1f1f":"#244a3f";
+  }
+
+  function filteredCustomersForDisplay(){
+    const lib=crmLibrary();
+    const q=String(crmSearchQuery||"").trim();
+    const list=Object.values(customers).map(ensureCollections);
+    if(!q||!lib)return list;
+    return lib.searchCustomers(customers,q).map(ensureCollections);
+  }
+
+  function renderCrmDashboard(){
+    const grid=byId("crmDashboardGrid");
+    const results=byId("crmSearchResults");
+    const lib=crmLibrary();
+    if(!grid)return;
+    if(!lib){
+      grid.innerHTML=`<article class="crm-panel"><p class="muted">CRM-Modul nicht geladen.</p></article>`;
+      return;
+    }
+    const dash=lib.buildDashboard(customers);
+    const panels=[
+      {title:"Nächste Reisen",items:dash.upcomingTrips.map(c=>`<li><strong>${escapeHtml(c.customerName||"")}</strong> · ${escapeHtml(c.tripName||"")} <span class="muted">${escapeHtml(formatPeriod(c))}</span></li>`),empty:"Keine anstehenden Reisen."},
+      {title:"Offene Aufgaben",items:dash.openTasks.map(t=>`<li><strong>${escapeHtml(t.type||t.title||"Aufgabe")}</strong> · ${escapeHtml(t.customerName||"")} <span class="crm-badge">${escapeHtml(t.status||"Offen")}</span></li>`),empty:"Keine offenen Aufgaben."},
+      {title:"Geburtstage",items:dash.birthdays.map(b=>`<li><strong>${escapeHtml(b.name||"")}</strong> <span class="muted">${escapeHtml(b.type||"")} · ${escapeHtml(b.date||"")}</span></li>`),empty:"Keine Geburtstage hinterlegt."},
+      {title:"Neue Anfragen",items:dash.newRequests.map(c=>`<li><strong>${escapeHtml(c.customerName||"")}</strong> · ${escapeHtml(c.tripName||"")}</li>`),empty:"Keine neuen Anfragen."},
+      {title:"Unveröffentlichte Programme",items:dash.unpublished.map(c=>`<li><strong>${escapeHtml(c.customerName||"")}</strong> · ${escapeHtml(c.tripName||"")}</li>`),empty:"Alle Programme sind veröffentlicht."}
+    ];
+    grid.innerHTML=panels.map(panel=>`
+      <article class="crm-panel">
+        <h3>${panel.title}</h3>
+        <ul>${panel.items.length?panel.items.join(""):`<li class="muted">${panel.empty}</li>`}</ul>
+      </article>
+    `).join("");
+
+    if(results){
+      const q=String(crmSearchQuery||"").trim();
+      if(!q){
+        results.hidden=true;
+        results.innerHTML="";
+        return;
+      }
+      const hits=lib.searchCustomers(customers,q).map(ensureCollections);
+      results.hidden=false;
+      results.innerHTML=hits.length?hits.map(c=>`
+        <article class="crm-search-hit">
+          <div>
+            <strong>${escapeHtml(c.customerName||"Unbenannt")}</strong>
+            <p class="muted">${escapeHtml(c.tripName||"")} · ${escapeHtml(c.phone||c.crm?.contact?.phone||"")} · ${escapeHtml(c.email||c.crm?.contact?.email||"")}</p>
+          </div>
+          <div class="form-actions">
+            <button class="button soft" type="button" data-open-crm="${escapeHtml(c.customerId)}">Kundenakte</button>
+            <button class="button soft" type="button" data-edit-customer="${escapeHtml(c.customerId)}">Reise bearbeiten</button>
+          </div>
+        </article>
+      `).join(""):`<p class="muted">Keine Treffer für „${escapeHtml(q)}“.</p>`;
+    }
+  }
+
+  function populateCrmSelects(){
+    const lib=crmLibrary();
+    if(!lib)return;
+    const comm=byId("crmCommForm")?.elements?.crmCommType;
+    const taskType=byId("crmTaskForm")?.elements?.crmTaskType;
+    const taskStatus=byId("crmTaskForm")?.elements?.crmTaskStatus;
+    const reminder=byId("crmReminderForm")?.elements?.crmReminderType;
+    if(comm)comm.innerHTML=lib.COMM_TYPES.map(item=>`<option>${escapeHtml(item)}</option>`).join("");
+    if(taskType)taskType.innerHTML=lib.TASK_TYPES.map(item=>`<option>${escapeHtml(item)}</option>`).join("");
+    if(taskStatus)taskStatus.innerHTML=lib.TASK_STATUSES.map(item=>`<option>${escapeHtml(item)}</option>`).join("");
+    if(reminder)reminder.innerHTML=lib.REMINDER_TYPES.map(item=>`<option>${escapeHtml(item)}</option>`).join("");
+  }
+
+  function crmField(name){
+    return document.querySelector(`[name="${name}"]`);
+  }
+
+  function renderCrmFamilyEditor(family){
+    const list=byId("crmFamilyEditor");
+    if(!list)return;
+    const items=Array.isArray(family)?family:[];
+    if(!items.length){
+      list.innerHTML=`<p class="muted">Noch keine Familienmitglieder.</p>`;
+      return;
+    }
+    list.innerHTML=items.map((member,index)=>`
+      <article class="editor-card" data-crm-family="${index}">
+        <div class="form-grid">
+          <label>Name<input data-crm-family-field="name" value="${escapeHtml(member.name||"")}"></label>
+          <label>Beziehung<input data-crm-family-field="relationship" value="${escapeHtml(member.relationship||"")}"></label>
+          <label>Geburtstag<input data-crm-family-field="birthday" type="date" value="${escapeHtml(member.birthday||"")}"></label>
+          <label>Alter<input data-crm-family-field="age" value="${escapeHtml(member.age||"")}"></label>
+          <label>Allergien<input data-crm-family-field="allergies" value="${escapeHtml(member.allergies||"")}"></label>
+          <label>Ernährung<input data-crm-family-field="diet" value="${escapeHtml(member.diet||"")}"></label>
+          <label class="full">Besonderheiten<textarea data-crm-family-field="notes" rows="2">${escapeHtml(member.notes||"")}</textarea></label>
+        </div>
+        <button class="button danger" type="button" data-remove-crm-family="${index}">Entfernen</button>
+      </article>
+    `).join("");
+  }
+
+  function renderCrmPreferences(crm){
+    const host=byId("crmPreferencesEditor");
+    const lib=crmLibrary();
+    if(!host||!lib)return;
+    const selected=crm?.preferences||{};
+    host.innerHTML=Object.entries(lib.PREFERENCE_OPTIONS).map(([group,options])=>`
+      <div class="crm-pref-group">
+        <strong>${group==="hotels"?"Hotels":group==="restaurants"?"Restaurants":"Aktivitäten"}</strong>
+        <div class="crm-pref-options">
+          ${options.map(option=>{
+            const checked=(selected[group]||[]).includes(option)?"checked":"";
+            return `<label><input type="checkbox" data-crm-pref="${group}" value="${escapeHtml(option)}" ${checked}> ${escapeHtml(option)}</label>`;
+          }).join("")}
+        </div>
+      </div>
+    `).join("");
+    if(crmField("crmFavHotel"))crmField("crmFavHotel").value=crm?.favorites?.hotel||"";
+    if(crmField("crmFavRestaurant"))crmField("crmFavRestaurant").value=crm?.favorites?.restaurant||"";
+    if(crmField("crmFavActivity"))crmField("crmFavActivity").value=crm?.favorites?.activity||"";
+  }
+
+  function renderCrmHistoryList(history){
+    const list=byId("crmHistoryList");
+    if(!list)return;
+    const items=Array.isArray(history)?history:[];
+    if(!items.length){
+      list.innerHTML=`<p class="muted">Noch keine Reisehistorie. Wird bei Veröffentlichung automatisch ergänzt.</p>`;
+      return;
+    }
+    list.innerHTML=items.map(entry=>`
+      <article class="crm-history-card">
+        <h4>${escapeHtml(entry.tripName||"Reise")} <span class="crm-badge">v${escapeHtml(entry.version||"")}</span></h4>
+        <p class="muted">${escapeHtml(entry.period||"")} · ${escapeHtml(entry.region||"")}</p>
+        <p><strong>Hotels:</strong> ${escapeHtml((entry.hotels||[]).join(", ")||"–")}</p>
+        <p><strong>Restaurants:</strong> ${escapeHtml((entry.restaurants||[]).join(", ")||"–")}</p>
+        <p><strong>Aktivitäten:</strong> ${escapeHtml((entry.activities||[]).join(", ")||"–")}</p>
+      </article>
+    `).join("");
+  }
+
+  function renderCrmSimpleList(containerId,items,mapper){
+    const list=byId(containerId);
+    if(!list)return;
+    const rows=Array.isArray(items)?items:[];
+    if(!rows.length){
+      list.innerHTML=`<p class="muted">Noch keine Einträge.</p>`;
+      return;
+    }
+    list.innerHTML=`<div class="crm-list">${rows.map(mapper).join("")}</div>`;
+  }
+
+  function readCrmFamilyFromDom(crm){
+    const lib=crmLibrary();
+    const cards=document.querySelectorAll("[data-crm-family]");
+    const family=[];
+    cards.forEach(card=>{
+      const item={id:crm?.family?.[Number(card.dataset.crmFamily)]?.id||lib?.freshId("family")||`family-${Date.now()}`};
+      card.querySelectorAll("[data-crm-family-field]").forEach(field=>{
+        item[field.dataset.crmFamilyField]=field.value.trim();
+      });
+      family.push(lib?lib.normalizeFamilyMember(item):item);
+    });
+    return family;
+  }
+
+  function readCrmPreferencesFromDom(){
+    const prefs={hotels:[],restaurants:[],activities:[]};
+    document.querySelectorAll("[data-crm-pref]:checked").forEach(input=>{
+      const group=input.dataset.crmPref;
+      if(prefs[group])prefs[group].push(input.value);
+    });
+    return prefs;
+  }
+
+  function readCrmFromForms(){
+    const customer=ensureCollections(activeCustomer());
+    const lib=crmLibrary();
+    const crm=lib?lib.normalizeCrm(customer):customer.crm||{};
+    crm.profile={
+      ...crm.profile,
+      salutation:crmField("crmSalutation")?.value.trim()||"",
+      firstName:crmField("crmFirstName")?.value.trim()||"",
+      lastName:crmField("crmLastName")?.value.trim()||"",
+      language:crmField("crmLanguage")?.value.trim()||"DE",
+      nationality:crmField("crmNationality")?.value.trim()||"",
+      birthDate:crmField("crmBirthDate")?.value||"",
+      company:crmField("crmCompany")?.value.trim()||"",
+      profession:crmField("crmProfession")?.value.trim()||""
+    };
+    crm.contact={
+      ...crm.contact,
+      phone:crmField("crmPhone")?.value.trim()||"",
+      mobile:crmField("crmMobile")?.value.trim()||"",
+      whatsapp:crmField("crmWhatsapp")?.value.trim()||"",
+      email:crmField("crmEmail")?.value.trim()||"",
+      address:crmField("crmAddress")?.value.trim()||"",
+      country:crmField("crmCountry")?.value.trim()||"Österreich"
+    };
+    crm.family=readCrmFamilyFromDom(crm);
+    crm.preferences=readCrmPreferencesFromDom();
+    crm.favorites={
+      hotel:crmField("crmFavHotel")?.value.trim()||"",
+      restaurant:crmField("crmFavRestaurant")?.value.trim()||"",
+      activity:crmField("crmFavActivity")?.value.trim()||""
+    };
+    return crm;
+  }
+
+  function renderCrmFile(){
+    const lib=crmLibrary();
+    if(!lib)return;
+    const customer=lib.syncCustomerFromCrm(ensureCollections(activeCustomer()));
+    customers[activeId]=customer;
+    const crm=customer.crm||lib.defaultCrm();
+    const title=byId("crmAkteTitle");
+    const subtitle=byId("crmAkteSubtitle");
+    if(title)title.textContent=customer.customerName||"Kundenakte";
+    if(subtitle)subtitle.textContent=`${customer.tripName||""} · Interne Daten – nicht im Kundenportal sichtbar.`;
+    if(crmField("crmSalutation"))crmField("crmSalutation").value=crm.profile?.salutation||"";
+    if(crmField("crmFirstName"))crmField("crmFirstName").value=crm.profile?.firstName||"";
+    if(crmField("crmLastName"))crmField("crmLastName").value=crm.profile?.lastName||"";
+    if(crmField("crmLanguage"))crmField("crmLanguage").value=crm.profile?.language||customer.language||"DE";
+    if(crmField("crmNationality"))crmField("crmNationality").value=crm.profile?.nationality||"";
+    if(crmField("crmBirthDate"))crmField("crmBirthDate").value=crm.profile?.birthDate||"";
+    if(crmField("crmCompany"))crmField("crmCompany").value=crm.profile?.company||"";
+    if(crmField("crmProfession"))crmField("crmProfession").value=crm.profile?.profession||"";
+    if(crmField("crmPhone"))crmField("crmPhone").value=crm.contact?.phone||customer.phone||"";
+    if(crmField("crmMobile"))crmField("crmMobile").value=crm.contact?.mobile||"";
+    if(crmField("crmWhatsapp"))crmField("crmWhatsapp").value=crm.contact?.whatsapp||customer.whatsapp||"";
+    if(crmField("crmEmail"))crmField("crmEmail").value=crm.contact?.email||customer.email||"";
+    if(crmField("crmAddress"))crmField("crmAddress").value=crm.contact?.address||"";
+    if(crmField("crmCountry"))crmField("crmCountry").value=crm.contact?.country||"Österreich";
+    renderCrmFamilyEditor(crm.family);
+    renderCrmPreferences(crm);
+    renderCrmHistoryList(crm.tripHistory);
+    renderCrmSimpleList("crmCommList",crm.communications,(item,index)=>`
+      <article class="crm-list-item">
+        <div class="crm-list-item-head"><strong>${escapeHtml(item.type||"")}</strong><span class="muted">${escapeHtml((item.date||"").slice(0,10))}</span></div>
+        <p>${escapeHtml(item.subject||"")}</p>
+        <p class="muted">${escapeHtml(item.content||"")}</p>
+        <button class="button danger" type="button" data-remove-crm-comm="${index}">Entfernen</button>
+      </article>
+    `);
+    renderCrmSimpleList("crmNotesList",crm.notes,(item,index)=>`
+      <article class="crm-list-item">
+        <div class="crm-list-item-head"><strong>${escapeHtml(item.title||"Notiz")}</strong><span class="crm-badge">Intern</span></div>
+        <p class="muted">${escapeHtml((item.date||"").slice(0,10))} · ${escapeHtml(item.editor||"")}</p>
+        <p>${escapeHtml(item.content||"")}</p>
+        <button class="button danger" type="button" data-remove-crm-note="${index}">Entfernen</button>
+      </article>
+    `);
+    renderCrmSimpleList("crmTasksList",crm.tasks,(item,index)=>`
+      <article class="crm-list-item">
+        <div class="crm-list-item-head">
+          <strong>${escapeHtml(item.type||item.title||"Aufgabe")}</strong>
+          <span class="crm-badge">${escapeHtml(item.status||"Offen")}</span>
+        </div>
+        <p class="muted">Fällig: ${escapeHtml(item.dueDate||"–")}</p>
+        <p>${escapeHtml(item.notes||"")}</p>
+        <label>Status
+          <select data-crm-task-status="${index}">
+            ${lib.TASK_STATUSES.map(status=>`<option ${status===(item.status||"Offen")?"selected":""}>${escapeHtml(status)}</option>`).join("")}
+          </select>
+        </label>
+        <button class="button danger" type="button" data-remove-crm-task="${index}">Entfernen</button>
+      </article>
+    `);
+    renderCrmSimpleList("crmRemindersList",crm.reminders,(item,index)=>`
+      <article class="crm-list-item">
+        <div class="crm-list-item-head"><strong>${escapeHtml(item.title||item.type||"Erinnerung")}</strong><span class="crm-badge">${escapeHtml(item.status||"Vorbereitet")}</span></div>
+        <p class="muted">${escapeHtml(item.type||"")} · ${escapeHtml(item.date||"")}</p>
+        <button class="button danger" type="button" data-remove-crm-reminder="${index}">Entfernen</button>
+      </article>
+    `);
+    renderCrmSimpleList("crmRatingsList",crm.ratings,(item,index)=>`
+      <article class="crm-list-item">
+        <div class="crm-list-item-head"><strong>${escapeHtml(item.tripName||"Reise")}</strong><span class="muted">${escapeHtml((item.date||"").slice(0,10))}</span></div>
+        <p>Hotel ${escapeHtml(String(item.hotel||0))} · Restaurant ${escapeHtml(String(item.restaurant||0))} · Aktivität ${escapeHtml(String(item.activity||0))} · Service ${escapeHtml(String(item.service||0))}</p>
+        <p class="muted">${escapeHtml(item.comment||"")}</p>
+        <button class="button danger" type="button" data-remove-crm-rating="${index}">Entfernen</button>
+      </article>
+    `);
+    if(crmField("crmRatingTrip"))crmField("crmRatingTrip").value=customer.tripName||"";
+  }
+
+  function saveCrmCustomer(){
+    const lib=crmLibrary();
+    if(!lib)return;
+    let crm=readCrmFromForms();
+    const customer=ensureCollections(activeCustomer());
+    document.querySelectorAll("[data-crm-task-status]").forEach(select=>{
+      const index=Number(select.dataset.crmTaskStatus);
+      if(crm.tasks[index])crm.tasks[index].status=select.value;
+    });
+    const synced=lib.syncCustomerFromCrm({...customer,crm});
+    customers[activeId]=synced;
+    saveCustomers();
+    saveDraftToFirebase(synced);
+    setCrmStatus("Kundenakte gespeichert.");
+    renderCrmFile();
+    renderCrmDashboard();
+  }
+
+  function openCrmAkte(id){
+    activeId=id;
+    adminMode="crm";
+    renderAll();
+    byId("crm-akte")?.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+
+  function addCrmFamilyMember(){
+    const lib=crmLibrary();
+    if(!lib)return;
+    const customer=ensureCollections(activeCustomer());
+    const crm=readCrmFromForms();
+    crm.family=[...crm.family,lib.normalizeFamilyMember({name:"",relationship:""})];
+    customers[activeId]=lib.syncCustomerFromCrm({...customer,crm});
+    renderCrmFamilyEditor(crm.family);
+  }
+
+  function mutateCrmList(mutator){
+    const lib=crmLibrary();
+    if(!lib)return;
+    const customer=ensureCollections(activeCustomer());
+    let crm=readCrmFromForms();
+    crm=mutator(crm);
+    customers[activeId]=lib.syncCustomerFromCrm({...customer,crm});
+    renderCrmFile();
+  }
+
+  async function migrateCrmToFirebase(){
+    const db=firebaseDatabase();
+    if(!db){
+      setCrmStatus("Firebase nicht geladen.",true);
+      return;
+    }
+    try{
+      setCrmStatus("CRM-Migration läuft ...");
+      let count=0;
+      for(const customer of Object.values(customers)){
+        await db.saveCrmRecord(ensureCollections(customer));
+        count+=1;
+      }
+      setCrmStatus(`CRM-Migration abgeschlossen: ${count} Kundenakte(n) in Firebase.`);
+    }catch(error){
+      setCrmStatus(`CRM-Migration fehlgeschlagen: ${error&&error.message?error.message:error}`,true);
+    }
   }
 
   function renderMaster(){
@@ -1138,8 +1516,14 @@
 
   function renderAll(){
     setAdminMode(adminMode);
+    renderCrmDashboard();
     renderTemplates();
     renderCustomers();
+    if(adminMode==="crm"){
+      populateCrmSelects();
+      renderCrmFile();
+      return;
+    }
     if(adminMode!=="edit")return;
     renderMaster();
     renderEditor("program","programEditor");
@@ -1272,11 +1656,19 @@
     delete snapshot.publishedSnapshot;
     delete snapshot.publishMeta;
     delete snapshot.publishHistory;
+    delete snapshot.crm;
     return snapshot;
   }
 
   function applyLocalPublish(customer,meta){
     if(customer.publishedSnapshot)customer.publishMeta.previousLocalBackup=clone(customer.publishedSnapshot);
+    const lib=crmLibrary();
+    if(lib){
+      const crm=lib.appendTripHistoryOnPublish(customer,meta);
+      const synced=lib.syncCustomerFromCrm({...customer,crm});
+      customer.crm=synced.crm;
+      if(synced.customerName)customer.customerName=synced.customerName;
+    }
     const workflow=publishWorkflow();
     const historyEntry=workflow?workflow.buildHistoryEntry(meta):{
       date:new Date().toLocaleDateString("de-DE"),
@@ -1991,6 +2383,8 @@
     document.addEventListener("click",event=>{
       const edit=event.target.closest("[data-edit-customer]");
       if(edit){activeId=edit.dataset.editCustomer;adminMode="edit";renderAll();scrollToMasterForm();}
+      const openCrm=event.target.closest("[data-open-crm]");
+      if(openCrm)openCrmAkte(openCrm.dataset.openCrm);
       const open=event.target.closest("[data-open-customer]");
       if(open)window.open(portalPath(open.dataset.openCustomer),"_blank","noopener");
       const copy=event.target.closest("[data-copy-customer]");
@@ -2005,9 +2399,82 @@
       if(add)addItem(add.dataset.addList);
       const remove=event.target.closest("[data-remove-item]");
       if(remove)removeItem(remove.dataset.removeItem,Number(remove.dataset.index));
+      const removeFamily=event.target.closest("[data-remove-crm-family]");
+      if(removeFamily)mutateCrmList(crm=>({...crm,family:crm.family.filter((_,index)=>index!==Number(removeFamily.dataset.removeCrmFamily))}));
+      const removeComm=event.target.closest("[data-remove-crm-comm]");
+      if(removeComm)mutateCrmList(crm=>({...crm,communications:crm.communications.filter((_,index)=>index!==Number(removeComm.dataset.removeCrmComm))}));
+      const removeNote=event.target.closest("[data-remove-crm-note]");
+      if(removeNote)mutateCrmList(crm=>({...crm,notes:crm.notes.filter((_,index)=>index!==Number(removeNote.dataset.removeCrmNote))}));
+      const removeTask=event.target.closest("[data-remove-crm-task]");
+      if(removeTask)mutateCrmList(crm=>({...crm,tasks:crm.tasks.filter((_,index)=>index!==Number(removeTask.dataset.removeCrmTask))}));
+      const removeReminder=event.target.closest("[data-remove-crm-reminder]");
+      if(removeReminder)mutateCrmList(crm=>({...crm,reminders:crm.reminders.filter((_,index)=>index!==Number(removeReminder.dataset.removeCrmReminder))}));
+      const removeRating=event.target.closest("[data-remove-crm-rating]");
+      if(removeRating)mutateCrmList(crm=>({...crm,ratings:crm.ratings.filter((_,index)=>index!==Number(removeRating.dataset.removeCrmRating))}));
     });
     byId("copyLinkButton").addEventListener("click",()=>copyText(byId("portalLink").value));
     byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
+    byId("backFromCrmButton")?.addEventListener("click",()=>{adminMode="overview";renderAll();byId("crm-dashboard").scrollIntoView({behavior:"smooth",block:"start"})});
+    byId("saveCrmButton")?.addEventListener("click",saveCrmCustomer);
+    byId("crmSearchInput")?.addEventListener("input",event=>{crmSearchQuery=event.target.value;renderCrmDashboard();renderCustomers()});
+    byId("migrateCrmFirebaseButton")?.addEventListener("click",migrateCrmToFirebase);
+    byId("crmAddFamilyButton")?.addEventListener("click",addCrmFamilyMember);
+    byId("crmAddCommButton")?.addEventListener("click",()=>{
+      const lib=crmLibrary();
+      if(!lib)return;
+      mutateCrmList(crm=>lib.addCommunication(crm,{
+        type:crmField("crmCommType")?.value,
+        subject:crmField("crmCommSubject")?.value.trim(),
+        content:crmField("crmCommContent")?.value.trim()
+      }));
+      if(crmField("crmCommSubject"))crmField("crmCommSubject").value="";
+      if(crmField("crmCommContent"))crmField("crmCommContent").value="";
+    });
+    byId("crmAddNoteButton")?.addEventListener("click",()=>{
+      const lib=crmLibrary();
+      if(!lib)return;
+      mutateCrmList(crm=>lib.addNote(crm,{
+        title:crmField("crmNoteTitle")?.value.trim(),
+        content:crmField("crmNoteContent")?.value.trim()
+      }));
+      if(crmField("crmNoteTitle"))crmField("crmNoteTitle").value="";
+      if(crmField("crmNoteContent"))crmField("crmNoteContent").value="";
+    });
+    byId("crmAddTaskButton")?.addEventListener("click",()=>{
+      const lib=crmLibrary();
+      if(!lib)return;
+      mutateCrmList(crm=>lib.addTask(crm,{
+        type:crmField("crmTaskType")?.value,
+        status:crmField("crmTaskStatus")?.value,
+        dueDate:crmField("crmTaskDue")?.value,
+        notes:crmField("crmTaskNotes")?.value.trim()
+      }));
+      if(crmField("crmTaskNotes"))crmField("crmTaskNotes").value="";
+    });
+    byId("crmAddReminderButton")?.addEventListener("click",()=>{
+      const lib=crmLibrary();
+      if(!lib)return;
+      mutateCrmList(crm=>lib.addReminder(crm,{
+        type:crmField("crmReminderType")?.value,
+        title:crmField("crmReminderTitle")?.value.trim(),
+        date:crmField("crmReminderDate")?.value
+      }));
+      if(crmField("crmReminderTitle"))crmField("crmReminderTitle").value="";
+    });
+    byId("crmAddRatingButton")?.addEventListener("click",()=>{
+      const lib=crmLibrary();
+      if(!lib)return;
+      mutateCrmList(crm=>lib.addRating(crm,{
+        tripName:crmField("crmRatingTrip")?.value.trim(),
+        hotel:crmField("crmRatingHotel")?.value,
+        restaurant:crmField("crmRatingRestaurant")?.value,
+        activity:crmField("crmRatingActivity")?.value,
+        service:crmField("crmRatingService")?.value,
+        comment:crmField("crmRatingComment")?.value.trim()
+      }));
+      if(crmField("crmRatingComment"))crmField("crmRatingComment").value="";
+    });
+    populateCrmSelects();
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()});
     byId("previewDraftButton").addEventListener("click",()=>{previewMode="draft";renderAdminPreview();renderPublishChanges()});
     byId("previewLiveButton").addEventListener("click",()=>{previewMode="live";renderAdminPreview()});

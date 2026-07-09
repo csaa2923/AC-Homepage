@@ -303,8 +303,7 @@
           </div>
           <div class="form-actions">
             <button class="button soft" type="button" data-edit-customer="${id}">Bearbeiten</button>
-            <button class="button soft" type="button" data-open-customer="${id}">Vorschau öffnen</button>
-            <button class="button soft" type="button" data-open-customer="${id}">Live-Portal öffnen</button>
+            <button class="button primary" type="button" data-open-customer="${id}">Reise öffnen</button>
             <button class="button soft" type="button" data-copy-customer="${id}">Link kopieren</button>
           </div>
         </article>

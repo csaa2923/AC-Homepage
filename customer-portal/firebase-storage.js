@@ -7,6 +7,10 @@
     uploadCustomerDocument:(customerId,file,meta,onProgress)=>{
       if(!window.ACTFirebaseService)return Promise.reject(new Error("Firebase-Service nicht geladen."));
       return window.ACTFirebaseService.uploadCustomerDocument(customerId,file,meta,onProgress);
+    },
+    uploadTemplateImage:(templateType,templateId,file,meta,onProgress)=>{
+      if(!window.ACTFirebaseService)return Promise.reject(new Error("Firebase-Service nicht geladen."));
+      return window.ACTFirebaseService.uploadTemplateImage(templateType,templateId,file,meta,onProgress);
     }
   };
 })();

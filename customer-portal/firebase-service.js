@@ -501,6 +501,136 @@
     };
   }
 
+  function templateRoot(){
+    return configRoot().templatesRoot||"templates";
+  }
+
+  function templateCollectionRef(type){
+    const ready=state;
+    const {firestoreModule}=ready.modules;
+    return firestoreModule.collection(ready.db,`${templateRoot()}/library/${type||"buildingBlocks"}`);
+  }
+
+  function normalizeTemplateForFirestore(template){
+    const data=clean(template||{});
+    data.templateId=data.templateId||data.id||"";
+    data.templateType=data.templateType||"buildingBlocks";
+    data.updatedAt=data.updatedAt||new Date().toISOString();
+    data.createdAt=data.createdAt||data.updatedAt;
+    data.tags=Array.isArray(data.tags)?data.tags:[];
+    data.images=Array.isArray(data.images)?data.images:[];
+    data.history=Array.isArray(data.history)?data.history:[];
+    data.payload=data.payload&&typeof data.payload==="object"?data.payload:{};
+    data.aiContext=data.aiContext&&typeof data.aiContext==="object"?data.aiContext:{};
+    data.permissions=data.permissions&&typeof data.permissions==="object"?data.permissions:{canEdit:true,canUse:true,role:"admin"};
+    return data;
+  }
+
+  async function loadTemplatesForAdmin(types){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const typeList=Array.isArray(types)&&types.length?types:[
+      "completeTrips","hotels","restaurants","activities","transfers","documents","programTemplates","dayTemplates","buildingBlocks"
+    ];
+    const templates={};
+    for(const type of typeList){
+      const snapshot=await firestoreModule.getDocs(templateCollectionRef(type));
+      snapshot.forEach(docSnap=>{
+        const raw=docSnap.data()||{};
+        const template={...raw,templateId:raw.templateId||docSnap.id,templateType:raw.templateType||type};
+        templates[template.templateId]=template;
+      });
+    }
+    return templates;
+  }
+
+  async function saveTemplate(template){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const data=normalizeTemplateForFirestore(template);
+    const type=data.templateType||"buildingBlocks";
+    const id=data.templateId;
+    if(!id)throw new Error("Vorlagen-ID fehlt.");
+    await firestoreModule.setDoc(firestoreModule.doc(templateCollectionRef(type),id),{
+      ...data,
+      templateId:id,
+      templateType:type,
+      updatedAt:new Date().toISOString(),
+      lastUpdated:nowText()
+    },{merge:true});
+    return data;
+  }
+
+  async function deleteTemplate(type,id){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    await firestoreModule.deleteDoc(firestoreModule.doc(templateCollectionRef(type),id));
+  }
+
+  async function migrateLocalTemplates(templates,overwrite){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const result={created:0,skipped:0,updated:0};
+    for(const template of Object.values(templates||{})){
+      const data=normalizeTemplateForFirestore(template);
+      const type=data.templateType||"buildingBlocks";
+      const id=data.templateId;
+      if(!id)continue;
+      const existing=await firestoreModule.getDoc(firestoreModule.doc(templateCollectionRef(type),id));
+      if(existing.exists()&&!overwrite){
+        result.skipped+=1;
+        continue;
+      }
+      await firestoreModule.setDoc(firestoreModule.doc(templateCollectionRef(type),id),{
+        ...data,
+        templateId:id,
+        templateType:type,
+        updatedAt:new Date().toISOString(),
+        lastUpdated:nowText()
+      },{merge:true});
+      if(existing.exists())result.updated+=1;
+      else result.created+=1;
+    }
+    return result;
+  }
+
+  async function uploadTemplateImage(templateType,templateId,file,meta,onProgress){
+    const ready=await ensureDb();
+    const {storageModule}=ready.modules;
+    if(!file)throw new Error("Datei fehlt.");
+    if(!ready.auth.currentUser)throw new Error("Firebase Upload abgebrochen: Kein angemeldeter Benutzer vorhanden.");
+    const type=safeSegment(templateType||"template");
+    const id=safeSegment(templateId||"draft");
+    const filename=safeSegment(file.name);
+    const path=`templates/${type}/${id}/images/${Date.now()}-${filename}`;
+    const fileRef=storageModule.ref(ready.storage,path);
+    const metadata={
+      contentType:file.type||"application/octet-stream",
+      customMetadata:{
+        templateType:String(templateType||""),
+        templateId:String(templateId||""),
+        title:String(meta&&meta.title||file.name)
+      }
+    };
+    const uploadPromise=new Promise((resolve,reject)=>{
+      const task=storageModule.uploadBytesResumable(fileRef,file,metadata);
+      task.on("state_changed",snapshot=>{
+        const percent=snapshot.totalBytes?Math.round((snapshot.bytesTransferred/snapshot.totalBytes)*100):0;
+        if(typeof onProgress==="function")onProgress(percent,snapshot);
+      },reject,()=>resolve(task.snapshot));
+    });
+    const snapshot=await withTimeout(uploadPromise,25000,"Firebase Storage Upload für Vorlagen fehlgeschlagen.");
+    const url=await storageModule.getDownloadURL(snapshot.ref);
+    return {
+      title:meta&&meta.title?meta.title:file.name,
+      url,
+      storagePath:path,
+      fileName:file.name,
+      contentType:file.type||"",
+      uploadedAt:new Date().toISOString()
+    };
+  }
+
   window.ACTFirebaseService={
     init,
     state:()=>({...state}),
@@ -515,6 +645,11 @@
     migrateLocalCustomers,
     prepareStorageReference,
     uploadCustomerDocument,
+    loadTemplatesForAdmin,
+    saveTemplate,
+    deleteTemplate,
+    migrateLocalTemplates,
+    uploadTemplateImage,
     denormalizeFromFirestore,
     normalizeForFirestore
   };

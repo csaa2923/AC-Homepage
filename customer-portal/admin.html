@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=32">
+<link rel="stylesheet" href="admin.css?v=33">
 </head>
 <body>
 <main>
@@ -36,10 +36,16 @@
       </div>
       <div class="header-actions">
         <button class="button soft overview-only" id="newCustomerButton" type="button">Kunde anlegen</button>
+        <button class="button soft overview-only" id="newTripFromTemplateButton" type="button">Neue Reise aus Vorlage</button>
         <button class="button soft edit-only" id="backToCustomersButton" type="button">Alle Kunden und Reisen</button>
         <button class="button soft" id="logoutButton" type="button">Sperren</button>
       </div>
     </header>
+
+    <nav class="admin-nav admin-nav-main" aria-label="Hauptbereiche">
+      <a href="#customers">Kunden</a>
+      <a href="#templates">Vorlagen</a>
+    </nav>
 
     <nav class="admin-nav edit-only" aria-label="Adminbereiche">
       <a href="#data-flow">Datenfluss</a>
@@ -53,6 +59,35 @@
       <a href="#publish-history">Historie</a>
       <a href="#export-import">Export / Import</a>
     </nav>
+
+    <section class="admin-section" id="templates">
+      <div class="section-head inline-head">
+        <div>
+          <p class="eyebrow">Vorlagenbibliothek</p>
+          <h2>Reisebausteine und Komplettreisen</h2>
+        </div>
+        <div class="form-actions">
+          <button class="button soft" id="exportTemplatesButton" type="button">Vorlagen exportieren</button>
+          <button class="button soft" id="importTemplatesButton" type="button">Vorlagen importieren</button>
+          <button class="button soft" id="migrateTemplatesFirebaseButton" type="button">Vorlagen in Firebase</button>
+        </div>
+      </div>
+      <div class="admin-card template-toolbar">
+        <label class="full">Suche
+          <input id="templateSearchInput" type="search" placeholder="Titel, Kategorie, Region, Schlagwort, Hotel, Restaurant, Aktivität ...">
+        </label>
+        <div class="template-type-tabs" id="templateTypeTabs" role="tablist" aria-label="Vorlagenkategorien"></div>
+        <p class="form-message full" id="templateStatus" aria-live="polite">Vorlagen werden geladen ...</p>
+      </div>
+      <div class="template-list" id="templateList"></div>
+      <label class="admin-card full" hidden id="templateImportPanel">JSON importieren
+        <textarea id="templateImportText" rows="8" placeholder="Vorlagen-JSON einfügen"></textarea>
+        <div class="form-actions">
+          <button class="button primary" id="templateImportConfirmButton" type="button">Import starten</button>
+          <button class="button soft" id="templateImportCancelButton" type="button">Abbrechen</button>
+        </div>
+      </label>
+    </section>
 
     <section class="admin-section" id="customers">
       <div class="section-head">
@@ -153,7 +188,10 @@
           <p class="eyebrow">Programm</p>
           <h2>Programmpunkte</h2>
         </div>
-        <button class="button soft" type="button" data-add-list="program">Programmpunkt hinzufügen</button>
+        <div class="form-actions">
+          <button class="button soft" type="button" data-add-list="program">Programmpunkt hinzufügen</button>
+          <button class="button soft" id="insertTemplateBlockButton" type="button">Baustein hinzufügen</button>
+        </div>
       </div>
       <p class="muted">Programmpunkte sind die zentrale Quelle fuer Kalender, Timeline und Detailkarten. Kategorien wie „Restaurant“ oder „Aktivitaet“ direkt am Programmpunkt waehlen.</p>
       <div class="editor-list" id="programEditor"></div>
@@ -194,6 +232,7 @@
         <p class="muted full">Alle Änderungen werden zuerst im Entwurf gespeichert. Das Kundenportal zeigt ausschließlich die veröffentlichte Live-Version.</p>
         <div class="form-actions">
           <button class="button soft" id="saveDraftButton" type="button">Entwurf speichern</button>
+          <button class="button soft" id="saveAsTemplateButton" type="button">Als Vorlage speichern</button>
           <button class="button primary" id="markPublishedButton" type="button">Veröffentlichen</button>
           <button class="button soft" id="restorePublishedButton" type="button">Letzte Veröffentlichung wiederherstellen</button>
           <button class="button soft" id="copyLinkButton" type="button">Link kopieren</button>
@@ -230,6 +269,79 @@
   </section>
 </main>
 
+<div class="admin-modal" id="templatePreviewModal" hidden>
+  <div class="admin-modal-card template-modal-card" role="dialog" aria-labelledby="templatePreviewTitle">
+    <h3 id="templatePreviewTitle">Vorlagenvorschau</h3>
+    <div id="templatePreviewBody"></div>
+    <div class="form-actions">
+      <button class="button soft" id="templatePreviewCloseButton" type="button">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<div class="admin-modal" id="saveTemplateModal" hidden>
+  <div class="admin-modal-card template-modal-card" role="dialog" aria-labelledby="saveTemplateTitle">
+    <h3 id="saveTemplateTitle">Als Vorlage speichern</h3>
+    <form class="form-grid" id="saveTemplateForm">
+      <label class="full">Vorlagentyp
+        <select name="templateType" id="saveTemplateTypeSelect"></select>
+      </label>
+      <label class="full">Titel<input name="title" required></label>
+      <label class="full">Beschreibung<textarea name="description" rows="3"></textarea></label>
+      <label>Kategorie<select name="category" id="saveTemplateCategorySelect"></select></label>
+      <label>Region<input name="region"></label>
+      <label>Saison<input name="season" placeholder="z. B. Winter"></label>
+      <label>Dauer<input name="duration" placeholder="z. B. 5 Tage"></label>
+      <label>Zielgruppe<input name="targetAudience" placeholder="z. B. Familie"></label>
+      <label class="full">Schlagwörter<input name="tags" placeholder="luxus, ski, gourmet"></label>
+      <label class="full">Versionskommentar<textarea name="comment" rows="2" placeholder="Optional"></textarea></label>
+      <label class="full">Bild hochladen<input type="file" id="saveTemplateImageInput" accept="image/*"></label>
+    </form>
+    <div class="form-actions">
+      <button class="button soft" id="saveTemplateCancelButton" type="button">Abbrechen</button>
+      <button class="button primary" id="saveTemplateConfirmButton" type="button">Vorlage speichern</button>
+    </div>
+  </div>
+</div>
+
+<div class="admin-modal" id="newTripTemplateModal" hidden>
+  <div class="admin-modal-card template-modal-card" role="dialog" aria-labelledby="newTripTemplateTitle">
+    <h3 id="newTripTemplateTitle">Neue Reise aus Vorlage</h3>
+    <p class="muted">Vorlage auswählen, Kundendaten eingeben, Zeitraum festlegen – das Programm wird automatisch erzeugt.</p>
+    <label class="full">Vorlage
+      <select id="newTripTemplateSelect"></select>
+    </label>
+    <form class="form-grid" id="newTripTemplateForm">
+      <label>Kundenname<input name="customerName" required></label>
+      <label>Reisebezeichnung<input name="tripName" required></label>
+      <label>Zeitraum von<input name="startDatePlain" type="date"></label>
+      <label>Zeitraum bis<input name="endDatePlain" type="date"></label>
+      <label>Region<input name="region"></label>
+    </form>
+    <div class="form-actions">
+      <button class="button soft" id="newTripTemplateCancelButton" type="button">Abbrechen</button>
+      <button class="button primary" id="newTripTemplateConfirmButton" type="button">Reise erzeugen</button>
+    </div>
+  </div>
+</div>
+
+<div class="admin-modal" id="insertTemplateModal" hidden>
+  <div class="admin-modal-card template-modal-card" role="dialog" aria-labelledby="insertTemplateTitle">
+    <h3 id="insertTemplateTitle">Baustein hinzufügen</h3>
+    <p class="muted">Hotels, Restaurants, Aktivitäten, Transfers, Dokumente oder Programmpunkte aus der Vorlagenbibliothek übernehmen.</p>
+    <label class="full">Baustein-Typ
+      <select id="insertTemplateTypeSelect"></select>
+    </label>
+    <label class="full">Vorlage
+      <select id="insertTemplateSelect"></select>
+    </label>
+    <div class="form-actions">
+      <button class="button soft" id="insertTemplateCancelButton" type="button">Abbrechen</button>
+      <button class="button primary" id="insertTemplateConfirmButton" type="button">Baustein übernehmen</button>
+    </div>
+  </div>
+</div>
+
 <div class="admin-modal" id="publishDialog" hidden>
   <div class="admin-modal-card" role="dialog" aria-labelledby="publishDialogTitle">
     <h3 id="publishDialogTitle">Änderungen veröffentlichen?</h3>
@@ -263,11 +375,12 @@
 
 <script src="customer-data.js?v=2"></script>
 <script src="publish-workflow.js?v=4"></script>
+<script src="template-library.js?v=1"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=11"></script>
+<script src="firebase-service.js?v=12"></script>
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
-<script src="firebase-storage.js?v=2"></script>
-<script src="admin.js?v=55"></script>
+<script src="firebase-storage.js?v=3"></script>
+<script src="admin.js?v=56"></script>
 </body>
 </html>

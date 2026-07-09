@@ -8,6 +8,9 @@
   let pendingScrollItemId="";
   let adminMode="overview";
   let previewMode="draft";
+  let templates={};
+  let templateActiveType="all";
+  let templateSearchQuery="";
   const PUBLISH_EDITOR="Alpine Concierge Tirol";
   const travelProgressSteps=[
     "Anfrage eingegangen",
@@ -1135,6 +1138,7 @@
 
   function renderAll(){
     setAdminMode(adminMode);
+    renderTemplates();
     renderCustomers();
     if(adminMode!=="edit")return;
     renderMaster();
@@ -1522,6 +1526,433 @@
     unlock();
   }
 
+  function templateLib(){
+    return window.ACTTemplateLibrary||null;
+  }
+
+  function saveTemplates(){
+    const lib=templateLib();
+    if(lib)lib.saveLocalTemplates(templates);
+  }
+
+  function loadLocalTemplates(){
+    const lib=templateLib();
+    templates=lib?lib.loadLocalTemplates():{};
+  }
+
+  function setTemplateStatus(message,isError){
+    const el=byId("templateStatus");
+    if(!el)return;
+    el.textContent=message;
+    el.style.color=isError?"#8c1f1f":"#244a3f";
+  }
+
+  async function loadFirebaseTemplates(){
+    const db=firebaseDatabase();
+    if(!db||!db.loadTemplatesForAdmin)return;
+    try{
+      await window.ACTFirebaseAuth?.prepareAuth?.();
+      const remote=await db.loadTemplatesForAdmin();
+      if(Object.keys(remote).length){
+        templates=remote;
+        saveTemplates();
+        setTemplateStatus(`Firebase verbunden. ${Object.keys(templates).length} Vorlagen geladen.`);
+        renderTemplates();
+      }else{
+        setTemplateStatus(`Firebase verbunden. Noch keine Vorlagen in Firestore – lokale Bibliothek aktiv (${Object.keys(templates).length}).`);
+      }
+    }catch(error){
+      setTemplateStatus(`Vorlagen lokal aktiv. Firebase: ${error&&error.message?error.message:"nicht erreichbar"}`,true);
+    }
+  }
+
+  function normalizeStoredTemplate(raw){
+    const lib=templateLib();
+    return lib?lib.normalizeTemplate(raw,raw?.templateType):raw;
+  }
+
+  async function persistTemplate(template){
+    const lib=templateLib();
+    const next=normalizeStoredTemplate(template);
+    templates[next.templateId]=next;
+    saveTemplates();
+    const db=firebaseDatabase();
+    if(db&&db.saveTemplate){
+      try{
+        await db.saveTemplate(clone(next));
+        setTemplateStatus(`Vorlage "${next.title}" gespeichert (lokal + Firebase).`);
+      }catch(error){
+        setTemplateStatus(`Vorlage lokal gespeichert. Firebase: ${error&&error.message?error.message:"Fehler"}`,true);
+      }
+    }else{
+      setTemplateStatus(`Vorlage "${next.title}" lokal gespeichert.`);
+    }
+    renderTemplates();
+    return next;
+  }
+
+  function renderTemplateTypeTabs(){
+    const root=byId("templateTypeTabs");
+    const lib=templateLib();
+    if(!root||!lib)return;
+    const tabs=[{id:"all",label:"Alle"},...Object.entries(lib.TEMPLATE_TYPES).map(([id,meta])=>({id,label:meta.label}))];
+    root.innerHTML=tabs.map(tab=>`<button type="button" data-template-type="${tab.id}" class="${templateActiveType===tab.id?"active":""}">${escapeHtml(tab.label)}</button>`).join("");
+    root.querySelectorAll("[data-template-type]").forEach(button=>{
+      button.addEventListener("click",()=>{
+        templateActiveType=button.dataset.templateType||"all";
+        renderTemplates();
+      });
+    });
+  }
+
+  function renderTemplateCategoryOptions(selectId,selected){
+    const lib=templateLib();
+    const select=byId(selectId);
+    if(!select||!lib)return;
+    select.innerHTML=`<option value="">– Kategorie wählen –</option>${lib.TEMPLATE_CATEGORIES.map(item=>`<option value="${escapeHtml(item)}" ${item===selected?"selected":""}>${escapeHtml(item)}</option>`).join("")}`;
+  }
+
+  function renderTemplateTypeOptions(selectId,types,selected){
+    const lib=templateLib();
+    const select=byId(selectId);
+    if(!select||!lib)return;
+    const entries=types||Object.entries(lib.TEMPLATE_TYPES);
+    select.innerHTML=entries.map(([id,meta])=>`<option value="${id}" ${id===selected?"selected":""}>${escapeHtml(meta.label||id)}</option>`).join("");
+  }
+
+  function filteredTemplates(){
+    const lib=templateLib();
+    if(!lib)return [];
+    return lib.searchTemplates(templates,templateSearchQuery,templateActiveType);
+  }
+
+  function renderTemplates(){
+    renderTemplateTypeTabs();
+    const root=byId("templateList");
+    if(!root)return;
+    const lib=templateLib();
+    const list=filteredTemplates();
+    if(!list.length){
+      root.innerHTML=`<article class="template-card"><p class="muted">Noch keine Vorlagen in dieser Kategorie. Speichern Sie eine Komplettreise oder einzelne Bausteine über „Als Vorlage speichern“.</p></article>`;
+      return;
+    }
+    root.innerHTML=list.map(template=>{
+      const t=normalizeStoredTemplate(template);
+      const stats=lib?lib.previewLines(t):{};
+      const tags=(t.tags||[]).map(tag=>`<span class="template-tag">${escapeHtml(tag)}</span>`).join("");
+      return `
+        <article class="template-card ${t.favorite?"is-favorite":""}">
+          <div class="template-card-head">
+            <div>
+              <h3>${t.favorite?"⭐ ":""}${escapeHtml(t.title||"Unbenannte Vorlage")}</h3>
+              <div class="template-card-meta">
+                <span>${escapeHtml(t.typeLabel||t.templateType||"")}</span>
+                <span>Version ${escapeHtml(t.version||"1.0")}</span>
+                <span>${escapeHtml(t.region||"Tirol")}</span>
+                <span>${escapeHtml(t.category||"")}</span>
+              </div>
+            </div>
+            <div class="template-card-actions">
+              <button class="button soft" type="button" data-template-preview="${escapeHtml(t.templateId)}">Vorschau</button>
+              <button class="button soft" type="button" data-template-favorite="${escapeHtml(t.templateId)}">${t.favorite?"Favorit":"⭐ Favorit"}</button>
+              <button class="button soft" type="button" data-template-duplicate="${escapeHtml(t.templateId)}">Duplizieren</button>
+              <button class="button soft" type="button" data-template-delete="${escapeHtml(t.templateId)}">Löschen</button>
+            </div>
+          </div>
+          <p>${escapeHtml(t.description||"Keine Beschreibung.")}</p>
+          <div class="template-statline">
+            <span>${stats.programCount||0} Programmpunkte</span>
+            <span>${stats.hotelCount||0} Hotels</span>
+            <span>${stats.restaurantCount||0} Restaurants</span>
+            <span>${stats.activityCount||0} Aktivitäten</span>
+            <span>${stats.documentCount||0} Dokumente</span>
+            <span>${stats.imageCount||0} Bilder</span>
+          </div>
+          ${tags?`<div class="template-card-tags">${tags}</div>`:""}
+          <p class="muted">Erstellt: ${escapeHtml(new Date(t.createdAt||"").toLocaleString("de-DE"))} · Bearbeitet: ${escapeHtml(t.lastEditor||"")}</p>
+        </article>
+      `;
+    }).join("");
+    root.querySelectorAll("[data-template-preview]").forEach(button=>button.addEventListener("click",()=>openTemplatePreview(button.dataset.templatePreview)));
+    root.querySelectorAll("[data-template-favorite]").forEach(button=>button.addEventListener("click",()=>toggleTemplateFavorite(button.dataset.templateFavorite)));
+    root.querySelectorAll("[data-template-duplicate]").forEach(button=>button.addEventListener("click",()=>duplicateTemplateById(button.dataset.templateDuplicate)));
+    root.querySelectorAll("[data-template-delete]").forEach(button=>button.addEventListener("click",()=>deleteTemplateById(button.dataset.templateDelete)));
+  }
+
+  function openTemplatePreview(templateId){
+    const template=normalizeStoredTemplate(templates[templateId]);
+    const lib=templateLib();
+    const body=byId("templatePreviewBody");
+    const modal=byId("templatePreviewModal");
+    if(!template||!body||!modal)return;
+    const p=template.payload||{};
+    const program=(p.program||[]).map(item=>`<li>${escapeHtml(item.title||"Programmpunkt")} · ${escapeHtml(item.dateValue||"")}</li>`).join("")||"<li>Keine Programmpunkte</li>";
+    const hotels=(p.accommodations||[]).map(item=>`<li>${escapeHtml(item.name||"Hotel")}</li>`).join("")||"<li>Keine Hotels</li>";
+    const restaurants=(p.restaurants||[]).map(item=>`<li>${escapeHtml(item.title||item.name||"Restaurant")}</li>`).join("")||"<li>Keine Restaurants</li>";
+    const activities=(p.activities||[]).map(item=>`<li>${escapeHtml(item.title||"Aktivität")}</li>`).join("")||"<li>Keine Aktivitäten</li>";
+    const docs=(p.documents||[]).map(item=>`<li>${escapeHtml(item.title||"Dokument")}</li>`).join("")||"<li>Keine Dokumente</li>";
+    const images=(template.images||[]).map(item=>`<li>${escapeHtml(item.title||item.fileName||"Bild")}</li>`).join("")||"<li>Keine Bilder</li>";
+    body.innerHTML=`
+      <div class="template-preview-grid">
+        <p><strong>${escapeHtml(template.title||"")}</strong></p>
+        <p>${escapeHtml(template.description||"")}</p>
+        <p class="muted">${escapeHtml(template.category||"")} · ${escapeHtml(template.region||"")} · ${escapeHtml(template.season||"")} · ${escapeHtml(template.targetAudience||"")}</p>
+        <section><p class="eyebrow">Programmpunkte</p><ul>${program}</ul></section>
+        <section><p class="eyebrow">Hotels</p><ul>${hotels}</ul></section>
+        <section><p class="eyebrow">Restaurants</p><ul>${restaurants}</ul></section>
+        <section><p class="eyebrow">Aktivitäten</p><ul>${activities}</ul></section>
+        <section><p class="eyebrow">Dokumente</p><ul>${docs}</ul></section>
+        <section><p class="eyebrow">Bilder</p><ul>${images}</ul></section>
+        ${lib?`<p class="muted">KI-Vorbereitung: ${escapeHtml(template.aiContext?.promptHints||"")}</p>`:""}
+      </div>
+    `;
+    modal.hidden=false;
+  }
+
+  function closeTemplatePreview(){
+    byId("templatePreviewModal").hidden=true;
+  }
+
+  function openSaveTemplateModal(){
+    const lib=templateLib();
+    if(!lib)return;
+    readMaster();
+    readEditors();
+    const customer=activeCustomer();
+    renderTemplateTypeOptions("saveTemplateTypeSelect",null,"completeTrips");
+    renderTemplateCategoryOptions("saveTemplateCategorySelect","");
+    const form=byId("saveTemplateForm");
+    if(form){
+      form.title.value=customer.tripName||customer.tripTitle||"";
+      form.description.value=`Vorlage basierend auf ${customer.tripName||"Reise"}`;
+      form.region.value=customer.region||"";
+      form.season.value="";
+      form.duration.value=customer.startDatePlain&&customer.endDatePlain?"Individuell":"";
+      form.targetAudience.value="";
+      form.tags.value=[customer.region,customer.status].filter(Boolean).join(", ");
+      form.comment.value="";
+    }
+    byId("saveTemplateModal").hidden=false;
+  }
+
+  function closeSaveTemplateModal(){
+    byId("saveTemplateModal").hidden=true;
+  }
+
+  async function confirmSaveTemplate(){
+    const lib=templateLib();
+    if(!lib)return;
+    readMaster();
+    readEditors();
+    const customer=activeCustomer();
+    const form=byId("saveTemplateForm");
+    if(!form||!form.title.value.trim()){
+      window.alert("Bitte einen Vorlagentitel eingeben.");
+      return;
+    }
+    const templateType=form.templateType.value||"completeTrips";
+    const meta={
+      title:form.title.value.trim(),
+      description:form.description.value.trim(),
+      category:form.category.value.trim(),
+      region:form.region.value.trim()||customer.region||"",
+      season:form.season.value.trim(),
+      duration:form.duration.value.trim(),
+      targetAudience:form.targetAudience.value.trim(),
+      tags:form.tags.value.split(",").map(item=>item.trim()).filter(Boolean),
+      comment:form.comment.value.trim()
+    };
+    let template=templateType==="completeTrips"
+      ?lib.buildTemplateFromCustomer(customer,{...meta,templateType})
+      :lib.buildTemplateFromItem(templateType,customer.program?.[0]||customer.accommodations?.[0]||customer.documents?.[0]||{},meta);
+    template=lib.updateTemplateVersion(template,meta.comment||"Erste Version",PUBLISH_EDITOR);
+    const imageInput=byId("saveTemplateImageInput");
+    const file=imageInput?.files?.[0];
+    if(file&&window.ACTFirebaseStorage?.uploadTemplateImage){
+      try{
+        const uploaded=await window.ACTFirebaseStorage.uploadTemplateImage(template.templateType,template.templateId,file,{title:template.title});
+        template.images=[...(template.images||[]),uploaded];
+      }catch(error){
+        setTemplateStatus(`Vorlage gespeichert, Bild-Upload fehlgeschlagen: ${error&&error.message?error.message:""}`,true);
+      }
+    }
+    await persistTemplate(template);
+    closeSaveTemplateModal();
+  }
+
+  function populateTripTemplateSelect(){
+    const select=byId("newTripTemplateSelect");
+    const lib=templateLib();
+    if(!select||!lib)return;
+    const list=lib.searchTemplates(templates,"", "completeTrips");
+    select.innerHTML=list.length?list.map(item=>`<option value="${escapeHtml(item.templateId)}">${escapeHtml(item.title)} (v${escapeHtml(item.version||"1.0")})</option>`).join(""):`<option value="">Keine Komplettreisen vorhanden</option>`;
+  }
+
+  function openNewTripFromTemplateModal(){
+    populateTripTemplateSelect();
+    const form=byId("newTripTemplateForm");
+    if(form){
+      form.customerName.value="";
+      form.tripName.value="";
+      form.startDatePlain.value="";
+      form.endDatePlain.value="";
+      form.region.value="";
+    }
+    byId("newTripTemplateModal").hidden=false;
+  }
+
+  function closeNewTripFromTemplateModal(){
+    byId("newTripTemplateModal").hidden=true;
+  }
+
+  function confirmNewTripFromTemplate(){
+    const lib=templateLib();
+    const templateId=byId("newTripTemplateSelect")?.value;
+    const form=byId("newTripTemplateForm");
+    if(!lib||!templateId||!form)return;
+    if(!form.customerName.value.trim()||!form.tripName.value.trim()){
+      window.alert("Bitte Kundenname und Reisebezeichnung eingeben.");
+      return;
+    }
+    const template=normalizeStoredTemplate(templates[templateId]);
+    const id=generateId();
+    let customer=normalizeCustomerData(defaultCustomerData(id),id);
+    customer.customerName=form.customerName.value.trim();
+    customer.tripName=form.tripName.value.trim();
+    customer.tripTitle=customer.tripName;
+    customer=lib.applyCompleteTripTemplate(customer,template,{
+      startDatePlain:form.startDatePlain.value,
+      endDatePlain:form.endDatePlain.value,
+      region:form.region.value.trim()||template.region||"",
+      tripName:customer.tripName
+    });
+    customers[id]=commitCustomer(customer,id);
+    activeId=id;
+    adminMode="edit";
+    saveCustomers();
+    saveDraftToFirebase(customers[id]);
+    closeNewTripFromTemplateModal();
+    renderAll();
+    scrollToMasterForm();
+    setTemplateStatus(`Neue Reise aus Vorlage "${template.title}" erzeugt.`);
+  }
+
+  function populateInsertTemplateSelect(type){
+    const lib=templateLib();
+    const select=byId("insertTemplateSelect");
+    if(!lib||!select)return;
+    const list=lib.searchTemplates(templates,"",type);
+    select.innerHTML=list.length?list.map(item=>`<option value="${escapeHtml(item.templateId)}">${escapeHtml(item.title)}</option>`).join(""):`<option value="">Keine Vorlagen in dieser Kategorie</option>`;
+  }
+
+  function openInsertTemplateModal(){
+    const lib=templateLib();
+    if(!lib)return;
+    const insertable=Object.entries(lib.TEMPLATE_TYPES).filter(([,meta])=>meta.insertable);
+    renderTemplateTypeOptions("insertTemplateTypeSelect",insertable,insertable[0]?.[0]||"hotels");
+    populateInsertTemplateSelect(byId("insertTemplateTypeSelect")?.value||"hotels");
+    byId("insertTemplateModal").hidden=false;
+  }
+
+  function closeInsertTemplateModal(){
+    byId("insertTemplateModal").hidden=true;
+  }
+
+  function confirmInsertTemplate(){
+    const lib=templateLib();
+    const templateId=byId("insertTemplateSelect")?.value;
+    if(!lib||!templateId){
+      window.alert("Bitte eine Vorlage auswählen.");
+      return;
+    }
+    readEditors();
+    const template=normalizeStoredTemplate(templates[templateId]);
+    let customer=activeCustomer();
+    customer=lib.applyItemTemplate(customer,template);
+    commitCustomer(customer);
+    saveCustomers();
+    saveDraftToFirebase(customers[activeId]);
+    closeInsertTemplateModal();
+    renderAll();
+    setTemplateStatus(`Baustein "${template.title}" wurde übernommen.`);
+  }
+
+  async function toggleTemplateFavorite(templateId){
+    const lib=templateLib();
+    if(!lib||!templates[templateId])return;
+    templates[templateId]=lib.toggleFavorite(templates[templateId]);
+    await persistTemplate(templates[templateId]);
+  }
+
+  async function duplicateTemplateById(templateId){
+    const lib=templateLib();
+    if(!lib||!templates[templateId])return;
+    const title=window.prompt("Titel der kopierten Vorlage:",`${templates[templateId].title} Kopie`);
+    if(title===null)return;
+    const copy=lib.duplicateTemplate(templates[templateId],title);
+    await persistTemplate(copy);
+  }
+
+  async function deleteTemplateById(templateId){
+    const template=templates[templateId];
+    if(!template||!window.confirm(`Vorlage "${template.title}" wirklich löschen?`))return;
+    delete templates[templateId];
+    saveTemplates();
+    const db=firebaseDatabase();
+    if(db&&db.deleteTemplate){
+      try{
+        await db.deleteTemplate(template.templateType,template.templateId);
+      }catch(error){
+        setTemplateStatus(`Lokal gelöscht. Firebase: ${error&&error.message?error.message:"Fehler"}`,true);
+      }
+    }
+    renderTemplates();
+  }
+
+  function exportTemplatesJson(){
+    const lib=templateLib();
+    if(!lib)return;
+    const blob=new Blob([lib.exportTemplates(templates)],{type:"application/json"});
+    const link=document.createElement("a");
+    link.href=URL.createObjectURL(blob);
+    link.download=`act-vorlagen-${new Date().toISOString().slice(0,10)}.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  function importTemplatesJson(){
+    const lib=templateLib();
+    const text=byId("templateImportText")?.value||"";
+    if(!lib||!text.trim()){
+      window.alert("Bitte JSON einfügen.");
+      return;
+    }
+    try{
+      const imported=lib.importTemplates(text);
+      templates={...templates,...imported};
+      saveTemplates();
+      renderTemplates();
+      byId("templateImportPanel").hidden=true;
+      setTemplateStatus(`${Object.keys(imported).length} Vorlagen importiert.`);
+    }catch(error){
+      window.alert(`Import fehlgeschlagen: ${error&&error.message?error.message:"Ungültiges JSON"}`);
+    }
+  }
+
+  async function migrateTemplatesToFirebase(){
+    const db=firebaseDatabase();
+    if(!db||!db.migrateLocalTemplates){
+      setTemplateStatus("Firebase nicht verfügbar.",true);
+      return;
+    }
+    try{
+      const result=await db.migrateLocalTemplates(templates,false);
+      setTemplateStatus(`Firebase Migration: ${result.created} neu, ${result.updated} aktualisiert, ${result.skipped} übersprungen.`);
+    }catch(error){
+      setTemplateStatus(`Migration fehlgeschlagen: ${error&&error.message?error.message:""}`,true);
+    }
+  }
+
   function bind(){
     byId("loginButton").addEventListener("click",login);
     byId("passwordInput").addEventListener("input",event=>{
@@ -1599,6 +2030,24 @@
     byId("exportButton").addEventListener("click",downloadJson);
     byId("migrateFirebaseButton").addEventListener("click",migrateLocalToFirebase);
     byId("importButton").addEventListener("click",()=>{try{importJson()}catch(error){window.alert("JSON konnte nicht geladen werden.")}});
+    byId("templateSearchInput")?.addEventListener("input",event=>{templateSearchQuery=event.target.value;renderTemplates()});
+    byId("exportTemplatesButton")?.addEventListener("click",exportTemplatesJson);
+    byId("importTemplatesButton")?.addEventListener("click",()=>{byId("templateImportPanel").hidden=false});
+    byId("templateImportConfirmButton")?.addEventListener("click",importTemplatesJson);
+    byId("templateImportCancelButton")?.addEventListener("click",()=>{byId("templateImportPanel").hidden=true});
+    byId("migrateTemplatesFirebaseButton")?.addEventListener("click",migrateTemplatesToFirebase);
+    byId("saveAsTemplateButton")?.addEventListener("click",openSaveTemplateModal);
+    byId("saveTemplateCancelButton")?.addEventListener("click",closeSaveTemplateModal);
+    byId("saveTemplateConfirmButton")?.addEventListener("click",confirmSaveTemplate);
+    byId("newTripFromTemplateButton")?.addEventListener("click",openNewTripFromTemplateModal);
+    byId("newTripTemplateCancelButton")?.addEventListener("click",closeNewTripFromTemplateModal);
+    byId("newTripTemplateConfirmButton")?.addEventListener("click",confirmNewTripFromTemplate);
+    byId("insertTemplateBlockButton")?.addEventListener("click",openInsertTemplateModal);
+    byId("insertTemplateCancelButton")?.addEventListener("click",closeInsertTemplateModal);
+    byId("insertTemplateConfirmButton")?.addEventListener("click",confirmInsertTemplate);
+    byId("insertTemplateTypeSelect")?.addEventListener("change",event=>populateInsertTemplateSelect(event.target.value));
+    byId("templatePreviewCloseButton")?.addEventListener("click",closeTemplatePreview);
+    byId("templatePreviewModal")?.addEventListener("click",event=>{if(event.target===event.currentTarget)closeTemplatePreview()});
   }
 
   function unlock(){
@@ -1654,10 +2103,12 @@
 
   function init(){
     setupMasterCombos();
+    loadLocalTemplates();
     bind();
     sessionStorage.setItem(SESSION_KEY,"1");
     unlock();
     loadFirebaseCustomers();
+    loadFirebaseTemplates();
   }
 
   if(document.readyState==="loading"){

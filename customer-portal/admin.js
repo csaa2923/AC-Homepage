@@ -149,6 +149,7 @@
   function saveDraftToFirebase(customer){
     const db=firebaseDatabase();
     if(!db)return;
+    console.log("[ACT Admin] Dokumente im Entwurf:",(customer.documents||[]).map(documentDebugInfo));
     db.saveDraftCustomer(clone(customer)).then(()=>{
       setFirebaseStatus("Entwurf wurde in Firestore gespeichert.");
     }).catch(error=>{
@@ -361,10 +362,37 @@
     if(!customer.accommodations.length&&customer.hotel)customer.accommodations=[customer.hotel];
     customer.restaurants=customer.restaurants||[];
     customer.activities=customer.activities||[];
-    customer.documents=customer.documents||[];
+    customer.documents=(customer.documents||[]).map(normalizeDocumentItem);
     customer.progressSteps=travelProgressSteps;
     customer.hotel=customer.accommodations[0]||customer.hotel||{};
     return customer;
+  }
+
+  function documentVisibleValue(item){
+    const value=item.visible!==undefined?item.visible:item.visibleForCustomer!==undefined?item.visibleForCustomer:item.customerVisible;
+    if(value===undefined)return true;
+    return value===true||value==="true"||value==="Ja"||value==="ja"||value===1||value==="1";
+  }
+
+  function normalizeDocumentItem(item){
+    const next={...(item||{})};
+    next.visible=documentVisibleValue(next);
+    delete next.visibleForCustomer;
+    delete next.customerVisible;
+    next.title=next.title||next.fileName||"Dokument";
+    next.type=next.type||"Sonstiges";
+    next.url=next.url||next.downloadUrl||next.downloadURL||"";
+    return next;
+  }
+
+  function documentDebugInfo(item){
+    return {
+      title:item&&item.title,
+      type:item&&item.type,
+      visible:item&&item.visible,
+      url:item&&item.url,
+      storagePath:item&&item.storagePath
+    };
   }
 
   function normalizeProgramItem(item){
@@ -563,8 +591,9 @@
         next[name]=value;
       });
       if(listName==="program")normalizeProgramItem(next);
-      customer[listName][index]=next;
+      customer[listName][index]=listName==="documents"?normalizeDocumentItem(next):next;
     });
+    customer.documents=customer.documents.map(normalizeDocumentItem);
     customer.program.sort((a,b)=>`${a.dateValue||a.date} ${a.startTime||""}`.localeCompare(`${b.dateValue||b.date} ${b.startTime||""}`));
     customer.hotel=customer.accommodations[0]||customer.hotel||{};
     customer.updatedAt=new Date().toLocaleDateString("de-DE");
@@ -641,7 +670,7 @@
       const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(activeId,file,{title:item.title,type:item.type},percent=>{
         if(status)status.textContent=percent>0?`Upload läuft ... ${percent}%`:"Upload wartet auf Firebase Storage ... 0%";
       });
-      customer.documents[index]={...item,...uploaded};
+      customer.documents[index]=normalizeDocumentItem({...item,...uploaded});
       customer.updatedAt=new Date().toLocaleDateString("de-DE");
       saveCustomers();
       saveDraftToFirebase(customer);
@@ -802,11 +831,13 @@
   }
 
   function publishCustomer(id){
+    if(adminMode==="edit")readEditors();
     const customer=ensureCollections(customers[id]);
     customer.publicationState="Veröffentlicht";
     customer.publishStatus="published";
     customer.updatedAt=new Date().toLocaleDateString("de-DE");
     saveCustomers();
+    console.log("[ACT Admin] Dokumente beim Veröffentlichen:",(customer.documents||[]).map(documentDebugInfo));
     const db=firebaseDatabase();
     if(db){
       db.publishCustomer(clone(customer)).then(()=>{
@@ -949,7 +980,7 @@
     byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderAdminPreview()});
     byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
-    byId("saveDraftButton").addEventListener("click",()=>{activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();saveDraftToFirebase(activeCustomer());renderAll()});
+    byId("saveDraftButton").addEventListener("click",()=>{readEditors();activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();saveDraftToFirebase(activeCustomer());renderAll()});
     byId("showPreviewButton").addEventListener("click",()=>document.getElementById("live-preview").scrollIntoView({behavior:"smooth"}));
     byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("openLiveButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));

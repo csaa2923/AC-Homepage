@@ -66,6 +66,26 @@
     if(el)el.textContent=value;
   }
 
+  function escapeHtml(value){
+    return String(value||"").replace(/[&<>"']/g,match=>({
+      "&":"&amp;",
+      "<":"&lt;",
+      ">":"&gt;",
+      "\"":"&quot;",
+      "'":"&#39;"
+    }[match]));
+  }
+
+  function normalizeDocument(item){
+    const next={...(item||{})};
+    const visible=next.visible!==undefined?next.visible:next.visibleForCustomer!==undefined?next.visibleForCustomer:next.customerVisible;
+    next.visible=visible===undefined?true:visible===true||visible==="true"||visible==="Ja"||visible==="ja"||visible===1||visible==="1";
+    next.title=next.title||next.fileName||"Dokument";
+    next.type=next.type||"Dokument";
+    next.url=next.url||next.downloadUrl||next.downloadURL||"";
+    return next;
+  }
+
   function mapsLink(destination){
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
   }
@@ -438,13 +458,18 @@
   }
 
   function renderDocuments(){
-    document.getElementById("documentGrid").innerHTML=customer.documents.map(item=>`
+    const documents=(customer.documents||[]).map(normalizeDocument);
+    const visibleDocuments=documents.filter(item=>item.visible!==false);
+    console.log("[ACT Portal] Dokumente geladen:",documents);
+    console.log("[ACT Portal] Sichtbare Dokumente:",visibleDocuments);
+    document.getElementById("documentGrid").innerHTML=visibleDocuments.length?visibleDocuments.map(item=>`
       <article class="document-card">
-        <h3>${item.title}</h3>
-        <div class="placeholder-box">${item.type||item.status||"Dokument"}</div>
-        ${item.url?`<a class="button soft" href="${item.url}" target="_blank" rel="noopener">Öffnen</a>`:`<button class="button soft" type="button" data-placeholder="${item.title}">Öffnen</button>`}
+        <h3>${escapeHtml(item.title)}</h3>
+        <div class="placeholder-box">${escapeHtml(item.type||"Dokument")}</div>
+        ${item.note?`<p>${escapeHtml(item.note)}</p>`:""}
+        ${item.url?`<a class="button soft" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">Dokument öffnen</a>`:`<button class="button soft" type="button" data-placeholder="${escapeHtml(item.title)}">Dokument öffnen</button>`}
       </article>
-    `).join("");
+    `).join(""):`<article class="document-card"><h3>Keine freigegebenen Dokumente</h3><div class="placeholder-box">Dokumente erscheinen hier nach der Veröffentlichung.</div></article>`;
   }
 
   function renderContact(){

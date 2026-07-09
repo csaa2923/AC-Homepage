@@ -121,6 +121,7 @@
     data.conciergeName=data.conciergeName||data.concierge||"";
     data.whatsappLink=data.whatsappLink||data.whatsapp||"";
     data.dropdownCustomValues=data.dropdownCustomValues||{};
+    data.documents=(data.documents||[]).map(normalizeDocument);
     return data;
   }
 
@@ -132,11 +133,23 @@
     source.accommodations=source.accommodations||[];
     source.restaurants=source.restaurants||[];
     source.activities=source.activities||[];
-    source.documents=source.documents||[];
+    source.documents=(source.documents||[]).map(normalizeDocument);
     source.concierge=source.concierge||source.conciergeName||"";
     source.whatsapp=source.whatsapp||source.whatsappLink||"";
     source.updatedAt=source.updatedAt||source.lastUpdated||"";
     return source;
+  }
+
+  function normalizeDocument(item){
+    const next={...(item||{})};
+    const visible=next.visible!==undefined?next.visible:next.visibleForCustomer!==undefined?next.visibleForCustomer:next.customerVisible;
+    next.visible=visible===undefined?true:visible===true||visible==="true"||visible==="Ja"||visible==="ja"||visible===1||visible==="1";
+    delete next.visibleForCustomer;
+    delete next.customerVisible;
+    next.title=next.title||next.fileName||"Dokument";
+    next.type=next.type||"Sonstiges";
+    next.url=next.url||next.downloadUrl||next.downloadURL||"";
+    return next;
   }
 
   async function loadCustomersForAdmin(){
@@ -170,6 +183,7 @@
     const id=customerIdOf(customer);
     if(!id)throw new Error("Kunden-ID fehlt.");
     const draftData=normalizeForFirestore(customer);
+    console.log("[ACT Firebase] Entwurf speichert Dokumente:",draftData.documents||[]);
     await firestoreModule.setDoc(docRef(id),{
       customerId:id,
       draftData,
@@ -190,6 +204,7 @@
       publishStatus:"published",
       updatedAt:nowText()
     });
+    console.log("[ACT Firebase] Veröffentlicht speichert Dokumente:",publishedData.documents||[]);
     await firestoreModule.setDoc(docRef(id),{
       customerId:id,
       draftData:normalizeForFirestore(customer),

@@ -4,7 +4,7 @@
   const SESSION_KEY="act_customer_portal_admin_unlocked";
   const demoRoot=window.CustomerPortalData||{customers:{}};
   let customers={};
-  let activeId=demoRoot.defaultCustomerId||"";
+  let activeId="";
   let pendingScrollItemId="";
   let adminMode="overview";
   let previewMode="draft";
@@ -30,9 +30,6 @@
     "Reise läuft",
     "Reise abgeschlossen"
   ];
-  customers=loadCustomers();
-  activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
-
   const dateFieldNames=new Set(["date","dateValue","endDate","endDateValue","checkIn","checkOut","startDatePlain","endDatePlain"]);
   const timeFieldNames=new Set(["startTime","endTime","time"]);
   const timeSlotOptions=(()=>{
@@ -142,10 +139,32 @@
     Object.keys(map).forEach(id=>{
       const customer=map[id];
       if((customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published")&&!customer.publishedSnapshot){
-        map[id]=normalizeCustomerData({...customer,publishedSnapshot:buildPublishedSnapshot(customer)},id);
+        try{
+          map[id]=normalizeCustomerData({...customer,publishedSnapshot:buildPublishedSnapshot(customer)},id);
+        }catch(error){
+          console.warn("[ACT Admin] Demo-Snapshot für",id,error);
+        }
       }
     });
     return map;
+  }
+
+  function bootstrapCustomers(){
+    try{
+      customers=loadCustomers();
+    }catch(error){
+      console.warn("[ACT Admin] Lokale Daten defekt:",error);
+      customers=prepareDemoCustomers();
+    }
+    activeId=window.ACTDemoExamples?.defaultCustomerId||demoRoot.defaultCustomerId||Object.keys(customers)[0]||"";
+    if(activeId&&!customers[activeId])activeId=Object.keys(customers)[0]||activeId;
+  }
+
+  function resetStoredCustomers(){
+    localStorage.removeItem(STORAGE_KEY);
+    customers=prepareDemoCustomers();
+    activeId=window.ACTDemoExamples?.defaultCustomerId||Object.keys(customers)[0]||demoRoot.defaultCustomerId||"";
+    if(activeId&&!customers[activeId])activeId=Object.keys(customers)[0]||activeId;
   }
 
   function seedDemoExamples(){
@@ -278,17 +297,32 @@
       if(next.publishedSnapshot)next.publishedSnapshot.history=next.history;
     }
     if(next.publishedSnapshot)next.publishedSnapshot=normalizePublishedSnapshot(next.publishedSnapshot,id);
-    const workflow=publishWorkflow();
-    const draftHash=workflow?workflow.publishContentHash(normalizePublishedSnapshot(buildPublishedSnapshot(next),id)):"";
-    if(next.publishMeta?.contentHash&&draftHash&&draftHash===next.publishMeta.contentHash){
-      next.publishedSnapshot=normalizePublishedSnapshot(buildPublishedSnapshot(next),id);
-    }else if(next.publishedSnapshot&&workflow&&!next.publishMeta.contentHash&&draftHash){
-      const liveHash=workflow.publishContentHash(normalizePublishedSnapshot(next.publishedSnapshot,id));
-      if(draftHash===liveHash)next.publishMeta.contentHash=draftHash;
+    try{
+      const workflow=publishWorkflow();
+      const draftHash=workflow?workflow.publishContentHash(normalizePublishedSnapshot(buildPublishedSnapshot(next),id)):"";
+      if(next.publishMeta?.contentHash&&draftHash&&draftHash===next.publishMeta.contentHash){
+        next.publishedSnapshot=normalizePublishedSnapshot(buildPublishedSnapshot(next),id);
+      }else if(next.publishedSnapshot&&workflow&&!next.publishMeta.contentHash&&draftHash){
+        const liveHash=workflow.publishContentHash(normalizePublishedSnapshot(next.publishedSnapshot,id));
+        if(draftHash===liveHash)next.publishMeta.contentHash=draftHash;
+      }
+    }catch(publishError){
+      console.warn("[ACT Admin] Veröffentlichungsvergleich:",publishError);
     }
-    if(window.ACTCrmLibrary)next=window.ACTCrmLibrary.syncCustomerFromCrm(next);
+    if(window.ACTCrmLibrary){
+      try{
+        next=window.ACTCrmLibrary.syncCustomerFromCrm(next);
+      }catch(crmError){
+        console.warn("[ACT Admin] CRM normalisieren:",crmError);
+      }
+    }
     if(window.ACTBookingLibrary){
-      next.bookings=Array.isArray(next.bookings)?next.bookings.map(booking=>window.ACTBookingLibrary.normalizeBooking(booking,next)):[];
+      try{
+        next.bookings=Array.isArray(next.bookings)?next.bookings.map(booking=>window.ACTBookingLibrary.normalizeBooking(booking,next)):[];
+      }catch(bookingError){
+        console.warn("[ACT Admin] Buchungen normalisieren:",bookingError);
+        next.bookings=[];
+      }
     }
     return next;
   }
@@ -314,8 +348,12 @@
 
   function normalizeCustomersMap(source){
     return Object.entries(source||{}).reduce((result,[fallbackId,customer])=>{
-      const normalized=normalizeCustomerData(customer,fallbackId);
-      result[normalized.customerId]=normalized;
+      try{
+        const normalized=normalizeCustomerData(customer,fallbackId);
+        result[normalized.customerId]=normalized;
+      }catch(error){
+        console.warn("[ACT Admin] Kunde übersprungen:",fallbackId,error);
+      }
       return result;
     },{});
   }
@@ -692,6 +730,7 @@
 
   function renderCustomers(){
     const list=byId("customerList");
+    if(!list)return;
     const filtered=filteredCustomersForDisplay();
     const sorted=filtered.map(customer=>[customer.customerId,customer]).sort(([,a],[,b])=>{
       const dateCompare=sortDate(a).localeCompare(sortDate(b));
@@ -2065,27 +2104,39 @@
     renderPreviewModeNote();
   }
 
+  function safeRender(label,renderFn){
+    try{
+      renderFn();
+    }catch(error){
+      console.error(`[ACT Admin] ${label}:`,error);
+    }
+  }
+
   function renderAll(){
     setAdminMode(adminMode);
-    renderCrmDashboard();
-    renderBookings();
-    renderTemplates();
-    renderCustomers();
+    safeRender("CRM-Dashboard",renderCrmDashboard);
+    safeRender("Buchungen",renderBookings);
+    safeRender("Vorlagen",renderTemplates);
+    safeRender("Kundenliste",renderCustomers);
     if(adminMode==="crm"){
-      populateCrmSelects();
-      renderCrmFile();
+      safeRender("CRM-Akte",()=>{
+        populateCrmSelects();
+        renderCrmFile();
+      });
       return;
     }
     if(adminMode!=="edit")return;
-    renderMaster();
-    renderEditor("program","programEditor");
-    renderEditor("accommodations","accommodationsEditor");
-    renderEditor("documents","documentsEditor");
-    renderLinks();
-    renderPublishDashboard();
-    renderPublishChanges();
-    renderPublishHistory();
-    renderAdminPreview();
+    safeRender("Bearbeitung",()=>{
+      renderMaster();
+      renderEditor("program","programEditor");
+      renderEditor("accommodations","accommodationsEditor");
+      renderEditor("documents","documentsEditor");
+      renderLinks();
+      renderPublishDashboard();
+      renderPublishChanges();
+      renderPublishHistory();
+      renderAdminPreview();
+    });
   }
 
   function newCustomer(){
@@ -2972,12 +3023,12 @@
       }
     });
     byId("resetLocalDataButton").addEventListener("click",()=>{
-      localStorage.removeItem(STORAGE_KEY);
+      resetStoredCustomers();
       sessionStorage.removeItem(SESSION_KEY);
-      customers=clone(demoRoot.customers||{});
-      activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
       byId("passwordInput").value="";
-      byId("loginMessage").textContent="Lokale Admin-Daten wurden zurückgesetzt. Bitte Passwort erneut eingeben.";
+      byId("loginMessage").textContent="Lokale Admin-Daten wurden zurückgesetzt. Bitte Passwort ACT2026 eingeben.";
+      byId("loginScreen").hidden=false;
+      byId("adminShell").hidden=true;
     });
     byId("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(SESSION_KEY);location.reload()});
     byId("newCustomerButton").addEventListener("click",newCustomer);
@@ -3176,9 +3227,7 @@
       else updateMainNavActive("customers");
     }catch(error){
       console.error(error);
-      localStorage.removeItem(STORAGE_KEY);
-      customers=clone(demoRoot.customers||{});
-      activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
+      resetStoredCustomers();
       try{
         renderAll();
       }catch(secondError){
@@ -3209,9 +3258,7 @@
       </section>
     `;
     byId("rebuildAdminButton").addEventListener("click",()=>{
-      localStorage.removeItem(STORAGE_KEY);
-      customers=clone(demoRoot.customers||{});
-      activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
+      resetStoredCustomers();
       location.reload();
     });
     byId("reloadAdminButton").addEventListener("click",()=>location.reload());
@@ -3221,13 +3268,18 @@
   window.ACTAdminRender=renderAll;
 
   function init(){
+    bootstrapCustomers();
     setupMasterCombos();
     loadLocalTemplates();
     bind();
-    sessionStorage.setItem(SESSION_KEY,"1");
-    unlock();
-    loadFirebaseCustomers();
-    loadFirebaseTemplates();
+    if(sessionStorage.getItem(SESSION_KEY)==="1"){
+      unlock();
+      loadFirebaseCustomers();
+      loadFirebaseTemplates();
+    }else{
+      byId("loginScreen").hidden=false;
+      byId("adminShell").hidden=true;
+    }
   }
 
   if(document.readyState==="loading"){

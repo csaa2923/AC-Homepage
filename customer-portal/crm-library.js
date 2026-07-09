@@ -302,9 +302,13 @@
     }).slice(0,8);
     const newRequests=customers.filter(c=>/anfrage/i.test(String(c.status||""))).slice(0,6);
     const unpublished=customers.filter(c=>{
-      const comparison=window.ACTPublishWorkflow?.compareDraftVsPublished;
-      if(!comparison||!c.publishedSnapshot)return true;
-      return comparison(window.ACTPublishWorkflow.publishComparePayload?{...c}:c,c.publishedSnapshot).count>0;
+      try{
+        const comparison=window.ACTPublishWorkflow?.compareDraftVsPublished;
+        if(!comparison||!c.publishedSnapshot)return true;
+        return comparison(c,c.publishedSnapshot).count>0;
+      }catch(error){
+        return false;
+      }
     }).slice(0,6);
     return {upcomingTrips,openTasks,birthdays,newRequests,unpublished};
   }

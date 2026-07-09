@@ -9,6 +9,19 @@
     view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
     dayIndex:0
   };
+  const travelProgressSteps=[
+    "Anfrage eingegangen",
+    "Angebot erstellt",
+    "Angebot gesendet",
+    "Angebot bestätigt",
+    "Zahlung offen",
+    "Anzahlung erhalten",
+    "Vollständig bezahlt",
+    "Programm in Bearbeitung",
+    "Programm veröffentlicht",
+    "Reise läuft",
+    "Reise abgeschlossen"
+  ];
 
   function loadStoredCustomer(id){
     try{
@@ -160,11 +173,13 @@
   }
 
   function renderStatus(){
-    const currentIndex=customer.progressSteps.indexOf(customer.status);
+    const steps=[...travelProgressSteps];
+    if(customer.status&&!steps.includes(customer.status))steps.push(customer.status);
+    const currentIndex=steps.indexOf(customer.status);
     const doneIndex=Math.max(currentIndex,0);
-    const percentage=(doneIndex/(customer.progressSteps.length-1))*100;
+    const percentage=steps.length>1?(doneIndex/(steps.length-1))*100:0;
     document.getElementById("progressFill").style.width=`${percentage}%`;
-    document.getElementById("statusSteps").innerHTML=customer.progressSteps.map((step,index)=>`
+    document.getElementById("statusSteps").innerHTML=steps.map((step,index)=>`
       <li class="${index<=doneIndex?"done":""}">
         <span class="step-dot"></span>
         <span>${step}</span>

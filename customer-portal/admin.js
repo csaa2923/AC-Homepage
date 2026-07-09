@@ -7,6 +7,19 @@
   let activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
   let pendingScrollItemId="";
   let adminMode="overview";
+  const travelProgressSteps=[
+    "Anfrage eingegangen",
+    "Angebot erstellt",
+    "Angebot gesendet",
+    "Angebot bestätigt",
+    "Zahlung offen",
+    "Anzahlung erhalten",
+    "Vollständig bezahlt",
+    "Programm in Bearbeitung",
+    "Programm veröffentlicht",
+    "Reise läuft",
+    "Reise abgeschlossen"
+  ];
 
   const fieldSets={
     program:[
@@ -280,9 +293,7 @@
     customer.restaurants=customer.restaurants||[];
     customer.activities=customer.activities||[];
     customer.documents=customer.documents||[];
-    customer.progressSteps=customer.progressSteps||[
-      "Anfrage eingegangen","Angebot erstellt","Angebot bestätigt","Zahlung eingegangen","Programm veröffentlicht","Reise läuft","Reise abgeschlossen"
-    ];
+    customer.progressSteps=travelProgressSteps;
     customer.hotel=customer.accommodations[0]||customer.hotel||{};
     return customer;
   }
@@ -395,6 +406,7 @@
     next.email=form.elements.email.value.trim();
     next.whatsapp=form.elements.whatsapp.value.trim();
     next.status=comboValue(form.elements.status);
+    next.progressSteps=travelProgressSteps;
     next.version=form.elements.version.value.trim()||"1.0";
     next.updatedAt=form.elements.updatedAt.value.trim()||new Date().toLocaleDateString("de-DE");
     next.publicationState=comboValue(form.elements.publicationState)||"Entwurf";

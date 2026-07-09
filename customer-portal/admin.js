@@ -2345,6 +2345,46 @@
     }
   }
 
+  function navigateMainSection(sectionId){
+    adminMode="overview";
+    renderAll();
+    window.setTimeout(()=>{
+      const target=byId(sectionId);
+      if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
+      if(sectionId)history.replaceState(null,"",`#${sectionId}`);
+    },0);
+  }
+
+  function navigateSection(sectionId){
+    const target=byId(sectionId);
+    if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
+    if(sectionId)history.replaceState(null,"",`#${sectionId}`);
+  }
+
+  function bindMainNavigation(){
+    document.querySelectorAll(".admin-nav-main a[href^='#']").forEach(link=>{
+      link.addEventListener("click",event=>{
+        event.preventDefault();
+        const sectionId=(link.getAttribute("href")||"").replace(/^#/,"");
+        if(sectionId)navigateMainSection(sectionId);
+      });
+    });
+    document.querySelectorAll(".admin-nav.crm-only a[href^='#']").forEach(link=>{
+      link.addEventListener("click",event=>{
+        event.preventDefault();
+        const sectionId=(link.getAttribute("href")||"").replace(/^#/,"");
+        if(sectionId)navigateSection(sectionId);
+      });
+    });
+    document.querySelectorAll(".admin-nav.edit-only a[href^='#']").forEach(link=>{
+      link.addEventListener("click",event=>{
+        event.preventDefault();
+        const sectionId=(link.getAttribute("href")||"").replace(/^#/,"");
+        if(sectionId)navigateSection(sectionId);
+      });
+    });
+  }
+
   function bind(){
     byId("loginButton").addEventListener("click",login);
     byId("passwordInput").addEventListener("input",event=>{
@@ -2475,6 +2515,7 @@
       if(crmField("crmRatingComment"))crmField("crmRatingComment").value="";
     });
     populateCrmSelects();
+    bindMainNavigation();
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()});
     byId("previewDraftButton").addEventListener("click",()=>{previewMode="draft";renderAdminPreview();renderPublishChanges()});
     byId("previewLiveButton").addEventListener("click",()=>{previewMode="live";renderAdminPreview()});

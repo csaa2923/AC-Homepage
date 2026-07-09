@@ -46,7 +46,8 @@ h3{font-size:25px}
 .header-actions,.form-actions{display:flex;flex-wrap:wrap;gap:10px}
 .admin-nav{position:sticky;top:0;z-index:20;display:flex;gap:8px;overflow-x:auto;padding:12px clamp(14px,4vw,54px);background:rgba(255,250,240,.97);border-bottom:1px solid var(--line);box-shadow:0 10px 24px rgba(5,24,19,.08)}
 .admin-nav a{flex:0 0 auto;min-height:38px;display:inline-flex;align-items:center;padding:9px 13px;border:1px solid rgba(216,183,106,.45);border-radius:999px;color:var(--green);background:#fff;text-decoration:none;text-transform:uppercase;font-size:11px;font-weight:900;letter-spacing:.06em}
-.admin-section{padding:56px clamp(18px,4vw,54px)}
+.admin-nav a.active{background:var(--green);color:#f8f1dd;border-color:var(--green)}
+.admin-section{padding:56px clamp(18px,4vw,54px);scroll-margin-top:72px}
 .section-head{width:min(1180px,100%);margin:0 auto 20px}
 .inline-head{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .admin-card,.customer-card,.editor-card{width:min(1180px,100%);margin:0 auto;border:1px solid var(--line);border-radius:8px;background:var(--paper);box-shadow:var(--shadow);padding:20px}

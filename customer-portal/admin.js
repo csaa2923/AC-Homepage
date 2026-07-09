@@ -95,6 +95,24 @@
     visible:"Steuert die Sichtbarkeit im Dokumentbereich."
   };
 
+  function numberValue(value){
+    const trimmed=String(value??"").trim();
+    if(!trimmed)return null;
+    const number=Number(trimmed.replace(",","."));
+    return Number.isFinite(number)?number:null;
+  }
+
+  function validCoordinates(latitude,longitude){
+    if(latitude===null||longitude===null)return false;
+    if(Math.abs(latitude)<0.0001&&Math.abs(longitude)<0.0001)return false;
+    if(Math.abs(latitude)>90||Math.abs(longitude)>180)return false;
+    return true;
+  }
+
+  function sanitizeCoordinates(latitude,longitude){
+    return validCoordinates(numberValue(latitude),numberValue(longitude))?{latitude:String(latitude).trim(),longitude:String(longitude).trim()}:{latitude:"",longitude:""};
+  }
+
   function loadCustomers(){
     try{
       const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
@@ -174,6 +192,7 @@
     next.dropdownCustomValues=next.dropdownCustomValues&&typeof next.dropdownCustomValues==="object"?next.dropdownCustomValues:{};
     next.latitude=next.latitude||"";
     next.longitude=next.longitude||"";
+    ({latitude:next.latitude,longitude:next.longitude}=sanitizeCoordinates(next.latitude,next.longitude));
     next.weatherLocationName=next.weatherLocationName||next.region||"";
     next.requirements=Array.isArray(next.requirements)?next.requirements:[];
     next.contact={...base.contact,...(next.contact||{}),phone:next.phone||next.contact?.phone||base.phone,whatsapp:next.whatsapp||next.contact?.whatsapp||base.whatsapp,email:next.email||next.contact?.email||base.email};
@@ -603,6 +622,7 @@
     next.region=comboValue(form.elements.region);
     next.latitude=form.elements.latitude.value.trim();
     next.longitude=form.elements.longitude.value.trim();
+    ({latitude:next.latitude,longitude:next.longitude}=sanitizeCoordinates(next.latitude,next.longitude));
     next.weatherLocationName=form.elements.weatherLocationName.value.trim()||next.region;
     next.language=comboValue(form.elements.language);
     next.concierge=form.elements.concierge.value.trim();

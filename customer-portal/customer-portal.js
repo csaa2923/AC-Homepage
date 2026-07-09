@@ -135,6 +135,10 @@
     next.documents=Array.isArray(next.documents)?next.documents.map(normalizeDocument):[];
     next.latitude=next.latitude||"";
     next.longitude=next.longitude||"";
+    if(!validCoordinates(numberValue(next.latitude),numberValue(next.longitude))){
+      next.latitude="";
+      next.longitude="";
+    }
     next.weatherLocationName=next.weatherLocationName||next.region||"";
     next.contact={...base.contact,...(next.contact||{})};
     next.weather={...base.weather,...(next.weather||{}),days:Array.isArray(next.weather?.days)?next.weather.days:[]};
@@ -150,8 +154,17 @@
   }
 
   function numberValue(value){
-    const number=Number(String(value||"").replace(",","."));
+    const trimmed=String(value??"").trim();
+    if(!trimmed)return null;
+    const number=Number(trimmed.replace(",","."));
     return Number.isFinite(number)?number:null;
+  }
+
+  function validCoordinates(latitude,longitude){
+    if(latitude===null||longitude===null)return false;
+    if(Math.abs(latitude)<0.0001&&Math.abs(longitude)<0.0001)return false;
+    if(Math.abs(latitude)>90||Math.abs(longitude)>180)return false;
+    return true;
   }
 
   function todayIso(){
@@ -282,30 +295,31 @@
   async function resolveWeatherLocation(){
     const latitude=numberValue(customer.latitude);
     const longitude=numberValue(customer.longitude);
-    if(latitude!==null&&longitude!==null){
+    if(validCoordinates(latitude,longitude)){
       return {
         latitude,
         longitude,
         name:weatherRegionLabel()!=="Nicht festgelegt"?weatherRegionLabel():`Standort aus Koordinaten ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        timezone:"auto",
         source:"customer-coordinates"
       };
     }
-    const name=weatherSearchName();
-    if(!name)throw new Error("Keine Region für Reisewetter hinterlegt.");
+    const name=weatherSearchName().trim();
+    if(!name)throw new Error("Bitte Wetter-Ort oder Region in den Stammdaten hinterlegen.");
     const params=new URLSearchParams({
       name,
-      count:"1",
+      count:"5",
       language:"de",
       format:"json"
     });
     const response=await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params.toString()}`);
     if(!response.ok)throw new Error(`Open-Meteo Standortsuche nicht erreichbar: ${response.status}`);
     const data=await response.json();
-    const location=data.results&&data.results[0];
-    if(!location)throw new Error(`Keine Wetter-Koordinaten für "${name}" gefunden.`);
+    const location=(data.results||[]).find(result=>validCoordinates(Number(result.latitude),Number(result.longitude)));
+    if(!location)throw new Error(`Kein gueltiger Wetter-Standort fuer "${name}" gefunden. Bitte Wetter-Ort praezisieren, z. B. "Grado, Italien".`);
     return {
-      latitude:location.latitude,
-      longitude:location.longitude,
+      latitude:Number(location.latitude),
+      longitude:Number(location.longitude),
       name:[location.name,location.admin1,location.country].filter(Boolean).join(", "),
       country:location.country_code||"",
       timezone:location.timezone||"auto",
@@ -832,39 +846,137 @@
     `).join(""):`<article class="history-item"><strong>Noch keine Änderungen protokolliert.</strong></article>`;
   }
 
-  function icsDate(dateValue,timeValue){
-    return `${dateValue.replaceAll("-","")}T${timeValue.replace(":","")}00`;
+  function isAppleMobile(){
+    return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  }
+
+  function parseIcsTime(timeValue){
+    const match=String(timeValue||"").match(/(\d{1,2}):(\d{2})/);
+    if(!match)return "";
+    return `${String(match[1]).padStart(2,"0")}${match[2]}00`;
+  }
+
+  function icsStamp(){
+    return new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");
   }
 
   function icsText(value){
-    return String(value||"").replaceAll("\\","\\\\").replaceAll("\n","\\n").replaceAll(",","\\,").replaceAll(";","\\;");
+    return String(value||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
   }
 
-  function downloadCalendar(item){
+  function foldIcsLine(line){
+    if(line.length<=75)return line;
+    const chunks=[line.slice(0,75)];
+    let rest=line.slice(75);
+    while(rest.length){
+      chunks.push(` ${rest.slice(0,74)}`);
+      rest=rest.slice(74);
+    }
+    return chunks.join("\r\n");
+  }
+
+  function icsTimezoneBlock(){
+    return [
+      "BEGIN:VTIMEZONE",
+      "TZID:Europe/Vienna",
+      "BEGIN:DAYLIGHT",
+      "TZOFFSETFROM:+0100",
+      "TZOFFSETTO:+0200",
+      "DTSTART:19700329T020000",
+      "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+      "END:DAYLIGHT",
+      "BEGIN:STANDARD",
+      "TZOFFSETFROM:+0200",
+      "TZOFFSETTO:+0100",
+      "DTSTART:19701025T030000",
+      "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU",
+      "END:STANDARD",
+      "END:VTIMEZONE"
+    ];
+  }
+
+  function icsEventLines(item){
+    if(!item.dateValue)return [];
+    const startTime=parseIcsTime(item.startTime);
+    const endTime=parseIcsTime(item.endTime)||startTime;
+    const endDate=item.endDateValue||item.dateValue;
+    const dateStart=item.dateValue.replace(/-/g,"");
+    const dateEnd=endDate.replace(/-/g,"");
+    const lines=[
+      "BEGIN:VEVENT",
+      `UID:${icsText(`${item.id}-${customerId}@alpineconcierge.info`)}`,
+      `DTSTAMP:${icsStamp()}`,
+      "STATUS:CONFIRMED",
+      `SUMMARY:${icsText(item.title)}`,
+      `LOCATION:${icsText(item.address||item.meetingPoint||"")}`,
+      `DESCRIPTION:${icsText([item.description,item.meetingPoint?`Treffpunkt: ${item.meetingPoint}`:"",item.notes?`Hinweise: ${item.notes}`:""].filter(Boolean).join("\\n"))}`
+    ];
+    if(startTime){
+      lines.push(`DTSTART;TZID=Europe/Vienna:${dateStart}T${startTime}`);
+      lines.push(`DTEND;TZID=Europe/Vienna:${dateEnd}T${endTime||startTime}`);
+    }else{
+      lines.push(`DTSTART;VALUE=DATE:${dateStart}`);
+      lines.push(`DTEND;VALUE=DATE:${addDaysIso(endDate,1).replace(/-/g,"")}`);
+    }
+    lines.push("END:VEVENT");
+    return lines;
+  }
+
+  function buildIcsContent(items){
+    const events=(items||[]).filter(item=>item.calendarEnabled!==false&&item.dateValue);
+    if(!events.length)throw new Error("Keine exportierbaren Kalendertermine vorhanden.");
     const lines=[
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
       "PRODID:-//Alpine Concierge Tirol//Customer Portal//DE",
-      "BEGIN:VEVENT",
-      `UID:${item.id}-${customerId}@alpineconcierge.info`,
-      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z")}`,
-      `DTSTART:${icsDate(item.dateValue,item.startTime)}`,
-      `DTEND:${icsDate(item.endDateValue||item.dateValue,item.endTime)}`,
-      `SUMMARY:${icsText(item.title)}`,
-      `LOCATION:${icsText(item.address||item.meetingPoint)}`,
-      `DESCRIPTION:${icsText(`${item.description}\nTreffpunkt: ${item.meetingPoint}\nHinweise: ${item.notes}`)}`,
-      "END:VEVENT",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      `NAME:${icsText(customer.tripName||"Reiseprogramm")}`,
+      ...icsTimezoneBlock(),
+      ...events.flatMap(item=>icsEventLines(item)),
       "END:VCALENDAR"
     ];
-    const blob=new Blob([lines.join("\r\n")],{type:"text/calendar;charset=utf-8"});
+    return `${lines.map(foldIcsLine).join("\r\n")}\r\n`;
+  }
+
+  function openIcsFile(content,filename){
+    const safeName=String(filename||"termin").replace(/[^\w.-]+/g,"-");
+    if(isAppleMobile()){
+      const link=document.createElement("a");
+      link.href=`data:text/calendar;charset=utf-8,${encodeURIComponent(content)}`;
+      link.rel="noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+    const blob=new Blob([content],{type:"text/calendar;charset=utf-8"});
     const url=URL.createObjectURL(blob);
     const link=document.createElement("a");
     link.href=url;
-    link.download=`${item.dateValue}-${item.id}.ics`;
+    link.download=safeName.endsWith(".ics")?safeName:`${safeName}.ics`;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  function downloadCalendar(item){
+    try{
+      const content=buildIcsContent([item]);
+      openIcsFile(content,`${item.dateValue}-${item.id}.ics`);
+    }catch(error){
+      window.alert(error.message||"Kalenderdatei konnte nicht erstellt werden.");
+    }
+  }
+
+  function downloadTripCalendar(){
+    try{
+      const content=buildIcsContent(programItems());
+      openIcsFile(content,`${customerId||"reise"}-programm.ics`);
+    }catch(error){
+      window.alert(error.message||"Kalenderdatei konnte nicht erstellt werden.");
+    }
   }
 
   function bindActions(){
@@ -904,8 +1016,10 @@
       if(type==="change")window.open(whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe einen Änderungswunsch zu meinem Reiseprogramm."),"_blank","noopener");
       if(type==="payment")window.alert("Zahlungsfunktion wird in einem späteren Schritt angebunden.");
       if(type==="pdf")window.alert("PDF-Erstellung wird in einem späteren Schritt angebunden.");
-      if(type==="calendar")window.alert("Bitte wählen Sie einen einzelnen Programmpunkt in den Detailkarten aus.");
+      if(type==="calendar")downloadTripCalendar();
     });
+    const tripCalendarButton=document.getElementById("downloadTripCalendarButton");
+    if(tripCalendarButton)tripCalendarButton.addEventListener("click",downloadTripCalendar);
   }
 
   function renderPortal(){

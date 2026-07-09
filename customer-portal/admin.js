@@ -225,6 +225,26 @@
       }));
       if(next.publishedSnapshot)next.publishedSnapshot.history=next.history;
     }
+    if(next.publishedSnapshot)next.publishedSnapshot=normalizePublishedSnapshot(next.publishedSnapshot,id);
+    return next;
+  }
+
+  function normalizePublishedSnapshot(snapshot,id){
+    if(!snapshot)return null;
+    const base=defaultCustomerData(id);
+    const next={...snapshot};
+    next.program=Array.isArray(next.program)?next.program:Array.isArray(next.programItems)?next.programItems:[];
+    next.programItems=next.program;
+    next.accommodations=Array.isArray(next.accommodations)?next.accommodations:[];
+    if(!next.accommodations.length&&next.hotel)next.accommodations=[next.hotel];
+    next.documents=Array.isArray(next.documents)?next.documents.map(normalizeDocumentItem):[];
+    next.latitude=next.latitude||"";
+    next.longitude=next.longitude||"";
+    ({latitude:next.latitude,longitude:next.longitude}=sanitizeCoordinates(next.latitude,next.longitude));
+    next.weatherLocationName=next.weatherLocationName||next.region||"";
+    next.contact={...base.contact,...(next.contact||{}),phone:next.phone||next.contact?.phone||base.phone,whatsapp:next.whatsapp||next.contact?.whatsapp||base.whatsapp,email:next.email||next.contact?.email||base.email};
+    next.hotel=next.accommodations[0]||next.hotel||{};
+    next.history=Array.isArray(next.history)?next.history:[];
     return next;
   }
 
@@ -922,7 +942,8 @@
   function getDraftComparison(customer){
     const workflow=publishWorkflow();
     if(!workflow)return {changes:[],count:0};
-    return workflow.compareDraftVsPublished(customer,getPublishedSnapshot(customer));
+    const normalized=ensureCollections(customer);
+    return workflow.compareDraftVsPublished(buildPublishedSnapshot(normalized),getPublishedSnapshot(normalized));
   }
 
   function getPublishStatusInfo(customer){
@@ -1254,6 +1275,8 @@
   function closeNotifyDialog(){
     byId("notifyDialog").hidden=true;
     setFirebaseStatus("Veröffentlichung abgeschlossen. Sie können weiter am Entwurf arbeiten oder die Kundenseite prüfen.");
+    renderPublishDashboard();
+    renderPublishChanges();
     byId("publish-status")?.scrollIntoView({behavior:"smooth",block:"start"});
   }
 

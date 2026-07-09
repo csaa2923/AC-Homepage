@@ -37,6 +37,7 @@ h3{font-size:25px}
 .admin-shell{min-height:100vh}
 .admin-shell.is-overview .edit-only{display:none!important}
 .admin-shell.is-editing #customers{display:none}
+.admin-shell.is-editing .overview-only{display:none!important}
 .admin-header{display:grid;gap:18px;padding:28px clamp(18px,4vw,54px);background:linear-gradient(90deg,var(--green),var(--green-2));color:#f8f1dd}
 .admin-header .eyebrow{color:var(--gold-2)}
 .admin-header .muted{color:#f5ecd4}

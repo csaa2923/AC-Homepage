@@ -3,6 +3,7 @@
   const STORAGE_KEY="act_customer_portal_customers";
   const params=new URLSearchParams(window.location.search);
   const customerId=params.get("customer")||dataRoot.defaultCustomerId;
+  const isAdminPreview=params.get("admin")==="1";
   let customer=null;
   let dataSource="demo";
   const root=document.getElementById("portalRoot");
@@ -60,17 +61,28 @@
     }
 
     const stored=loadStoredCustomer(customerId);
-    if(stored&&isPublishedPortalCustomer(stored)){
-      dataSource="local";
-      console.log("[ACT Portal] Lokale publishedData verwendet:",{
-        customerId,
-        source:"localStorage",
-        documentsTotal:(stored.documents||[]).length,
-        documents:stored.documents||[]
-      });
-      return stored;
-    }
     if(stored){
+      const published=stored.publishedSnapshot||null;
+      if(published){
+        dataSource="local";
+        console.log("[ACT Portal] Lokale publishedSnapshot verwendet:",{
+          customerId,
+          source:"localStorage publishedSnapshot",
+          version:published.version,
+          documentsTotal:(published.documents||[]).length
+        });
+        return published;
+      }
+      if(isPublishedPortalCustomer(stored)){
+        dataSource="local";
+        console.log("[ACT Portal] Lokale publishedData verwendet:",{
+          customerId,
+          source:"localStorage",
+          documentsTotal:(stored.documents||[]).length,
+          documents:stored.documents||[]
+        });
+        return stored;
+      }
       console.log("[ACT Portal] Lokale Entwurfsdaten ignoriert (nicht veroeffentlicht):",{
         customerId,
         documentsTotal:(stored.documents||[]).length,
@@ -1092,7 +1104,21 @@
     renderActions();
     renderHistory();
     renderDataSourceNotice();
+    renderAdminVersionHint();
     bindActions();
+  }
+
+  function renderAdminVersionHint(){
+    const hint=document.getElementById("adminVersionHint");
+    if(!hint)return;
+    if(!isAdminPreview){
+      hint.hidden=true;
+      return;
+    }
+    hint.hidden=false;
+    const stand=customer.updatedAt||customer.publishMeta?.lastPublishedAt||"";
+    const standText=stand?new Date(stand).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"}):stand;
+    hint.textContent=`Admin-Ansicht · Version ${customer.version||"1.0"}${standText?` · Stand: ${standText}`:""}`;
   }
 
   function renderDataSourceNotice(){

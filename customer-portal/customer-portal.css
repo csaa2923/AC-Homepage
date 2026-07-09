@@ -611,3 +611,10 @@ h3{font-size:24px;color:var(--green)}
   .hero-panel,.status-card,.info-card,.mini-card,.document-card,.history-item,.timeline-item{box-shadow:none}
   .portal-section{padding:22px}
 }
+
+.admin-version-hint{
+  margin:0 0 8px;
+  font-size:12px;
+  color:rgba(216,183,106,.92);
+  letter-spacing:.02em;
+}

@@ -25,6 +25,14 @@
     return JSON.parse(JSON.stringify(value||{}));
   }
 
+  function buildPublishedSnapshotForFirestore(customer){
+    const snapshot=clean(customer);
+    delete snapshot.publishedSnapshot;
+    delete snapshot.publishMeta;
+    delete snapshot.history;
+    return snapshot;
+  }
+
   function nowText(){
     return new Date().toLocaleDateString("de-DE");
   }
@@ -166,6 +174,12 @@
     return next;
   }
 
+  function versionsCollectionRef(id){
+    const ready=state;
+    const {firestoreModule}=ready.modules;
+    return firestoreModule.collection(ready.db,`${configRoot().collection||"customers"}/${id}/versions`);
+  }
+
   async function loadCustomersForAdmin(){
     const ready=await ensureDb();
     const {firestoreModule}=ready.modules;
@@ -173,12 +187,48 @@
     const customers={};
     snapshot.forEach(docSnap=>{
       const raw=docSnap.data()||{};
-      const data=raw.draftData||raw.publishedData||raw;
-      const customer=denormalizeFromFirestore(data);
+      const draftSource=raw.draftData||raw.publishedData||raw;
+      const customer=denormalizeFromFirestore(draftSource);
       customer.customerId=customer.customerId||docSnap.id;
+      customer.publishedSnapshot=raw.publishedData?denormalizeFromFirestore(raw.publishedData):null;
+      customer.publishMeta=raw.publishMeta&&typeof raw.publishMeta==="object"?raw.publishMeta:{};
+      customer.history=Array.isArray(raw.publishHistory)?raw.publishHistory:(Array.isArray(customer.history)?customer.history:[]);
+      customer.publishStatus=raw.publishStatus||customer.publishStatus||"draft";
       customers[customer.customerId]=customer;
     });
     return customers;
+  }
+
+  async function loadCustomerPublishState(id){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const snapshot=await firestoreModule.getDoc(docRef(id));
+    if(!snapshot.exists())return null;
+    const raw=snapshot.data()||{};
+    return {
+      customerId:id,
+      draftData:raw.draftData?denormalizeFromFirestore(raw.draftData):null,
+      publishedData:raw.publishedData?denormalizeFromFirestore(raw.publishedData):null,
+      publishMeta:raw.publishMeta||{},
+      publishStatus:raw.publishStatus||"draft"
+    };
+  }
+
+  async function saveVersionBackup(id,publishedData,meta){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const versionId=`v${String(meta.version||"1.0").replace(/\./g,"-")}-${Date.now()}`;
+    const versionRef=firestoreModule.doc(versionsCollectionRef(id),versionId);
+    await firestoreModule.setDoc(versionRef,{
+      versionId,
+      version:meta.version||"",
+      publishedAt:meta.publishedAt||new Date().toISOString(),
+      publisher:meta.publisher||"",
+      comment:meta.comment||"",
+      changes:meta.changes||[],
+      publishedData:normalizeForFirestore(publishedData)
+    });
+    return versionId;
   }
 
   async function loadPublishedCustomer(id){
@@ -220,31 +270,94 @@
     return draftData;
   }
 
-  async function publishCustomer(customer){
+  async function publishCustomer(customer,publishMeta){
     const ready=await ensureDb();
     const {firestoreModule}=ready.modules;
     const id=customerIdOf(customer);
     if(!id)throw new Error("Kunden-ID fehlt.");
+    const meta={
+      ...(publishMeta||{}),
+      publishedAt:publishMeta?.publishedAt||new Date().toISOString(),
+      publisher:publishMeta?.publisher||"Alpine Concierge Tirol"
+    };
+    const existing=await firestoreModule.getDoc(docRef(id));
+    const existingData=existing.exists()?existing.data()||{}:{};
+    const previousPublished=existingData.publishedData||null;
+    if(previousPublished){
+      const backupMeta={
+        version:existingData.publishMeta?.version||customer.version||"1.0",
+        publishedAt:existingData.publishMeta?.lastPublishedAt||existingData.updatedAt||new Date().toISOString(),
+        publisher:existingData.publishMeta?.lastPublisher||"",
+        comment:"Automatisches Backup vor Veröffentlichung",
+        changes:meta.changes||[]
+      };
+      meta.previousVersionBackupId=await saveVersionBackup(id,denormalizeFromFirestore(previousPublished),backupMeta);
+    }
     const publishedData=normalizeForFirestore({
-      ...customer,
+      ...buildPublishedSnapshotForFirestore(customer),
       publicationState:"Veröffentlicht",
       publishStatus:"published",
+      version:meta.version||customer.version||"1.0",
       updatedAt:nowText()
     });
+    const draftData=normalizeForFirestore(customer);
+    const publishRecord={
+      lastPublishedAt:meta.publishedAt,
+      lastPublisher:meta.publisher,
+      lastPublishComment:meta.comment||"",
+      version:meta.version||customer.version||"1.0",
+      lastChanges:meta.changes||[],
+      previousVersionBackupId:meta.previousVersionBackupId||"",
+      publishError:""
+    };
     console.log("[ACT Firebase] Veröffentlicht speichert Dokumente:",{
       customerId:id,
       documentsTotal:(publishedData.documents||[]).length,
+      version:publishRecord.version,
       documents:publishedData.documents||[]
     });
     await firestoreModule.setDoc(docRef(id),{
       customerId:id,
-      draftData:normalizeForFirestore(customer),
+      draftData,
       publishedData,
       publishStatus:"published",
+      publishMeta:publishRecord,
+      publishHistory:(customer.history||[]).slice(0,30),
       updatedAt:new Date().toISOString(),
       lastUpdated:nowText()
     },{merge:true});
-    return publishedData;
+    return {publishedData:denormalizeFromFirestore(publishedData),publishMeta:publishRecord};
+  }
+
+  async function restoreLastPublishedVersion(id){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const snapshot=await firestoreModule.getDoc(docRef(id));
+    if(!snapshot.exists())throw new Error("Kunde nicht gefunden.");
+    const raw=snapshot.data()||{};
+    const backupId=raw.publishMeta?.previousVersionBackupId;
+    let restoredPublished=null;
+    if(backupId){
+      const versionSnap=await firestoreModule.getDoc(firestoreModule.doc(versionsCollectionRef(id),backupId));
+      if(versionSnap.exists())restoredPublished=versionSnap.data().publishedData||null;
+    }
+    if(!restoredPublished)restoredPublished=raw.publishedData||null;
+    if(!restoredPublished)throw new Error("Keine gespeicherte Version zum Wiederherstellen gefunden.");
+    const restoredCustomer=denormalizeFromFirestore(restoredPublished);
+    await firestoreModule.setDoc(docRef(id),{
+      customerId:id,
+      draftData:normalizeForFirestore(restoredCustomer),
+      publishedData:restoredPublished,
+      publishStatus:"published",
+      publishMeta:{
+        ...(raw.publishMeta||{}),
+        publishError:"",
+        restoredAt:new Date().toISOString()
+      },
+      updatedAt:new Date().toISOString(),
+      lastUpdated:nowText()
+    },{merge:true});
+    return restoredCustomer;
   }
 
   async function deleteCustomer(id){
@@ -259,6 +372,7 @@
     const result={created:0,skipped:0,updated:0};
     for(const [fallbackId,customer] of Object.entries(customers||{})){
       const data=normalizeForFirestore({...customer,customerId:customer.customerId||fallbackId});
+      const publishedSource=customer.publishedSnapshot||((customer.publishStatus==="published"||customer.publicationState==="Veröffentlicht")?customer:null);
       const existing=await firestoreModule.getDoc(docRef(data.customerId));
       if(existing.exists()&&!overwrite){
         result.skipped+=1;
@@ -267,8 +381,10 @@
       await firestoreModule.setDoc(docRef(data.customerId),{
         customerId:data.customerId,
         draftData:data,
-        publishedData:data.publishStatus==="published"||data.publicationState==="Veröffentlicht"?data:null,
-        publishStatus:data.publishStatus||"draft",
+        publishedData:publishedSource?normalizeForFirestore(publishedSource):null,
+        publishStatus:customer.publishStatus||"draft",
+        publishMeta:customer.publishMeta||{},
+        publishHistory:Array.isArray(customer.history)?customer.history.slice(0,30):[],
         createdAt:existing.exists()?existing.data().createdAt:new Date().toISOString(),
         updatedAt:new Date().toISOString(),
         lastUpdated:nowText()
@@ -380,9 +496,12 @@
     init,
     state:()=>({...state}),
     loadCustomersForAdmin,
+    loadCustomerPublishState,
     loadPublishedCustomer,
     saveDraftCustomer,
     publishCustomer,
+    restoreLastPublishedVersion,
+    saveVersionBackup,
     deleteCustomer,
     migrateLocalCustomers,
     prepareStorageReference,

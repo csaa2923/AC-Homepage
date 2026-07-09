@@ -7,6 +7,8 @@
   let activeId=demoRoot.defaultCustomerId||"";
   let pendingScrollItemId="";
   let adminMode="overview";
+  let previewMode="draft";
+  const PUBLISH_EDITOR="Alpine Concierge Tirol";
   const travelProgressSteps=[
     "Anfrage eingegangen",
     "Angebot erstellt",
@@ -201,6 +203,8 @@
     next.progressSteps=travelProgressSteps;
     next.hotel=next.accommodations[0]||next.hotel||{};
     next.publishStatus=next.publicationState==="Veröffentlicht"||next.publishStatus==="published"?"published":"draft";
+    next.publishedSnapshot=next.publishedSnapshot||null;
+    next.publishMeta=next.publishMeta&&typeof next.publishMeta==="object"?next.publishMeta:{};
     return next;
   }
 
@@ -474,9 +478,10 @@
     shell.classList.toggle("is-overview",adminMode==="overview");
   }
 
-  function portalPath(id){
+  function portalPath(id,options){
     const href=window.location.href.split("#")[0].split("?")[0].replace(/admin\.html$/,"index.html");
-    return `${href}?customer=${encodeURIComponent(id)}`;
+    const admin=options&&options.admin?"&admin=1":"";
+    return `${href}?customer=${encodeURIComponent(id)}${admin}`;
   }
 
   function formatPeriod(customer){
@@ -886,10 +891,119 @@
     window.open(`https://api.whatsapp.com/send?phone=${whatsappPhoneNumber()}&text=${encodeURIComponent(text)}`,"_blank","noopener");
   }
 
+  function publishWorkflow(){
+    return window.ACTPublishWorkflow;
+  }
+
+  function getPublishedSnapshot(customer){
+    return customer?.publishedSnapshot||null;
+  }
+
+  function getDraftComparison(customer){
+    const workflow=publishWorkflow();
+    if(!workflow)return {changes:[],count:0};
+    return workflow.compareDraftVsPublished(customer,getPublishedSnapshot(customer));
+  }
+
+  function getPublishStatusInfo(customer){
+    const workflow=publishWorkflow();
+    if(!workflow)return null;
+    return workflow.getPublishStatus(customer,getPublishedSnapshot(customer),customer.publishMeta||{});
+  }
+
+  function previewCustomerData(){
+    const customer=ensureCollections(activeCustomer());
+    if(previewMode==="live"&&customer.publishedSnapshot)return normalizeCustomerData(customer.publishedSnapshot,customer.customerId);
+    return customer;
+  }
+
+  function previewPanelClass(label,changes){
+    const match=(changes||[]).find(item=>(item.label||"").includes(label)||label.includes(item.label||""));
+    if(!match)return "";
+    if(match.kind==="new")return "is-new";
+    if(match.kind==="removed")return "is-removed";
+    return "is-changed";
+  }
+
+  function renderPublishDashboard(){
+    const card=byId("publishStatusCard");
+    if(!card)return;
+    const customer=ensureCollections(activeCustomer());
+    const workflow=publishWorkflow();
+    const status=workflow?workflow.getPublishStatus(customer,getPublishedSnapshot(customer),customer.publishMeta||{}):null;
+    const comparison=getDraftComparison(customer);
+    const meta=customer.publishMeta||{};
+    card.innerHTML=`
+      <div class="publish-status-head">
+        <span class="publish-status-icon">${status?status.icon:"🟡"}</span>
+        <div>
+          <h3>${escapeHtml(status?status.label:"Entwurf vorhanden")}</h3>
+          <p class="muted">${escapeHtml(status?status.message:"")}</p>
+        </div>
+      </div>
+      <div class="publish-status-meta">
+        <div><span>Aktuelle Version</span><strong>${escapeHtml(customer.version||"1.0")}</strong></div>
+        <div><span>Letzte Veröffentlichung</span><strong>${escapeHtml(workflow?workflow.formatPublishDateTime(meta.lastPublishedAt):"-")}</strong></div>
+        <div><span>Letzter Bearbeiter</span><strong>${escapeHtml(meta.lastPublisher||"-")}</strong></div>
+        <div><span>Letzte Änderung</span><strong>${escapeHtml(customer.updatedAt||"-")}</strong></div>
+        <div><span>Unveröffentlichte Änderungen</span><strong>${comparison.count}</strong></div>
+        <div><span>Live-Version</span><strong>${customer.publishedSnapshot?"Veröffentlicht":"Noch nicht live"}</strong></div>
+      </div>
+    `;
+  }
+
+  function renderPublishChanges(){
+    const panel=byId("publishChangesPanel");
+    if(!panel)return;
+    const comparison=getDraftComparison(ensureCollections(activeCustomer()));
+    if(!comparison.count){
+      panel.innerHTML=`<p class="muted">Keine Unterschiede zwischen Entwurf und Live-Version.</p>`;
+      return;
+    }
+    panel.innerHTML=`
+      <p class="eyebrow">Änderungsprüfung</p>
+      <ul class="publish-change-list">
+        ${comparison.changes.map(item=>`<li class="publish-change-${escapeHtml(item.kind||"changed")}">${escapeHtml(item.label)}</li>`).join("")}
+      </ul>
+    `;
+  }
+
+  function renderPublishHistory(){
+    const root=byId("publishHistoryList");
+    if(!root)return;
+    const customer=ensureCollections(activeCustomer());
+    const entries=(customer.history||[]).slice().reverse();
+    if(!entries.length){
+      root.innerHTML=`<p class="muted">Noch keine Veröffentlichungen protokolliert.</p>`;
+      return;
+    }
+    root.innerHTML=entries.map(entry=>`
+      <article class="history-entry">
+        <div class="history-entry-head">
+          <strong>Version ${escapeHtml(entry.version||"-")}</strong>
+          <span class="muted">${escapeHtml(entry.date||"")} ${escapeHtml(entry.time||"")}</span>
+        </div>
+        <p><strong>${escapeHtml(entry.editor||PUBLISH_EDITOR)}</strong></p>
+        ${entry.comment?`<p>${escapeHtml(entry.comment)}</p>`:""}
+        ${Array.isArray(entry.changes)&&entry.changes.length?`<ul>${entry.changes.map(change=>`<li>${escapeHtml(change)}</li>`).join("")}</ul>`:""}
+      </article>
+    `).join("");
+  }
+
+  function renderPreviewModeNote(){
+    const note=byId("previewModeNote");
+    if(!note)return;
+    note.textContent=previewMode==="live"?"Aktuelle Ansicht: Live-Version (veröffentlicht)":"Aktuelle Ansicht: Entwurf";
+    byId("previewDraftButton")?.classList.toggle("primary",previewMode==="draft");
+    byId("previewLiveButton")?.classList.toggle("primary",previewMode==="live");
+  }
+
   function renderAdminPreview(){
     const root=byId("adminPreview");
     if(!root)return;
-    const customer=ensureCollections(activeCustomer());
+    const customer=previewCustomerData();
+    const draftCustomer=ensureCollections(activeCustomer());
+    const comparison=previewMode==="draft"?getDraftComparison(draftCustomer):{changes:[]};
     const program=[...(customer.program||[])].sort((a,b)=>`${a.dateValue||a.date} ${a.startTime||""}`.localeCompare(`${b.dateValue||b.date} ${b.startTime||""}`));
     const nextItems=upcomingItems(program);
     const grouped=program.reduce((acc,item)=>{
@@ -900,41 +1014,43 @@
     },{});
     const hotel=customer.accommodations?.[0]||customer.hotel||{};
     root.innerHTML=`
-      <article class="preview-panel preview-hero">
+      <article class="preview-panel preview-hero ${previewPanelClass("Stammdaten",comparison.changes)}">
         <p class="eyebrow">Begruessung / Reiseuebersicht</p>
         <h3>${escapeHtml(customer.customerName||"Unbenannter Kunde")}</h3>
         <p>${escapeHtml(customer.tripName||customer.tripTitle||"Neue Reise")}</p>
         <div class="preview-meta">
           <span>Status: <strong>${escapeHtml(customer.status||"Entwurf")}</strong></span>
+          <span>Version: <strong>${escapeHtml(customer.version||"1.0")}</strong></span>
           <span>Veroeffentlichung: <strong>${escapeHtml(customer.publicationState||customer.publishStatus||"Entwurf")}</strong></span>
           <span>Zeitraum: <strong>${escapeHtml(formatPeriod(customer)||"-")}</strong></span>
         </div>
       </article>
-      <article class="preview-panel">
+      <article class="preview-panel ${previewPanelClass("Programmpunkt",comparison.changes)}">
         <p class="eyebrow">Nächste Termine</p>
         ${previewList(nextItems,item=>`<li><strong>${escapeHtml(itemDate(item))}, ${escapeHtml(itemTime(item))}</strong> ${escapeHtml(item.title)} <span>${escapeHtml(item.meetingPoint||item.address||"")}</span></li>`,"Noch keine kommenden Termine.")}
       </article>
-      <article class="preview-panel">
+      <article class="preview-panel ${previewPanelClass("Programmpunkt",comparison.changes)}">
         <p class="eyebrow">Gesamt-Timeline</p>
         ${previewList(program,item=>`<li><strong>${escapeHtml(itemDate(item))}, ${escapeHtml(itemTime(item))}</strong> ${escapeHtml(item.title)} <span>${escapeHtml(item.status||"")}</span></li>`,"Noch keine Programmpunkte.")}
       </article>
-      <article class="preview-panel">
+      <article class="preview-panel ${previewPanelClass("Programmpunkt",comparison.changes)}">
         <p class="eyebrow">Tages-Timeline</p>
         ${Object.keys(grouped).length?Object.entries(grouped).map(([date,items])=>`<section class="preview-day"><h4>${escapeHtml(date)}</h4>${previewList(items,item=>`<li><strong>${escapeHtml(itemTime(item))}</strong> ${escapeHtml(item.title)} <span>${escapeHtml(item.shortDescription||item.meetingPoint||"")}</span></li>`,"")}</section>`).join(""):`<p class="muted">Noch keine Tagespunkte.</p>`}
       </article>
-      <article class="preview-panel">
+      <article class="preview-panel ${previewPanelClass("Programmpunkt",comparison.changes)}">
         <p class="eyebrow">Programmdetails</p>
         ${previewList(program,item=>`<li><strong>${escapeHtml(item.title)}</strong> <span>${escapeHtml(item.description||item.shortDescription||"Keine Beschreibung")}</span></li>`,"Noch keine Detailkarten.")}
       </article>
-      <article class="preview-panel">
+      <article class="preview-panel ${previewPanelClass("Unterkunft",comparison.changes)}">
         <p class="eyebrow">Unterkunft</p>
         <p><strong>${escapeHtml(hotel.name||"Keine Unterkunft")}</strong><br>${escapeHtml(hotel.address||hotel.navigation||"")}</p>
       </article>
-      <article class="preview-panel">
+      <article class="preview-panel ${previewPanelClass("Dokument",comparison.changes)}">
         <p class="eyebrow">Dokumente</p>
         ${previewList(customer.documents.filter(isPortalReadyDocument),item=>`<li><strong>${escapeHtml(item.title||item.fileName||"Dokument")}</strong> <span>${escapeHtml(item.type||item.note||"")}</span></li>`,"Noch keine sichtbaren Dokumente.")}
       </article>
     `;
+    renderPreviewModeNote();
   }
 
   function renderAll(){
@@ -946,6 +1062,9 @@
     renderEditor("accommodations","accommodationsEditor");
     renderEditor("documents","documentsEditor");
     renderLinks();
+    renderPublishDashboard();
+    renderPublishChanges();
+    renderPublishHistory();
     renderAdminPreview();
   }
 
@@ -991,31 +1110,199 @@
     scrollToMasterForm();
   }
 
-  function publishCustomer(id){
+  function openPublishDialog(id){
     if(adminMode==="edit"){
       readMaster();
       id=activeId;
       readEditors();
     }
+    pendingPublishId=id;
     const customer=ensureCollections(customers[id]);
+    const workflow=publishWorkflow();
+    const comparison=getDraftComparison(customer);
+    const validation=workflow?workflow.validateForPublish(customer):{ok:true,errors:[]};
+    const nextVersion=workflow?workflow.bumpVersion(customer.version||"1.0"):customer.version;
+    const body=byId("publishDialogBody");
+    const errors=byId("publishValidationErrors");
+    if(body){
+      body.innerHTML=`
+        <p><strong>Kunde:</strong> ${escapeHtml(customer.customerName||"Unbenannter Kunde")}</p>
+        <p><strong>Reise:</strong> ${escapeHtml(customer.tripName||customer.tripTitle||"")}</p>
+        <p><strong>Version:</strong> ${escapeHtml(customer.version||"1.0")} → ${escapeHtml(nextVersion)}</p>
+        <p><strong>Geänderte Bereiche:</strong></p>
+        <ul class="publish-change-list">${comparison.count?comparison.changes.map(item=>`<li class="publish-change-${escapeHtml(item.kind||"changed")}">${escapeHtml(item.label)}</li>`).join(""):`<li>Keine Unterschiede zur Live-Version</li>`}</ul>
+      `;
+    }
+    if(errors){
+      if(validation.ok){
+        errors.hidden=true;
+        errors.innerHTML="";
+      }else{
+        errors.hidden=false;
+        errors.innerHTML=validation.errors.map(item=>`<p>${escapeHtml(item)}</p>`).join("");
+      }
+    }
+    byId("publishCommentInput").value="";
+    byId("publishDialogConfirm").disabled=!validation.ok;
+    byId("publishDialog").hidden=false;
+  }
+
+  function closePublishDialog(){
+    byId("publishDialog").hidden=true;
+    pendingPublishId="";
+  }
+
+  let pendingPublishId="";
+
+  function buildPublishedSnapshot(customer){
+    const snapshot=clone(customer);
+    delete snapshot.publishedSnapshot;
+    delete snapshot.publishMeta;
+    delete snapshot.history;
+    return snapshot;
+  }
+
+  function applyLocalPublish(customer,meta){
+    if(customer.publishedSnapshot)customer.publishMeta.previousLocalBackup=clone(customer.publishedSnapshot);
+    customer.publishedSnapshot=buildPublishedSnapshot(customer);
+    customer.publishMeta={
+      ...(customer.publishMeta||{}),
+      lastPublishedAt:meta.publishedAt,
+      lastPublisher:meta.publisher,
+      lastPublishComment:meta.comment||"",
+      version:meta.version,
+      lastChanges:meta.changes||[],
+      publishError:""
+    };
+    const workflow=publishWorkflow();
+    const historyEntry=workflow?workflow.buildHistoryEntry(meta):{
+      date:new Date().toLocaleDateString("de-DE"),
+      time:new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}),
+      version:meta.version,
+      editor:meta.publisher,
+      comment:meta.comment||"",
+      changes:(meta.changes||[]).map(item=>item.label||item)
+    };
+    customer.history=[historyEntry,...(customer.history||[])].slice(0,30);
+  }
+
+  function openNotifyDialog(customer,meta){
+    const workflow=publishWorkflow();
+    const texts=workflow?workflow.buildNotificationTexts(customer,{...meta,portalLink:portalPath(customer.customerId)}):{whatsapp:"",email:""};
+    byId("notifyPreparedText").value=texts.whatsapp;
+    byId("notifyDialog").hidden=false;
+    byId("notifyDialog").dataset.whatsappText=texts.whatsapp;
+    byId("notifyDialog").dataset.emailText=texts.email;
+    document.querySelector('input[name="notifyMode"][value="whatsapp"]').checked=true;
+  }
+
+  function closeNotifyDialog(){
+    byId("notifyDialog").hidden=true;
+  }
+
+  function updateNotifyPreparedText(){
+    const mode=document.querySelector('input[name="notifyMode"]:checked')?.value||"none";
+    const dialog=byId("notifyDialog");
+    const target=byId("notifyPreparedText");
+    if(mode==="email")target.value=dialog.dataset.emailText||"";
+    else if(mode==="whatsapp")target.value=dialog.dataset.whatsappText||"";
+    else target.value="Keine Benachrichtigung vorbereitet.";
+  }
+
+  function publishCustomer(id){
+    openPublishDialog(id);
+  }
+
+  async function confirmPublish(){
+    const id=pendingPublishId||activeId;
+    const workflow=publishWorkflow();
+    if(adminMode==="edit"){
+      readMaster();
+      readEditors();
+    }
+    const customer=ensureCollections(customers[id]);
+    const validation=workflow?workflow.validateForPublish(customer):{ok:true,errors:[]};
+    if(!validation.ok){
+      const errors=byId("publishValidationErrors");
+      if(errors){
+        errors.hidden=false;
+        errors.innerHTML=validation.errors.map(item=>`<p>${escapeHtml(item)}</p>`).join("");
+      }
+      return;
+    }
+    const comparison=getDraftComparison(customer);
+    const nextVersion=workflow?workflow.bumpVersion(customer.version||"1.0"):customer.version;
+    const comment=byId("publishCommentInput").value.trim();
+    const meta={
+      version:nextVersion,
+      comment,
+      publisher:PUBLISH_EDITOR,
+      publishedAt:new Date().toISOString(),
+      changes:comparison.changes
+    };
+    customer.version=nextVersion;
     customer.publicationState="Veröffentlicht";
     customer.publishStatus="published";
     customer.updatedAt=new Date().toLocaleDateString("de-DE");
+    applyLocalPublish(customer,meta);
     saveCustomers();
-    console.log("[ACT Admin] Dokumente beim Veröffentlichen:",{
+    console.log("[ACT Admin] Veröffentlichung:",{
       customerId:customer.customerId,
-      portalCustomerId:id,
+      version:nextVersion,
       documentsTotal:(customer.documents||[]).length,
       documentsVisible:(customer.documents||[]).filter(isPortalReadyDocument).length,
-      documents:(customer.documents||[]).map(documentDebugInfo)
+      changes:comparison.changes
     });
     const db=firebaseDatabase();
     if(db){
-      db.publishCustomer(clone(customer)).then(()=>{
-        setFirebaseStatus("Veröffentlichte Daten wurden in Firestore aktualisiert.");
-      }).catch(error=>{
-        setFirebaseStatus(`Veröffentlichung lokal gespeichert. Firebase nicht möglich: ${error&&error.message?error.message:""}`,true);
-      });
+      try{
+        await db.publishCustomer(clone(customer),meta);
+        customer.publishMeta.publishError="";
+        setFirebaseStatus(`Version ${nextVersion} wurde veröffentlicht.`);
+      }catch(error){
+        customer.publishMeta.publishError=error&&error.message?error.message:String(error);
+        setFirebaseStatus(`Lokal veröffentlicht. Firebase-Fehler: ${customer.publishMeta.publishError}`,true);
+      }
+      saveCustomers();
+    }
+    closePublishDialog();
+    renderAll();
+    openNotifyDialog(customer,meta);
+  }
+
+  async function restoreLastPublished(){
+    const customer=ensureCollections(activeCustomer());
+    if(!customer.publishedSnapshot&&!customer.publishMeta?.previousLocalBackup){
+      window.alert("Keine gespeicherte Live-Version zum Wiederherstellen vorhanden.");
+      return;
+    }
+    if(!window.confirm("Letzte veröffentlichte Version wiederherstellen?\n\nDer aktuelle Entwurf wird durch die Live-Version ersetzt."))return;
+    const db=firebaseDatabase();
+    if(db){
+      try{
+        const restored=await db.restoreLastPublishedVersion(customer.customerId);
+        customers[activeId]=normalizeCustomerData({
+          ...restored,
+          publishedSnapshot:clone(restored),
+          publishMeta:customer.publishMeta||{}
+        },activeId);
+        saveCustomers();
+        setFirebaseStatus("Letzte veröffentlichte Version wurde wiederhergestellt.");
+      }catch(error){
+        const backup=customer.publishMeta?.previousLocalBackup||customer.publishedSnapshot;
+        if(!backup){
+          window.alert(`Wiederherstellung fehlgeschlagen: ${error&&error.message?error.message:error}`);
+          return;
+        }
+        customers[activeId]=normalizeCustomerData({...clone(backup),publishedSnapshot:clone(backup),publishMeta:customer.publishMeta||{}},activeId);
+        saveCustomers();
+        setFirebaseStatus("Lokale Live-Version wiederhergestellt.");
+      }
+    }else{
+      const backup=customer.publishMeta?.previousLocalBackup||customer.publishedSnapshot;
+      customers[activeId]=normalizeCustomerData({...clone(backup),publishedSnapshot:clone(backup),publishMeta:customer.publishMeta||{}},activeId);
+      saveCustomers();
+      setFirebaseStatus("Lokale Live-Version wiederhergestellt.");
     }
     renderAll();
   }
@@ -1127,9 +1414,9 @@
       if(event.target.matches("select[data-combo-list]"))updateComboCustom(event.target);
       if(event.target.matches("select[data-time-select]"))updateTimeCustom(event.target);
       if(event.target.closest("#requirementsPicker"))updateRequirementsCustom();
-      if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}
+      if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()}
     });
-    document.addEventListener("input",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}});
+    document.addEventListener("input",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()}});
     document.addEventListener("click",event=>{
       const edit=event.target.closest("[data-edit-customer]");
       if(edit){activeId=edit.dataset.editCustomer;adminMode="edit";renderAll();scrollToMasterForm();}
@@ -1150,11 +1437,20 @@
     });
     byId("copyLinkButton").addEventListener("click",()=>copyText(byId("portalLink").value));
     byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
-    byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderAdminPreview()});
-    byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
+    byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()});
+    byId("previewDraftButton").addEventListener("click",()=>{previewMode="draft";renderAdminPreview();renderPublishChanges()});
+    byId("previewLiveButton").addEventListener("click",()=>{previewMode="live";renderAdminPreview()});
+    byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId,{admin:true}),"_blank","noopener"));
     byId("saveDraftButton").addEventListener("click",()=>{readMaster();readEditors();activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();saveDraftToFirebase(activeCustomer());renderAll()});
-    byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
-    byId("markPublishedButton").addEventListener("click",()=>publishCustomer(activeId));
+    byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId,{admin:true}),"_blank","noopener"));
+    byId("markPublishedButton").addEventListener("click",()=>openPublishDialog(activeId));
+    byId("restorePublishedButton").addEventListener("click",restoreLastPublished);
+    byId("publishDialogCancel").addEventListener("click",closePublishDialog);
+    byId("publishDialogConfirm").addEventListener("click",confirmPublish);
+    byId("notifyCloseButton").addEventListener("click",closeNotifyDialog);
+    byId("notifyCopyButton").addEventListener("click",()=>copyText(byId("notifyPreparedText").value));
+    byId("notifyWhatsappButton").addEventListener("click",()=>{const text=byId("notifyPreparedText").value;window.open(`https://api.whatsapp.com/send?phone=${whatsappPhoneNumber()}&text=${encodeURIComponent(text)}`,"_blank","noopener")});
+    document.querySelectorAll('input[name="notifyMode"]').forEach(input=>input.addEventListener("change",updateNotifyPreparedText));
     byId("deleteActiveCustomerButton").addEventListener("click",()=>deleteCustomer(activeId));
     byId("copyWhatsappButton").addEventListener("click",openWhatsappMessage);
     byId("exportButton").addEventListener("click",downloadJson);

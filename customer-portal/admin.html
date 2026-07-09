@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=31">
+<link rel="stylesheet" href="admin.css?v=32">
 </head>
 <body>
 <main>
@@ -48,7 +48,9 @@
       <a href="#program-items">Programmpunkte</a>
       <a href="#accommodations">Unterkunft</a>
       <a href="#documents-admin">Dokumente</a>
+      <a href="#publish-status">Veröffentlichungsstatus</a>
       <a href="#publish">Veröffentlichung</a>
+      <a href="#publish-history">Historie</a>
       <a href="#export-import">Export / Import</a>
     </nav>
 
@@ -87,10 +89,13 @@
           <h2>So sieht der Kunde die Daten</h2>
         </div>
         <div class="form-actions">
+          <button class="button soft" type="button" id="previewDraftButton" data-preview-mode="draft">Vorschau (Entwurf)</button>
+          <button class="button soft" type="button" id="previewLiveButton" data-preview-mode="live">Live-Version</button>
           <button class="button soft" id="refreshPreviewButton" type="button">Vorschau aktualisieren</button>
           <button class="button soft" id="openPortalPreviewButton" type="button">Kundenseite öffnen</button>
         </div>
       </div>
+      <p class="muted preview-mode-note" id="previewModeNote">Aktuelle Ansicht: Entwurf</p>
       <div class="admin-preview" id="adminPreview"></div>
     </section>
 
@@ -170,17 +175,27 @@
       <div class="editor-list" id="documentsEditor"></div>
     </section>
 
+    <section class="admin-section edit-only" id="publish-status">
+      <div class="section-head">
+        <p class="eyebrow">Workflow</p>
+        <h2>Veröffentlichungsstatus</h2>
+      </div>
+      <div class="admin-card publish-status-card" id="publishStatusCard"></div>
+    </section>
+
     <section class="admin-section edit-only" id="publish">
       <div class="section-head">
         <p class="eyebrow">Veröffentlichung</p>
-        <h2>Link, Vorschau und WhatsApp</h2>
+        <h2>Entwurf prüfen und veröffentlichen</h2>
       </div>
       <div class="admin-card publish-grid">
+        <div class="full" id="publishChangesPanel"></div>
         <label>Diesen Link erhält der Kunde<input id="portalLink" readonly></label>
-        <p class="muted full">Entwurf speichern, pruefen und veroeffentlichen. Den Link kopieren oder per WhatsApp an den Kunden senden.</p>
+        <p class="muted full">Alle Änderungen werden zuerst im Entwurf gespeichert. Das Kundenportal zeigt ausschließlich die veröffentlichte Live-Version.</p>
         <div class="form-actions">
           <button class="button soft" id="saveDraftButton" type="button">Entwurf speichern</button>
           <button class="button primary" id="markPublishedButton" type="button">Veröffentlichen</button>
+          <button class="button soft" id="restorePublishedButton" type="button">Letzte Veröffentlichung wiederherstellen</button>
           <button class="button soft" id="copyLinkButton" type="button">Link kopieren</button>
           <button class="button soft" id="openPreviewButton" type="button">Kundenseite öffnen</button>
           <button class="button danger" id="deleteActiveCustomerButton" type="button">Diese Reise löschen</button>
@@ -188,6 +203,14 @@
         <label class="full">WhatsApp-Text<textarea id="whatsappText" rows="5"></textarea></label>
         <button class="button soft" id="copyWhatsappButton" type="button">WhatsApp-Nachricht erstellen</button>
       </div>
+    </section>
+
+    <section class="admin-section edit-only" id="publish-history">
+      <div class="section-head">
+        <p class="eyebrow">Versionierung</p>
+        <h2>Historie</h2>
+      </div>
+      <div class="admin-card" id="publishHistoryList"></div>
     </section>
 
     <section class="admin-section edit-only" id="export-import">
@@ -207,12 +230,42 @@
   </section>
 </main>
 
+<div class="admin-modal" id="publishDialog" hidden>
+  <div class="admin-modal-card" role="dialog" aria-labelledby="publishDialogTitle">
+    <h3 id="publishDialogTitle">Änderungen veröffentlichen?</h3>
+    <div id="publishDialogBody"></div>
+    <label class="full modal-label">Kommentar<textarea id="publishCommentInput" rows="3" placeholder="Optional: Was wurde geändert?"></textarea></label>
+    <div id="publishValidationErrors" class="publish-validation-errors" hidden></div>
+    <div class="form-actions">
+      <button class="button soft" id="publishDialogCancel" type="button">Abbrechen</button>
+      <button class="button primary" id="publishDialogConfirm" type="button">Veröffentlichen</button>
+    </div>
+  </div>
+</div>
+
+<div class="admin-modal" id="notifyDialog" hidden>
+  <div class="admin-modal-card" role="dialog" aria-labelledby="notifyDialogTitle">
+    <h3 id="notifyDialogTitle">Kundenbenachrichtigung vorbereiten</h3>
+    <p class="muted">Noch keine automatische Versendung. Texte können kopiert oder vorbereitet werden.</p>
+    <label class="choice-pill"><input type="radio" name="notifyMode" value="whatsapp" checked> WhatsApp vorbereiten</label>
+    <label class="choice-pill"><input type="radio" name="notifyMode" value="email"> E-Mail vorbereiten</label>
+    <label class="choice-pill"><input type="radio" name="notifyMode" value="none"> Keine Benachrichtigung</label>
+    <textarea id="notifyPreparedText" rows="8" readonly></textarea>
+    <div class="form-actions">
+      <button class="button soft" id="notifyCopyButton" type="button">Text kopieren</button>
+      <button class="button soft" id="notifyWhatsappButton" type="button">WhatsApp öffnen</button>
+      <button class="button primary" id="notifyCloseButton" type="button">Schließen</button>
+    </div>
+  </div>
+</div>
+
 <script src="customer-data.js?v=2"></script>
+<script src="publish-workflow.js?v=1"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=7"></script>
+<script src="firebase-service.js?v=9"></script>
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=2"></script>
-<script src="admin.js?v=45"></script>
+<script src="admin.js?v=48"></script>
 </body>
 </html>

@@ -106,7 +106,11 @@
         <label>Reisebezeichnung<input name="tripName" required></label>
         <label>Zeitraum von<input name="startDatePlain" type="date"></label>
         <label>Zeitraum bis<input name="endDatePlain" type="date"></label>
-        <label>Region<select name="region" data-combo-list="regions"></select><input class="combo-custom" data-combo-custom="region" placeholder="Eigene Region eingeben" hidden><small>Erscheint in Reiseuebersicht und Vorschau.</small></label>
+        <label class="full">Region
+          <select name="region" data-combo-list="regions"></select>
+          <input class="combo-custom" data-combo-custom="region" data-always-visible="true" placeholder="Eigener Ort, z. B. Grado">
+          <small>Tirol-Region waehlen oder eigenen Ort eintragen. Erscheint in Reiseuebersicht und Vorschau.</small>
+        </label>
         <label>Wetter-Ort<input name="weatherLocationName" placeholder="z. B. Seefeld in Tirol"></label>
         <label>Latitude<input name="latitude" inputmode="decimal" placeholder="Optional"></label>
         <label>Longitude<input name="longitude" inputmode="decimal" placeholder="Optional"></label>
@@ -209,6 +213,6 @@
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=2"></script>
-<script src="admin.js?v=42"></script>
+<script src="admin.js?v=43"></script>
 </body>
 </html>

@@ -325,34 +325,60 @@
     const key=select.dataset.comboList;
     const multi=select.dataset.comboMulti==="true";
     const values=Array.isArray(value)?value:multi?String(value||"").split(",").map(item=>item.trim()).filter(Boolean):[String(value||"")];
+    const currentValue=multi?values[0]:values[0];
+    const custom=customInputForSelect(select);
+    const alwaysVisible=customInputAlwaysVisible(custom);
     select._comboValue=multi?values:values[0];
-    select.innerHTML=optionMarkup(key,multi?values:values[0]);
-    Array.from(select.options).forEach(option=>{
-      option.selected=values.includes(option.value)||(!values.length&&option.value==="");
-    });
+    if(alwaysVisible&&currentValue&&!comboOptions(key).includes(String(currentValue))){
+      select.innerHTML=optionMarkup(key,"");
+      custom.value=currentValue;
+      Array.from(select.options).forEach(option=>{option.selected=option.value===""});
+    }else if(alwaysVisible&&currentValue&&comboOptions(key).includes(String(currentValue))){
+      select.innerHTML=optionMarkup(key,currentValue);
+      custom.value="";
+      Array.from(select.options).forEach(option=>{option.selected=option.value===currentValue});
+    }else{
+      select.innerHTML=optionMarkup(key,multi?values:values[0]);
+      Array.from(select.options).forEach(option=>{
+        option.selected=values.includes(option.value)||(!values.length&&option.value==="");
+      });
+    }
     updateComboCustom(select);
+    if(alwaysVisible&&custom)custom.hidden=false;
+  }
+
+  function customInputForSelect(select){
+    const key=select.name||select.dataset.field;
+    return select.parentElement.querySelector(`[data-combo-custom="${key}"]`);
+  }
+
+  function customInputAlwaysVisible(custom){
+    return custom&&custom.dataset.alwaysVisible==="true";
   }
 
   function updateComboCustom(select){
     const key=select.name||select.dataset.field;
-    const custom=select.parentElement.querySelector(`[data-combo-custom="${key}"]`);
+    const custom=customInputForSelect(select);
     if(!custom)return;
     const selected=Array.from(select.selectedOptions).map(option=>option.value);
-    const show=selected.includes(customOptionValue);
+    const alwaysVisible=customInputAlwaysVisible(custom);
+    const show=alwaysVisible||selected.includes(customOptionValue);
     custom.hidden=!show;
     if(show&&!custom.value){
       const current=Array.isArray(select._comboValue)?select._comboValue:[select._comboValue];
       custom.value=(current||[]).find(value=>value&&!comboOptions(select.dataset.comboList).includes(value))||"";
     }
-    if(show)window.setTimeout(()=>custom.focus(),0);
+    if(show&&!alwaysVisible)window.setTimeout(()=>custom.focus(),0);
+    if(alwaysVisible&&selected.length===1&&selected[0]&&selected[0]!==customOptionValue&&comboOptions(select.dataset.comboList).includes(selected[0])){
+      custom.value="";
+    }
   }
 
   function comboValue(select){
-    const key=select.name||select.dataset.field;
-    const custom=select.parentElement.querySelector(`[data-combo-custom="${key}"]`);
+    const custom=customInputForSelect(select);
     const selected=Array.from(select.selectedOptions).map(option=>option.value).filter(Boolean);
     const normal=selected.filter(value=>value!==customOptionValue);
-    const customValue=custom&&!custom.hidden&&custom.value.trim()?custom.value.trim():"";
+    const customValue=custom&&(!custom.hidden||customInputAlwaysVisible(custom))&&custom.value.trim()?custom.value.trim():"";
     if(select.dataset.comboMulti==="true")return customValue?[...normal,customValue]:normal;
     return customValue||normal[0]||"";
   }

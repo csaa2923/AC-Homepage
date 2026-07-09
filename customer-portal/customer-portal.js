@@ -154,13 +154,74 @@
     return Number.isFinite(number)?number:null;
   }
 
-  function tripForecastDays(){
-    const start=customer.startDatePlain||programItems().find(item=>item.dateValue)?.dateValue;
-    const end=customer.endDatePlain||[...programItems()].reverse().find(item=>item.endDateValue||item.dateValue)?.endDateValue||[...programItems()].reverse().find(item=>item.dateValue)?.dateValue;
-    const startDate=start?new Date(start):null;
-    const endDate=end?new Date(end):startDate;
-    if(!startDate||Number.isNaN(startDate.getTime())||!endDate||Number.isNaN(endDate.getTime()))return 4;
-    return Math.min(Math.max(Math.round((endDate-startDate)/86400000)+1,1),16);
+  function todayIso(){
+    const now=new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  }
+
+  function addDaysIso(dateIso,days){
+    const [year,month,day]=dateIso.split("-").map(Number);
+    const date=new Date(Date.UTC(year,month-1,day+days));
+    return date.toISOString().slice(0,10);
+  }
+
+  function tripDateRange(){
+    const start=customer.startDatePlain||programItems().find(item=>item.dateValue)?.dateValue||"";
+    const end=customer.endDatePlain||[...programItems()].reverse().find(item=>item.endDateValue||item.dateValue)?.endDateValue||[...programItems()].reverse().find(item=>item.dateValue)?.dateValue||start;
+    return {start,end:end||start};
+  }
+
+  function weatherQueryRange(){
+    const {start,end}=tripDateRange();
+    const today=todayIso();
+    const forecastEnd=addDaysIso(today,15);
+    if(start&&start>forecastEnd){
+      return {
+        mode:"too_far",
+        start,
+        end,
+        message:`Eine Wettervorhersage ist erst ab 16 Tage vor Reisebeginn (${formatDateValue(start)}) verfuegbar.`
+      };
+    }
+    if(start&&end){
+      const queryStart=start<today?today:start;
+      const queryEnd=end>forecastEnd?forecastEnd:end;
+      if(queryStart>queryEnd){
+        return {mode:"unavailable",message:"Fuer den Reisezeitraum liegt aktuell keine Vorhersage vor."};
+      }
+      return {
+        mode:"trip",
+        start:queryStart,
+        end:queryEnd,
+        tripStart:start,
+        tripEnd:end,
+        partial:start<today||end>forecastEnd,
+        partialMessage:start<today&&end>forecastEnd
+          ?`Zeigt den verfuegbaren Vorhersagezeitraum innerhalb Ihrer Reise (${formatDateValue(queryStart)} bis ${formatDateValue(queryEnd)}).`
+          :start<today
+            ?`Ab heute (${formatDateValue(queryStart)}) bis Reiseende, soweit Vorhersage verfuegbar.`
+            :end>forecastEnd
+              ?`Vorhersage bis ${formatDateValue(queryEnd)}. Weitere Tage folgen naeher am Reisedatum.`
+              :""
+      };
+    }
+    return {mode:"near_term",start:today,end:addDaysIso(today,Math.min(6,15))};
+  }
+
+  function formatCoordinates(latitude,longitude){
+    return `${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`;
+  }
+
+  function weatherMetaMarkup(result,range){
+    const updatedAt=new Date().toLocaleString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+    const coords=formatCoordinates(result.location.latitude,result.location.longitude);
+    const parts=[
+      `Quelle: Open-Meteo`,
+      `Koordinaten: ${coords}`,
+      `Aktualisiert: ${updatedAt}`
+    ];
+    if(range&&range.partial&&range.partialMessage)parts.push(range.partialMessage);
+    return `<p class="weather-meta">${parts.map(part=>`<span>${escapeHtml(part)}</span>`).join("")}</p>`;
   }
 
   function weatherCodeText(code){
@@ -246,26 +307,34 @@
       latitude:location.latitude,
       longitude:location.longitude,
       name:[location.name,location.admin1,location.country].filter(Boolean).join(", "),
+      country:location.country_code||"",
+      timezone:location.timezone||"auto",
       source:"open-meteo-geocoding"
     };
   }
 
-  function openMeteoUrl(location){
+  function openMeteoUrl(location,range){
     if(!location)return "";
     const params=new URLSearchParams({
       latitude:String(location.latitude),
       longitude:String(location.longitude),
       daily:"weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max",
-      hourly:"temperature_2m,precipitation_probability,precipitation,wind_speed_10m",
-      timezone:"Europe/Vienna",
-      forecast_days:String(tripForecastDays())
+      timezone:location.timezone&&location.timezone!=="auto"?location.timezone:"auto"
     });
+    if(range&&(range.mode==="trip"||range.mode==="near_term")){
+      params.set("start_date",range.start);
+      params.set("end_date",range.end);
+    }else{
+      params.set("forecast_days","7");
+    }
     return `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
   }
 
   async function loadOpenMeteoWeather(){
+    const range=weatherQueryRange();
+    if(range.mode==="too_far"||range.mode==="unavailable")throw new Error(range.message);
     const location=await resolveWeatherLocation();
-    const url=openMeteoUrl(location);
+    const url=openMeteoUrl(location,range);
     if(!url)throw new Error("Keine Koordinaten für Reisewetter hinterlegt.");
     const response=await fetch(url);
     if(!response.ok)throw new Error(`Open-Meteo nicht erreichbar: ${response.status}`);
@@ -286,16 +355,24 @@
       day.symbol=weatherSymbol(day.code);
       day.outfit=clothingHint(day);
       return day;
-    });
-    return {location,days};
+    }).filter(day=>day.tempMin!==undefined&&day.tempMax!==undefined);
+    if(!days.length)throw new Error("Open-Meteo hat keine verwertbaren Tageswerte geliefert.");
+    return {location,days,range};
   }
 
   function mapsLink(destination){
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
   }
 
+  function resolveNavigationUrl(primary,...fallbacks){
+    const value=String(primary||"").trim();
+    if(/^https?:\/\//i.test(value))return value;
+    const destination=value||fallbacks.map(item=>String(item||"").trim()).find(Boolean)||"";
+    return destination?mapsLink(destination):"";
+  }
+
   function itemNavigationUrl(item){
-    return item.navigationUrl||mapsLink(item.address||item.meetingPoint||item.title);
+    return item.navigationUrl||resolveNavigationUrl("",item.address,item.meetingPoint,item.title);
   }
 
   function whatsappLink(number,message){
@@ -629,6 +706,7 @@
 
   function renderHotel(){
     const hotel=customer.hotel;
+    const navUrl=resolveNavigationUrl(hotel.navigation,hotel.address,hotel.name);
     document.getElementById("hotelCard").innerHTML=`
       <p class="eyebrow">Unterkunft</p>
       <h2>${hotel.name}</h2>
@@ -639,29 +717,25 @@
         ["Kontakt",hotel.contact],
         ["Voucher",hotel.voucherStatus]
       ])}
-      <div class="card-actions">
-        <a class="button primary" href="${mapsLink(hotel.navigation)}" target="_blank" rel="noopener">Navigation öffnen</a>
-      </div>
+      ${navUrl?`<div class="card-actions"><a class="button primary" href="${navUrl}" target="_blank" rel="noopener">Navigation öffnen</a></div>`:""}
     `;
   }
 
   function renderWeather(){
-    const weather=customer.weather;
     document.getElementById("weatherCard").innerHTML=`
       <p class="eyebrow">Wetter</p>
       <h2>Reisewetter</h2>
       <p id="weatherLocationLabel"><strong>Wetter für:</strong> ${escapeHtml(weatherRegionLabel())}</p>
       <div class="weather-days" id="weatherDays">
-        ${fallbackWeatherMarkup(weather)}
+        <div class="weather-day"><strong>Live-Wetter wird geladen …</strong><span>Daten kommen direkt von Open-Meteo fuer Ihren Reisezeitraum.</span></div>
       </div>
+      <div id="weatherMeta"></div>
     `;
     updateOpenMeteoWeather();
   }
 
-  function fallbackWeatherMarkup(weather){
-    const days=(weather.days||[]).filter(day=>[day.day,day.temp,day.condition].some(hasDisplayValue));
-    if(!days.length)return `<div class="weather-day"><strong>Wetterdaten werden geladen</strong><span>Falls keine Koordinaten hinterlegt sind, erscheint hier ein Hinweis.</span></div>`;
-    return days.map(day=>`<div class="weather-day"><strong>${escapeHtml(day.day)}</strong><span>${escapeHtml(day.temp)}</span><br><span>${escapeHtml(day.condition)}</span></div>`).join("");
+  function weatherUnavailableMarkup(message){
+    return `<div class="weather-day"><strong>Keine belastbare Vorhersage</strong><span>${escapeHtml(message)}</span></div>`;
   }
 
   function weatherDayMarkup(day){
@@ -680,6 +754,7 @@
 
   async function updateOpenMeteoWeather(){
     const target=document.getElementById("weatherDays");
+    const meta=document.getElementById("weatherMeta");
     if(!target)return;
     try{
       const result=await loadOpenMeteoWeather();
@@ -688,12 +763,13 @@
       const heading=document.getElementById("weatherLocationLabel");
       if(heading)heading.innerHTML=`<strong>Wetter für:</strong> ${escapeHtml(result.location.name)}`;
       target.innerHTML=days.map(weatherDayMarkup).join("");
-      console.log("[ACT Portal] Open-Meteo geladen:",{customerId,location:result.location,days});
+      if(meta)meta.innerHTML=weatherMetaMarkup(result,result.range);
+      console.log("[ACT Portal] Open-Meteo geladen:",{customerId,location:result.location,range:result.range,days});
     }catch(error){
       console.warn("[ACT Portal] Open-Meteo nicht verfügbar:",error);
-      if(!(customer.weather?.days||[]).length){
-        target.innerHTML=`<div class="weather-day"><strong>Wetter derzeit nicht verfügbar</strong><span>Bitte Koordinaten beim Kunden hinterlegen oder später erneut öffnen.</span></div>`;
-      }
+      const message=error&&error.message?error.message:"Wetterdaten konnten nicht geladen werden.";
+      target.innerHTML=weatherUnavailableMarkup(message);
+      if(meta)meta.innerHTML=`<p class="weather-meta"><span>Quelle: Open-Meteo (nicht verfuegbar)</span><span>${escapeHtml(weatherSearchName()||"Kein Wetter-Ort hinterlegt")}</span></p>`;
     }
   }
 

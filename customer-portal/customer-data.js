@@ -149,13 +149,8 @@ window.CustomerPortalData={
         localEmergency:"Euro-Notruf 112, Rettung 144, Polizei 133, Feuerwehr 122"
       },
       weather:{
-        summary:"Demo-Wetterdaten für die Reise. Live-Wetter kann später angebunden werden.",
-        days:[
-          {day:"Do",temp:"24°C",condition:"Sonnig"},
-          {day:"Fr",temp:"22°C",condition:"Leicht bewölkt"},
-          {day:"Sa",temp:"21°C",condition:"Bergwetter stabil"},
-          {day:"So",temp:"23°C",condition:"Sonnig"}
-        ]
+        summary:"",
+        days:[]
       },
       history:[
         {date:"03.07.2026",text:"Restaurant geändert"},

@@ -141,7 +141,7 @@
     (c.program||[]).forEach((item,index)=>{
       const label=item.title||`Programmpunkt ${index+1}`;
       if(!String(item.title||"").trim())errors.push(`${label}: Titel fehlt.`);
-      if(!String(item.dateValue||"").trim())errors.push(`${label}: Datum fehlt.`);
+      if(!String(item.dateValue||"").trim())errors.push(`${label}: Termindatum fehlt (wann findet der Programmpunkt statt?).`);
     });
 
     (c.documents||[]).forEach(item=>{

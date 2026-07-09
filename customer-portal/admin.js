@@ -39,7 +39,7 @@
 
   const fieldSets={
     program:[
-      ["id","ID"],["date","Datum als Text"],["dateValue","Datum von"],["endDateValue","Datum bis"],["startTime","Beginn","time"],["endTime","Ende","time"],["title","Titel"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["category","Kategorie"],["meetingPoint","Treffpunkt"],["address","Adresse"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Terminstatus"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"]
+      ["title","Titel"],["dateValue","Termindatum (von)"],["endDateValue","Termindatum (bis)"],["startTime","Beginn","time"],["endTime","Ende","time"],["category","Kategorie"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["meetingPoint","Treffpunkt"],["address","Adresse"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Terminstatus"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"],["id","ID"],["date","Datum als Text"]
     ],
     accommodations:[
       ["name","Hotelname"],["address","Adresse"],["checkIn","Check-in"],["checkOut","Check-out"],["contact","Kontakt"],["phone","Telefon"],["navigation","Navigationslink"],["voucherStatus","Voucher-Link"],["notes","Hinweise","textarea"]
@@ -79,7 +79,7 @@
     status:"Bei Stammdaten: Reisestatus. Bei Programmpunkten: Terminstatus fuer Kalender, Timeline und Detailkarte.",
     publicationState:"Steuert Entwurf oder Veroeffentlicht im Adminbereich.",
     title:"Erscheint im Kalender, in der Timeline und in der Detailkarte.",
-    dateValue:"Startdatum des Programmpunkts. Mehrtaegige Punkte nutzen zusaetzlich Datum bis.",
+    dateValue:"Wann findet dieser Programmpunkt statt? (Kalender/Timeline – nicht das Bearbeitungsdatum)",
     endDateValue:"Optionales Enddatum, wenn der Programmpunkt mehr als einen Tag betrifft.",
     date:"Datum mit Kalenderauswahl.",
     startTime:"15-Minuten-Raster oder eigene Uhrzeit.",
@@ -205,6 +205,10 @@
     next.publishStatus=next.publicationState==="Veröffentlicht"||next.publishStatus==="published"?"published":"draft";
     next.publishedSnapshot=next.publishedSnapshot||null;
     next.publishMeta=next.publishMeta&&typeof next.publishMeta==="object"?next.publishMeta:{};
+    if(next.publishedSnapshot&&!next.publishMeta.lastPublishedAt){
+      next.publishMeta.lastPublishedAt=next.publishedSnapshot.updatedAt||next.updatedAt||"";
+      next.publishMeta.lastPublisher=next.publishMeta.lastPublisher||PUBLISH_EDITOR;
+    }
     return next;
   }
 
@@ -945,7 +949,7 @@
         <div><span>Aktuelle Version</span><strong>${escapeHtml(customer.version||"1.0")}</strong></div>
         <div><span>Letzte Veröffentlichung</span><strong>${escapeHtml(workflow?workflow.formatPublishDateTime(meta.lastPublishedAt):"-")}</strong></div>
         <div><span>Letzter Bearbeiter</span><strong>${escapeHtml(meta.lastPublisher||"-")}</strong></div>
-        <div><span>Letzte Änderung</span><strong>${escapeHtml(customer.updatedAt||"-")}</strong></div>
+        <div><span>Entwurf zuletzt bearbeitet</span><strong>${escapeHtml(customer.updatedAt||"-")}</strong></div>
         <div><span>Unveröffentlichte Änderungen</span><strong>${comparison.count}</strong></div>
         <div><span>Live-Version</span><strong>${customer.publishedSnapshot?"Veröffentlicht":"Noch nicht live"}</strong></div>
       </div>
@@ -1110,6 +1114,43 @@
     scrollToMasterForm();
   }
 
+  function formatValidationError(error){
+    if(/Termindatum fehlt|Datum fehlt/.test(error))return `${error} → Bereich „Programmpunkte“, Feld „Termindatum (von)“`;
+    if(/Titel fehlt/.test(error))return `${error} → Bereich „Programmpunkte“, Feld „Titel“`;
+    if(error==="Unterkunft fehlt.")return `${error} → Bereich „Unterkunft“, Feld „Hotelname“`;
+    if(error==="Persönlicher Concierge fehlt.")return `${error} → Bereich „Stammdaten“, Feld „Persönlicher Concierge“`;
+    if(error==="Kundenname fehlt.")return `${error} → Bereich „Stammdaten“, Feld „Kundenname“`;
+    if(error==="Reisebezeichnung fehlt.")return `${error} → Bereich „Stammdaten“, Feld „Reisebezeichnung“`;
+    if(error==="Telefon oder WhatsApp fehlt.")return `${error} → Bereich „Stammdaten“, Felder „Telefon“ oder „WhatsApp“`;
+    if(/Dokument/.test(error))return `${error} → Bereich „Dokumente“`;
+    return error;
+  }
+
+  function scrollToPublishFix(error){
+    if(/Programmpunkt|Termindatum fehlt|Datum fehlt|Titel fehlt/.test(error))byId("program-items")?.scrollIntoView({behavior:"smooth",block:"start"});
+    else if(/Unterkunft/.test(error))byId("accommodations")?.scrollIntoView({behavior:"smooth",block:"start"});
+    else if(/Dokument/.test(error))byId("documents-admin")?.scrollIntoView({behavior:"smooth",block:"start"});
+    else byId("master-data")?.scrollIntoView({behavior:"smooth",block:"start"});
+    closePublishDialog();
+  }
+
+  function renderPublishValidationErrors(container,validation){
+    if(!container)return;
+    if(validation.ok){
+      container.hidden=true;
+      container.innerHTML="";
+      return;
+    }
+    container.hidden=false;
+    container.innerHTML=validation.errors.map(item=>{
+      const text=formatValidationError(item);
+      return `<p><button class="validation-jump" type="button" data-validation-jump="${escapeHtml(item)}">${escapeHtml(text)}</button></p>`;
+    }).join("");
+    container.querySelectorAll("[data-validation-jump]").forEach(button=>{
+      button.addEventListener("click",()=>scrollToPublishFix(button.dataset.validationJump||""));
+    });
+  }
+
   function openPublishDialog(id){
     if(adminMode==="edit"){
       readMaster();
@@ -1133,15 +1174,7 @@
         <ul class="publish-change-list">${comparison.count?comparison.changes.map(item=>`<li class="publish-change-${escapeHtml(item.kind||"changed")}">${escapeHtml(item.label)}</li>`).join(""):`<li>Keine Unterschiede zur Live-Version</li>`}</ul>
       `;
     }
-    if(errors){
-      if(validation.ok){
-        errors.hidden=true;
-        errors.innerHTML="";
-      }else{
-        errors.hidden=false;
-        errors.innerHTML=validation.errors.map(item=>`<p>${escapeHtml(item)}</p>`).join("");
-      }
-    }
+    if(errors)renderPublishValidationErrors(errors,validation);
     byId("publishCommentInput").value="";
     byId("publishDialogConfirm").disabled=!validation.ok;
     byId("publishDialog").hidden=false;
@@ -1223,11 +1256,7 @@
     const customer=ensureCollections(customers[id]);
     const validation=workflow?workflow.validateForPublish(customer):{ok:true,errors:[]};
     if(!validation.ok){
-      const errors=byId("publishValidationErrors");
-      if(errors){
-        errors.hidden=false;
-        errors.innerHTML=validation.errors.map(item=>`<p>${escapeHtml(item)}</p>`).join("");
-      }
+      renderPublishValidationErrors(byId("publishValidationErrors"),validation);
       return;
     }
     const comparison=getDraftComparison(customer);

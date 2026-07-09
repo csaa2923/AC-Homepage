@@ -143,6 +143,17 @@ textarea{min-height:92px;resize:vertical;text-transform:none}
 .admin-modal-card h3{margin:0;font-size:30px}
 .modal-label{text-transform:none;letter-spacing:0;font-weight:700;color:var(--ink)}
 .publish-validation-errors{display:grid;gap:6px;padding:12px;border:1px solid rgba(140,31,31,.28);border-radius:8px;background:#fff6f6;color:#8c1f1f;font-size:14px;line-height:1.45}
+.publish-validation-errors .validation-jump{
+  width:100%;
+  text-align:left;
+  padding:10px 12px;
+  border:1px solid rgba(140,31,31,.22);
+  border-radius:8px;
+  background:#fff6f6;
+  color:#8c1f1f;
+  cursor:pointer;
+}
+.publish-validation-errors .validation-jump:hover{background:#ffeded}
 .publish-validation-errors p{margin:0}
 @media(min-width:780px){
   .publish-status-meta{grid-template-columns:repeat(3,1fr)}

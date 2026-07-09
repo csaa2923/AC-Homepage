@@ -30,6 +30,8 @@ h3{font-size:25px}
 .login-card h1{font-size:clamp(42px,5vw,64px);overflow-wrap:anywhere}
 .form-message{min-height:22px;color:#8c1f1f;font-weight:800}
 .admin-shell{min-height:100vh}
+.admin-shell.is-overview .edit-only{display:none!important}
+.admin-shell.is-editing #customers{display:none}
 .admin-header{display:grid;gap:18px;padding:28px clamp(18px,4vw,54px);background:linear-gradient(90deg,var(--green),var(--green-2));color:#f8f1dd}
 .admin-header .eyebrow{color:var(--gold-2)}
 .admin-header .muted{color:#f5ecd4}

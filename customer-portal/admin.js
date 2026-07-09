@@ -6,6 +6,7 @@
   let customers=loadCustomers();
   let activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
   let pendingScrollItemId="";
+  let adminMode="overview";
 
   const fieldSets={
     program:[
@@ -246,6 +247,14 @@
   }
 
   function byId(id){return document.getElementById(id)}
+
+  function setAdminMode(mode){
+    adminMode=mode==="edit"?"edit":"overview";
+    const shell=byId("adminShell");
+    if(!shell)return;
+    shell.classList.toggle("is-editing",adminMode==="edit");
+    shell.classList.toggle("is-overview",adminMode==="overview");
+  }
 
   function portalPath(id){
     const href=window.location.href.split("#")[0].split("?")[0].replace(/admin\.html$/,"index.html");
@@ -557,6 +566,7 @@
   }
 
   function renderAll(){
+    setAdminMode(adminMode);
     renderCustomers();
     renderMaster();
     renderEditor("program","programEditor");
@@ -591,8 +601,10 @@
       documents:[]
     });
     activeId=id;
+    adminMode="overview";
     saveCustomers();
     renderAll();
+    window.setTimeout(()=>byId("customers")?.scrollIntoView({behavior:"smooth",block:"start"}),0);
   }
 
   function downloadJson(){
@@ -682,7 +694,7 @@
     document.addEventListener("input",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}});
     document.addEventListener("click",event=>{
       const edit=event.target.closest("[data-edit-customer]");
-      if(edit){activeId=edit.dataset.editCustomer;renderAll();scrollToMasterForm();}
+      if(edit){activeId=edit.dataset.editCustomer;adminMode="edit";renderAll();scrollToMasterForm();}
       const open=event.target.closest("[data-open-customer]");
       if(open)window.open(portalPath(open.dataset.openCustomer),"_blank","noopener");
       const copy=event.target.closest("[data-copy-customer]");
@@ -693,6 +705,7 @@
       if(remove)removeItem(remove.dataset.removeItem,Number(remove.dataset.index));
     });
     byId("copyLinkButton").addEventListener("click",()=>copyText(byId("portalLink").value));
+    byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderAdminPreview()});
     byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("saveDraftButton").addEventListener("click",()=>{activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();renderAll()});

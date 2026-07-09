@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=22">
+<link rel="stylesheet" href="admin.css?v=23">
 </head>
 <body>
 <main>
@@ -36,12 +36,12 @@
       </div>
       <div class="header-actions">
         <button class="button soft" id="newCustomerButton" type="button">Kunde anlegen</button>
+        <button class="button soft edit-only" id="backToCustomersButton" type="button">Zur Kundenübersicht</button>
         <button class="button soft" id="logoutButton" type="button">Sperren</button>
       </div>
     </header>
 
-    <nav class="admin-nav" aria-label="Adminbereiche">
-      <a href="#customers">Kundenübersicht</a>
+    <nav class="admin-nav edit-only" aria-label="Adminbereiche">
       <a href="#data-flow">Datenfluss</a>
       <a href="#live-preview">Live-Vorschau</a>
       <a href="#master-data">Stammdaten</a>
@@ -62,7 +62,7 @@
       <div class="customer-list" id="customerList"></div>
     </section>
 
-    <section class="admin-section" id="data-flow">
+    <section class="admin-section edit-only" id="data-flow">
       <div class="section-head">
         <p class="eyebrow">Datenfluss</p>
         <h2>Von der Eingabe ins Kundenportal</h2>
@@ -81,7 +81,7 @@
       </div>
     </section>
 
-    <section class="admin-section" id="live-preview">
+    <section class="admin-section edit-only" id="live-preview">
       <div class="section-head inline-head">
         <div>
           <p class="eyebrow">Live-Vorschau</p>
@@ -95,7 +95,7 @@
       <div class="admin-preview" id="adminPreview"></div>
     </section>
 
-    <section class="admin-section" id="master-data">
+    <section class="admin-section edit-only" id="master-data">
       <div class="section-head">
         <p class="eyebrow">Stammdaten</p>
         <h2>Kunde bearbeiten</h2>
@@ -134,7 +134,7 @@
       </form>
     </section>
 
-    <section class="admin-section" id="program-items">
+    <section class="admin-section edit-only" id="program-items">
       <div class="section-head inline-head">
         <div>
           <p class="eyebrow">Programm</p>
@@ -145,7 +145,7 @@
       <div class="editor-list" id="programEditor"></div>
     </section>
 
-    <section class="admin-section" id="accommodations">
+    <section class="admin-section edit-only" id="accommodations">
       <div class="section-head inline-head">
         <div><p class="eyebrow">Unterkunft</p><h2>Unterkünfte</h2></div>
         <button class="button soft" type="button" data-add-list="accommodations">Unterkunft hinzufügen</button>
@@ -153,7 +153,7 @@
       <div class="editor-list" id="accommodationsEditor"></div>
     </section>
 
-    <section class="admin-section" id="restaurants-admin">
+    <section class="admin-section edit-only" id="restaurants-admin">
       <div class="section-head inline-head">
         <div><p class="eyebrow">Reservierungen</p><h2>Restaurants</h2></div>
         <button class="button soft" type="button" data-add-list="restaurants">Restaurant hinzufügen</button>
@@ -161,7 +161,7 @@
       <div class="editor-list" id="restaurantsEditor"></div>
     </section>
 
-    <section class="admin-section" id="activities-admin">
+    <section class="admin-section edit-only" id="activities-admin">
       <div class="section-head inline-head">
         <div><p class="eyebrow">Erlebnisse</p><h2>Aktivitäten</h2></div>
         <button class="button soft" type="button" data-add-list="activities">Aktivität hinzufügen</button>
@@ -169,7 +169,7 @@
       <div class="editor-list" id="activitiesEditor"></div>
     </section>
 
-    <section class="admin-section" id="documents-admin">
+    <section class="admin-section edit-only" id="documents-admin">
       <div class="section-head inline-head">
         <div><p class="eyebrow">Dokumente</p><h2>Dokumente</h2></div>
         <button class="button soft" type="button" data-add-list="documents">Dokument hinzufügen</button>
@@ -177,7 +177,7 @@
       <div class="editor-list" id="documentsEditor"></div>
     </section>
 
-    <section class="admin-section" id="publish">
+    <section class="admin-section edit-only" id="publish">
       <div class="section-head">
         <p class="eyebrow">Veröffentlichung</p>
         <h2>Link, Vorschau und WhatsApp</h2>
@@ -198,7 +198,7 @@
       </div>
     </section>
 
-    <section class="admin-section" id="export-import">
+    <section class="admin-section edit-only" id="export-import">
       <div class="section-head">
         <p class="eyebrow">Datensicherung</p>
         <h2>Export / Import</h2>
@@ -214,6 +214,6 @@
 </main>
 
 <script src="customer-data.js"></script>
-<script src="admin.js?v=22"></script>
+<script src="admin.js?v=23"></script>
 </body>
 </html>

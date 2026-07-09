@@ -1,5 +1,5 @@
 window.CustomerPortalData={
-  defaultCustomerId:"demo-a7k92m",
+  defaultCustomerId:"kunde-holzer",
   customers:{
     "demo-a7k92m":{
       version:"1.0",

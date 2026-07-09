@@ -130,10 +130,50 @@
     try{
       const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
       if(stored&&typeof stored==="object"&&!Array.isArray(stored)&&Object.keys(stored).length)return normalizeCustomersMap(stored);
-      return normalizeCustomersMap(clone(demoRoot.customers||{}));
+      return prepareDemoCustomers();
     }catch(error){
-      return normalizeCustomersMap(clone(demoRoot.customers||{}));
+      return prepareDemoCustomers();
     }
+  }
+
+  function prepareDemoCustomers(){
+    const demoSource=window.ACTDemoExamples?.customers||demoRoot.customers||{};
+    const map=normalizeCustomersMap(clone(demoSource));
+    Object.keys(map).forEach(id=>{
+      const customer=map[id];
+      if((customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published")&&!customer.publishedSnapshot){
+        map[id]=normalizeCustomerData({...customer,publishedSnapshot:buildPublishedSnapshot(customer)},id);
+      }
+    });
+    return map;
+  }
+
+  function seedDemoExamples(){
+    const demo=window.ACTDemoExamples;
+    if(!demo){
+      window.alert("Beispieldaten nicht geladen. Bitte Seite mit Strg+F5 neu laden.");
+      return;
+    }
+    customers=normalizeCustomersMap(clone(demo.customers||{}));
+    Object.keys(customers).forEach(id=>{
+      let customer=customers[id];
+      if(customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published"){
+        customer=commitCustomer({...customer,publishedSnapshot:buildPublishedSnapshot(customer)},id);
+        customers[id]=customer;
+      }
+    });
+    activeId=demo.defaultCustomerId||Object.keys(customers)[0]||activeId;
+    if(demo.templates&&window.ACTTemplateLibrary){
+      templates=clone(demo.templates);
+      saveTemplates();
+    }
+    adminMode="overview";
+    saveCustomers();
+    renderAll();
+    setCrmStatus("Beispieldaten geladen: Familie Holzer, Familie Müller, Vorlagen, CRM, Buchungen.");
+    setBookingStatus("Beispieldaten geladen. Kunde Holzer ist veröffentlicht und im Portal sichtbar.");
+    setTemplateStatus("Beispiel-Vorlagen geladen.");
+    navigateMainSection("customers");
   }
 
   function clone(value){
@@ -2449,6 +2489,10 @@
   function loadLocalTemplates(){
     const lib=templateLib();
     templates=lib?lib.loadLocalTemplates():{};
+    if(!Object.keys(templates).length&&window.ACTDemoExamples?.templates){
+      templates=clone(window.ACTDemoExamples.templates);
+      saveTemplates();
+    }
   }
 
   function setTemplateStatus(message,isError){
@@ -2865,13 +2909,26 @@
   }
 
   function navigateMainSection(sectionId){
+    if(typeof closeBookingModal==="function")closeBookingModal();
+    if(typeof closePublishDialog==="function")closePublishDialog();
+    if(typeof closeNotifyDialog==="function")closeNotifyDialog();
     adminMode="overview";
     renderAll();
+    updateMainNavActive(sectionId);
     window.setTimeout(()=>{
       const target=byId(sectionId);
-      if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
+      if(target){
+        target.removeAttribute("hidden");
+        target.scrollIntoView({behavior:"smooth",block:"start"});
+      }
       if(sectionId)history.replaceState(null,"",`#${sectionId}`);
-    },0);
+    },50);
+  }
+
+  function updateMainNavActive(sectionId){
+    document.querySelectorAll(".admin-nav-main [data-main-nav]").forEach(button=>{
+      button.classList.toggle("active",button.dataset.mainNav===sectionId);
+    });
   }
 
   function navigateSection(sectionId){
@@ -2881,11 +2938,10 @@
   }
 
   function bindMainNavigation(){
-    document.querySelectorAll(".admin-nav-main a[href^='#']").forEach(link=>{
-      link.addEventListener("click",event=>{
+    document.querySelectorAll(".admin-nav-main [data-main-nav]").forEach(button=>{
+      button.addEventListener("click",event=>{
         event.preventDefault();
-        const sectionId=(link.getAttribute("href")||"").replace(/^#/,"");
-        if(sectionId)navigateMainSection(sectionId);
+        navigateMainSection(button.dataset.mainNav||"");
       });
     });
     document.querySelectorAll(".admin-nav.crm-only a[href^='#']").forEach(link=>{
@@ -2925,6 +2981,7 @@
     });
     byId("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(SESSION_KEY);location.reload()});
     byId("newCustomerButton").addEventListener("click",newCustomer);
+    byId("loadDemoExamplesButton")?.addEventListener("click",seedDemoExamples);
     byId("generateIdButton").addEventListener("click",()=>{byId("masterForm").elements.customerId.value=generateId()});
     byId("masterForm").addEventListener("submit",event=>{event.preventDefault();readMaster()});
     document.addEventListener("change",event=>{
@@ -2982,8 +3039,8 @@
       if(removeBookingDoc){editingBookingDocuments=editingBookingDocuments.filter((_,index)=>index!==Number(removeBookingDoc.dataset.removeBookingDoc));renderBookingDocumentsList();}
     });
     byId("copyLinkButton").addEventListener("click",()=>copyText(byId("portalLink").value));
-    byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
-    byId("backFromCrmButton")?.addEventListener("click",()=>{adminMode="overview";renderAll();byId("crm-dashboard").scrollIntoView({behavior:"smooth",block:"start"})});
+    byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();updateMainNavActive("customers");byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
+    byId("backFromCrmButton")?.addEventListener("click",()=>{adminMode="overview";renderAll();updateMainNavActive("crm-dashboard");byId("crm-dashboard").scrollIntoView({behavior:"smooth",block:"start"})});
     byId("saveCrmButton")?.addEventListener("click",saveCrmCustomer);
     byId("crmSearchInput")?.addEventListener("input",event=>{crmSearchQuery=event.target.value;renderCrmDashboard();renderCustomers()});
     byId("migrateCrmFirebaseButton")?.addEventListener("click",migrateCrmToFirebase);
@@ -3114,6 +3171,9 @@
     byId("adminShell").hidden=false;
     try{
       renderAll();
+      const hash=location.hash.replace(/^#/,"");
+      if(hash&&byId(hash))navigateMainSection(hash);
+      else updateMainNavActive("customers");
     }catch(error){
       console.error(error);
       localStorage.removeItem(STORAGE_KEY);

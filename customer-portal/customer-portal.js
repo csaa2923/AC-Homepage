@@ -45,7 +45,13 @@
         const published=await db.loadPublishedCustomer(customerId);
         if(published){
           dataSource="firebase";
-          console.log("[ACT Portal] PublishedData verwendet:",{customerId,documents:(published.documents||[]).length,publishedData:published});
+          console.log("[ACT Portal] PublishedData verwendet:",{
+            customerId,
+            source:"Firestore",
+            documentsTotal:(published.documents||[]).length,
+            documentsVisible:(published.documents||[]).filter(isPortalDocument).length,
+            publishedData:published
+          });
           return published;
         }
       }
@@ -54,10 +60,23 @@
     }
 
     const stored=loadStoredCustomer(customerId);
-    if(stored){
+    if(stored&&isPublishedPortalCustomer(stored)){
       dataSource="local";
-      console.log("[ACT Portal] Lokale Kundendaten verwendet:",{customerId,documents:(stored.documents||[]).length});
+      console.log("[ACT Portal] Lokale publishedData verwendet:",{
+        customerId,
+        source:"localStorage",
+        documentsTotal:(stored.documents||[]).length,
+        documents:stored.documents||[]
+      });
       return stored;
+    }
+    if(stored){
+      console.log("[ACT Portal] Lokale Entwurfsdaten ignoriert (nicht veroeffentlicht):",{
+        customerId,
+        documentsTotal:(stored.documents||[]).length,
+        publishStatus:stored.publishStatus,
+        publicationState:stored.publicationState
+      });
     }
 
     dataSource="demo";
@@ -80,14 +99,34 @@
     }[match]));
   }
 
+  function documentVisibleValue(item){
+    const value=item.visible!==undefined?item.visible:item.visibleForCustomer!==undefined?item.visibleForCustomer:item.customerVisible;
+    if(value===undefined)return true;
+    return value===true||value==="true"||value==="Ja"||value==="ja"||value===1||value==="1";
+  }
+
   function normalizeDocument(item){
     const next={...(item||{})};
-    const visible=next.visible!==undefined?next.visible:next.visibleForCustomer!==undefined?next.visibleForCustomer:next.customerVisible;
-    next.visible=visible===undefined?true:visible===true||visible==="true"||visible==="Ja"||visible==="ja"||visible===1||visible==="1";
-    next.title=next.title||next.fileName||"Dokument";
-    next.type=next.type||"Dokument";
-    next.url=next.url||next.downloadUrl||next.downloadURL||"";
+    next.visible=documentVisibleValue(next);
+    delete next.visibleForCustomer;
+    delete next.customerVisible;
+    next.title=String(next.title||next.fileName||"").trim();
+    next.type=String(next.type||"Sonstiges").trim();
+    if(next.type==="Platzhalter"||next.type==="Dokument")next.type=next.title?"Sonstiges":"";
+    next.url=String(next.url||next.downloadUrl||next.downloadURL||"").trim();
+    next.note=String(next.note||"").trim();
+    next.fileName=String(next.fileName||"").trim();
+    next.uploadedAt=next.uploadedAt||next.uploadDate||"";
     return next;
+  }
+
+  function isPublishedPortalCustomer(data){
+    return Boolean(data&&(data.publishStatus==="published"||data.publicationState==="Veröffentlicht"));
+  }
+
+  function isPortalDocument(item){
+    const doc=normalizeDocument(item);
+    return doc.visible===true&&hasDisplayValue(doc.url);
   }
 
   function normalizeCustomerData(data,id){
@@ -789,27 +828,37 @@
 
   function renderDocuments(){
     const documents=(customer.documents||[]).map(normalizeDocument);
-    const visibleDocuments=documents.filter(item=>item.visible!==false&&[item.title,item.type,item.note,item.url,item.fileName,item.uploadedAt,item.status].some(hasDisplayValue));
-    console.log("[ACT Portal] Dokumente geladen:",{customerId,source:dataSource,count:documents.length,documents});
-    console.log("[ACT Portal] Sichtbare Dokumente:",{customerId,count:visibleDocuments.length,documents:visibleDocuments});
+    const visibleDocuments=documents.filter(isPortalDocument);
+    console.log("[ACT Portal] Dokumentenstatus:",{
+      customerId,
+      source:dataSource,
+      documentsTotal:documents.length,
+      documentsVisible:visibleDocuments.length,
+      documentsDraftHidden:documents.filter(item=>item.visible===false).length,
+      documentsWithoutUrl:documents.filter(item=>item.visible!==false&&!hasDisplayValue(item.url)).length,
+      documents:documents.map(item=>({title:item.title,type:item.type,visible:item.visible,url:item.url,fileName:item.fileName}))
+    });
     document.getElementById("documentGrid").innerHTML=visibleDocuments.length?visibleDocuments.map(item=>`
       <article class="document-card">
-        <h3>${escapeHtml(item.title)}</h3>
-        <div class="placeholder-box">${escapeHtml(item.type||"Dokument")}</div>
-        ${item.note?`<p>${escapeHtml(item.note)}</p>`:""}
-        ${item.fileName?`<p class="muted">${escapeHtml(item.fileName)}</p>`:""}
-        ${formatUploadDate(item.uploadedAt)?`<p class="muted">Hochgeladen: ${escapeHtml(formatUploadDate(item.uploadedAt))}</p>`:""}
-        ${item.url?`<a class="button soft" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">Dokument öffnen</a>`:""}
+        <h3>${escapeHtml(item.title||item.fileName||"Dokument")}</h3>
+        ${definitionList([
+          ["Dokumenttyp",item.type||"Sonstiges"],
+          ["Hinweis",item.note],
+          ["Dateiname",item.fileName],
+          ["Upload-Datum",formatUploadDate(item.uploadedAt)]
+        ])}
+        <div class="card-actions">
+          <a class="button primary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">Dokument öffnen</a>
+        </div>
       </article>
-    `).join(""):`<article class="document-card document-empty"><h3>Derzeit sind noch keine Dokumente verfügbar.</h3></article>`;
+    `).join(""):`<article class="document-card document-empty"><h3>Derzeit sind noch keine Dokumente verfügbar.</h3><p class="muted">Sobald Unterlagen freigegeben sind, erscheinen sie hier zum Download.</p></article>`;
   }
 
   function renderContact(){
     const contact=customer.contact;
     document.getElementById("contactCard").innerHTML=`
-      <p class="eyebrow">Kontakt & Notfall</p>
-      <h2>${contact.company}</h2>
       ${definitionList([
+        ["Unternehmen",contact.company],
         ["Telefon",contact.phone],
         ["WhatsApp",contact.whatsapp],
         ["E-Mail",contact.email],
@@ -1049,9 +1098,9 @@
   function renderDataSourceNotice(){
     const target=document.getElementById("publicationStatus");
     if(!target)return;
-    if(dataSource==="firebase")return;
-    const suffix=dataSource==="local"?"Lokale Sicherung aktiv.":"Demo-Daten werden angezeigt.";
-    target.textContent=`${target.textContent} · ${suffix}`;
+    const visibleCount=(customer.documents||[]).filter(isPortalDocument).length;
+    const sourceLabel=dataSource==="firebase"?"Firestore publishedData":dataSource==="local"?"localStorage (veroeffentlicht)":"Demo";
+    target.textContent=`${target.textContent} · Datenquelle: ${sourceLabel} · ${visibleCount} sichtbare Dokumente`;
   }
 
   async function initPortal(){

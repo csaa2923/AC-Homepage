@@ -262,7 +262,12 @@
   function saveDraftToFirebase(customer){
     const db=firebaseDatabase();
     if(!db)return;
-    console.log("[ACT Admin] Dokumente im Entwurf:",{customerId:customer.customerId,documents:(customer.documents||[]).map(documentDebugInfo)});
+    console.log("[ACT Admin] Dokumente im Entwurf:",{
+      customerId:customer.customerId,
+      documentsTotal:(customer.documents||[]).length,
+      documentsVisible:(customer.documents||[]).filter(isPortalReadyDocument).length,
+      documents:(customer.documents||[]).map(documentDebugInfo)
+    });
     db.saveDraftCustomer(clone(customer)).then(()=>{
       setFirebaseStatus("Entwurf wurde in Firestore gespeichert.");
     }).catch(error=>{
@@ -499,10 +504,18 @@
     next.visible=documentVisibleValue(next);
     delete next.visibleForCustomer;
     delete next.customerVisible;
-    next.title=next.title||next.fileName||"Dokument";
-    next.type=next.type||"Sonstiges";
-    next.url=next.url||next.downloadUrl||next.downloadURL||"";
+    next.title=String(next.title||next.fileName||"").trim();
+    next.type=String(next.type||"Sonstiges").trim();
+    next.url=String(next.url||next.downloadUrl||next.downloadURL||"").trim();
+    next.note=String(next.note||"").trim();
+    next.fileName=String(next.fileName||"").trim();
+    next.uploadedAt=next.uploadedAt||next.uploadDate||"";
     return next;
+  }
+
+  function isPortalReadyDocument(item){
+    const doc=normalizeDocumentItem(item);
+    return doc.visible===true&&Boolean(String(doc.url||"").trim());
   }
 
   function documentDebugInfo(item){
@@ -919,7 +932,7 @@
       </article>
       <article class="preview-panel">
         <p class="eyebrow">Dokumente</p>
-        ${previewList(customer.documents.filter(item=>item.visible!==false),item=>`<li><strong>${escapeHtml(item.title)}</strong> <span>${escapeHtml(item.type||item.status||item.note||"")}</span></li>`,"Noch keine sichtbaren Dokumente.")}
+        ${previewList(customer.documents.filter(isPortalReadyDocument),item=>`<li><strong>${escapeHtml(item.title||item.fileName||"Dokument")}</strong> <span>${escapeHtml(item.type||item.note||"")}</span></li>`,"Noch keine sichtbaren Dokumente.")}
       </article>
     `;
   }
@@ -989,7 +1002,13 @@
     customer.publishStatus="published";
     customer.updatedAt=new Date().toLocaleDateString("de-DE");
     saveCustomers();
-    console.log("[ACT Admin] Dokumente beim Veröffentlichen:",{customerId:customer.customerId,portalCustomerId:id,documents:(customer.documents||[]).map(documentDebugInfo)});
+    console.log("[ACT Admin] Dokumente beim Veröffentlichen:",{
+      customerId:customer.customerId,
+      portalCustomerId:id,
+      documentsTotal:(customer.documents||[]).length,
+      documentsVisible:(customer.documents||[]).filter(isPortalReadyDocument).length,
+      documents:(customer.documents||[]).map(documentDebugInfo)
+    });
     const db=firebaseDatabase();
     if(db){
       db.publishCustomer(clone(customer)).then(()=>{

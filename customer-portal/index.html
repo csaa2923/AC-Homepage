@@ -32,6 +32,7 @@
   <a href="#accommodation">Unterkunft</a>
   <a href="#documents">Dokumente</a>
   <a href="#contact">Kontakt</a>
+  <a href="#actions">Aktionen</a>
 </nav>
 
 <main id="portalRoot">
@@ -120,11 +121,20 @@
     <div class="document-grid" id="documentGrid"></div>
   </section>
 
-  <section class="portal-section split-grid" id="contact" aria-label="Kontakt und Aktionen">
+  <section class="portal-section" id="contact" aria-labelledby="contactTitle">
+    <div class="section-head">
+      <p class="eyebrow">Erreichbarkeit</p>
+      <h2 id="contactTitle">Kontakt &amp; Notfall</h2>
+    </div>
     <article class="info-card contact-card" id="contactCard"></article>
-    <article class="info-card action-card">
+  </section>
+
+  <section class="portal-section" id="actions" aria-labelledby="actionsTitle">
+    <div class="section-head">
       <p class="eyebrow">Kundenaktionen</p>
-      <h2>N&auml;chste Schritte</h2>
+      <h2 id="actionsTitle">N&auml;chste Schritte</h2>
+    </div>
+    <article class="info-card action-card">
       <div class="action-grid" id="actionGrid"></div>
     </article>
   </section>
@@ -148,10 +158,10 @@
 
 <script src="customer-data.js?v=2"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=6"></script>
+<script src="firebase-service.js?v=7"></script>
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js"></script>
-<script src="customer-portal.js?v=22"></script>
+<script src="customer-portal.js?v=23"></script>
 </body>
 </html>

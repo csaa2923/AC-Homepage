@@ -157,9 +157,12 @@
     next.visible=visible===undefined?true:visible===true||visible==="true"||visible==="Ja"||visible==="ja"||visible===1||visible==="1";
     delete next.visibleForCustomer;
     delete next.customerVisible;
-    next.title=next.title||next.fileName||"Dokument";
-    next.type=next.type||"Sonstiges";
-    next.url=next.url||next.downloadUrl||next.downloadURL||"";
+    next.title=String(next.title||next.fileName||"").trim();
+    next.type=String(next.type||"Sonstiges").trim();
+    next.url=String(next.url||next.downloadUrl||next.downloadURL||"").trim();
+    next.note=String(next.note||"").trim();
+    next.fileName=String(next.fileName||"").trim();
+    next.uploadedAt=next.uploadedAt||next.uploadDate||"";
     return next;
   }
 
@@ -200,7 +203,11 @@
     const id=customerIdOf(customer);
     if(!id)throw new Error("Kunden-ID fehlt.");
     const draftData=normalizeForFirestore(customer);
-    console.log("[ACT Firebase] Entwurf speichert Dokumente:",draftData.documents||[]);
+    console.log("[ACT Firebase] Entwurf speichert Dokumente:",{
+      customerId:id,
+      documentsTotal:(draftData.documents||[]).length,
+      documents:draftData.documents||[]
+    });
     const existing=await firestoreModule.getDoc(docRef(id));
     const payload={
       customerId:id,
@@ -224,7 +231,11 @@
       publishStatus:"published",
       updatedAt:nowText()
     });
-    console.log("[ACT Firebase] Veröffentlicht speichert Dokumente:",publishedData.documents||[]);
+    console.log("[ACT Firebase] Veröffentlicht speichert Dokumente:",{
+      customerId:id,
+      documentsTotal:(publishedData.documents||[]).length,
+      documents:publishedData.documents||[]
+    });
     await firestoreModule.setDoc(docRef(id),{
       customerId:id,
       draftData:normalizeForFirestore(customer),

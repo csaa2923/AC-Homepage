@@ -132,14 +132,7 @@ window.CustomerPortalData={
         navigation:"Möserer Straße 18, Seefeld in Tirol",
         voucherStatus:"Voucher-Platzhalter vorbereitet"
       },
-      documents:[
-        {title:"Angebot",status:"Platzhalter"},
-        {title:"Rechnung",status:"Platzhalter"},
-        {title:"Voucher",status:"Platzhalter"},
-        {title:"Tickets",status:"Platzhalter"},
-        {title:"Reiseunterlagen",status:"Platzhalter"},
-        {title:"Versicherungen",status:"Platzhalter"}
-      ],
+      documents:[],
       contact:{
         company:"Alpine Concierge Tirol",
         phone:"+43 677 61410679",

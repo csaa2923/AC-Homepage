@@ -55,6 +55,7 @@
 
   const fieldHints={
     customerName:"Erscheint in Begruessung, Reiseuebersicht und Kundenlink.",
+    companions:"Mitreisende werden in der Reiseuebersicht der Kundenseite angezeigt.",
     tripName:"Erscheint in Begruessung, Reiseuebersicht und WhatsApp-Text.",
     status:"Bei Stammdaten: Reisestatus. Bei Programmpunkten: Terminstatus fuer Kalender, Timeline und Detailkarte.",
     publicationState:"Steuert Entwurf oder Veroeffentlicht im Adminbereich.",
@@ -262,8 +263,13 @@
   }
 
   function formatPeriod(customer){
-    if(customer.startDatePlain&&customer.endDatePlain)return `${customer.startDatePlain} - ${customer.endDatePlain}`;
+    if(customer.startDatePlain&&customer.endDatePlain)return `${formatDate(customer.startDatePlain)} - ${formatDate(customer.endDatePlain)}`;
+    if(customer.startDatePlain)return formatDate(customer.startDatePlain);
     return customer.travelPeriod||"";
+  }
+
+  function sortDate(customer){
+    return customer.startDatePlain||dateOnly(customer.startDate)||"9999-12-31";
   }
 
   function ensureCollections(customer){
@@ -290,10 +296,20 @@
 
   function renderCustomers(){
     const list=byId("customerList");
-    list.innerHTML=Object.values(customers).map(raw=>{
+    const sorted=Object.entries(customers).sort(([,a],[,b])=>{
+      const dateCompare=sortDate(a).localeCompare(sortDate(b));
+      if(dateCompare)return dateCompare;
+      return String(a.customerName||"").localeCompare(String(b.customerName||""),"de");
+    });
+    if(!sorted.length){
+      list.innerHTML=`<article class="customer-card"><p class="muted">Noch keine Kunden oder Reisen angelegt.</p></article>`;
+      return;
+    }
+    list.innerHTML=sorted.map(([fallbackId,raw])=>{
       const customer=ensureCollections(raw);
-      const id=customer.customerId||Object.keys(customers).find(key=>customers[key]===raw);
+      const id=customer.customerId||fallbackId;
       const link=portalPath(id);
+      const published=customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published";
       return `
         <article class="customer-card">
           <div>
@@ -311,9 +327,12 @@
             </div>
           </div>
           <div class="form-actions">
-            <button class="button soft" type="button" data-edit-customer="${id}">Bearbeiten</button>
-            <button class="button primary" type="button" data-open-customer="${id}">Reise öffnen</button>
+            <button class="button soft" type="button" data-edit-customer="${id}">Reise bearbeiten</button>
+            <button class="button primary" type="button" data-open-customer="${id}">Kundenseite öffnen</button>
+            <button class="button soft" type="button" data-publish-customer="${id}">${published?"Informationen erneut auf Kundenseite stellen":"Informationen auf Kundenseite stellen"}</button>
+            <button class="button soft" type="button" data-copy-trip="${id}">Weitere Reise für diesen Kunden</button>
             <button class="button soft" type="button" data-copy-customer="${id}">Link kopieren</button>
+            <button class="button danger" type="button" data-delete-customer="${id}">Löschen</button>
           </div>
         </article>
       `;
@@ -326,6 +345,7 @@
     const values={
       customerId:activeId,
       customerName:customer.customerName||"",
+      companions:customer.companions||"",
       tripName:customer.tripName||customer.tripTitle||"",
       startDatePlain:customer.startDatePlain||dateOnly(customer.startDate)||"",
       endDatePlain:customer.endDatePlain||"",
@@ -361,6 +381,7 @@
     const next={...previous};
     next.customerId=nextId;
     next.customerName=form.elements.customerName.value.trim();
+    next.companions=form.elements.companions.value.trim();
     next.tripName=form.elements.tripName.value.trim();
     next.tripTitle=next.tripName;
     next.startDatePlain=form.elements.startDatePlain.value;
@@ -388,7 +409,9 @@
   }
 
   function formatDate(value){
+    if(!value)return "";
     const [year,month,day]=value.split("-");
+    if(!year||!month||!day)return value;
     return `${day}.${month}.${year}`;
   }
 
@@ -495,6 +518,9 @@
 
   function removeItem(listName,index){
     readEditors();
+    const item=activeCustomer()[listName][index]||{};
+    const label=item.title||item.name||item.id||`${listName} ${index+1}`;
+    if(!window.confirm(`Diesen Eintrag wirklich löschen?\n\n${label}`))return;
     activeCustomer()[listName].splice(index,1);
     saveCustomers();
     renderAll();
@@ -568,6 +594,7 @@
   function renderAll(){
     setAdminMode(adminMode);
     renderCustomers();
+    if(adminMode!=="edit")return;
     renderMaster();
     renderEditor("program","programEditor");
     renderEditor("accommodations","accommodationsEditor");
@@ -583,6 +610,7 @@
     customers[id]=ensureCollections({
       customerId:id,
       customerName:"Neuer Kunde",
+      companions:"",
       tripName:"Neue Reise",
       startDatePlain:"",
       endDatePlain:"",
@@ -605,6 +633,56 @@
     saveCustomers();
     renderAll();
     window.setTimeout(()=>byId("customers")?.scrollIntoView({behavior:"smooth",block:"start"}),0);
+  }
+
+  function copyTripForCustomer(id){
+    const source=ensureCollections(customers[id]);
+    const nextId=generateId();
+    customers[nextId]=ensureCollections({
+      ...clone(source),
+      customerId:nextId,
+      tripName:"Neue Reise",
+      tripTitle:"Neue Reise",
+      startDatePlain:"",
+      endDatePlain:"",
+      travelPeriod:"",
+      startDate:"",
+      status:"Entwurf",
+      publicationState:"Entwurf",
+      publishStatus:"draft",
+      version:"1.0",
+      updatedAt:new Date().toLocaleDateString("de-DE"),
+      program:[],
+      accommodations:[],
+      restaurants:[],
+      activities:[],
+      documents:[]
+    });
+    activeId=nextId;
+    adminMode="edit";
+    saveCustomers();
+    renderAll();
+    scrollToMasterForm();
+  }
+
+  function publishCustomer(id){
+    const customer=ensureCollections(customers[id]);
+    customer.publicationState="Veröffentlicht";
+    customer.publishStatus="published";
+    customer.updatedAt=new Date().toLocaleDateString("de-DE");
+    saveCustomers();
+    renderAll();
+  }
+
+  function deleteCustomer(id){
+    const customer=customers[id]||{};
+    const label=[customer.customerName,customer.tripName||customer.tripTitle].filter(Boolean).join(" - ")||id;
+    if(!window.confirm(`Diesen Kunden / diese Reise wirklich löschen?\n\n${label}`))return;
+    delete customers[id];
+    if(activeId===id)activeId=Object.keys(customers)[0]||"";
+    adminMode="overview";
+    saveCustomers();
+    renderAll();
   }
 
   function downloadJson(){
@@ -699,6 +777,12 @@
       if(open)window.open(portalPath(open.dataset.openCustomer),"_blank","noopener");
       const copy=event.target.closest("[data-copy-customer]");
       if(copy)copyText(portalPath(copy.dataset.copyCustomer));
+      const publish=event.target.closest("[data-publish-customer]");
+      if(publish)publishCustomer(publish.dataset.publishCustomer);
+      const copyTrip=event.target.closest("[data-copy-trip]");
+      if(copyTrip)copyTripForCustomer(copyTrip.dataset.copyTrip);
+      const deleteCustomerButton=event.target.closest("[data-delete-customer]");
+      if(deleteCustomerButton)deleteCustomer(deleteCustomerButton.dataset.deleteCustomer);
       const add=event.target.closest("[data-add-list]");
       if(add)addItem(add.dataset.addList);
       const remove=event.target.closest("[data-remove-item]");
@@ -713,6 +797,7 @@
     byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("openLiveButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("markPublishedButton").addEventListener("click",()=>{activeCustomer().publicationState="Veröffentlicht";activeCustomer().publishStatus="published";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();renderAll()});
+    byId("deleteActiveCustomerButton").addEventListener("click",()=>deleteCustomer(activeId));
     byId("copyWhatsappButton").addEventListener("click",()=>copyText(byId("whatsappText").value));
     byId("exportButton").addEventListener("click",downloadJson);
     byId("importButton").addEventListener("click",()=>{try{importJson()}catch(error){window.alert("JSON konnte nicht geladen werden.")}});

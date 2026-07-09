@@ -137,6 +137,7 @@
     const items=[
       ["Reisezeitraum",customer.travelPeriod],
       ["Region",customer.region],
+      ["Mitreisende",customer.companions],
       ["Status",customer.status],
       ["Countdown",daysUntil(customer.startDate)],
       ["Concierge",customer.concierge],

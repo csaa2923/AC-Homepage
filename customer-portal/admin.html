@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=23">
+<link rel="stylesheet" href="admin.css?v=24">
 </head>
 <body>
 <main>
@@ -36,7 +36,7 @@
       </div>
       <div class="header-actions">
         <button class="button soft" id="newCustomerButton" type="button">Kunde anlegen</button>
-        <button class="button soft edit-only" id="backToCustomersButton" type="button">Zur Kundenübersicht</button>
+        <button class="button soft edit-only" id="backToCustomersButton" type="button">Alle Kunden und Reisen</button>
         <button class="button soft" id="logoutButton" type="button">Sperren</button>
       </div>
     </header>
@@ -103,6 +103,7 @@
       <form class="admin-card form-grid" id="masterForm">
         <label>Kunden-ID<input name="customerId" required></label>
         <label>Kundenname<input name="customerName" required></label>
+        <label class="full">Mitreisende<textarea name="companions" rows="3" placeholder="Namen der Mitreisenden eintragen"></textarea></label>
         <label>Reisebezeichnung<input name="tripName" required></label>
         <label>Zeitraum von<input name="startDatePlain" type="date"></label>
         <label>Zeitraum bis<input name="endDatePlain" type="date"></label>
@@ -192,6 +193,7 @@
           <button class="button soft" id="openPreviewButton" type="button">Vorschau öffnen</button>
           <button class="button soft" id="openLiveButton" type="button">Live-Portal öffnen</button>
           <button class="button primary" id="markPublishedButton" type="button">Veröffentlichen</button>
+          <button class="button danger" id="deleteActiveCustomerButton" type="button">Diese Reise löschen</button>
         </div>
         <label class="full">WhatsApp-Text<textarea id="whatsappText" rows="5"></textarea></label>
         <button class="button soft" id="copyWhatsappButton" type="button">WhatsApp-Nachricht erstellen</button>
@@ -214,6 +216,6 @@
 </main>
 
 <script src="customer-data.js"></script>
-<script src="admin.js?v=23"></script>
+<script src="admin.js?v=24"></script>
 </body>
 </html>

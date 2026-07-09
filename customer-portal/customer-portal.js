@@ -3,7 +3,8 @@
   const STORAGE_KEY="act_customer_portal_customers";
   const params=new URLSearchParams(window.location.search);
   const customerId=params.get("customer")||dataRoot.defaultCustomerId;
-  const customer=loadStoredCustomer(customerId)||dataRoot.customers[customerId];
+  let customer=null;
+  let dataSource="demo";
   const root=document.getElementById("portalRoot");
   const calendarState={
     view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
@@ -31,6 +32,33 @@
       console.warn("Gespeicherte Portaldaten konnten nicht geladen werden.",error);
       return null;
     }
+  }
+
+  async function loadCustomerData(){
+    root.setAttribute("aria-busy","true");
+    text("portalTitle","Daten werden geladen ...");
+    text("tripTitle","Ihr persönliches Reiseprogramm wird vorbereitet.");
+    try{
+      const db=window.ACTFirebaseDatabase;
+      if(db){
+        const published=await db.loadPublishedCustomer(customerId);
+        if(published){
+          dataSource="firebase";
+          return published;
+        }
+      }
+    }catch(error){
+      console.warn("Firebase nicht erreichbar - lokale Sicherung wird geprüft.",error);
+    }
+
+    const stored=loadStoredCustomer(customerId);
+    if(stored){
+      dataSource="local";
+      return stored;
+    }
+
+    dataSource="demo";
+    return dataRoot.customers[customerId]||null;
   }
 
   function text(id,value){
@@ -537,6 +565,7 @@
   }
 
   function renderPortal(){
+    root.removeAttribute("aria-busy");
     text("portalTitle",`Willkommen ${customer.customerName}`);
     text("tripTitle",customer.tripName);
     text("portalVersion",`Version ${customer.version}`);
@@ -557,13 +586,27 @@
     renderContact();
     renderActions();
     renderHistory();
+    renderDataSourceNotice();
     bindActions();
   }
 
-  if(!customer){
-    root.replaceChildren(document.getElementById("notFoundTemplate").content.cloneNode(true));
-    return;
+  function renderDataSourceNotice(){
+    const target=document.getElementById("publicationStatus");
+    if(!target)return;
+    if(dataSource==="firebase")return;
+    const suffix=dataSource==="local"?"Lokale Sicherung aktiv.":"Demo-Daten werden angezeigt.";
+    target.textContent=`${target.textContent} · ${suffix}`;
   }
 
-  renderPortal();
+  async function initPortal(){
+    customer=await loadCustomerData();
+    if(!customer){
+      root.removeAttribute("aria-busy");
+      root.replaceChildren(document.getElementById("notFoundTemplate").content.cloneNode(true));
+      return;
+    }
+    renderPortal();
+  }
+
+  initPortal();
 })();

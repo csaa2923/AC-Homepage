@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=29">
+<link rel="stylesheet" href="admin.css?v=30">
 </head>
 <body>
 <main>
@@ -32,7 +32,7 @@
       <div>
         <p class="eyebrow">Alpine Concierge Tirol</p>
         <h1>Interne Kundenverwaltung</h1>
-        <p class="muted">localStorage-Version für Schritt 2. Keine echte Authentifizierung, keine Firebase-Anbindung.</p>
+        <p class="muted">Schritt 3: Firebase vorbereitet. localStorage bleibt als Fallback aktiv, bis Firestore konfiguriert ist.</p>
       </div>
       <div class="header-actions">
         <button class="button soft overview-only" id="newCustomerButton" type="button">Kunde anlegen</button>
@@ -68,6 +68,7 @@
         <h2>Von der Eingabe ins Kundenportal</h2>
       </div>
       <div class="admin-card flow-card">
+        <p class="form-message full" id="firebaseStatus" aria-live="polite">Daten werden geladen ...</p>
         <div class="flow-steps" aria-label="Datenfluss">
           <span>Admin-Eingabe</span>
           <span>Speicherung</span>
@@ -207,8 +208,10 @@
       </div>
       <div class="admin-card export-grid">
         <button class="button primary" id="exportButton" type="button">Kundendaten als JSON herunterladen</button>
+        <button class="button soft" id="migrateFirebaseButton" type="button">Lokale Daten in Firebase übernehmen</button>
         <label>JSON importieren<textarea id="importText" rows="9" placeholder="JSON hier einfügen"></textarea></label>
         <button class="button soft" id="importButton" type="button">JSON laden</button>
+        <p class="form-message full" id="migrationStatus" aria-live="polite"></p>
         <p class="muted full">Sicherheitshinweis: localStorage und das Passwort ACT2026 sind nur eine Übergangslösung. Für echte Kundendaten ist später Firebase Authentication oder eine vergleichbare sichere Lösung erforderlich.</p>
       </div>
     </section>
@@ -216,6 +219,11 @@
 </main>
 
 <script src="customer-data.js"></script>
-<script src="admin.js?v=29"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-service.js"></script>
+<script src="firebase-auth.js"></script>
+<script src="firebase-database.js"></script>
+<script src="firebase-storage.js"></script>
+<script src="admin.js?v=30"></script>
 </body>
 </html>

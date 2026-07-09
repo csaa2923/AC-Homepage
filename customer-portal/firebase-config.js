@@ -1,0 +1,13 @@
+window.ACTFirebaseConfig={
+  enabled:false,
+  collection:"customers",
+  firebaseVersion:"10.12.5",
+  config:{
+    apiKey:"",
+    authDomain:"",
+    projectId:"",
+    storageBucket:"",
+    messagingSenderId:"",
+    appId:""
+  }
+};

@@ -105,6 +105,75 @@
     localStorage.setItem(STORAGE_KEY,JSON.stringify(customers));
   }
 
+  function firebaseDatabase(){
+    return window.ACTFirebaseDatabase||null;
+  }
+
+  function setFirebaseStatus(message,isError){
+    const el=byId("firebaseStatus");
+    if(!el)return;
+    el.textContent=message;
+    el.style.color=isError?"#8c1f1f":"#244a3f";
+  }
+
+  function setMigrationStatus(message,isError){
+    const el=byId("migrationStatus");
+    if(!el)return;
+    el.textContent=message;
+    el.style.color=isError?"#8c1f1f":"#244a3f";
+  }
+
+  async function loadFirebaseCustomers(){
+    const db=firebaseDatabase();
+    if(!db){
+      setFirebaseStatus("Firebase nicht geladen - lokale Sicherung wird verwendet.",true);
+      return;
+    }
+    try{
+      await window.ACTFirebaseAuth?.prepareAuth?.();
+      const firebaseCustomers=await db.loadCustomersForAdmin();
+      if(Object.keys(firebaseCustomers).length){
+        customers=firebaseCustomers;
+        activeId=Object.keys(customers)[0]||activeId;
+        saveCustomers();
+        renderAll();
+        setFirebaseStatus("Firebase verbunden. Kundendaten wurden aus Firestore geladen.");
+      }else{
+        setFirebaseStatus("Firebase verbunden. Noch keine Firestore-Kunden gefunden - lokale Daten bleiben aktiv.");
+      }
+    }catch(error){
+      setFirebaseStatus(`Firebase nicht erreichbar - lokale Sicherung wird verwendet. ${error&&error.message?error.message:""}`,true);
+    }
+  }
+
+  function saveDraftToFirebase(customer){
+    const db=firebaseDatabase();
+    if(!db)return;
+    db.saveDraftCustomer(clone(customer)).then(()=>{
+      setFirebaseStatus("Entwurf wurde in Firestore gespeichert.");
+    }).catch(error=>{
+      setFirebaseStatus(`Entwurf lokal gespeichert. Firebase-Speicherung nicht möglich: ${error&&error.message?error.message:""}`,true);
+    });
+  }
+
+  async function migrateLocalToFirebase(){
+    const db=firebaseDatabase();
+    if(!db){
+      setMigrationStatus("Firebase ist nicht geladen. Migration nicht möglich.",true);
+      return;
+    }
+    const overwrite=window.confirm("Lokale Daten in Firebase übernehmen?\n\nBestehende Firestore-Kunden werden nur überschrieben, wenn Sie im nächsten Schritt zustimmen.");
+    if(!overwrite)return;
+    const allowOverwrite=window.confirm("Bestehende Kunden in Firestore überschreiben, wenn die Kunden-ID bereits existiert?");
+    try{
+      setMigrationStatus("Migration läuft ...");
+      const result=await db.migrateLocalCustomers(customers,allowOverwrite);
+      setMigrationStatus(`Migration abgeschlossen: ${result.created} neu, ${result.updated} aktualisiert, ${result.skipped} übersprungen.`);
+    }catch(error){
+      setMigrationStatus(`Migration fehlgeschlagen: ${error&&error.message?error.message:error}`,true);
+    }
+  }
+
   function escapeHtml(value){
     return String(value||"").replace(/[&<>"']/g,match=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[match]));
   }
@@ -417,6 +486,7 @@
     activeId=nextId;
     customers[activeId]=ensureCollections(next);
     saveCustomers();
+    saveDraftToFirebase(customers[activeId]);
     renderAll();
   }
 
@@ -683,6 +753,14 @@
     customer.publishStatus="published";
     customer.updatedAt=new Date().toLocaleDateString("de-DE");
     saveCustomers();
+    const db=firebaseDatabase();
+    if(db){
+      db.publishCustomer(clone(customer)).then(()=>{
+        setFirebaseStatus("Veröffentlichte Daten wurden in Firestore aktualisiert.");
+      }).catch(error=>{
+        setFirebaseStatus(`Veröffentlichung lokal gespeichert. Firebase nicht möglich: ${error&&error.message?error.message:""}`,true);
+      });
+    }
     renderAll();
   }
 
@@ -694,6 +772,14 @@
     if(activeId===id)activeId=Object.keys(customers)[0]||"";
     adminMode="overview";
     saveCustomers();
+    const db=firebaseDatabase();
+    if(db){
+      db.deleteCustomer(id).then(()=>{
+        setFirebaseStatus("Kunde/Reise wurde auch in Firestore gelöscht.");
+      }).catch(error=>{
+        setFirebaseStatus(`Lokal gelöscht. Firebase-Löschung nicht möglich: ${error&&error.message?error.message:""}`,true);
+      });
+    }
     renderAll();
   }
 
@@ -804,14 +890,15 @@
     byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderAdminPreview()});
     byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
-    byId("saveDraftButton").addEventListener("click",()=>{activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();renderAll()});
+    byId("saveDraftButton").addEventListener("click",()=>{activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();saveDraftToFirebase(activeCustomer());renderAll()});
     byId("showPreviewButton").addEventListener("click",()=>document.getElementById("live-preview").scrollIntoView({behavior:"smooth"}));
     byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("openLiveButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
-    byId("markPublishedButton").addEventListener("click",()=>{activeCustomer().publicationState="Veröffentlicht";activeCustomer().publishStatus="published";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();renderAll()});
+    byId("markPublishedButton").addEventListener("click",()=>publishCustomer(activeId));
     byId("deleteActiveCustomerButton").addEventListener("click",()=>deleteCustomer(activeId));
     byId("copyWhatsappButton").addEventListener("click",()=>copyText(byId("whatsappText").value));
     byId("exportButton").addEventListener("click",downloadJson);
+    byId("migrateFirebaseButton").addEventListener("click",migrateLocalToFirebase);
     byId("importButton").addEventListener("click",()=>{try{importJson()}catch(error){window.alert("JSON konnte nicht geladen werden.")}});
   }
 
@@ -871,6 +958,7 @@
     bind();
     sessionStorage.setItem(SESSION_KEY,"1");
     unlock();
+    loadFirebaseCustomers();
   }
 
   if(document.readyState==="loading"){

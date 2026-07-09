@@ -390,6 +390,11 @@ h3{font-size:24px;color:var(--green)}
 .calendar-event strong{font-size:13px;line-height:1.25}
 .calendar-event span,.calendar-event em{font-size:12px;line-height:1.25;color:#415a53;font-style:normal}
 .calendar-event em{font-weight:900}
+.calendar-event.is-continuation{
+  opacity:.88;
+  border-left-style:dashed;
+  background:#fffaf0;
+}
 .type-hotel{border-left-color:#7f9f8f;background:#f7fbf8}
 .type-activity{border-left-color:#b9913e;background:#fffaf0}
 .type-leisure{border-left-color:#86a5bd;background:#f6fafc}

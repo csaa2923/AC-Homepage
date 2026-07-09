@@ -23,18 +23,30 @@
   customers=loadCustomers();
   activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
 
+  const dateFieldNames=new Set(["date","dateValue","endDate","endDateValue","checkIn","checkOut","startDatePlain","endDatePlain"]);
+  const timeFieldNames=new Set(["startTime","endTime","time"]);
+  const timeSlotOptions=(()=>{
+    const slots=[];
+    for(let hour=0;hour<24;hour++){
+      for(let minute=0;minute<60;minute+=15){
+        slots.push(`${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`);
+      }
+    }
+    return slots;
+  })();
+
   const fieldSets={
     program:[
-      ["id","ID"],["date","Datum als Text"],["dateValue","Datum von"],["endDateValue","Datum bis"],["startTime","Beginn"],["endTime","Ende"],["title","Titel"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["category","Kategorie"],["meetingPoint","Treffpunkt"],["address","Adresse"],["latitude","Latitude"],["longitude","Longitude"],["weatherLocationName","Wetter-Ort"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Terminstatus"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"]
+      ["id","ID"],["date","Datum als Text"],["dateValue","Datum von"],["endDateValue","Datum bis"],["startTime","Beginn","time"],["endTime","Ende","time"],["title","Titel"],["shortDescription","Kurzbeschreibung","textarea"],["description","Beschreibung","textarea"],["category","Kategorie"],["meetingPoint","Treffpunkt"],["address","Adresse"],["navigationUrl","Navigationslink"],["outfit","Kleidung/Ausrüstung"],["notes","Hinweise","textarea"],["contactPerson","Kontaktperson"],["phone","Telefon"],["status","Terminstatus"],["colorClass","Farbklasse"],["documentsText","Dokument-Link"],["imagesText","Bild-URL"],["calendarEnabled","Kalender aktiviert","checkbox"]
     ],
     accommodations:[
       ["name","Hotelname"],["address","Adresse"],["checkIn","Check-in"],["checkOut","Check-out"],["contact","Kontakt"],["phone","Telefon"],["navigation","Navigationslink"],["voucherStatus","Voucher-Link"],["notes","Hinweise","textarea"]
     ],
     restaurants:[
-      ["name","Restaurantname"],["date","Datum"],["time","Uhrzeit"],["guests","Personenanzahl"],["address","Adresse"],["status","Reservierungsstatus"],["dresscode","Dresscode"],["notes","Hinweise","textarea"],["navigation","Navigationslink"],["voucherLink","Bestätigungs-/Voucher-Link"]
+      ["name","Restaurantname"],["date","Datum"],["time","Uhrzeit","time"],["guests","Personenanzahl"],["address","Adresse"],["status","Reservierungsstatus"],["dresscode","Dresscode"],["notes","Hinweise","textarea"],["navigation","Navigationslink"],["voucherLink","Bestätigungs-/Voucher-Link"]
     ],
     activities:[
-      ["title","Aktivität"],["provider","Anbieter"],["date","Datum"],["time","Uhrzeit"],["meetingPoint","Treffpunkt"],["address","Adresse"],["contact","Ansprechpartner"],["phone","Telefon"],["ticketStatus","Ticket-Link"],["qrStatus","QR-Code-Link / Platzhalter"],["status","Status"],["notes","Hinweise","textarea"]
+      ["title","Aktivität"],["provider","Anbieter"],["date","Datum von"],["endDate","Datum bis"],["time","Uhrzeit","time"],["meetingPoint","Treffpunkt"],["address","Adresse"],["contact","Ansprechpartner"],["phone","Telefon"],["ticketStatus","Ticket-Link"],["qrStatus","QR-Code-Link / Platzhalter"],["status","Status"],["notes","Hinweise","textarea"]
     ],
     documents:[
       ["title","Dokumenttitel"],["type","Dokumenttyp"],["url","Link / Datei-URL"],["visible","Sichtbar für Kunden","checkbox"],["note","Hinweis","textarea"]
@@ -77,6 +89,11 @@
     title:"Erscheint im Kalender, in der Timeline und in der Detailkarte.",
     dateValue:"Startdatum des Programmpunkts. Mehrtaegige Punkte nutzen zusaetzlich Datum bis.",
     endDateValue:"Optionales Enddatum, wenn der Programmpunkt mehr als einen Tag betrifft.",
+    endDate:"Optionales Enddatum fuer mehrtaegige Aktivitaeten.",
+    date:"Datum mit Kalenderauswahl.",
+    startTime:"15-Minuten-Raster oder eigene Uhrzeit.",
+    endTime:"15-Minuten-Raster oder eigene Uhrzeit.",
+    time:"15-Minuten-Raster oder eigene Uhrzeit.",
     shortDescription:"Erscheint in Tagesprogramm und kompakter Vorschau.",
     description:"Erscheint in der Detailkarte.",
     meetingPoint:"Erscheint im Kalender, in der Timeline und bei Navigation.",
@@ -639,6 +656,36 @@
     `;
   }
 
+  function isDateField(name){
+    return dateFieldNames.has(name);
+  }
+
+  function isTimeField(name,type){
+    return type==="time"||timeFieldNames.has(name);
+  }
+
+  function timeFieldMarkup(name,label,value,hint){
+    const selected=String(value||"");
+    const isCustom=selected&&!timeSlotOptions.includes(selected);
+    return `<label>${label}<select data-field="${name}" data-time-select="true"><option value="">– Uhrzeit wählen –</option>${timeSlotOptions.map(slot=>`<option value="${slot}" ${slot===selected&&!isCustom?"selected":""}>${slot}</option>`).join("")}<option value="${customOptionValue}" ${isCustom?"selected":""}>Eigene Uhrzeit</option></select><input class="time-custom" data-time-custom="${name}" value="${isCustom?escapeHtml(selected):""}" placeholder="z. B. 09:45" ${isCustom?"":"hidden"}>${hint}</label>`;
+  }
+
+  function updateTimeCustom(select){
+    const key=select.dataset.field;
+    const custom=select.parentElement.querySelector(`[data-time-custom="${key}"]`);
+    if(!custom)return;
+    const show=select.value===customOptionValue;
+    custom.hidden=!show;
+    if(show)window.setTimeout(()=>custom.focus(),0);
+  }
+
+  function timeValue(select){
+    const key=select.dataset.field;
+    const custom=select.parentElement.querySelector(`[data-time-custom="${key}"]`);
+    if(select.value===customOptionValue)return custom&&!custom.hidden?custom.value.trim():"";
+    return select.value.trim();
+  }
+
   function fieldMarkup(listName,name,label,type,item){
     const value=name==="documentsText"?(item.documents||[]).join(", "):name==="imagesText"?(item.images||[]).join(", "):(item[name]||"");
     const hint=fieldHints[name]?`<small>${fieldHints[name]}</small>`:"";
@@ -648,8 +695,9 @@
     }
     if(type==="textarea")return `<label class="full">${label}<textarea data-field="${name}">${escapeHtml(value)}</textarea>${hint}</label>`;
     if(type==="checkbox")return `<label>${label}<select data-field="${name}"><option value="true" ${value?"selected":""}>Ja</option><option value="false" ${!value?"selected":""}>Nein</option></select>${hint}</label>`;
-    const inputType=name.toLowerCase().includes("datevalue")||name==="date"&&false?"date":"text";
-    return `<label>${label}<input type="${inputType}" data-field="${name}" value="${escapeHtml(value)}">${hint}</label>`;
+    if(isTimeField(name,type))return timeFieldMarkup(name,label,value,hint);
+    if(isDateField(name))return `<label>${label}<input type="date" data-field="${name}" value="${escapeHtml(dateOnly(value))}">${hint}</label>`;
+    return `<label>${label}<input type="text" data-field="${name}" value="${escapeHtml(value)}">${hint}</label>`;
   }
 
   function readEditors(){
@@ -660,11 +708,21 @@
       const next={...(customer[listName][index]||{})};
       card.querySelectorAll("[data-field]").forEach(field=>{
         const name=field.dataset.field;
-        let value=field.dataset.combo==="true"?comboValue(field):field.value;
+        let value=field.dataset.combo==="true"?comboValue(field):field.dataset.timeSelect==="true"?timeValue(field):field.value;
         if(value==="true")value=true;
         if(value==="false")value=false;
         next[name]=value;
       });
+      if(listName==="program"&&next.dateValue){
+        next.date=next.date||formatDate(next.dateValue);
+      }
+      if(listName==="restaurants"&&next.date){
+        next.date=dateOnly(next.date);
+      }
+      if(listName==="activities"){
+        if(next.date)next.date=dateOnly(next.date);
+        if(next.endDate)next.endDate=dateOnly(next.endDate);
+      }
       if(listName==="program")normalizeProgramItem(next);
       customer[listName][index]=listName==="documents"?normalizeDocumentItem(next):next;
     });
@@ -682,7 +740,7 @@
       program:()=>({id:`item-${Date.now()}`,date:"",dateValue:"",endDateValue:"",startTime:"10:00",endTime:"11:00",title:"Neuer Programmpunkt",shortDescription:"",description:"",category:"Concierge-Service",meetingPoint:"",address:"",navigationUrl:"",outfit:"",notes:"",contactPerson:"",phone:"",status:"In Planung",calendarEnabled:true,colorClass:"type-concierge",images:[],documents:[]}),
       accommodations:()=>({name:"Neue Unterkunft",address:"",checkIn:"",checkOut:"",contact:"",phone:"",navigation:"",voucherStatus:"",notes:""}),
       restaurants:()=>({name:"Neues Restaurant",date:"",time:"",guests:"",address:"",status:"Angefragt",dresscode:"",notes:"",navigation:"",voucherLink:""}),
-      activities:()=>({title:"Neue Aktivität",provider:"",date:"",time:"",meetingPoint:"",address:"",contact:"",phone:"",ticketStatus:"",qrStatus:"",status:"Angefragt",notes:""}),
+      activities:()=>({title:"Neue Aktivität",provider:"",date:"",endDate:"",time:"",meetingPoint:"",address:"",contact:"",phone:"",ticketStatus:"",qrStatus:"",status:"Angefragt",notes:""}),
       documents:()=>({title:"Neues Dokument",type:"Sonstiges",url:"",storagePath:"",fileName:"",contentType:"",visible:true,note:""})
     };
     const item=factories[listName]();
@@ -772,6 +830,21 @@
     const link=portalPath(activeId);
     byId("portalLink").value=link;
     byId("whatsappText").value=`Guten Tag, hier finden Sie Ihr persönliches Reiseprogramm von Alpine Concierge Tirol:\n${link}\n\nBei Änderungswünschen können Sie uns jederzeit kontaktieren.`;
+  }
+
+  function whatsappPhoneNumber(){
+    const customer=ensureCollections(activeCustomer());
+    const raw=String(customer.whatsapp||customer.contact?.whatsapp||"").replace(/\D/g,"");
+    return raw||"4367761410679";
+  }
+
+  function openWhatsappMessage(){
+    const text=byId("whatsappText").value.trim();
+    if(!text){
+      window.alert("Bitte zuerst einen WhatsApp-Text eingeben.");
+      return;
+    }
+    window.open(`https://api.whatsapp.com/send?phone=${whatsappPhoneNumber()}&text=${encodeURIComponent(text)}`,"_blank","noopener");
   }
 
   function renderAdminPreview(){
@@ -1019,6 +1092,7 @@
         return;
       }
       if(event.target.matches("select[data-combo-list]"))updateComboCustom(event.target);
+      if(event.target.matches("select[data-time-select]"))updateTimeCustom(event.target);
       if(event.target.closest("#requirementsPicker"))updateRequirementsCustom();
       if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}
     });
@@ -1051,7 +1125,7 @@
     byId("openLiveButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("markPublishedButton").addEventListener("click",()=>publishCustomer(activeId));
     byId("deleteActiveCustomerButton").addEventListener("click",()=>deleteCustomer(activeId));
-    byId("copyWhatsappButton").addEventListener("click",()=>copyText(byId("whatsappText").value));
+    byId("copyWhatsappButton").addEventListener("click",openWhatsappMessage);
     byId("exportButton").addEventListener("click",downloadJson);
     byId("migrateFirebaseButton").addEventListener("click",migrateLocalToFirebase);
     byId("importButton").addEventListener("click",()=>{try{importJson()}catch(error){window.alert("JSON konnte nicht geladen werden.")}});

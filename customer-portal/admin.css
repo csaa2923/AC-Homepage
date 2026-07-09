@@ -70,6 +70,8 @@ input[type=file]{padding:10px;background:#fffaf0;cursor:pointer}
 select[multiple]{min-height:150px}
 .combo-custom{margin-top:4px;border:2px solid rgba(216,183,106,.85);background:#fffaf0}
 .combo-custom:not([hidden]){display:block}
+.time-custom{margin-top:4px;border:2px solid rgba(216,183,106,.85);background:#fffaf0}
+.time-custom:not([hidden]){display:block}
 .choice-grid{display:grid;grid-template-columns:1fr;gap:8px;padding:10px;border:1px solid rgba(16,40,32,.14);border-radius:8px;background:#fff}
 .choice-pill{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 10px;border:1px solid rgba(216,183,106,.45);border-radius:8px;background:#fffaf0;color:var(--ink);font-size:13px;font-weight:800;letter-spacing:0;text-transform:none;cursor:pointer}
 .choice-pill input{width:auto;accent-color:var(--gold)}

@@ -349,11 +349,39 @@
     return [...customer.program].sort((a,b)=>`${a.dateValue||a.date} ${a.startTime}`.localeCompare(`${b.dateValue||b.date} ${b.startTime}`));
   }
 
+  function addDays(dateValue,days){
+    const [year,month,day]=dateValue.split("-").map(Number);
+    const date=new Date(Date.UTC(year,month-1,day+days));
+    return date.toISOString().slice(0,10);
+  }
+
+  function dateRangeValues(startValue,endValue){
+    if(!startValue)return [];
+    const end=endValue&&endValue>=startValue?endValue:startValue;
+    const values=[];
+    let current=startValue;
+    while(current<=end){
+      values.push(current);
+      if(current===end)break;
+      current=addDays(current,1);
+    }
+    return values;
+  }
+
+  function expandProgramByDays(items){
+    return items.flatMap(item=>{
+      const days=dateRangeValues(item.dateValue,item.endDateValue);
+      if(!days.length)return [{...item,_calendarDate:item.dateValue||""}];
+      return days.map(day=>({...item,_calendarDate:day,_isContinuation:day!==item.dateValue}));
+    });
+  }
+
   function groupedProgram(){
-    return programItems().reduce((groups,item)=>{
-      const existing=groups.find(group=>group.dateValue===item.dateValue);
+    return expandProgramByDays(programItems()).reduce((groups,item)=>{
+      const dateValue=item._calendarDate||item.dateValue;
+      const existing=groups.find(group=>group.dateValue===dateValue);
       if(existing)existing.items.push(item);
-      else groups.push({date:itemDate(item),dateValue:item.dateValue,items:[item]});
+      else groups.push({date:formatDateValue(dateValue),dateValue,items:[item]});
       return groups;
     },[]);
   }
@@ -400,10 +428,13 @@
   }
 
   function calendarBlock(item,bounds){
+    const continuation=item._isContinuation;
+    const timeLabel=continuation?"Ganztägig":item.startTime;
+    const titleLabel=continuation?`${item.title} (Fortsetzung)`:item.title;
     return `
-      <a class="calendar-event ${item.colorClass||"type-concierge"}" href="#${detailId(item)}" style="${calendarEventStyle(item,bounds)}">
-        <strong>${item.startTime} ${item.title}</strong>
-        <span>${item.meetingPoint}</span>
+      <a class="calendar-event ${item.colorClass||"type-concierge"}${continuation?" is-continuation":""}" href="#${detailId(item)}" style="${continuation?"top:0;height:48px":calendarEventStyle(item,bounds)}">
+        <strong>${timeLabel} ${titleLabel}</strong>
+        <span>${item.meetingPoint||""}</span>
         <em>${item.status}</em>
       </a>
     `;
@@ -666,6 +697,12 @@
     }
   }
 
+  function activityDate(item){
+    if(item.date&&item.endDate&&item.endDate!==item.date)return `${formatDateValue(item.date)} - ${formatDateValue(item.endDate)}`;
+    if(item.date)return formatDateValue(item.date);
+    return item.date||"-";
+  }
+
   function renderRestaurants(){
     const items=(customer.restaurants||[]).filter(item=>[item.name,item.status,item.time,item.guests,item.dresscode,item.notes].some(hasDisplayValue));
     document.getElementById("restaurantGrid").innerHTML=items.length?items.map(item=>`
@@ -673,6 +710,7 @@
         <span class="tag">${item.status}</span>
         <h3>${item.name}</h3>
         ${definitionList([
+          ["Datum",item.date?formatDateValue(item.date):item.date],
           ["Reservierung",item.time],
           ["Personen",item.guests],
           ["Dresscode",item.dresscode],
@@ -692,6 +730,7 @@
         <span class="tag">${item.status}</span>
         <h3>${item.title}</h3>
         ${definitionList([
+          ["Datum",activityDate(item)],
           ["Treffpunkt",item.meetingPoint],
           ["Uhrzeit",item.time],
           ["Ansprechpartner",item.contact],

@@ -110,8 +110,9 @@
         <label>Zeitraum bis<input name="endDatePlain" type="date"></label>
         <label>Region<select name="region" data-combo-list="regions"></select><input class="combo-custom" data-combo-custom="region" placeholder="Eigene Region eingeben" hidden><small>Erscheint in Reiseuebersicht und Vorschau.</small></label>
         <label>Wetter-Ort<input name="weatherLocationName" placeholder="z. B. Seefeld in Tirol"></label>
-        <label>Latitude<input name="latitude" inputmode="decimal" placeholder="z. B. 47.3302"></label>
-        <label>Longitude<input name="longitude" inputmode="decimal" placeholder="z. B. 11.1879"></label>
+        <label>Latitude<input name="latitude" inputmode="decimal" placeholder="Optional"></label>
+        <label>Longitude<input name="longitude" inputmode="decimal" placeholder="Optional"></label>
+        <p class="muted full">Fuer die Wetteranzeige reicht in der Regel der Wetter-Ort. Latitude und Longitude sind optional und nur noetig, wenn der Ort nicht eindeutig gefunden wird.</p>
         <label>Sprache<select name="language" data-combo-list="languages"></select><input class="combo-custom" data-combo-custom="language" placeholder="Eigene Sprache eingeben" hidden><small>Vorbereitung fuer mehrsprachige Portale.</small></label>
         <label>Persönlicher Concierge<input name="concierge"></label>
         <label>Telefon<input name="phone"></label>
@@ -147,6 +148,7 @@
         </div>
         <button class="button soft" type="button" data-add-list="program">Programmpunkt hinzufügen</button>
       </div>
+      <p class="muted">Programmpunkte sind die einzige Quelle fuer Kalender, Timeline und Detailkarten. Restaurants und Aktivitaeten als eigene Kategorie (z. B. „Restaurant“, „Aktivitaet“) anlegen – nicht doppelt pflegen.</p>
       <div class="editor-list" id="programEditor"></div>
     </section>
 
@@ -163,6 +165,7 @@
         <div><p class="eyebrow">Reservierungen</p><h2>Restaurants</h2></div>
         <button class="button soft" type="button" data-add-list="restaurants">Restaurant hinzufügen</button>
       </div>
+      <p class="muted">Reservierungsdetails fuer den Kunden – erscheinen nicht im Kalender. Kalender-Eintrag ueber Programmpunkt mit Kategorie „Restaurant“.</p>
       <div class="editor-list" id="restaurantsEditor"></div>
     </section>
 
@@ -171,6 +174,7 @@
         <div><p class="eyebrow">Erlebnisse</p><h2>Aktivitäten</h2></div>
         <button class="button soft" type="button" data-add-list="activities">Aktivität hinzufügen</button>
       </div>
+      <p class="muted">Ticket- und QR-Infos fuer den Kunden – erscheinen nicht im Kalender. Kalender-Eintrag ueber Programmpunkt mit Kategorie „Aktivitaet“. Mehrtaegige Aktivitaeten mit „Datum bis“.</p>
       <div class="editor-list" id="activitiesEditor"></div>
     </section>
 
@@ -227,6 +231,6 @@
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=2"></script>
-<script src="admin.js?v=39"></script>
+<script src="admin.js?v=40"></script>
 </body>
 </html>

@@ -1,13 +1,14 @@
 window.ACTFirebaseConfig={
-  enabled:false,
+  enabled:true,
   collection:"customers",
   firebaseVersion:"10.12.5",
   config:{
-    apiKey:"",
-    authDomain:"",
-    projectId:"",
-    storageBucket:"",
-    messagingSenderId:"",
-    appId:""
+    apiKey:"AIzaSyAH86JOMuDdZm5igcZceMJl945GgMc4B1g",
+    authDomain:"alpine-concierge-tirol.firebaseapp.com",
+    projectId:"alpine-concierge-tirol",
+    storageBucket:"alpine-concierge-tirol.firebasestorage.app",
+    messagingSenderId:"122808915984",
+    appId:"1:122808915984:web:4515e3a42201372fd81295",
+    measurementId:"G-3BHM06FCDN"
   }
 };

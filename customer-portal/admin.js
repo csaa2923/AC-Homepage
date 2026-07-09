@@ -1088,9 +1088,7 @@
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderAdminPreview()});
     byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("saveDraftButton").addEventListener("click",()=>{readMaster();readEditors();activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();saveDraftToFirebase(activeCustomer());renderAll()});
-    byId("showPreviewButton").addEventListener("click",()=>document.getElementById("live-preview").scrollIntoView({behavior:"smooth"}));
     byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
-    byId("openLiveButton").addEventListener("click",()=>window.open(portalPath(activeId),"_blank","noopener"));
     byId("markPublishedButton").addEventListener("click",()=>publishCustomer(activeId));
     byId("deleteActiveCustomerButton").addEventListener("click",()=>deleteCustomer(activeId));
     byId("copyWhatsappButton").addEventListener("click",openWhatsappMessage);

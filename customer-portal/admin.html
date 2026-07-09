@@ -88,7 +88,7 @@
         </div>
         <div class="form-actions">
           <button class="button soft" id="refreshPreviewButton" type="button">Vorschau aktualisieren</button>
-          <button class="button primary" id="openPortalPreviewButton" type="button">Portal-Vorschau öffnen</button>
+          <button class="button soft" id="openPortalPreviewButton" type="button">Kundenseite öffnen</button>
         </div>
       </div>
       <div class="admin-preview" id="adminPreview"></div>
@@ -173,14 +173,12 @@
       </div>
       <div class="admin-card publish-grid">
         <label>Diesen Link erhält der Kunde<input id="portalLink" readonly></label>
-        <p class="muted full">Entwürfe dienen zur internen Bearbeitung. Erst veröffentlichte Daten sollen im Kundenportal angezeigt werden. In Schritt 2 wird diese Logik vereinfacht mit localStorage abgebildet.</p>
+        <p class="muted full">Entwurf speichern, pruefen und veroeffentlichen. Den Link kopieren oder per WhatsApp an den Kunden senden.</p>
         <div class="form-actions">
           <button class="button soft" id="saveDraftButton" type="button">Entwurf speichern</button>
-          <button class="button soft" id="showPreviewButton" type="button">Vorschau anzeigen</button>
-          <button class="button soft" id="copyLinkButton" type="button">Link kopieren</button>
-          <button class="button soft" id="openPreviewButton" type="button">Vorschau öffnen</button>
-          <button class="button soft" id="openLiveButton" type="button">Live-Portal öffnen</button>
           <button class="button primary" id="markPublishedButton" type="button">Veröffentlichen</button>
+          <button class="button soft" id="copyLinkButton" type="button">Link kopieren</button>
+          <button class="button soft" id="openPreviewButton" type="button">Kundenseite öffnen</button>
           <button class="button danger" id="deleteActiveCustomerButton" type="button">Diese Reise löschen</button>
         </div>
         <label class="full">WhatsApp-Text<textarea id="whatsappText" rows="5"></textarea></label>
@@ -211,6 +209,6 @@
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=2"></script>
-<script src="admin.js?v=41"></script>
+<script src="admin.js?v=42"></script>
 </body>
 </html>

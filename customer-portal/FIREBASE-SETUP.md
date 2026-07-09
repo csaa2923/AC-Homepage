@@ -56,9 +56,35 @@ Lokale Daten in Firebase übernehmen
 
 Die Migration liest lokale Kundendaten und schreibt sie nach Firestore. Bereits vorhandene Firestore-Kunden werden nur nach Rückfrage überschrieben.
 
-## Storage
+## Storage und Dokumentenupload
 
-Firebase Storage ist vorbereitet, aber Uploads sind noch nicht umgesetzt. Dokument-Links funktionieren weiterhin wie bisher.
+Firebase Storage ist aktiv vorbereitet und im Adminbereich bei den Dokumenten angebunden.
+
+Unterstützt werden:
+
+- PDF
+- Voucher
+- Rechnungen
+- Tickets
+- Bilder
+- Office-Dokumente als ergänzender Fallback
+
+Uploads werden pro Kunde abgelegt:
+
+```text
+customers/{customerId}/documents/{documentType}/{timestamp}-{filename}
+```
+
+Nach dem Upload wird die Download-URL im jeweiligen Dokument gespeichert:
+
+- `url`
+- `storagePath`
+- `fileName`
+- `fileSize`
+- `contentType`
+- `uploadedAt`
+
+Beim Speichern/Veröffentlichen landen diese Werte in Firestore. Das Kundenportal öffnet Dokumente direkt über die gespeicherte Firebase-Storage-Download-URL.
 
 ## Spätere Security Rules
 

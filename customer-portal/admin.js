@@ -510,6 +510,7 @@
   function editorCard(listName,item,index){
     const fields=fieldSets[listName];
     const title=item.title||item.name||item.id||`${listName} ${index+1}`;
+    const uploadMarkup=listName==="documents"?documentUploadMarkup(item,index):"";
     return `
       <article class="editor-card" data-editor="${listName}" data-index="${index}" data-item-id="${escapeHtml(item.id||item.name||`${listName}-${index}`)}">
         <header>
@@ -518,8 +519,20 @@
         </header>
         <div class="editor-grid">
           ${fields.map(([name,label,type])=>fieldMarkup(listName,name,label,type,item)).join("")}
+          ${uploadMarkup}
         </div>
       </article>
+    `;
+  }
+
+  function documentUploadMarkup(item,index){
+    const uploaded=item.url?`<small>Aktueller Link: ${escapeHtml(item.fileName||item.url)}</small>`:"<small>Noch keine Datei hochgeladen.</small>";
+    return `
+      <label class="full firebase-upload">Datei hochladen
+        <input type="file" data-upload-document="${index}" accept=".pdf,image/*,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx">
+        ${uploaded}
+        <span class="upload-status" data-upload-status="${index}"></span>
+      </label>
     `;
   }
 
@@ -566,7 +579,7 @@
       accommodations:()=>({name:"Neue Unterkunft",address:"",checkIn:"",checkOut:"",contact:"",phone:"",navigation:"",voucherStatus:"",notes:""}),
       restaurants:()=>({name:"Neues Restaurant",date:"",time:"",guests:"",address:"",status:"Angefragt",dresscode:"",notes:"",navigation:"",voucherLink:""}),
       activities:()=>({title:"Neue Aktivität",provider:"",date:"",time:"",meetingPoint:"",address:"",contact:"",phone:"",ticketStatus:"",qrStatus:"",status:"Angefragt",notes:""}),
-      documents:()=>({title:"Neues Dokument",type:"Sonstiges",url:"",visible:true,note:""})
+      documents:()=>({title:"Neues Dokument",type:"Sonstiges",url:"",storagePath:"",fileName:"",contentType:"",visible:true,note:""})
     };
     const item=factories[listName]();
     customer[listName].push(item);
@@ -606,6 +619,47 @@
     activeCustomer()[listName].splice(index,1);
     saveCustomers();
     renderAll();
+  }
+
+  async function uploadDocument(index,file){
+    if(!file)return;
+    readEditors();
+    const customer=ensureCollections(activeCustomer());
+    const item=customer.documents[index]||{};
+    const status=byId("documentsEditor")?.querySelector(`[data-upload-status="${index}"]`);
+    const allowed=/^(application\/pdf|image\/|application\/msword|application\/vnd\.openxmlformats-officedocument|application\/vnd\.ms-excel)/;
+    if(file.type&&!allowed.test(file.type)){
+      if(status)status.textContent="Dateityp nicht vorgesehen. Bitte PDF, Bild, Voucher, Rechnung oder Ticket verwenden.";
+      return;
+    }
+    if(!window.ACTFirebaseStorage){
+      if(status)status.textContent="Firebase Storage ist nicht geladen. Link-Feld bitte manuell nutzen.";
+      return;
+    }
+    try{
+      if(status)status.textContent="Upload wird gestartet ...";
+      const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(activeId,file,{title:item.title,type:item.type},percent=>{
+        if(status)status.textContent=percent>0?`Upload läuft ... ${percent}%`:"Upload wartet auf Firebase Storage ... 0%";
+      });
+      customer.documents[index]={...item,...uploaded};
+      customer.updatedAt=new Date().toLocaleDateString("de-DE");
+      saveCustomers();
+      saveDraftToFirebase(customer);
+      renderAll();
+      setFirebaseStatus("Datei wurde hochgeladen und dem Kunden zugeordnet.");
+    }catch(error){
+      const message=error&&error.message?error.message:String(error);
+      console.error("[ACT Admin] Vollständiger Upload-Fehler:",{
+        code:error&&error.code,
+        message:error&&error.message,
+        serverResponse:error&&error.serverResponse,
+        customData:error&&error.customData,
+        stack:error&&error.stack,
+        error
+      });
+      if(status)status.textContent=`Upload fehlgeschlagen: ${message}`;
+      setFirebaseStatus(`Upload fehlgeschlagen. localStorage bleibt aktiv. Bitte Firebase Authentication und Storage Rules prüfen. ${message}`,true);
+    }
   }
 
   function renderLinks(){
@@ -863,6 +917,11 @@
     byId("generateIdButton").addEventListener("click",()=>{byId("masterForm").elements.customerId.value=generateId()});
     byId("masterForm").addEventListener("submit",event=>{event.preventDefault();readMaster()});
     document.addEventListener("change",event=>{
+      const upload=event.target.closest("[data-upload-document]");
+      if(upload){
+        uploadDocument(Number(upload.dataset.uploadDocument),upload.files&&upload.files[0]);
+        return;
+      }
       if(event.target.matches("select[data-combo-list]"))updateComboCustom(event.target);
       if(event.target.closest("#requirementsPicker"))updateRequirementsCustom();
       if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderAdminPreview()}

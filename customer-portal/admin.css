@@ -66,6 +66,7 @@ h3{font-size:25px}
 label{display:grid;gap:7px;color:#8d6b20;text-transform:uppercase;font-size:12px;font-weight:900;letter-spacing:.08em}
 label small{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:0;text-transform:none;line-height:1.4}
 input,select,textarea{width:100%;padding:12px;border:1px solid rgba(16,40,32,.20);border-radius:8px;background:#fff;color:var(--ink)}
+input[type=file]{padding:10px;background:#fffaf0;cursor:pointer}
 select[multiple]{min-height:150px}
 .combo-custom{margin-top:4px;border:2px solid rgba(216,183,106,.85);background:#fffaf0}
 .combo-custom:not([hidden]){display:block}
@@ -92,6 +93,8 @@ textarea{min-height:92px;resize:vertical;text-transform:none}
 .editor-card header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .editor-card header strong{font-family:Georgia,serif;font-size:23px;font-weight:400}
 .danger{border-color:rgba(140,31,31,.35);color:#8c1f1f}
+.firebase-upload{border:1px dashed rgba(216,183,106,.70);border-radius:8px;padding:12px;background:#fffdf7}
+.upload-status{color:#244a3f;font-size:12px;font-weight:800;letter-spacing:0;text-transform:none}
 @media(min-width:780px){
   .admin-header{grid-template-columns:minmax(0,1fr) auto;align-items:center}
   .form-grid,.editor-grid,.publish-grid,.export-grid{grid-template-columns:repeat(2,1fr)}

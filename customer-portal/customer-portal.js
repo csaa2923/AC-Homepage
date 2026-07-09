@@ -441,8 +441,8 @@
     document.getElementById("documentGrid").innerHTML=customer.documents.map(item=>`
       <article class="document-card">
         <h3>${item.title}</h3>
-        <div class="placeholder-box">${item.status}</div>
-        <button class="button soft" type="button" data-placeholder="${item.title}">Öffnen</button>
+        <div class="placeholder-box">${item.type||item.status||"Dokument"}</div>
+        ${item.url?`<a class="button soft" href="${item.url}" target="_blank" rel="noopener">Öffnen</a>`:`<button class="button soft" type="button" data-placeholder="${item.title}">Öffnen</button>`}
       </article>
     `).join("");
   }

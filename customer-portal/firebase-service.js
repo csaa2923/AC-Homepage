@@ -7,7 +7,10 @@
     auth:null,
     db:null,
     storage:null,
-    modules:null
+    modules:null,
+    user:null,
+    bucket:"",
+    initPromise:null
   };
 
   function configRoot(){
@@ -31,10 +34,22 @@
   }
 
   async function init(){
+    if(state.initPromise)return state.initPromise;
     if(state.initialized)return state;
+    state.initPromise=initInternal();
+    return state.initPromise;
+  }
+
+  async function initInternal(){
     state.initialized=true;
     const root=configRoot();
     const firebaseConfig=root.config||{};
+    console.log("[ACT Firebase] Konfiguration geladen:",{
+      enabled:Boolean(root.enabled),
+      projectId:firebaseConfig.projectId||"",
+      authDomain:firebaseConfig.authDomain||"",
+      storageBucket:firebaseConfig.storageBucket||""
+    });
     if(!root.enabled||!hasConfig(firebaseConfig)){
       state.available=false;
       state.error="Firebase ist noch nicht konfiguriert. Lokale Daten werden verwendet.";
@@ -53,13 +68,31 @@
       state.app=appModule.initializeApp(firebaseConfig);
       state.auth=authModule.getAuth(state.app);
       state.db=firestoreModule.getFirestore(state.app);
-      state.storage=storageModule.getStorage(state.app);
-      await authModule.signInAnonymously(state.auth);
+      state.bucket=firebaseConfig.storageBucket||"";
+      const bucketUrl=state.bucket?`gs://${state.bucket}`:undefined;
+      state.storage=bucketUrl?storageModule.getStorage(state.app,bucketUrl):storageModule.getStorage(state.app);
+      console.log("[ACT Firebase] Firebase initialisiert:",{
+        projectId:firebaseConfig.projectId,
+        storageBucket:state.bucket,
+        bucketUrl:bucketUrl||"(default)"
+      });
+      const credential=await authModule.signInAnonymously(state.auth);
+      state.user=credential.user||state.auth.currentUser;
+      console.log("[ACT Firebase] Benutzer angemeldet:",{
+        anonymous:Boolean(state.user&&state.user.isAnonymous),
+        uid:state.user&&state.user.uid?state.user.uid:""
+      });
       state.available=true;
       state.error="";
     }catch(error){
       state.available=false;
       state.error=error&&error.message?error.message:String(error);
+      console.error("[ACT Firebase] Initialisierung fehlgeschlagen:",{
+        code:error&&error.code,
+        message:error&&error.message,
+        stack:error&&error.stack,
+        error
+      });
       console.warn("Firebase nicht erreichbar - lokale Sicherung wird verwendet.",error);
     }
     return state;
@@ -209,6 +242,94 @@
     };
   }
 
+  function safeSegment(value){
+    return String(value||"datei").normalize("NFKD").replace(/[^\w.-]+/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"").slice(0,90)||"datei";
+  }
+
+  function withTimeout(promise,ms,message){
+    let timer;
+    const timeout=new Promise((_,reject)=>{
+      timer=window.setTimeout(()=>reject(new Error(message)),ms);
+    });
+    return Promise.race([promise,timeout]).finally(()=>window.clearTimeout(timer));
+  }
+
+  async function uploadCustomerDocument(customerId,file,meta,onProgress){
+    const ready=await ensureDb();
+    const {storageModule}=ready.modules;
+    if(!customerId)throw new Error("Kunden-ID fehlt.");
+    if(!file)throw new Error("Datei fehlt.");
+    if(!ready.auth.currentUser){
+      throw new Error("Firebase Upload abgebrochen: Kein angemeldeter Benutzer vorhanden.");
+    }
+    const category=safeSegment(meta&&meta.type||"dokument");
+    const filename=safeSegment(file.name);
+    const path=`customers/${safeSegment(customerId)}/documents/${category}/${Date.now()}-${filename}`;
+    const fileRef=storageModule.ref(ready.storage,path);
+    console.log("[ACT Firebase] Upload vorbereitet:",{
+      uid:ready.auth.currentUser.uid,
+      bucket:ready.bucket,
+      fullPath:path,
+      fileName:file.name,
+      fileType:file.type||"",
+      fileSize:file.size
+    });
+    const metadata={
+      contentType:file.type||"application/octet-stream",
+      customMetadata:{
+        customerId:String(customerId),
+        documentType:String(meta&&meta.type||""),
+        title:String(meta&&meta.title||file.name)
+      }
+    };
+    const uploadPromise=new Promise((resolve,reject)=>{
+      const task=storageModule.uploadBytesResumable(fileRef,file,metadata);
+      console.log("[ACT Firebase] uploadBytesResumable() gestartet");
+      task.on("state_changed",snapshot=>{
+        const percent=snapshot.totalBytes?Math.round((snapshot.bytesTransferred/snapshot.totalBytes)*100):0;
+        console.log("[ACT Firebase] Upload Status:",{
+          state:snapshot.state,
+          bytesTransferred:snapshot.bytesTransferred,
+          totalBytes:snapshot.totalBytes,
+          percent
+        });
+        if(typeof onProgress==="function")onProgress(percent,snapshot);
+      },error=>{
+        console.error("[ACT Firebase] Vollständiger Upload-Fehler:",{
+          code:error&&error.code,
+          message:error&&error.message,
+          serverResponse:error&&error.serverResponse,
+          customData:error&&error.customData,
+          stack:error&&error.stack,
+          error
+        });
+        reject(error);
+      },()=>{
+        console.log("[ACT Firebase] Upload abgeschlossen:",{
+          fullPath:task.snapshot.ref.fullPath,
+          bytesTransferred:task.snapshot.bytesTransferred,
+          totalBytes:task.snapshot.totalBytes
+        });
+        resolve(task.snapshot);
+      });
+    });
+    const snapshot=await withTimeout(uploadPromise,25000,"Firebase Storage nimmt keine Daten an. Bitte prüfen: Anonymous Authentication aktiv, Storage Rules erlauben Uploads für angemeldete Nutzer, Storage Bucket korrekt.");
+    const url=await storageModule.getDownloadURL(snapshot.ref);
+    console.log("[ACT Firebase] Download-URL erstellt:",url);
+    return {
+      title:meta&&meta.title?meta.title:file.name,
+      type:meta&&meta.type?meta.type:"Dokument",
+      url,
+      storagePath:path,
+      fileName:file.name,
+      fileSize:file.size,
+      contentType:file.type||"",
+      uploadedAt:new Date().toISOString(),
+      status:"Hochgeladen",
+      visible:true
+    };
+  }
+
   window.ACTFirebaseService={
     init,
     state:()=>({...state}),
@@ -219,6 +340,7 @@
     deleteCustomer,
     migrateLocalCustomers,
     prepareStorageReference,
+    uploadCustomerDocument,
     denormalizeFromFirestore,
     normalizeForFirestore
   };

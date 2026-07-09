@@ -897,12 +897,21 @@
     document.getElementById("actionGrid").innerHTML=actions.map(([label,action])=>`<button class="button ${action==="confirm"?"primary":"soft"}" type="button" data-action="${action}">${label}</button>`).join("");
   }
 
+  function historyDisplayText(item){
+    if(hasDisplayValue(item.text))return item.text;
+    const changes=Array.isArray(item.changes)?item.changes.filter(hasDisplayValue):[];
+    if(changes.length)return changes.join(", ");
+    if(hasDisplayValue(item.comment))return item.comment;
+    if(hasDisplayValue(item.version))return `Version ${item.version} veröffentlicht`;
+    return "";
+  }
+
   function renderHistory(){
-    const items=(customer.history||[]).filter(item=>[item.date,item.text].some(hasDisplayValue));
+    const items=(customer.history||[]).filter(item=>[item.date,historyDisplayText(item)].some(hasDisplayValue));
     document.getElementById("historyList").innerHTML=items.length?items.map(item=>`
       <article class="history-item">
-        <time>${item.date}</time>
-        <strong>${item.text}</strong>
+        <time>${escapeHtml(item.date||"")}</time>
+        <strong>${escapeHtml(historyDisplayText(item))}</strong>
       </article>
     `).join(""):`<article class="history-item"><strong>Noch keine Änderungen protokolliert.</strong></article>`;
   }

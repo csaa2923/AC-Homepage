@@ -173,7 +173,8 @@
         localEmergency:"Euro-Notruf 112, Rettung 144, Polizei 133, Feuerwehr 122"
       },
       weather:{summary:"",days:[]},
-      history:[]
+      history:[],
+      publishHistory:[]
     };
   }
 
@@ -200,6 +201,13 @@
     next.contact={...base.contact,...(next.contact||{}),phone:next.phone||next.contact?.phone||base.phone,whatsapp:next.whatsapp||next.contact?.whatsapp||base.whatsapp,email:next.email||next.contact?.email||base.email};
     next.weather={...base.weather,...(next.weather||{}),days:Array.isArray(next.weather?.days)?next.weather.days:[]};
     next.history=Array.isArray(next.history)?next.history:[];
+    next.publishHistory=Array.isArray(next.publishHistory)?next.publishHistory:[];
+    if(!next.publishHistory.length&&next.history.some(entry=>entry&&entry.version)){
+      next.publishHistory=next.history.filter(entry=>entry&&entry.version);
+      next.history=next.history.filter(entry=>entry&&entry.text&&!entry.version).concat(
+        next.publishHistory.map(entry=>({date:entry.date||"",text:entry.text||`Version ${entry.version||""} veröffentlicht`}))
+      );
+    }
     next.progressSteps=travelProgressSteps;
     next.hotel=next.accommodations[0]||next.hotel||{};
     next.publishStatus=next.publicationState==="Veröffentlicht"||next.publishStatus==="published"?"published":"draft";
@@ -208,6 +216,14 @@
     if(next.publishedSnapshot&&!next.publishMeta.lastPublishedAt){
       next.publishMeta.lastPublishedAt=next.publishedSnapshot.updatedAt||next.updatedAt||"";
       next.publishMeta.lastPublisher=next.publishMeta.lastPublisher||PUBLISH_EDITOR;
+      next.publishMeta.version=next.publishMeta.version||next.publishedSnapshot.version||next.version||"1.0";
+    }
+    if((!next.history.length||!next.history.some(entry=>entry&&entry.text))&&next.publishHistory.length){
+      next.history=next.publishHistory.map(entry=>({
+        date:entry.date||"",
+        text:entry.text||`Version ${entry.version||""} veröffentlicht`
+      }));
+      if(next.publishedSnapshot)next.publishedSnapshot.history=next.history;
     }
     return next;
   }
@@ -976,7 +992,7 @@
     const root=byId("publishHistoryList");
     if(!root)return;
     const customer=ensureCollections(activeCustomer());
-    const entries=(customer.history||[]).slice().reverse();
+    const entries=(customer.publishHistory||[]).slice().reverse();
     if(!entries.length){
       root.innerHTML=`<p class="muted">Noch keine Veröffentlichungen protokolliert.</p>`;
       return;
@@ -1191,12 +1207,24 @@
     const snapshot=clone(customer);
     delete snapshot.publishedSnapshot;
     delete snapshot.publishMeta;
-    delete snapshot.history;
+    delete snapshot.publishHistory;
     return snapshot;
   }
 
   function applyLocalPublish(customer,meta){
     if(customer.publishedSnapshot)customer.publishMeta.previousLocalBackup=clone(customer.publishedSnapshot);
+    const workflow=publishWorkflow();
+    const historyEntry=workflow?workflow.buildHistoryEntry(meta):{
+      date:new Date().toLocaleDateString("de-DE"),
+      time:new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}),
+      version:meta.version,
+      editor:meta.publisher,
+      comment:meta.comment||"",
+      changes:(meta.changes||[]).map(item=>item.label||item),
+      text:`Version ${meta.version||""} veröffentlicht`
+    };
+    customer.publishHistory=[historyEntry,...(customer.publishHistory||[])].slice(0,30);
+    customer.history=[{date:historyEntry.date,text:historyEntry.text},...(customer.history||[])].slice(0,30);
     customer.publishedSnapshot=buildPublishedSnapshot(customer);
     customer.publishMeta={
       ...(customer.publishMeta||{}),
@@ -1207,16 +1235,6 @@
       lastChanges:meta.changes||[],
       publishError:""
     };
-    const workflow=publishWorkflow();
-    const historyEntry=workflow?workflow.buildHistoryEntry(meta):{
-      date:new Date().toLocaleDateString("de-DE"),
-      time:new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}),
-      version:meta.version,
-      editor:meta.publisher,
-      comment:meta.comment||"",
-      changes:(meta.changes||[]).map(item=>item.label||item)
-    };
-    customer.history=[historyEntry,...(customer.history||[])].slice(0,30);
   }
 
   function openNotifyDialog(customer,meta){

@@ -199,6 +199,14 @@
     return date.toLocaleString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
   }
 
+  function buildPortalHistoryText(meta){
+    const changes=Array.isArray(meta.changes)?meta.changes.map(item=>item.label||item).filter(Boolean):[];
+    const version=meta.version||"";
+    if(changes.length)return `Version ${version}: ${changes.join(", ")}`;
+    if(meta.comment)return `Version ${version}: ${meta.comment}`;
+    return `Version ${version} veröffentlicht`;
+  }
+
   function buildHistoryEntry(meta){
     const now=new Date();
     return {
@@ -208,7 +216,8 @@
       editor:meta.publisher||DEFAULT_EDITOR,
       comment:meta.comment||"",
       changes:Array.isArray(meta.changes)?meta.changes.map(item=>item.label||item):[],
-      publishedAt:meta.publishedAt||now.toISOString()
+      publishedAt:meta.publishedAt||now.toISOString(),
+      text:buildPortalHistoryText(meta)
     };
   }
 
@@ -252,6 +261,7 @@
     getPublishStatus,
     formatPublishDateTime,
     buildHistoryEntry,
+    buildPortalHistoryText,
     buildNotificationTexts
   };
 })();

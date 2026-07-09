@@ -29,7 +29,7 @@
     const snapshot=clean(customer);
     delete snapshot.publishedSnapshot;
     delete snapshot.publishMeta;
-    delete snapshot.history;
+    delete snapshot.publishHistory;
     return snapshot;
   }
 
@@ -192,7 +192,13 @@
       customer.customerId=customer.customerId||docSnap.id;
       customer.publishedSnapshot=raw.publishedData?denormalizeFromFirestore(raw.publishedData):null;
       customer.publishMeta=raw.publishMeta&&typeof raw.publishMeta==="object"?raw.publishMeta:{};
-      customer.history=Array.isArray(raw.publishHistory)?raw.publishHistory:(Array.isArray(customer.history)?customer.history:[]);
+      customer.publishHistory=Array.isArray(raw.publishHistory)?raw.publishHistory:[];
+      if(!customer.publishHistory.length&&Array.isArray(customer.history)&&customer.history.some(entry=>entry&&entry.version)){
+        customer.publishHistory=customer.history.filter(entry=>entry&&entry.version);
+      }
+      if(customer.publishedSnapshot&&Array.isArray(customer.publishedSnapshot.history)&&customer.publishedSnapshot.history.length){
+        customer.history=customer.publishedSnapshot.history;
+      }
       customer.publishStatus=raw.publishStatus||customer.publishStatus||"draft";
       customers[customer.customerId]=customer;
     });
@@ -322,7 +328,7 @@
       publishedData,
       publishStatus:"published",
       publishMeta:publishRecord,
-      publishHistory:(customer.history||[]).slice(0,30),
+      publishHistory:(customer.publishHistory||[]).slice(0,30),
       updatedAt:new Date().toISOString(),
       lastUpdated:nowText()
     },{merge:true});
@@ -384,7 +390,7 @@
         publishedData:publishedSource?normalizeForFirestore(publishedSource):null,
         publishStatus:customer.publishStatus||"draft",
         publishMeta:customer.publishMeta||{},
-        publishHistory:Array.isArray(customer.history)?customer.history.slice(0,30):[],
+        publishHistory:Array.isArray(customer.publishHistory)?customer.publishHistory.slice(0,30):[],
         createdAt:existing.exists()?existing.data().createdAt:new Date().toISOString(),
         updatedAt:new Date().toISOString(),
         lastUpdated:nowText()

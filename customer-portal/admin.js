@@ -500,7 +500,7 @@
           <div class="form-actions">
             <button class="button soft" type="button" data-edit-customer="${id}">Reise/Kunden bearbeiten</button>
             <button class="button primary" type="button" data-open-customer="${id}">Kundenseite öffnen</button>
-            <button class="button soft" type="button" data-publish-customer="${id}">${published?"Informationen erneut auf Kundenseite stellen":"Informationen auf Kundenseite stellen"}</button>
+            <button class="button soft" type="button" data-publish-customer="${id}">${published?"Kundenseite aktualisieren":"Kundenseite veröffentlichen"}</button>
             <button class="button soft" type="button" data-copy-trip="${id}">Weitere Reise für diesen Kunden</button>
             <button class="button soft" type="button" data-copy-customer="${id}">Link kopieren</button>
             <button class="button danger" type="button" data-delete-customer="${id}">Löschen</button>

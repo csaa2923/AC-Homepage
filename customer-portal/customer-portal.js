@@ -199,13 +199,47 @@
     return "Bequeme Kleidung in Schichten ist passend.";
   }
 
-  function openMeteoUrl(){
+  function weatherSearchName(){
+    return customer.weatherLocationName||customer.region||customer.tripName||"";
+  }
+
+  async function resolveWeatherLocation(){
     const latitude=numberValue(customer.latitude);
     const longitude=numberValue(customer.longitude);
-    if(latitude===null||longitude===null)return "";
+    if(latitude!==null&&longitude!==null){
+      return {
+        latitude,
+        longitude,
+        name:customer.weatherLocationName||customer.region||"Reiseregion",
+        source:"customer-coordinates"
+      };
+    }
+    const name=weatherSearchName();
+    if(!name)throw new Error("Keine Region für Reisewetter hinterlegt.");
     const params=new URLSearchParams({
-      latitude:String(latitude),
-      longitude:String(longitude),
+      name,
+      count:"1",
+      language:"de",
+      format:"json"
+    });
+    const response=await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params.toString()}`);
+    if(!response.ok)throw new Error(`Open-Meteo Standortsuche nicht erreichbar: ${response.status}`);
+    const data=await response.json();
+    const location=data.results&&data.results[0];
+    if(!location)throw new Error(`Keine Wetter-Koordinaten für "${name}" gefunden.`);
+    return {
+      latitude:location.latitude,
+      longitude:location.longitude,
+      name:[location.name,location.admin1,location.country].filter(Boolean).join(", "),
+      source:"open-meteo-geocoding"
+    };
+  }
+
+  function openMeteoUrl(location){
+    if(!location)return "";
+    const params=new URLSearchParams({
+      latitude:String(location.latitude),
+      longitude:String(location.longitude),
       daily:"weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max",
       hourly:"temperature_2m,precipitation_probability,precipitation,wind_speed_10m",
       timezone:"Europe/Vienna",
@@ -215,13 +249,14 @@
   }
 
   async function loadOpenMeteoWeather(){
-    const url=openMeteoUrl();
+    const location=await resolveWeatherLocation();
+    const url=openMeteoUrl(location);
     if(!url)throw new Error("Keine Koordinaten für Reisewetter hinterlegt.");
     const response=await fetch(url);
     if(!response.ok)throw new Error(`Open-Meteo nicht erreichbar: ${response.status}`);
     const data=await response.json();
     const daily=data.daily||{};
-    return (daily.time||[]).map((date,index)=>{
+    const days=(daily.time||[]).map((date,index)=>{
       const day={
         date,
         label:formatDateValue(date),
@@ -236,6 +271,7 @@
       day.outfit=clothingHint(day);
       return day;
     });
+    return {location,days};
   }
 
   function mapsLink(destination){
@@ -567,7 +603,7 @@
     document.getElementById("weatherCard").innerHTML=`
       <p class="eyebrow">Wetter</p>
       <h2>Reisewetter</h2>
-      <p>${escapeHtml(weather.weatherLocationName||customer.weatherLocationName||customer.region||"Reiseregion")}</p>
+      <p id="weatherLocationLabel">${escapeHtml(weather.weatherLocationName||customer.weatherLocationName||customer.region||"Reiseregion")}</p>
       <div class="weather-days" id="weatherDays">
         ${fallbackWeatherMarkup(weather)}
       </div>
@@ -599,10 +635,13 @@
     const target=document.getElementById("weatherDays");
     if(!target)return;
     try{
-      const days=await loadOpenMeteoWeather();
+      const result=await loadOpenMeteoWeather();
+      const days=result.days||[];
       if(!days.length)throw new Error("Keine Wettertage erhalten.");
+      const heading=document.getElementById("weatherLocationLabel");
+      if(heading)heading.textContent=result.location.name;
       target.innerHTML=days.map(weatherDayMarkup).join("");
-      console.log("[ACT Portal] Open-Meteo geladen:",{customerId,location:customer.weatherLocationName,days});
+      console.log("[ACT Portal] Open-Meteo geladen:",{customerId,location:result.location,days});
     }catch(error){
       console.warn("[ACT Portal] Open-Meteo nicht verfügbar:",error);
       if(!(customer.weather?.days||[]).length){

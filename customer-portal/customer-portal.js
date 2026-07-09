@@ -650,7 +650,7 @@
     document.getElementById("weatherCard").innerHTML=`
       <p class="eyebrow">Wetter</p>
       <h2>Reisewetter</h2>
-      <p id="weatherLocationLabel"><strong>Wetterregion:</strong> ${escapeHtml(weatherRegionLabel())}</p>
+      <p id="weatherLocationLabel"><strong>Wetter für:</strong> ${escapeHtml(weatherRegionLabel())}</p>
       <div class="weather-days" id="weatherDays">
         ${fallbackWeatherMarkup(weather)}
       </div>
@@ -686,7 +686,7 @@
       const days=result.days||[];
       if(!days.length)throw new Error("Keine Wettertage erhalten.");
       const heading=document.getElementById("weatherLocationLabel");
-      if(heading)heading.innerHTML=`<strong>Wetterregion:</strong> ${escapeHtml(weatherRegionLabel())}<br><span>Wetterstandort: ${escapeHtml(result.location.name)}</span>`;
+      if(heading)heading.innerHTML=`<strong>Wetter für:</strong> ${escapeHtml(result.location.name)}`;
       target.innerHTML=days.map(weatherDayMarkup).join("");
       console.log("[ACT Portal] Open-Meteo geladen:",{customerId,location:result.location,days});
     }catch(error){

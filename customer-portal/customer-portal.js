@@ -38,12 +38,14 @@
     root.setAttribute("aria-busy","true");
     text("portalTitle","Daten werden geladen ...");
     text("tripTitle","Ihr persönliches Reiseprogramm wird vorbereitet.");
+    console.log("[ACT Portal] Lade Kundendaten:",{customerId});
     try{
       const db=window.ACTFirebaseDatabase;
       if(db){
         const published=await db.loadPublishedCustomer(customerId);
         if(published){
           dataSource="firebase";
+          console.log("[ACT Portal] PublishedData verwendet:",{customerId,documents:(published.documents||[]).length,publishedData:published});
           return published;
         }
       }
@@ -54,10 +56,12 @@
     const stored=loadStoredCustomer(customerId);
     if(stored){
       dataSource="local";
+      console.log("[ACT Portal] Lokale Kundendaten verwendet:",{customerId,documents:(stored.documents||[]).length});
       return stored;
     }
 
     dataSource="demo";
+    console.log("[ACT Portal] Demo-Kundendaten verwendet:",{customerId});
     return dataRoot.customers[customerId]||null;
   }
 
@@ -84,6 +88,59 @@
     next.type=next.type||"Dokument";
     next.url=next.url||next.downloadUrl||next.downloadURL||"";
     return next;
+  }
+
+  function normalizeCustomerData(data,id){
+    const base={
+      customerId:id||"",
+      customerName:"Kunde",
+      tripName:"Reise",
+      tripTitle:"Reise",
+      version:"1.0",
+      status:"Entwurf",
+      publicationState:"Entwurf",
+      updatedAt:"",
+      concierge:"Alpine Concierge Tirol",
+      whatsapp:"+4367761410679",
+      program:[],
+      programItems:[],
+      accommodations:[],
+      restaurants:[],
+      activities:[],
+      documents:[],
+      contact:{
+        company:"Alpine Concierge Tirol",
+        phone:"+43 677 61410679",
+        whatsapp:"+43 677 61410679",
+        email:"alpineconcierge.tirol@gmail.com",
+        emergency:"Persönlicher Notfallkontakt: +43 677 61410679",
+        localEmergency:"Euro-Notruf 112, Rettung 144, Polizei 133, Feuerwehr 122"
+      },
+      weather:{summary:"",days:[]},
+      history:[]
+    };
+    const next={...base,...(data||{})};
+    next.customerId=next.customerId||id||"";
+    next.tripName=next.tripName||next.tripTitle||base.tripName;
+    next.tripTitle=next.tripTitle||next.tripName;
+    next.program=Array.isArray(next.program)?next.program:Array.isArray(next.programItems)?next.programItems:[];
+    next.programItems=next.program;
+    next.accommodations=Array.isArray(next.accommodations)?next.accommodations:[];
+    if(!next.accommodations.length&&next.hotel)next.accommodations=[next.hotel];
+    next.restaurants=Array.isArray(next.restaurants)?next.restaurants:[];
+    next.activities=Array.isArray(next.activities)?next.activities:[];
+    next.documents=Array.isArray(next.documents)?next.documents.map(normalizeDocument):[];
+    next.contact={...base.contact,...(next.contact||{})};
+    next.weather={...base.weather,...(next.weather||{}),days:Array.isArray(next.weather?.days)?next.weather.days:[]};
+    next.history=Array.isArray(next.history)?next.history:[];
+    next.hotel=next.accommodations[0]||next.hotel||{};
+    return next;
+  }
+
+  function formatUploadDate(value){
+    if(!hasDisplayValue(value))return "";
+    const date=new Date(value);
+    return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString("de-DE");
   }
 
   function mapsLink(destination){
@@ -415,15 +472,16 @@
     document.getElementById("weatherCard").innerHTML=`
       <p class="eyebrow">Wetter</p>
       <h2>Reisewetter</h2>
-      <p>${weather.summary}</p>
+      <p>${escapeHtml(weather.summary||"Wetterinformationen werden ergänzt.")}</p>
       <div class="weather-days">
-        ${weather.days.map(day=>`<div class="weather-day"><strong>${day.day}</strong><span>${day.temp}</span><br><span>${day.condition}</span></div>`).join("")}
+        ${(weather.days||[]).filter(day=>[day.day,day.temp,day.condition].some(hasDisplayValue)).map(day=>`<div class="weather-day"><strong>${escapeHtml(day.day)}</strong><span>${escapeHtml(day.temp)}</span><br><span>${escapeHtml(day.condition)}</span></div>`).join("")}
       </div>
     `;
   }
 
   function renderRestaurants(){
-    document.getElementById("restaurantGrid").innerHTML=customer.restaurants.map(item=>`
+    const items=(customer.restaurants||[]).filter(item=>[item.name,item.status,item.time,item.guests,item.dresscode,item.notes].some(hasDisplayValue));
+    document.getElementById("restaurantGrid").innerHTML=items.length?items.map(item=>`
       <article class="mini-card">
         <span class="tag">${item.status}</span>
         <h3>${item.name}</h3>
@@ -437,11 +495,12 @@
           <a class="button soft" href="${mapsLink(item.navigation)}" target="_blank" rel="noopener">Navigation öffnen</a>
         </div>
       </article>
-    `).join("");
+    `).join(""):`<article class="mini-card"><h3>Noch keine Restaurants hinterlegt.</h3></article>`;
   }
 
   function renderActivities(){
-    document.getElementById("activityGrid").innerHTML=customer.activities.map(item=>`
+    const items=(customer.activities||[]).filter(item=>[item.title,item.status,item.meetingPoint,item.time,item.contact,item.ticketStatus,item.qrStatus].some(hasDisplayValue));
+    document.getElementById("activityGrid").innerHTML=items.length?items.map(item=>`
       <article class="mini-card">
         <span class="tag">${item.status}</span>
         <h3>${item.title}</h3>
@@ -454,22 +513,24 @@
         ])}
         <div class="qr-placeholder">QR-Code<br>Platzhalter</div>
       </article>
-    `).join("");
+    `).join(""):`<article class="mini-card"><h3>Noch keine Aktivitäten hinterlegt.</h3></article>`;
   }
 
   function renderDocuments(){
     const documents=(customer.documents||[]).map(normalizeDocument);
-    const visibleDocuments=documents.filter(item=>item.visible!==false);
-    console.log("[ACT Portal] Dokumente geladen:",documents);
-    console.log("[ACT Portal] Sichtbare Dokumente:",visibleDocuments);
+    const visibleDocuments=documents.filter(item=>item.visible!==false&&[item.title,item.type,item.note,item.url,item.fileName,item.uploadedAt,item.status].some(hasDisplayValue));
+    console.log("[ACT Portal] Dokumente geladen:",{customerId,source:dataSource,count:documents.length,documents});
+    console.log("[ACT Portal] Sichtbare Dokumente:",{customerId,count:visibleDocuments.length,documents:visibleDocuments});
     document.getElementById("documentGrid").innerHTML=visibleDocuments.length?visibleDocuments.map(item=>`
       <article class="document-card">
         <h3>${escapeHtml(item.title)}</h3>
         <div class="placeholder-box">${escapeHtml(item.type||"Dokument")}</div>
         ${item.note?`<p>${escapeHtml(item.note)}</p>`:""}
-        ${item.url?`<a class="button soft" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">Dokument öffnen</a>`:`<button class="button soft" type="button" data-placeholder="${escapeHtml(item.title)}">Dokument öffnen</button>`}
+        ${item.fileName?`<p class="muted">${escapeHtml(item.fileName)}</p>`:""}
+        ${formatUploadDate(item.uploadedAt)?`<p class="muted">Hochgeladen: ${escapeHtml(formatUploadDate(item.uploadedAt))}</p>`:""}
+        ${item.url?`<a class="button soft" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">Dokument öffnen</a>`:""}
       </article>
-    `).join(""):`<article class="document-card"><h3>Keine freigegebenen Dokumente</h3><div class="placeholder-box">Dokumente erscheinen hier nach der Veröffentlichung.</div></article>`;
+    `).join(""):`<article class="document-card document-empty"><h3>Derzeit sind noch keine Dokumente verfügbar.</h3></article>`;
   }
 
   function renderContact(){
@@ -505,12 +566,13 @@
   }
 
   function renderHistory(){
-    document.getElementById("historyList").innerHTML=customer.history.map(item=>`
+    const items=(customer.history||[]).filter(item=>[item.date,item.text].some(hasDisplayValue));
+    document.getElementById("historyList").innerHTML=items.length?items.map(item=>`
       <article class="history-item">
         <time>${item.date}</time>
         <strong>${item.text}</strong>
       </article>
-    `).join("");
+    `).join(""):`<article class="history-item"><strong>Noch keine Änderungen protokolliert.</strong></article>`;
   }
 
   function icsDate(dateValue,timeValue){
@@ -624,12 +686,13 @@
   }
 
   async function initPortal(){
-    customer=await loadCustomerData();
-    if(!customer){
+    const loaded=await loadCustomerData();
+    if(!loaded){
       root.removeAttribute("aria-busy");
       root.replaceChildren(document.getElementById("notFoundTemplate").content.cloneNode(true));
       return;
     }
+    customer=normalizeCustomerData(loaded,customerId);
     renderPortal();
   }
 

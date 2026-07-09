@@ -117,11 +117,19 @@
     data.endDate=data.endDate||data.endDatePlain||"";
     data.lastUpdated=data.lastUpdated||data.updatedAt||nowText();
     data.updatedAt=data.updatedAt||nowText();
-    data.programItems=data.programItems||data.program||[];
+    data.program=Array.isArray(data.program)?data.program:Array.isArray(data.programItems)?data.programItems:[];
+    data.programItems=data.program;
+    data.accommodations=Array.isArray(data.accommodations)?data.accommodations:[];
+    data.restaurants=Array.isArray(data.restaurants)?data.restaurants:[];
+    data.activities=Array.isArray(data.activities)?data.activities:[];
     data.conciergeName=data.conciergeName||data.concierge||"";
     data.whatsappLink=data.whatsappLink||data.whatsapp||"";
-    data.dropdownCustomValues=data.dropdownCustomValues||{};
-    data.documents=(data.documents||[]).map(normalizeDocument);
+    data.dropdownCustomValues=data.dropdownCustomValues&&typeof data.dropdownCustomValues==="object"?data.dropdownCustomValues:{};
+    data.documents=Array.isArray(data.documents)?data.documents.map(normalizeDocument):[];
+    data.contact=data.contact&&typeof data.contact==="object"?data.contact:{};
+    data.weather=data.weather&&typeof data.weather==="object"?data.weather:{summary:"",days:[]};
+    data.weather.days=Array.isArray(data.weather.days)?data.weather.days:[];
+    data.history=Array.isArray(data.history)?data.history:[];
     return data;
   }
 
@@ -174,6 +182,12 @@
     if(!snapshot.exists())return null;
     const raw=snapshot.data()||{};
     const published=raw.publishedData||null;
+    console.log("[ACT Firebase] PublishedData geladen:",{
+      customerId:id,
+      hasPublishedData:Boolean(published),
+      documents:published&&Array.isArray(published.documents)?published.documents:[],
+      raw
+    });
     return published?denormalizeFromFirestore(published):null;
   }
 
@@ -184,12 +198,15 @@
     if(!id)throw new Error("Kunden-ID fehlt.");
     const draftData=normalizeForFirestore(customer);
     console.log("[ACT Firebase] Entwurf speichert Dokumente:",draftData.documents||[]);
-    await firestoreModule.setDoc(docRef(id),{
+    const existing=await firestoreModule.getDoc(docRef(id));
+    const payload={
       customerId:id,
       draftData,
       updatedAt:new Date().toISOString(),
       lastUpdated:nowText()
-    },{merge:true});
+    };
+    if(!existing.exists()||!("publishedData" in (existing.data()||{})))payload.publishedData=null;
+    await firestoreModule.setDoc(docRef(id),payload,{merge:true});
     return draftData;
   }
 

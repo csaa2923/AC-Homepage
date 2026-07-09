@@ -3,8 +3,8 @@
   const STORAGE_KEY="act_customer_portal_customers";
   const SESSION_KEY="act_customer_portal_admin_unlocked";
   const demoRoot=window.CustomerPortalData||{customers:{}};
-  let customers=loadCustomers();
-  let activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
+  let customers={};
+  let activeId=demoRoot.defaultCustomerId||"";
   let pendingScrollItemId="";
   let adminMode="overview";
   const travelProgressSteps=[
@@ -20,6 +20,8 @@
     "Reise läuft",
     "Reise abgeschlossen"
   ];
+  customers=loadCustomers();
+  activeId=Object.keys(customers)[0]||demoRoot.defaultCustomerId;
 
   const fieldSets={
     program:[
@@ -90,10 +92,10 @@
   function loadCustomers(){
     try{
       const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
-      if(stored&&typeof stored==="object"&&!Array.isArray(stored)&&Object.keys(stored).length)return stored;
-      return clone(demoRoot.customers||{});
+      if(stored&&typeof stored==="object"&&!Array.isArray(stored)&&Object.keys(stored).length)return normalizeCustomersMap(stored);
+      return normalizeCustomersMap(clone(demoRoot.customers||{}));
     }catch(error){
-      return clone(demoRoot.customers||{});
+      return normalizeCustomersMap(clone(demoRoot.customers||{}));
     }
   }
 
@@ -101,7 +103,87 @@
     return JSON.parse(JSON.stringify(value||{}));
   }
 
+  function defaultCustomerData(id){
+    const today=new Date().toLocaleDateString("de-DE");
+    return {
+      customerId:id||generateId(),
+      customerName:"Neuer Kunde",
+      companions:"",
+      tripName:"Neue Reise",
+      tripTitle:"Neue Reise",
+      startDatePlain:"",
+      endDatePlain:"",
+      travelPeriod:"",
+      startDate:"",
+      endDate:"",
+      region:"",
+      language:"DE",
+      status:"Entwurf",
+      publicationState:"Entwurf",
+      publishStatus:"draft",
+      version:"1.0",
+      updatedAt:today,
+      concierge:"Alpine Concierge Tirol",
+      phone:"+43 677 61410679",
+      email:"alpineconcierge.tirol@gmail.com",
+      whatsapp:"+4367761410679",
+      requirements:[],
+      dropdownCustomValues:{},
+      program:[],
+      programItems:[],
+      accommodations:[],
+      restaurants:[],
+      activities:[],
+      documents:[],
+      contact:{
+        company:"Alpine Concierge Tirol",
+        phone:"+43 677 61410679",
+        whatsapp:"+43 677 61410679",
+        email:"alpineconcierge.tirol@gmail.com",
+        emergency:"Persönlicher Notfallkontakt: +43 677 61410679",
+        localEmergency:"Euro-Notruf 112, Rettung 144, Polizei 133, Feuerwehr 122"
+      },
+      weather:{summary:"",days:[]},
+      history:[]
+    };
+  }
+
+  function normalizeCustomerData(customer,fallbackId){
+    const id=(customer&&customer.customerId)||fallbackId||generateId();
+    const base=defaultCustomerData(id);
+    const next={...base,...(customer||{})};
+    next.customerId=next.customerId||id;
+    next.tripName=next.tripName||next.tripTitle||base.tripName;
+    next.tripTitle=next.tripTitle||next.tripName;
+    next.program=Array.isArray(next.program)?next.program:Array.isArray(next.programItems)?next.programItems:[];
+    next.programItems=next.program;
+    next.accommodations=Array.isArray(next.accommodations)?next.accommodations:[];
+    if(!next.accommodations.length&&next.hotel)next.accommodations=[next.hotel];
+    next.restaurants=Array.isArray(next.restaurants)?next.restaurants:[];
+    next.activities=Array.isArray(next.activities)?next.activities:[];
+    next.documents=Array.isArray(next.documents)?next.documents.map(normalizeDocumentItem):[];
+    next.dropdownCustomValues=next.dropdownCustomValues&&typeof next.dropdownCustomValues==="object"?next.dropdownCustomValues:{};
+    next.requirements=Array.isArray(next.requirements)?next.requirements:[];
+    next.contact={...base.contact,...(next.contact||{}),phone:next.phone||next.contact?.phone||base.phone,whatsapp:next.whatsapp||next.contact?.whatsapp||base.whatsapp,email:next.email||next.contact?.email||base.email};
+    next.weather={...base.weather,...(next.weather||{}),days:Array.isArray(next.weather?.days)?next.weather.days:[]};
+    next.history=Array.isArray(next.history)?next.history:[];
+    next.progressSteps=travelProgressSteps;
+    next.hotel=next.accommodations[0]||next.hotel||{};
+    next.publishStatus=next.publicationState==="Veröffentlicht"||next.publishStatus==="published"?"published":"draft";
+    return next;
+  }
+
+  function normalizeCustomersMap(source){
+    return Object.entries(source||{}).reduce((result,[fallbackId,customer])=>{
+      const normalized=normalizeCustomerData(customer,fallbackId);
+      result[normalized.customerId]=normalized;
+      return result;
+    },{});
+  }
+
   function saveCustomers(){
+    customers=normalizeCustomersMap(customers);
+    if(activeId&&!customers[activeId])activeId=Object.keys(customers)[0]||activeId;
     localStorage.setItem(STORAGE_KEY,JSON.stringify(customers));
   }
 
@@ -133,7 +215,7 @@
       await window.ACTFirebaseAuth?.prepareAuth?.();
       const firebaseCustomers=await db.loadCustomersForAdmin();
       if(Object.keys(firebaseCustomers).length){
-        customers=firebaseCustomers;
+        customers=normalizeCustomersMap(firebaseCustomers);
         activeId=Object.keys(customers)[0]||activeId;
         saveCustomers();
         renderAll();
@@ -149,7 +231,7 @@
   function saveDraftToFirebase(customer){
     const db=firebaseDatabase();
     if(!db)return;
-    console.log("[ACT Admin] Dokumente im Entwurf:",(customer.documents||[]).map(documentDebugInfo));
+    console.log("[ACT Admin] Dokumente im Entwurf:",{customerId:customer.customerId,documents:(customer.documents||[]).map(documentDebugInfo)});
     db.saveDraftCustomer(clone(customer)).then(()=>{
       setFirebaseStatus("Entwurf wurde in Firestore gespeichert.");
     }).catch(error=>{
@@ -314,19 +396,9 @@
   function activeCustomer(){
     if(!customers[activeId]){
       activeId=Object.keys(customers)[0]||generateId();
-      customers[activeId]=customers[activeId]||{
-        customerId:activeId,
-        customerName:"Neuer Kunde",
-        tripName:"Neue Reise",
-        status:"Entwurf",
-        publicationState:"Entwurf",
-        publishStatus:"draft",
-        version:"1.0",
-        updatedAt:new Date().toLocaleDateString("de-DE"),
-        concierge:"Alpine Concierge Tirol",
-        whatsapp:"+4367761410679"
-      };
+      customers[activeId]=customers[activeId]||defaultCustomerData(activeId);
     }
+    customers[activeId]=normalizeCustomerData(customers[activeId],activeId);
     return customers[activeId];
   }
 
@@ -356,16 +428,7 @@
   }
 
   function ensureCollections(customer){
-    if(!customer||typeof customer!=="object")customer={};
-    customer.program=customer.program||customer.programItems||[];
-    customer.accommodations=customer.accommodations||[];
-    if(!customer.accommodations.length&&customer.hotel)customer.accommodations=[customer.hotel];
-    customer.restaurants=customer.restaurants||[];
-    customer.activities=customer.activities||[];
-    customer.documents=(customer.documents||[]).map(normalizeDocumentItem);
-    customer.progressSteps=travelProgressSteps;
-    customer.hotel=customer.accommodations[0]||customer.hotel||{};
-    return customer;
+    return normalizeCustomerData(customer,customer&&customer.customerId);
   }
 
   function documentVisibleValue(item){
@@ -667,7 +730,9 @@
     }
     try{
       if(status)status.textContent="Upload wird gestartet ...";
-      const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(activeId,file,{title:item.title,type:item.type},percent=>{
+      const uploadCustomerId=customer.customerId||activeId;
+      console.log("[ACT Admin] Upload startet für Kunde:",{activeId,customerId:uploadCustomerId,fileName:file.name});
+      const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(uploadCustomerId,file,{title:item.title,type:item.type},percent=>{
         if(status)status.textContent=percent>0?`Upload läuft ... ${percent}%`:"Upload wartet auf Firebase Storage ... 0%";
       });
       customer.documents[index]=normalizeDocumentItem({...item,...uploaded});
@@ -772,27 +837,8 @@
 
   function newCustomer(){
     const id=generateId();
-    customers[id]=ensureCollections({
-      customerId:id,
-      customerName:"Neuer Kunde",
-      companions:"",
-      tripName:"Neue Reise",
-      startDatePlain:"",
-      endDatePlain:"",
-      region:"",
-      status:"Entwurf",
-      publicationState:"Entwurf",
-      publishStatus:"draft",
-      version:"1.0",
-      updatedAt:new Date().toLocaleDateString("de-DE"),
-      concierge:"Alpine Concierge Tirol",
-      whatsapp:"+4367761410679",
-      program:[],
-      accommodations:[],
-      restaurants:[],
-      activities:[],
-      documents:[]
-    });
+    customers[id]=normalizeCustomerData(defaultCustomerData(id),id);
+    console.log("[ACT Admin] Neuer Kunde angelegt:",{customerId:id,documents:customers[id].documents});
     activeId=id;
     adminMode="overview";
     saveCustomers();
@@ -804,6 +850,7 @@
     const source=ensureCollections(customers[id]);
     const nextId=generateId();
     customers[nextId]=ensureCollections({
+      ...defaultCustomerData(nextId),
       ...clone(source),
       customerId:nextId,
       tripName:"Neue Reise",
@@ -818,10 +865,12 @@
       version:"1.0",
       updatedAt:new Date().toLocaleDateString("de-DE"),
       program:[],
+      programItems:[],
       accommodations:[],
       restaurants:[],
       activities:[],
-      documents:[]
+      documents:[],
+      dropdownCustomValues:{}
     });
     activeId=nextId;
     adminMode="edit";
@@ -837,7 +886,7 @@
     customer.publishStatus="published";
     customer.updatedAt=new Date().toLocaleDateString("de-DE");
     saveCustomers();
-    console.log("[ACT Admin] Dokumente beim Veröffentlichen:",(customer.documents||[]).map(documentDebugInfo));
+    console.log("[ACT Admin] Dokumente beim Veröffentlichen:",{customerId:customer.customerId,portalCustomerId:id,documents:(customer.documents||[]).map(documentDebugInfo)});
     const db=firebaseDatabase();
     if(db){
       db.publishCustomer(clone(customer)).then(()=>{

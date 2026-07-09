@@ -130,6 +130,26 @@
     return {changes,count:changes.length};
   }
 
+  function publishComparePayload(customer){
+    const source=customer||{};
+    return {
+      master:masterSignature(source),
+      contact:contactSignature(source.contact),
+      weather:{
+        weatherLocationName:source.weatherLocationName||"",
+        latitude:source.latitude||"",
+        longitude:source.longitude||""
+      },
+      program:programSignature(source.program||source.programItems),
+      accommodations:accommodationSignature(source.accommodations),
+      documents:documentSignature(source.documents)
+    };
+  }
+
+  function publishContentHash(customer){
+    return stableJson(publishComparePayload(customer));
+  }
+
   function validateForPublish(customer){
     const errors=[];
     const c=customer||{};
@@ -257,6 +277,8 @@
     DEFAULT_EDITOR,
     bumpVersion,
     compareDraftVsPublished,
+    publishComparePayload,
+    publishContentHash,
     validateForPublish,
     getPublishStatus,
     formatPublishDateTime,

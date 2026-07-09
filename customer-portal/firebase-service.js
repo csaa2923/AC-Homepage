@@ -120,6 +120,9 @@
 
   function normalizeForFirestore(customer){
     const data=clean(customer);
+    delete data.publishedSnapshot;
+    delete data.publishMeta;
+    delete data.publishHistory;
     data.customerId=customerIdOf(data);
     data.tripTitle=data.tripTitle||data.tripName||"";
     data.endDate=data.endDate||data.endDatePlain||"";

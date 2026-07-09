@@ -226,6 +226,14 @@
       if(next.publishedSnapshot)next.publishedSnapshot.history=next.history;
     }
     if(next.publishedSnapshot)next.publishedSnapshot=normalizePublishedSnapshot(next.publishedSnapshot,id);
+    const workflow=publishWorkflow();
+    const draftHash=workflow?workflow.publishContentHash(normalizePublishedSnapshot(buildPublishedSnapshot(next),id)):"";
+    if(next.publishMeta?.contentHash&&draftHash&&draftHash===next.publishMeta.contentHash){
+      next.publishedSnapshot=normalizePublishedSnapshot(buildPublishedSnapshot(next),id);
+    }else if(next.publishedSnapshot&&workflow&&!next.publishMeta.contentHash&&draftHash){
+      const liveHash=workflow.publishContentHash(normalizePublishedSnapshot(next.publishedSnapshot,id));
+      if(draftHash===liveHash)next.publishMeta.contentHash=draftHash;
+    }
     return next;
   }
 
@@ -939,11 +947,31 @@
     return customer?.publishedSnapshot||null;
   }
 
+  function comparablePublishCustomer(customer,usePublished){
+    const id=customer.customerId;
+    const source=usePublished?clone(getPublishedSnapshot(customer)||{}):buildPublishedSnapshot(customer);
+    source.customerId=id;
+    return normalizePublishedSnapshot(source,id);
+  }
+
+  function publishContentHash(customer){
+    const workflow=publishWorkflow();
+    if(!workflow||!workflow.publishContentHash)return "";
+    return workflow.publishContentHash(comparablePublishCustomer(customer,false));
+  }
+
   function getDraftComparison(customer){
     const workflow=publishWorkflow();
     if(!workflow)return {changes:[],count:0};
     const normalized=ensureCollections(customer);
-    return workflow.compareDraftVsPublished(buildPublishedSnapshot(normalized),getPublishedSnapshot(normalized));
+    const published=getPublishedSnapshot(normalized);
+    if(!published)return workflow.compareDraftVsPublished(comparablePublishCustomer(normalized,false),{});
+    const draftHash=publishContentHash(normalized);
+    if(normalized.publishMeta?.contentHash&&draftHash===normalized.publishMeta.contentHash)return {changes:[],count:0};
+    return workflow.compareDraftVsPublished(
+      comparablePublishCustomer(normalized,false),
+      comparablePublishCustomer(normalized,true)
+    );
   }
 
   function getPublishStatusInfo(customer){
@@ -974,12 +1002,13 @@
     const status=workflow?workflow.getPublishStatus(customer,getPublishedSnapshot(customer),customer.publishMeta||{}):null;
     const comparison=getDraftComparison(customer);
     const meta=customer.publishMeta||{};
+    const changeSummary=comparison.count?comparison.changes.map(item=>item.label).join(", "):"";
     card.innerHTML=`
       <div class="publish-status-head">
         <span class="publish-status-icon">${status?status.icon:"🟡"}</span>
         <div>
           <h3>${escapeHtml(status?status.label:"Entwurf vorhanden")}</h3>
-          <p class="muted">${escapeHtml(status?status.message:"")}</p>
+          <p class="muted">${escapeHtml(status?status.message:"")}${changeSummary?` (${escapeHtml(changeSummary)})`:""}</p>
         </div>
       </div>
       <div class="publish-status-meta">
@@ -1246,7 +1275,7 @@
     };
     customer.publishHistory=[historyEntry,...(customer.publishHistory||[])].slice(0,30);
     customer.history=[{date:historyEntry.date,text:historyEntry.text},...(customer.history||[])].slice(0,30);
-    customer.publishedSnapshot=buildPublishedSnapshot(customer);
+    customer.publishedSnapshot=normalizePublishedSnapshot(buildPublishedSnapshot(customer),customer.customerId);
     customer.publishMeta={
       ...(customer.publishMeta||{}),
       lastPublishedAt:meta.publishedAt,
@@ -1254,6 +1283,7 @@
       lastPublishComment:meta.comment||"",
       version:meta.version,
       lastChanges:meta.changes||[],
+      contentHash:publishContentHash(customer),
       publishError:""
     };
   }

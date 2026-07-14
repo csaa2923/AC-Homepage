@@ -17,12 +17,16 @@
       <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol Logo" width="118" height="88">
       <p class="eyebrow">Interne Verwaltung</p>
       <h1>Kundenportal Admin</h1>
-      <p class="muted">Übergangslösung für Schritt 2. Für echte Kundendaten später Firebase Authentication verwenden.</p>
-      <p class="muted">Nach dem Login: <strong>Beispiele laden</strong> klicken, um CRM, Buchungen und Vorlagen auszuprobieren.</p>
-      <label>Passwort
-        <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Passwort eingeben">
-      </label>
-      <button class="button primary" id="loginButton" type="button">Öffnen</button>
+      <p class="muted">Mit freigegebenem Firebase-Admin-Konto anmelden. Der Adminbereich wird erst nach Rollenpruefung freigegeben.</p>
+      <form id="adminLoginForm">
+        <label>E-Mail
+          <input id="adminEmailInput" type="email" autocomplete="username" placeholder="admin@example.com">
+        </label>
+        <label>Passwort
+          <input id="adminPasswordInput" type="password" autocomplete="current-password" placeholder="Passwort eingeben">
+        </label>
+        <button class="button primary" id="loginButton" type="submit">Anmelden</button>
+      </form>
       <button class="button soft" id="resetLocalDataButton" type="button">Lokale Admin-Daten zurücksetzen</button>
       <p class="form-message" id="loginMessage" aria-live="polite"></p>
     </div>
@@ -449,7 +453,7 @@
         <label>JSON importieren<textarea id="importText" rows="9" placeholder="JSON hier einfügen"></textarea></label>
         <button class="button soft" id="importButton" type="button">JSON laden</button>
         <p class="form-message full" id="migrationStatus" aria-live="polite"></p>
-        <p class="muted full">Sicherheitshinweis: localStorage und das Passwort ACT2026 sind nur eine Übergangslösung. Für echte Kundendaten ist später Firebase Authentication oder eine vergleichbare sichere Lösung erforderlich.</p>
+        <p class="muted full">Sicherheitshinweis: localStorage ist nur fuer lokale Demo- und Fallback-Daten vorgesehen. Echte Adminzugriffe erfolgen ueber Firebase Authentication mit Rollenpruefung.</p>
       </div>
     </section>
   </section>
@@ -622,10 +626,11 @@
 <script src="crm-library.js?v=2"></script>
 <script src="booking-library.js?v=1"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=14"></script>
-<script src="firebase-auth.js"></script>
+<script src="firebase-service.js?v=15"></script>
+<script src="firebase-auth.js?v=2"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=3"></script>
-<script src="admin.js?v=63"></script>
+<script src="admin.js?v=64"></script>
 </body>
 </html>
+

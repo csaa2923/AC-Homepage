@@ -1,5 +1,4 @@
 (function(){
-  const PASSWORD="ACT2026";
   const STORAGE_KEY="act_customer_portal_customers";
   const SESSION_KEY="act_customer_portal_admin_unlocked";
   const demoRoot=window.CustomerPortalData||{customers:{}};
@@ -389,7 +388,11 @@
       return;
     }
     try{
-      await window.ACTFirebaseAuth?.prepareAuth?.();
+      const authCheck=await window.ACTFirebaseAuth?.requireAdmin?.();
+      if(!authCheck||!authCheck.allowed){
+        setFirebaseStatus(authCheck?.message||"Firebase Admin-Zugriff erst nach Anmeldung verfuegbar.",true);
+        return;
+      }
       const firebaseCustomers=await db.loadCustomersForAdmin();
       if(Object.keys(firebaseCustomers).length){
         customers=normalizeCustomersMap(firebaseCustomers);
@@ -2490,25 +2493,40 @@
     return Promise.resolve();
   }
 
-  function normalizePassword(value){
-    return String(value||"").normalize("NFKC").replace(/[^a-z0-9]/gi,"").toUpperCase();
+  function setLoginMessage(text,isError){
+    const el=byId("loginMessage");
+    if(!el)return;
+    el.textContent=text||"";
+    el.style.color=isError?"#8c1f1f":"#244a3f";
   }
 
-  function login(){
-    const input=byId("passwordInput");
-    const message=byId("loginMessage");
-    const rawValue=input?input.value:"";
-    const comparisonValue=normalizePassword(rawValue);
+  function lockAdmin(message,isError){
+    byId("loginScreen").hidden=false;
+    byId("adminShell").hidden=true;
+    if(message!==undefined)setLoginMessage(message,isError);
+  }
 
-    if(!comparisonValue.includes(PASSWORD)){
-      if(message)message.textContent="Passwort nicht korrekt.";
+  async function login(){
+    const emailInput=byId("adminEmailInput");
+    const passwordInput=byId("adminPasswordInput");
+    const email=emailInput?emailInput.value.trim():"";
+    const password=passwordInput?passwordInput.value:"";
+    if(!window.ACTFirebaseAuth){
+      setLoginMessage("Firebase Auth ist nicht erreichbar.",true);
       return;
     }
-
-    if(input)input.value=PASSWORD;
-    if(message)message.textContent="";
-    sessionStorage.setItem(SESSION_KEY,"1");
-    unlock();
+    setLoginMessage("Anmeldung wird geprueft ...");
+    const authState=await window.ACTFirebaseAuth.signIn(email,password);
+    if(authState.allowed){
+      if(passwordInput)passwordInput.value="";
+      setLoginMessage("");
+      unlock();
+      loadFirebaseCustomers();
+      loadFirebaseTemplates();
+      return;
+    }
+    if(passwordInput)passwordInput.value="";
+    lockAdmin(authState.error||"Dieses Konto hat keine Admin-Berechtigung.",true);
   }
 
   function templateLib(){
@@ -2540,7 +2558,11 @@
     const db=firebaseDatabase();
     if(!db||!db.loadTemplatesForAdmin)return;
     try{
-      await window.ACTFirebaseAuth?.prepareAuth?.();
+      const authCheck=await window.ACTFirebaseAuth?.requireAdmin?.();
+      if(!authCheck||!authCheck.allowed){
+        setTemplateStatus(authCheck?.message||"Firebase Admin-Zugriff erst nach Anmeldung verfuegbar.",true);
+        return;
+      }
       const remote=await db.loadTemplatesForAdmin();
       if(Object.keys(remote).length){
         templates=remote;
@@ -2995,25 +3017,27 @@
   }
 
   function bind(){
-    byId("loginButton").addEventListener("click",login);
-    byId("passwordInput").addEventListener("input",event=>{
-      if(normalizePassword(event.target.value).includes(PASSWORD))login();
-    });
-    byId("passwordInput").addEventListener("keydown",event=>{
-      if(event.key==="Enter"){
+    const loginForm=byId("adminLoginForm");
+    if(loginForm){
+      loginForm.addEventListener("submit",event=>{
         event.preventDefault();
         login();
-      }
-    });
+      });
+    }else{
+      byId("loginButton").addEventListener("click",login);
+    }
     byId("resetLocalDataButton").addEventListener("click",()=>{
       resetStoredCustomers();
       sessionStorage.removeItem(SESSION_KEY);
-      byId("passwordInput").value="";
-      byId("loginMessage").textContent="Lokale Admin-Daten wurden zurückgesetzt. Bitte Passwort ACT2026 eingeben.";
-      byId("loginScreen").hidden=false;
-      byId("adminShell").hidden=true;
+      const passwordInput=byId("adminPasswordInput");
+      if(passwordInput)passwordInput.value="";
+      lockAdmin("Lokale Admin-Daten wurden zurueckgesetzt. Bitte mit Firebase-Admin-Konto anmelden.");
     });
-    byId("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(SESSION_KEY);location.reload()});
+    byId("logoutButton").addEventListener("click",async()=>{
+      sessionStorage.removeItem(SESSION_KEY);
+      await window.ACTFirebaseAuth?.signOut?.();
+      lockAdmin("Abgemeldet.");
+    });
     byId("newCustomerButton").addEventListener("click",newCustomer);
     byId("loadDemoExamplesButton")?.addEventListener("click",seedDemoExamples);
     byId("generateIdButton").addEventListener("click",()=>{byId("masterForm").elements.customerId.value=generateId()});
@@ -3247,22 +3271,47 @@
     byId("reloadAdminButton").addEventListener("click",()=>location.reload());
   }
 
-  window.ACTAdminUnlock=unlock;
+  window.ACTAdminUnlock=async function(){
+    const authCheck=await window.ACTFirebaseAuth?.requireAdmin?.();
+    if(authCheck&&authCheck.allowed){
+      unlock();
+      return true;
+    }
+    lockAdmin(authCheck?.message||"Bitte mit einem Admin-Konto anmelden.",true);
+    return false;
+  };
   window.ACTAdminRender=renderAll;
+
+  async function initializeAdminAuth(){
+    lockAdmin("Bitte mit Firebase-Admin-Konto anmelden.");
+    if(!window.ACTFirebaseAuth){
+      setLoginMessage("Firebase Auth ist nicht erreichbar.",true);
+      return;
+    }
+    const authState=await window.ACTFirebaseAuth.prepareAuth();
+    if(authState.allowed){
+      setLoginMessage("");
+      unlock();
+      loadFirebaseCustomers();
+      loadFirebaseTemplates();
+      return;
+    }
+    if(authState.missingRole){
+      lockAdmin("Dieses Konto hat keine Admin-Berechtigung.",true);
+      return;
+    }
+    if(authState.error){
+      lockAdmin(authState.error,true);
+    }
+  }
 
   function init(){
     bootstrapCustomers();
     setupMasterCombos();
     loadLocalTemplates();
     bind();
-    if(sessionStorage.getItem(SESSION_KEY)==="1"){
-      unlock();
-      loadFirebaseCustomers();
-      loadFirebaseTemplates();
-    }else{
-      byId("loginScreen").hidden=false;
-      byId("adminShell").hidden=true;
-    }
+    sessionStorage.removeItem(SESSION_KEY);
+    initializeAdminAuth();
   }
 
   if(document.readyState==="loading"){

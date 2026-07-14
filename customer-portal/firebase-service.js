@@ -48,11 +48,24 @@
     return customer.customerId||customer.id;
   }
 
-  async function init(){
-    if(state.initPromise)return state.initPromise;
-    if(state.initialized)return state;
-    state.initPromise=initInternal();
-    return state.initPromise;
+  async function init(options){
+    const authOptions=options||{};
+    if(state.initPromise)await state.initPromise;
+    else if(!state.initialized){
+      state.initPromise=initInternal();
+      await state.initPromise;
+    }
+    if(state.available&&authOptions.anonymous!==false&&state.auth&&!state.auth.currentUser){
+      try{
+        await signInAnonymousIfNeeded();
+      }catch(error){
+        state.available=false;
+        state.error=error&&error.message?error.message:String(error);
+        console.warn("Firebase nicht erreichbar - lokale Sicherung wird verwendet.",error&&error.message?error.message:"Fehler");
+      }
+    }
+    if(state.auth)state.user=state.auth.currentUser;
+    return state;
   }
 
   async function initInternal(){
@@ -82,9 +95,7 @@
       const bucketUrl=state.bucket?`gs://${state.bucket}`:undefined;
       state.storage=bucketUrl?storageModule.getStorage(state.app,bucketUrl):storageModule.getStorage(state.app);
       console.log("[ACT Firebase] Firebase initialisiert.");
-      const credential=await authModule.signInAnonymously(state.auth);
-      state.user=credential.user||state.auth.currentUser;
-      console.log("[ACT Firebase] Benutzer angemeldet.");
+      state.user=state.auth.currentUser||null;
       state.available=true;
       state.error="";
     }catch(error){
@@ -94,6 +105,29 @@
       console.warn("Firebase nicht erreichbar - lokale Sicherung wird verwendet.",error&&error.message?error.message:"Fehler");
     }
     return state;
+  }
+
+  async function signInAnonymousIfNeeded(){
+    const {authModule}=state.modules||{};
+    if(!authModule||!state.auth)return null;
+    if(state.auth.currentUser){
+      state.user=state.auth.currentUser;
+      return state.user;
+    }
+    const credential=await authModule.signInAnonymously(state.auth);
+    state.user=credential.user||state.auth.currentUser;
+    console.log("[ACT Firebase] Benutzer angemeldet.");
+    return state.user;
+  }
+
+  function authContext(){
+    return {
+      available:state.available,
+      error:state.error,
+      auth:state.auth,
+      authModule:state.modules&&state.modules.authModule,
+      user:state.auth?state.auth.currentUser:state.user
+    };
   }
 
   async function ensureDb(){
@@ -815,6 +849,7 @@
 
   window.ACTFirebaseService={
     init,
+    authContext,
     state:()=>({...state}),
     loadCustomersForAdmin,
     loadCustomerPublishState,

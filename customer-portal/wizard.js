@@ -22,12 +22,12 @@
   ];
 
   const BUDGET_OPTIONS=[
-    {value:"offen",label:"Offen"},
-    {value:"bis-500",label:"Bis 500 €"},
-    {value:"500-1000",label:"500 – 1.000 €"},
-    {value:"1000-3000",label:"1.000 – 3.000 €"},
-    {value:"premium",label:"Premium"},
-    {value:"custom",label:"Eigenes Budget"}
+    {value:"offen",label:"Offen",hint:"Noch nicht festgelegt"},
+    {value:"bis-500",label:"Bis 500 €",hint:"Einstiegsbudget"},
+    {value:"500-1000",label:"500 – 1.000 €",hint:"Komfortbereich"},
+    {value:"1000-3000",label:"1.000 – 3.000 €",hint:"Erweitertes Programm"},
+    {value:"premium",label:"Premium",hint:"Exklusive Erlebnisse"},
+    {value:"custom",label:"Eigenes Budget",hint:"Individuelle Angabe"}
   ];
 
   const PROGRAM_CATEGORIES=[
@@ -567,6 +567,7 @@
       const checked=d.wishes.includes(wish);
       return `<label class="wizard-choice-pill${checked?" is-selected":""}">
         <input type="checkbox" data-wizard-wish value="${escapeHtml(wish)}"${checked?" checked":""}>
+        <span class="wizard-option-indicator" aria-hidden="true"></span>
         <span>${escapeHtml(wish)}</span>
       </label>`;
     }).join("");
@@ -583,7 +584,11 @@
       const selected=d.budget===opt.value;
       return `<label class="wizard-radio-option${selected?" is-selected":""}">
         <input type="radio" name="wizardBudget" data-wizard-budget value="${escapeHtml(opt.value)}"${selected?" checked":""}>
-        <span>${escapeHtml(opt.label)}</span>
+        <span class="wizard-option-indicator" aria-hidden="true"></span>
+        <span>
+          <span class="wizard-option-label-main">${escapeHtml(opt.label)}</span>
+          ${opt.hint?`<span class="wizard-option-label-sub">${escapeHtml(opt.hint)}</span>`:""}
+        </span>
       </label>`;
     }).join("");
     const customHidden=d.budget!=="custom"?" hidden":"";
@@ -801,6 +806,7 @@
     return `<div class="wizard-choice-grid">${checks.map(c=>`
       <label class="wizard-choice-pill${p[c.key]?" is-selected":""}">
         <input type="checkbox" data-wizard-portal="${c.key}"${p[c.key]?" checked":""}>
+        <span class="wizard-option-indicator" aria-hidden="true"></span>
         <span>${escapeHtml(c.label)}</span>
       </label>`).join("")}</div>`;
   }
@@ -816,6 +822,7 @@
     return `<div class="wizard-choice-grid">${checks.map(item=>`
       <label class="wizard-choice-pill${c[item.key]?" is-selected":""}">
         <input type="checkbox" data-wizard-comm="${item.key}"${c[item.key]?" checked":""}>
+        <span class="wizard-option-indicator" aria-hidden="true"></span>
         <span>${escapeHtml(item.label)}</span>
       </label>`).join("")}</div>`;
   }

@@ -30,7 +30,7 @@
       const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
       return stored[id]||null;
     }catch(error){
-      console.warn("Gespeicherte Portaldaten konnten nicht geladen werden.",error);
+      console.warn("Gespeicherte Portaldaten konnten nicht geladen werden.",error&&error.message?error.message:"Fehler");
       return null;
     }
   }
@@ -39,69 +39,37 @@
     root.setAttribute("aria-busy","true");
     text("portalTitle","Daten werden geladen ...");
     text("tripTitle","Ihr persönliches Reiseprogramm wird vorbereitet.");
-    console.log("[ACT Portal] Lade Kundendaten:",{customerId});
     try{
       const db=window.ACTFirebaseDatabase;
       if(db){
         const published=await db.loadPublishedCustomer(customerId);
         if(published){
           dataSource="firebase";
-          console.log("[ACT Portal] PublishedData verwendet:",{
-            customerId,
-            source:"Firestore",
-            documentsTotal:(published.documents||[]).length,
-            documentsVisible:(published.documents||[]).filter(isPortalDocument).length,
-            publishedData:published
-          });
           return published;
         }
       }
     }catch(error){
-      console.warn("Firebase nicht erreichbar - lokale Sicherung wird geprüft.",error);
+      console.warn("Firebase nicht erreichbar - lokale Sicherung wird geprüft.",error&&error.message?error.message:"Fehler");
     }
 
     const stored=loadStoredCustomer(customerId);
     if(stored){
       if(isAdminPreview){
         dataSource="local-draft";
-        console.log("[ACT Portal] Admin-Entwurfsvorschau:",{
-          customerId,
-          source:"localStorage draft",
-          documentsTotal:(stored.documents||[]).length
-        });
         return buildAdminDraftPreview(stored);
       }
       const published=stored.publishedSnapshot||null;
       if(published){
         dataSource="local";
-        console.log("[ACT Portal] Lokale publishedSnapshot verwendet:",{
-          customerId,
-          source:"localStorage publishedSnapshot",
-          version:published.version,
-          documentsTotal:(published.documents||[]).length
-        });
         return published;
       }
       if(isPublishedPortalCustomer(stored)){
         dataSource="local";
-        console.log("[ACT Portal] Lokale publishedData verwendet:",{
-          customerId,
-          source:"localStorage",
-          documentsTotal:(stored.documents||[]).length,
-          documents:stored.documents||[]
-        });
         return stored;
       }
-      console.log("[ACT Portal] Lokale Entwurfsdaten ignoriert (nicht veroeffentlicht):",{
-        customerId,
-        documentsTotal:(stored.documents||[]).length,
-        publishStatus:stored.publishStatus,
-        publicationState:stored.publicationState
-      });
     }
 
     dataSource="demo";
-    console.log("[ACT Portal] Demo-Kundendaten verwendet:",{customerId});
     return dataRoot.customers[customerId]||window.ACTDemoExamples?.customers?.[customerId]||null;
   }
 
@@ -910,9 +878,8 @@
       if(heading)heading.innerHTML=`<strong>Wetter für:</strong> ${escapeHtml(result.location.name)}`;
       target.innerHTML=days.map(weatherDayMarkup).join("");
       if(meta)meta.innerHTML=weatherMetaMarkup(result,result.range);
-      console.log("[ACT Portal] Open-Meteo geladen:",{customerId,location:result.location,range:result.range,days});
     }catch(error){
-      console.warn("[ACT Portal] Open-Meteo nicht verfügbar:",error);
+      console.warn("[ACT Portal] Open-Meteo nicht verfügbar:",error&&error.message?error.message:"Fehler");
       const message=error&&error.message?error.message:"Wetterdaten konnten nicht geladen werden.";
       target.innerHTML=weatherUnavailableMarkup(message);
       if(meta)meta.innerHTML=`<p class="weather-meta"><span>Quelle: Open-Meteo (nicht verfuegbar)</span><span>${escapeHtml(weatherSearchName()||"Kein Wetter-Ort hinterlegt")}</span></p>`;
@@ -922,15 +889,6 @@
   function renderDocuments(){
     const documents=(customer.documents||[]).map(normalizeDocument);
     const visibleDocuments=documents.filter(isPortalDocument);
-    console.log("[ACT Portal] Dokumentenstatus:",{
-      customerId,
-      source:dataSource,
-      documentsTotal:documents.length,
-      documentsVisible:visibleDocuments.length,
-      documentsDraftHidden:documents.filter(item=>item.visible===false).length,
-      documentsWithoutUrl:documents.filter(item=>item.visible!==false&&!hasDisplayValue(item.url)).length,
-      documents:documents.map(item=>({title:item.title,type:item.type,visible:item.visible,url:item.url,fileName:item.fileName}))
-    });
     document.getElementById("documentGrid").innerHTML=visibleDocuments.length?visibleDocuments.map(item=>`
       <article class="document-card">
         <h3>${escapeHtml(item.title||item.fileName||"Dokument")}</h3>

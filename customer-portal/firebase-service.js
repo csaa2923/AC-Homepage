@@ -59,12 +59,7 @@
     state.initialized=true;
     const root=configRoot();
     const firebaseConfig=root.config||{};
-    console.log("[ACT Firebase] Konfiguration geladen:",{
-      enabled:Boolean(root.enabled),
-      projectId:firebaseConfig.projectId||"",
-      authDomain:firebaseConfig.authDomain||"",
-      storageBucket:firebaseConfig.storageBucket||""
-    });
+    console.log("[ACT Firebase] Konfiguration geladen.");
     if(!root.enabled||!hasConfig(firebaseConfig)){
       state.available=false;
       state.error="Firebase ist noch nicht konfiguriert. Lokale Daten werden verwendet.";
@@ -86,29 +81,17 @@
       state.bucket=firebaseConfig.storageBucket||"";
       const bucketUrl=state.bucket?`gs://${state.bucket}`:undefined;
       state.storage=bucketUrl?storageModule.getStorage(state.app,bucketUrl):storageModule.getStorage(state.app);
-      console.log("[ACT Firebase] Firebase initialisiert:",{
-        projectId:firebaseConfig.projectId,
-        storageBucket:state.bucket,
-        bucketUrl:bucketUrl||"(default)"
-      });
+      console.log("[ACT Firebase] Firebase initialisiert.");
       const credential=await authModule.signInAnonymously(state.auth);
       state.user=credential.user||state.auth.currentUser;
-      console.log("[ACT Firebase] Benutzer angemeldet:",{
-        anonymous:Boolean(state.user&&state.user.isAnonymous),
-        uid:state.user&&state.user.uid?state.user.uid:""
-      });
+      console.log("[ACT Firebase] Benutzer angemeldet.");
       state.available=true;
       state.error="";
     }catch(error){
       state.available=false;
       state.error=error&&error.message?error.message:String(error);
-      console.error("[ACT Firebase] Initialisierung fehlgeschlagen:",{
-        code:error&&error.code,
-        message:error&&error.message,
-        stack:error&&error.stack,
-        error
-      });
-      console.warn("Firebase nicht erreichbar - lokale Sicherung wird verwendet.",error);
+      console.error(`[ACT Firebase] Initialisierung fehlgeschlagen: ${error&&error.code?error.code:"kein Fehlercode"} - ${error&&error.message?error.message:"Fehler"}`);
+      console.warn("Firebase nicht erreichbar - lokale Sicherung wird verwendet.",error&&error.message?error.message:"Fehler");
     }
     return state;
   }
@@ -254,12 +237,7 @@
     if(!snapshot.exists())return null;
     const raw=snapshot.data()||{};
     const published=raw.publishedData||null;
-    console.log("[ACT Firebase] PublishedData geladen:",{
-      customerId:id,
-      hasPublishedData:Boolean(published),
-      documents:published&&Array.isArray(published.documents)?published.documents:[],
-      raw
-    });
+    console.log(published?"[ACT Firebase] Veröffentlichte Daten geladen.":"[ACT Firebase] Keine veröffentlichten Daten gefunden.");
     return published?denormalizeFromFirestore(published):null;
   }
 
@@ -269,11 +247,7 @@
     const id=customerIdOf(customer);
     if(!id)throw new Error("Kunden-ID fehlt.");
     const draftData=normalizeForFirestore(customer);
-    console.log("[ACT Firebase] Entwurf speichert Dokumente:",{
-      customerId:id,
-      documentsTotal:(draftData.documents||[]).length,
-      documents:draftData.documents||[]
-    });
+    console.log("[ACT Firebase] Entwurf wird gespeichert.");
     const existing=await firestoreModule.getDoc(docRef(id));
     const payload={
       customerId:id,
@@ -283,8 +257,8 @@
     };
     if(!existing.exists()||!("publishedData" in (existing.data()||{})))payload.publishedData=null;
     await firestoreModule.setDoc(docRef(id),payload,{merge:true});
-    try{await saveCrmRecord(customer);}catch(error){console.warn("[ACT Firebase] CRM-Speicherung:",error);}
-    try{await saveCustomerBookings(customer);}catch(error){console.warn("[ACT Firebase] Buchungs-Speicherung:",error);}
+    try{await saveCrmRecord(customer);}catch(error){console.warn("[ACT Firebase] CRM-Speicherung:",error&&error.message?error.message:"Fehler");}
+    try{await saveCustomerBookings(customer);}catch(error){console.warn("[ACT Firebase] Buchungs-Speicherung:",error&&error.message?error.message:"Fehler");}
     return draftData;
   }
 
@@ -328,12 +302,7 @@
       previousVersionBackupId:meta.previousVersionBackupId||"",
       publishError:""
     };
-    console.log("[ACT Firebase] Veröffentlicht speichert Dokumente:",{
-      customerId:id,
-      documentsTotal:(publishedData.documents||[]).length,
-      version:publishRecord.version,
-      documents:publishedData.documents||[]
-    });
+    console.log("[ACT Firebase] Veröffentlichung wird gespeichert.");
     await firestoreModule.setDoc(docRef(id),{
       customerId:id,
       draftData,
@@ -382,7 +351,7 @@
     const ready=await ensureDb();
     const {firestoreModule}=ready.modules;
     await firestoreModule.deleteDoc(docRef(id));
-    try{await deleteCrmRecord(id);}catch(error){console.warn("[ACT Firebase] CRM-Löschung:",error);}
+    try{await deleteCrmRecord(id);}catch(error){console.warn("[ACT Firebase] CRM-Löschung:",error&&error.message?error.message:"Fehler");}
   }
 
   async function migrateLocalCustomers(customers,overwrite){
@@ -447,14 +416,7 @@
     const filename=safeSegment(file.name);
     const path=`customers/${safeSegment(customerId)}/documents/${category}/${Date.now()}-${filename}`;
     const fileRef=storageModule.ref(ready.storage,path);
-    console.log("[ACT Firebase] Upload vorbereitet:",{
-      uid:ready.auth.currentUser.uid,
-      bucket:ready.bucket,
-      fullPath:path,
-      fileName:file.name,
-      fileType:file.type||"",
-      fileSize:file.size
-    });
+    console.log("[ACT Firebase] Upload vorbereitet.");
     const metadata={
       contentType:file.type||"application/octet-stream",
       customMetadata:{
@@ -465,38 +427,21 @@
     };
     const uploadPromise=new Promise((resolve,reject)=>{
       const task=storageModule.uploadBytesResumable(fileRef,file,metadata);
-      console.log("[ACT Firebase] uploadBytesResumable() gestartet");
+      console.log("[ACT Firebase] Upload gestartet.");
       task.on("state_changed",snapshot=>{
         const percent=snapshot.totalBytes?Math.round((snapshot.bytesTransferred/snapshot.totalBytes)*100):0;
-        console.log("[ACT Firebase] Upload Status:",{
-          state:snapshot.state,
-          bytesTransferred:snapshot.bytesTransferred,
-          totalBytes:snapshot.totalBytes,
-          percent
-        });
+        console.log(`[ACT Firebase] Upload Status: ${percent}%`);
         if(typeof onProgress==="function")onProgress(percent,snapshot);
       },error=>{
-        console.error("[ACT Firebase] Vollständiger Upload-Fehler:",{
-          code:error&&error.code,
-          message:error&&error.message,
-          serverResponse:error&&error.serverResponse,
-          customData:error&&error.customData,
-          stack:error&&error.stack,
-          error
-        });
+        console.error(`[ACT Firebase] Upload fehlgeschlagen: ${error&&error.code?error.code:"kein Fehlercode"} - ${error&&error.message?error.message:"Fehler"}`);
         reject(error);
       },()=>{
-        console.log("[ACT Firebase] Upload abgeschlossen:",{
-          fullPath:task.snapshot.ref.fullPath,
-          bytesTransferred:task.snapshot.bytesTransferred,
-          totalBytes:task.snapshot.totalBytes
-        });
+        console.log("[ACT Firebase] Upload abgeschlossen.");
         resolve(task.snapshot);
       });
     });
     const snapshot=await withTimeout(uploadPromise,25000,"Firebase Storage nimmt keine Daten an. Bitte prüfen: Anonymous Authentication aktiv, Storage Rules erlauben Uploads für angemeldete Nutzer, Storage Bucket korrekt.");
     const url=await storageModule.getDownloadURL(snapshot.ref);
-    console.log("[ACT Firebase] Download-URL erstellt:",url);
     return {
       title:meta&&meta.title?meta.title:file.name,
       type:meta&&meta.type?meta.type:"Dokument",
@@ -841,7 +786,7 @@
   async function saveCustomerBookings(customer){
     const bookings=Array.isArray(customer?.bookings)?customer.bookings:[];
     for(const booking of bookings){
-      try{await saveBookingRecord(booking);}catch(error){console.warn("[ACT Firebase] Buchung:",error);}
+      try{await saveBookingRecord(booking);}catch(error){console.warn("[ACT Firebase] Buchung:",error&&error.message?error.message:"Fehler");}
     }
   }
 

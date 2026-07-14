@@ -429,7 +429,7 @@
       const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
       return templatesToMap(stored);
     }catch(error){
-      console.warn("[ACT Templates] Lokale Vorlagen konnten nicht geladen werden.",error);
+      console.warn("[ACT Templates] Lokale Vorlagen konnten nicht geladen werden.",error&&error.message?error.message:"Fehler");
       return {};
     }
   }

@@ -142,7 +142,7 @@
         try{
           map[id]=normalizeCustomerData({...customer,publishedSnapshot:buildPublishedSnapshot(customer)},id);
         }catch(error){
-          console.warn("[ACT Admin] Demo-Snapshot für",id,error);
+          console.warn("[ACT Admin] Demo-Snapshot:",error&&error.message?error.message:"Fehler");
         }
       }
     });
@@ -153,7 +153,7 @@
     try{
       customers=loadCustomers();
     }catch(error){
-      console.warn("[ACT Admin] Lokale Daten defekt:",error);
+      console.warn("[ACT Admin] Lokale Daten defekt:",error&&error.message?error.message:"Fehler");
       customers=prepareDemoCustomers();
     }
     activeId=window.ACTDemoExamples?.defaultCustomerId||demoRoot.defaultCustomerId||Object.keys(customers)[0]||"";
@@ -252,7 +252,7 @@
   function normalizeCustomerData(customer,fallbackId){
     const id=(customer&&customer.customerId)||fallbackId||generateId();
     const base=defaultCustomerData(id);
-    const next={...base,...(customer||{})};
+    let next={...base,...(customer||{})};
     next.customerId=next.customerId||id;
     next.tripName=next.tripName||next.tripTitle||base.tripName;
     next.tripTitle=next.tripTitle||next.tripName;
@@ -307,20 +307,20 @@
         if(draftHash===liveHash)next.publishMeta.contentHash=draftHash;
       }
     }catch(publishError){
-      console.warn("[ACT Admin] Veröffentlichungsvergleich:",publishError);
+      console.warn("[ACT Admin] Veröffentlichungsvergleich:",publishError&&publishError.message?publishError.message:"Fehler");
     }
     if(window.ACTCrmLibrary){
       try{
         next=window.ACTCrmLibrary.syncCustomerFromCrm(next);
       }catch(crmError){
-        console.warn("[ACT Admin] CRM normalisieren:",crmError);
+        console.warn("[ACT Admin] CRM normalisieren:",crmError&&crmError.message?crmError.message:"Fehler");
       }
     }
     if(window.ACTBookingLibrary){
       try{
         next.bookings=Array.isArray(next.bookings)?next.bookings.map(booking=>window.ACTBookingLibrary.normalizeBooking(booking,next)):[];
       }catch(bookingError){
-        console.warn("[ACT Admin] Buchungen normalisieren:",bookingError);
+        console.warn("[ACT Admin] Buchungen normalisieren:",bookingError&&bookingError.message?bookingError.message:"Fehler");
         next.bookings=[];
       }
     }
@@ -352,7 +352,7 @@
         const normalized=normalizeCustomerData(customer,fallbackId);
         result[normalized.customerId]=normalized;
       }catch(error){
-        console.warn("[ACT Admin] Kunde übersprungen:",fallbackId,error);
+        console.warn("[ACT Admin] Kunde übersprungen:",error&&error.message?error.message:"Fehler");
       }
       return result;
     },{});
@@ -402,7 +402,7 @@
             });
           }
         }catch(crmError){
-          console.warn("[ACT Admin] CRM aus Firebase:",crmError);
+          console.warn("[ACT Admin] CRM aus Firebase:",crmError&&crmError.message?crmError.message:"Fehler");
         }
         try{
           const bookingMap=await db.loadAllBookingsForAdmin();
@@ -418,7 +418,7 @@
             });
           }
         }catch(bookingError){
-          console.warn("[ACT Admin] Buchungen aus Firebase:",bookingError);
+          console.warn("[ACT Admin] Buchungen aus Firebase:",bookingError&&bookingError.message?bookingError.message:"Fehler");
         }
         activeId=Object.keys(customers)[0]||activeId;
         saveCustomers();
@@ -435,16 +435,10 @@
   function saveDraftToFirebase(customer){
     const db=firebaseDatabase();
     if(!db)return;
-    console.log("[ACT Admin] Dokumente im Entwurf:",{
-      customerId:customer.customerId,
-      documentsTotal:(customer.documents||[]).length,
-      documentsVisible:(customer.documents||[]).filter(isPortalReadyDocument).length,
-      documents:(customer.documents||[]).map(documentDebugInfo)
-    });
     db.saveDraftCustomer(clone(customer)).then(()=>{
       setFirebaseStatus("Entwurf wurde in Firestore gespeichert.");
       db.saveCrmRecord(clone(customer)).catch(error=>{
-        console.warn("[ACT Admin] CRM Firestore:",error);
+        console.warn("[ACT Admin] CRM Firestore:",error&&error.message?error.message:"Fehler");
       });
     }).catch(error=>{
       setFirebaseStatus(`Entwurf lokal gespeichert. Firebase-Speicherung nicht möglich: ${error&&error.message?error.message:""}`,true);
@@ -1496,7 +1490,7 @@
     saveCustomers();
     saveDraftToFirebase(customers[booking.customerId]);
     const db=firebaseDatabase();
-    if(db?.saveBookingRecord)db.saveBookingRecord(booking).catch(error=>console.warn("[ACT Admin] Buchung Firebase:",error));
+    if(db?.saveBookingRecord)db.saveBookingRecord(booking).catch(error=>console.warn("[ACT Admin] Buchung Firebase:",error&&error.message?error.message:"Fehler"));
     setBookingStatus("Buchung gespeichert.");
     closeBookingModal();
     renderBookings();
@@ -1879,7 +1873,6 @@
     try{
       if(status)status.textContent="Upload wird gestartet ...";
       const uploadCustomerId=customer.customerId||activeId;
-      console.log("[ACT Admin] Upload startet für Kunde:",{activeId,customerId:uploadCustomerId,fileName:file.name});
       const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(uploadCustomerId,file,{title:item.title,type:item.type},percent=>{
         if(status)status.textContent=percent>0?`Upload läuft ... ${percent}%`:"Upload wartet auf Firebase Storage ... 0%";
       });
@@ -1892,13 +1885,9 @@
       setFirebaseStatus("Datei wurde hochgeladen und dem Kunden zugeordnet.");
     }catch(error){
       const message=error&&error.message?error.message:String(error);
-      console.error("[ACT Admin] Vollständiger Upload-Fehler:",{
+      console.error("[ACT Admin] Upload fehlgeschlagen:",{
         code:error&&error.code,
-        message:error&&error.message,
-        serverResponse:error&&error.serverResponse,
-        customData:error&&error.customData,
-        stack:error&&error.stack,
-        error
+        message:error&&error.message
       });
       if(status)status.textContent=`Upload fehlgeschlagen: ${message}`;
       setFirebaseStatus(`Upload fehlgeschlagen. localStorage bleibt aktiv. Bitte Firebase Authentication und Storage Rules prüfen. ${message}`,true);
@@ -2114,7 +2103,7 @@
     try{
       renderFn();
     }catch(error){
-      console.error(`[ACT Admin] ${label}:`,error);
+      console.error(`[ACT Admin] ${label}:`,error&&error.message?error.message:"Fehler");
     }
   }
 
@@ -2148,7 +2137,6 @@
   function newCustomer(){
     const id=generateId();
     customers[id]=normalizeCustomerData(defaultCustomerData(id),id);
-    console.log("[ACT Admin] Neuer Kunde angelegt:",{customerId:id,documents:customers[id].documents});
     activeId=id;
     adminMode="edit";
     saveCustomers();
@@ -2401,15 +2389,6 @@
     applyLocalPublish(customer,meta);
     customer=commitCustomer(customer,id);
     saveCustomers();
-    console.log("[ACT Admin] Veröffentlichung:",{
-      customerId:customer.customerId,
-      version:nextVersion,
-      programTotal:(customer.program||[]).length,
-      publishedProgramTotal:(customer.publishedSnapshot?.program||[]).length,
-      documentsTotal:(customer.documents||[]).length,
-      documentsVisible:(customer.documents||[]).filter(isPortalReadyDocument).length,
-      changes:comparison.changes
-    });
     const db=firebaseDatabase();
     if(db){
       try{
@@ -2524,17 +2503,11 @@
     const rawValue=input?input.value:"";
     const comparisonValue=normalizePassword(rawValue);
 
-    console.log("Login gestartet");
-    console.log("Passwort:", rawValue);
-    console.log("Vergleich:", comparisonValue);
-    console.log("ACTAdminUnlock vorhanden:", typeof window.ACTAdminUnlock);
-
     if(!comparisonValue.includes(PASSWORD)){
       if(message)message.textContent="Passwort nicht korrekt.";
       return;
     }
 
-    console.log("Login erfolgreich");
     if(input)input.value=PASSWORD;
     if(message)message.textContent="";
     sessionStorage.setItem(SESSION_KEY,"1");
@@ -3239,12 +3212,12 @@
       if(hash&&byId(hash))navigateMainSection(hash);
       else updateMainNavActive("customers");
     }catch(error){
-      console.error(error);
+      console.error("[ACT Admin] Initialisierung fehlgeschlagen:",error&&error.message?error.message:"Fehler");
       resetStoredCustomers();
       try{
         renderAll();
       }catch(secondError){
-        console.error(secondError);
+        console.error("[ACT Admin] Wiederherstellung fehlgeschlagen:",secondError&&secondError.message?secondError.message:"Fehler");
         renderRecoveryAdmin(secondError);
       }
     }

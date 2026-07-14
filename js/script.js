@@ -122,6 +122,7 @@ function renderServices(lang){
   if(serviceGrid){
     serviceGrid.innerHTML=data.map(([key,title,text])=>`<a class="service-card" href="#request" data-service="${key}" style="background-image:url('images/services/${key}.jpg')"><div class="inner"><h3>${title}</h3><div class="mini"></div><p>${text}</p></div></a>`).join("");
     serviceGrid.querySelectorAll("[data-service]").forEach(card=>card.addEventListener("click",()=>{if(serviceSelect)serviceSelect.value=card.dataset.service}));
+    if(typeof actObserveReveal==="function")actObserveReveal(serviceGrid);
   }
   if(serviceSelect){
     const previous=serviceSelect.value;
@@ -271,8 +272,84 @@ function initHeroVideo(){
   video.addEventListener("error",()=>video.remove());
 }
 
+const REVEAL_SINGLE_SELECTORS=[
+  "main > section:not(.hero) .section-head",
+  ".story-wrap",
+  ".story-columns",
+  ".process-wrap > div:first-child",
+  ".seo-cta",
+  ".contact-card",
+  ".request-panel",
+  ".faq-head",
+  ".faq-whatsapp",
+  ".legal-block"
+];
+const REVEAL_STAGGER_GRIDS=".feature-grid,.region-grid,.audience-list,.process-list,.quality-grid,.booked-grid,#serviceGrid,#faqList";
+let revealObserver=null;
+
+function bindRevealElement(el,delay=0){
+  if(!revealObserver||!el||el.classList.contains("reveal"))return;
+  el.classList.add("reveal");
+  if(delay>0)el.style.setProperty("--reveal-delay",`${delay}s`);
+  revealObserver.observe(el);
+}
+
+function bindRevealGrid(grid){
+  if(!revealObserver||!grid)return;
+  grid.querySelectorAll(":scope > article,:scope > .service-card,:scope > .faq-item").forEach((el,index)=>{
+    bindRevealElement(el,Math.min(index*0.07,0.42));
+  });
+}
+
+function actObserveReveal(root=document){
+  if(!revealObserver)return;
+  if(root===document){
+    REVEAL_SINGLE_SELECTORS.forEach(selector=>{
+      document.querySelectorAll(selector).forEach(el=>bindRevealElement(el));
+    });
+    document.querySelectorAll(REVEAL_STAGGER_GRIDS).forEach(bindRevealGrid);
+    return;
+  }
+  bindRevealGrid(root);
+}
+
+function initScrollReveal(){
+  if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    window.actObserveReveal=()=>{};
+    return;
+  }
+  revealObserver=new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{
+      if(!entry.isIntersecting)return;
+      entry.target.classList.add("is-visible");
+      revealObserver.unobserve(entry.target);
+    });
+  },{threshold:0.12,rootMargin:"0px 0px -48px 0px"});
+  window.actObserveReveal=actObserveReveal;
+  actObserveReveal(document);
+}
+
+function initHeaderScroll(){
+  const topbar=document.querySelector(".topbar");
+  if(!topbar)return;
+  const threshold=56;
+  let ticking=false;
+  const update=()=>{
+    topbar.classList.toggle("is-scrolled",window.scrollY>threshold);
+    ticking=false;
+  };
+  window.addEventListener("scroll",()=>{
+    if(ticking)return;
+    ticking=true;
+    requestAnimationFrame(update);
+  },{passive:true});
+  update();
+}
+
 document.addEventListener("DOMContentLoaded",()=>{
   initHeroVideo();
+  initHeaderScroll();
+  initScrollReveal();
   document.querySelectorAll(".lang-switch button").forEach(btn=>btn.addEventListener("click",()=>setLang(btn.dataset.lang)));
   const burger=document.querySelector(".burger"),nav=document.querySelector("nav");
   if(burger&&nav)burger.addEventListener("click",()=>{const open=nav.classList.toggle("open");burger.setAttribute("aria-expanded",open?"true":"false")});

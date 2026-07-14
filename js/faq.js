@@ -124,6 +124,7 @@ function renderACTFAQ(lang){
     if(el) el.textContent=data[key];
   });
   root.innerHTML=data.items.map((item,i)=>`<details class="faq-item" ${i===0?"open":""}><summary>${item[0]}</summary><p>${item[1]}</p></details>`).join("");
+  if(typeof window.actObserveReveal==="function")window.actObserveReveal(root);
   if(search){
     search.oninput=()=>{
       const q=search.value.toLowerCase().trim();

@@ -2420,6 +2420,14 @@
   }
 
   function newCustomer(){
+    if(window.ACTConciergeWizard){
+      window.ACTConciergeWizard.open();
+      return;
+    }
+    createBlankCustomer();
+  }
+
+  function createBlankCustomer(){
     const id=generateId();
     customers[id]=normalizeCustomerData(defaultCustomerData(id),id);
     activeId=id;
@@ -2437,6 +2445,224 @@
         nameField.select();
       }
     },220);
+  }
+
+  function formatWizardCompanions(data){
+    const adults=String(data.adults||"0").trim()||"0";
+    const children=String(data.children||"0").trim()||"0";
+    let text=`${adults} Erwachsene`;
+    if(Number(children)>0){
+      text+=`, ${children} Kind${Number(children)===1?"":"er"}`;
+      if(data.childrenAges?.trim())text+=` (${data.childrenAges.trim()})`;
+    }
+    return text;
+  }
+
+  function finalizeWizardCustomer(wizardData,offerSummary){
+    const id=generateId();
+    const today=new Date().toLocaleDateString("de-DE");
+    const customerName=`${wizardData.firstName||""} ${wizardData.lastName||""}`.trim()||"Neuer Kunde";
+    const phone=wizardData.phone?.trim()||"";
+    const whatsapp=wizardData.whatsapp?.trim()||phone;
+    const email=wizardData.email?.trim()||"";
+    const tripName=wizardData.hotel
+      ?`Aufenthalt ${wizardData.hotel}`
+      :wizardData.region
+        ?`Reise ${wizardData.region}`
+        :"Neue Reise";
+    const budgetLabel=wizardData.budget==="custom"
+      ?wizardData.budgetCustom
+      :({
+        offen:"Offen",
+        "bis-500":"Bis 500 €",
+        "500-1000":"500 – 1.000 €",
+        "1000-3000":"1.000 – 3.000 €",
+        premium:"Premium"
+      })[wizardData.budget]||wizardData.budget;
+
+    const crmNotes=[];
+    if(wizardData.remarks?.trim()){
+      crmNotes.push({
+        title:"Anmerkungen (Wizard)",
+        date:new Date().toISOString(),
+        editor:"Concierge-Wizard",
+        content:wizardData.remarks.trim()
+      });
+    }
+    if(offerSummary){
+      crmNotes.push({
+        title:"Angebotsübersicht (Entwurf)",
+        date:new Date().toISOString(),
+        editor:"Concierge-Wizard",
+        content:`Region: ${offerSummary.region||"–"}\nZeitraum: ${offerSummary.period||"–"}\nBudget (intern): ${offerSummary.budget||"–"}\nWünsche: ${offerSummary.wishes||"–"}`
+      });
+    }
+
+    const crmReminders=[];
+    if(wizardData.communication?.reminders){
+      crmReminders.push({
+        type:"Reisebeginn",
+        title:"Erinnerungen aktivieren",
+        date:wizardData.arrival||"",
+        status:"Vorbereitet"
+      });
+    }
+
+    let customer=defaultCustomerData(id);
+    customer={
+      ...customer,
+      customerId:id,
+      customerName,
+      companions:formatWizardCompanions(wizardData),
+      tripName,
+      tripTitle:tripName,
+      region:wizardData.region||"",
+      startDatePlain:wizardData.arrival||"",
+      endDatePlain:wizardData.departure||"",
+      travelPeriod:wizardData.arrival&&wizardData.departure?`${wizardData.arrival} – ${wizardData.departure}`:"",
+      language:wizardData.language||"Deutsch",
+      phone,
+      whatsapp,
+      email,
+      weatherLocationName:wizardData.region||"",
+      status:"Anfrage eingegangen",
+      publicationState:"Entwurf",
+      publishStatus:"draft",
+      updatedAt:today,
+      program:Array.isArray(wizardData.program)?wizardData.program:[],
+      programItems:Array.isArray(wizardData.program)?wizardData.program:[],
+      accommodations:wizardData.hotel?[{
+        name:wizardData.hotel,
+        address:"",
+        checkIn:wizardData.arrival||"",
+        checkOut:wizardData.departure||"",
+        contact:"",
+        phone:"",
+        navigation:"",
+        voucherStatus:"",
+        notes:""
+      }]:[],
+      documents:Array.isArray(wizardData.documents)?wizardData.documents.map(doc=>normalizeDocumentItem({
+        title:doc.title||doc.fileName||"Dokument",
+        type:doc.type||"Sonstiges",
+        url:doc.dataUrl||doc.url||"",
+        fileName:doc.fileName||"",
+        contentType:doc.contentType||"",
+        visible:!!wizardData.portal?.publishDocuments,
+        note:doc.note||"Wizard-Upload"
+      })):[],
+      dropdownCustomValues:{
+        wizard:{
+          wishes:wizardData.wishes||[],
+          wishesText:wizardData.wishesText||"",
+          budget:wizardData.budget||"offen",
+          budgetCustom:wizardData.budgetCustom||"",
+          budgetLabel,
+          travel:{adults:wizardData.adults,children:wizardData.children,childrenAges:wizardData.childrenAges,days:offerSummary?.days||0},
+          portal:wizardData.portal||{},
+          communication:wizardData.communication||{},
+          createdVia:"concierge-wizard",
+          createdAt:new Date().toISOString()
+        }
+      },
+      publishMeta:{
+        workflowStep:"Anfrage",
+        wizardPortal:wizardData.portal||{},
+        wizardCommunication:wizardData.communication||{}
+      },
+      crm:{
+        profile:{
+          salutation:"",
+          firstName:wizardData.firstName||"",
+          lastName:wizardData.lastName||"",
+          language:wizardData.language||"Deutsch",
+          nationality:wizardData.nationality||"",
+          birthDate:"",
+          company:"",
+          profession:""
+        },
+        contact:{
+          phone,
+          mobile:phone,
+          whatsapp,
+          email,
+          address:wizardData.residence||"",
+          country:"Österreich"
+        },
+        family:Number(wizardData.children)>0&&wizardData.childrenAges?wizardData.childrenAges.split(/[,;]+/).map((age,index)=>({
+          id:`family-${Date.now()}-${index}`,
+          name:`Kind ${index+1}`,
+          relationship:"Kind",
+          age:age.trim(),
+          birthday:"",
+          allergies:"",
+          diet:"",
+          notes:""
+        })).filter(item=>item.age):[],
+        preferences:{
+          hotels:[],
+          restaurants:[],
+          activities:(wizardData.wishes||[]).slice()
+        },
+        favorites:{hotel:wizardData.hotel||"",restaurant:"",activity:""},
+        tripHistory:[],
+        communications:[],
+        notes:crmNotes,
+        tasks:[],
+        reminders:crmReminders,
+        ratings:[],
+        aiContext:{
+          summary:wizardData.wishesText||`${customerName} · ${(wizardData.wishes||[]).join(", ")}`,
+          adjustableFields:["preferences","favorites","family","tripHistory"],
+          promptHints:"Concierge-Wizard: Wünsche und Budget intern hinterlegt."
+        }
+      }
+    };
+
+    customer=normalizeCustomerData(customer,id);
+    if(window.ACTCrmLibrary){
+      customer=window.ACTCrmLibrary.pushMasterFieldsToCrm(customer);
+    }
+    customers[id]=customer;
+    activeId=id;
+    adminMode="edit";
+    customerLocalRevision[id]=(customerLocalRevision[id]||0)+1;
+    saveCustomers();
+    resetSaveStateForCustomer();
+    saveState.status="dirty";
+    updateSaveStatusUI();
+    renderAll();
+    scrollToMasterForm();
+    showWorkflowDashboard();
+    saveCustomerDraft();
+  }
+
+  const WORKFLOW_DASHBOARD_STEPS=["Anfrage","Angebot","Zahlung","Programm","Portal","Reise","Abgeschlossen"];
+
+  function showWorkflowDashboard(){
+    const panel=byId("workflowDashboardPanel");
+    const stepsEl=byId("workflowDashboardSteps");
+    if(!panel||!stepsEl)return;
+    stepsEl.innerHTML=WORKFLOW_DASHBOARD_STEPS.map((label,index)=>{
+      const cls=index===0?"is-done":index===1?"is-current":"";
+      const mark=index===0?"✓":index===1?"●":"○";
+      return `<div class="wizard-workflow-step ${cls}"><span>${mark}</span>${escapeHtml(label)}</div>`;
+    }).join("");
+    panel.hidden=false;
+  }
+
+  function hideWorkflowDashboard(){
+    const panel=byId("workflowDashboardPanel");
+    if(panel)panel.hidden=true;
+  }
+
+  function initConciergeWizard(){
+    if(!window.ACTConciergeWizard)return;
+    window.ACTConciergeWizard.init({
+      regions:masterData.regions,
+      languages:masterData.languages,
+      onComplete:finalizeWizardCustomer
+    });
   }
 
   function copyTripForCustomer(id){
@@ -3326,6 +3552,7 @@
       lockAdmin("Abgemeldet.");
     });
     byId("newCustomerButton").addEventListener("click",newCustomer);
+    byId("workflowDashboardClose")?.addEventListener("click",hideWorkflowDashboard);
     byId("loadDemoExamplesButton")?.addEventListener("click",seedDemoExamples);
     byId("generateIdButton").addEventListener("click",()=>{byId("masterForm").elements.customerId.value=generateId()});
     byId("masterForm").addEventListener("submit",event=>{event.preventDefault();applyMasterData(collectCustomerFromForms());markDirty()});
@@ -3607,6 +3834,7 @@
     setupMasterCombos();
     loadLocalTemplates();
     bind();
+    initConciergeWizard();
     sessionStorage.removeItem(SESSION_KEY);
     initializeAdminAuth();
   }

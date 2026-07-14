@@ -8,7 +8,8 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=38">
+<link rel="stylesheet" href="admin.css?v=39">
+<link rel="stylesheet" href="wizard.css?v=1">
 </head>
 <body>
 <main>
@@ -629,6 +630,55 @@
   </div>
 </div>
 
+<div class="concierge-wizard" id="conciergeWizard" hidden>
+  <div class="wizard-layout">
+    <header class="wizard-header">
+      <div class="wizard-header-top">
+        <div>
+          <p class="eyebrow">Neuer Concierge-Auftrag</p>
+          <h2 id="wizardTitle">Kundendaten</h2>
+          <div class="wizard-header-meta">
+            <span id="wizardCustomerLabel">Neuer Concierge-Auftrag</span>
+            <span class="wizard-draft-badge" id="wizardDraftBadge" hidden>Entwurf gespeichert</span>
+          </div>
+        </div>
+        <button class="button soft" id="wizardCancelButton" type="button">Abbrechen</button>
+      </div>
+      <div class="wizard-progress-block">
+        <div class="wizard-progress-label">
+          <span id="wizardStepLabel">Schritt 1 von 9</span>
+          <span class="wizard-progress-pct" id="wizardProgressPct">11 %</span>
+        </div>
+        <div class="wizard-progress-track"><div class="wizard-progress-fill" id="wizardProgressFill" style="width:11%"></div></div>
+      </div>
+    </header>
+    <div class="wizard-body">
+      <main class="wizard-main" id="wizardStepContent"></main>
+      <aside class="wizard-sidebar">
+        <p class="wizard-sidebar-title">Checkliste</p>
+        <ul class="wizard-checklist" id="wizardChecklist"></ul>
+        <div class="wizard-workflow-dash" id="wizardWorkflowDash" hidden></div>
+      </aside>
+    </div>
+    <footer class="wizard-footer">
+      <p class="wizard-footer-hint" id="wizardFooterHint"></p>
+      <p class="wizard-footer-hint" id="wizardDraftHint"></p>
+      <div class="wizard-footer-actions">
+        <button class="button soft" id="wizardSaveButton" type="button">Zwischenspeichern</button>
+        <button class="button soft" id="wizardBackButton" type="button">Zurück</button>
+        <button class="button primary" id="wizardNextButton" type="button">Weiter</button>
+        <button class="button primary" id="wizardCompleteButton" type="button" hidden>Kunden und Auftrag erstellen</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<div class="workflow-dashboard-panel" id="workflowDashboardPanel" hidden>
+  <h4>Concierge-Workflow</h4>
+  <div class="wizard-workflow-steps" id="workflowDashboardSteps"></div>
+  <button class="button soft workflow-dashboard-close" id="workflowDashboardClose" type="button">Schließen</button>
+</div>
+
 <script src="customer-data.js?v=2"></script>
 <script src="demo-examples.js?v=1"></script>
 <script src="publish-workflow.js?v=4"></script>
@@ -640,7 +690,8 @@
 <script src="firebase-auth.js?v=2"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=3"></script>
-<script src="admin.js?v=64"></script>
+<script src="wizard.js?v=1"></script>
+<script src="admin.js?v=65"></script>
 </body>
 </html>
 

@@ -120,6 +120,22 @@
     return next;
   }
 
+  function pushMasterFieldsToCrm(customer){
+    const next={...(customer||{})};
+    const crm=normalizeCrm(next);
+    const split=splitCustomerName(next.customerName);
+    if(split.firstName||split.lastName){
+      crm.profile.firstName=split.firstName;
+      crm.profile.lastName=split.lastName;
+    }
+    if(next.phone)crm.contact.phone=next.phone;
+    if(next.whatsapp)crm.contact.whatsapp=next.whatsapp;
+    if(next.email)crm.contact.email=next.email;
+    if(next.language)crm.profile.language=next.language;
+    next.crm=crm;
+    return next;
+  }
+
   function syncCustomerFromCrm(customer){
     const next={...(customer||{})};
     const crm=normalizeCrm(next);
@@ -363,6 +379,7 @@
     searchCustomers,
     buildDashboard,
     crmBundleForFirestore,
-    mergeCrmFromFirestore
+    mergeCrmFromFirestore,
+    pushMasterFieldsToCrm
   };
 })();

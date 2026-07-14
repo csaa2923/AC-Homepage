@@ -15,6 +15,9 @@
   let bookingFilters={};
   let editingBookingId="";
   let editingBookingDocuments=[];
+  let saveState={status:"saved-local",dirty:false,saving:false,lastSavedAt:null,lastError:""};
+  const customerLocalRevision={};
+  let firebaseLoadStartedAt=0;
   const PUBLISH_EDITOR="Alpine Concierge Tirol";
   const travelProgressSteps=[
     "Anfrage eingegangen",
@@ -363,6 +366,329 @@
     localStorage.setItem(STORAGE_KEY,JSON.stringify(customers));
   }
 
+  function pushMasterFieldsToCrm(customer){
+    const lib=crmLibrary();
+    if(lib?.pushMasterFieldsToCrm)return lib.pushMasterFieldsToCrm(customer);
+    return customer;
+  }
+
+  function formatSaveTime(date){
+    if(!date)return "";
+    return date.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+  }
+
+  function setSaveStatus(status,message){
+    saveState.status=status;
+    if(message!==undefined)saveState.lastError=message;
+    updateSaveStatusUI();
+  }
+
+  function updateSaveStatusUI(){
+    const button=byId("saveDraftButton");
+    const statusEl=byId("saveStatus");
+    const retryButton=byId("retrySyncButton");
+    const label=button?.querySelector(".save-button-label");
+    const spinner=button?.querySelector(".save-button-spinner");
+    const check=button?.querySelector(".save-button-check");
+    if(!button||!statusEl)return;
+    button.classList.remove("is-saving","is-success","is-warning","is-error");
+    statusEl.classList.remove("is-dirty","is-saving","is-success","is-warning","is-error");
+    if(spinner)spinner.hidden=true;
+    if(check)check.hidden=true;
+    button.disabled=saveState.saving;
+    if(retryButton)retryButton.hidden=saveState.status!=="sync-error"||saveState.saving;
+    if(saveState.saving){
+      button.classList.add("is-saving");
+      statusEl.classList.add("is-saving");
+      if(label)label.textContent="Wird gespeichert …";
+      if(spinner)spinner.hidden=false;
+      statusEl.textContent="Wird gespeichert …";
+      return;
+    }
+    if(saveState.status==="dirty"){
+      button.classList.add("is-warning");
+      statusEl.classList.add("is-dirty");
+      if(label)label.textContent="Speichern";
+      statusEl.textContent="Ungespeicherte Änderungen";
+      return;
+    }
+    if(saveState.status==="saved-cloud"){
+      button.classList.add("is-success");
+      statusEl.classList.add("is-success");
+      if(label)label.textContent="Speichern";
+      if(check)check.hidden=false;
+      statusEl.textContent=saveState.lastSavedAt?`Gespeichert um ${formatSaveTime(saveState.lastSavedAt)}`:"Gespeichert";
+      return;
+    }
+    if(saveState.status==="sync-error"){
+      button.classList.add("is-warning");
+      statusEl.classList.add("is-warning");
+      if(label)label.textContent="Speichern";
+      statusEl.textContent="Lokal gespeichert – Cloud-Sync fehlgeschlagen";
+      return;
+    }
+    if(saveState.status==="error"){
+      button.classList.add("is-error");
+      statusEl.classList.add("is-error");
+      if(label)label.textContent="Speichern";
+      statusEl.textContent=saveState.lastError||"Speichern fehlgeschlagen";
+      return;
+    }
+    if(label)label.textContent="Speichern";
+    statusEl.textContent=saveState.lastSavedAt?`Gespeichert um ${formatSaveTime(saveState.lastSavedAt)}`:"";
+  }
+
+  function markDirty(){
+    if(saveState.saving||adminMode!=="edit")return;
+    saveState.dirty=true;
+    saveState.status="dirty";
+    updateSaveStatusUI();
+  }
+
+  function resetSaveStateForCustomer(){
+    saveState.dirty=false;
+    saveState.saving=false;
+    saveState.lastError="";
+    saveState.status="saved-local";
+    updateSaveStatusUI();
+  }
+
+  function customerSaveFingerprint(customer){
+    const c=ensureCollections(customer);
+    return JSON.stringify({
+      customerId:c.customerId,
+      customerName:c.customerName,
+      companions:c.companions,
+      tripName:c.tripName,
+      region:c.region,
+      startDatePlain:c.startDatePlain,
+      endDatePlain:c.endDatePlain,
+      phone:c.phone,
+      email:c.email,
+      whatsapp:c.whatsapp,
+      status:c.status,
+      publicationState:c.publicationState,
+      program:c.program,
+      accommodations:c.accommodations,
+      documents:c.documents,
+      bookings:c.bookings,
+      crmSummary:c.crm?{
+        tasks:(c.crm.tasks||[]).length,
+        notes:(c.crm.notes||[]).length,
+        communications:(c.crm.communications||[]).length
+      }:null,
+      publishMeta:c.publishMeta||null
+    });
+  }
+
+  function validateCustomerForSave(customer){
+    const errors=[];
+    const id=String(customer?.customerId||"").trim();
+    if(!id)errors.push("Kunden-ID fehlt");
+    if(!String(customer?.customerName||"").trim())errors.push("Kundenname fehlt");
+    return {valid:!errors.length,errors,id};
+  }
+
+  function verifySavedCustomer(expected,customerId){
+    const saved=customers[customerId];
+    if(!saved)return {ok:false,reason:"Gespeicherter Kunde nicht gefunden"};
+    if(saved.customerId!==customerId)return {ok:false,reason:"Kunden-ID stimmt nicht überein"};
+    if(customerSaveFingerprint(saved)!==customerSaveFingerprint(expected))return {ok:false,reason:"Gespeicherte Daten stimmen nicht mit dem Formular überein"};
+    return {ok:true};
+  }
+
+  function readEditorsInto(customer){
+    const target=ensureCollections(customer);
+    document.querySelectorAll("[data-editor]").forEach(card=>{
+      const listName=card.dataset.editor;
+      const index=Number(card.dataset.index);
+      if(!Array.isArray(target[listName])||index<0||index>=target[listName].length)return;
+      const next={...(target[listName][index]||{})};
+      card.querySelectorAll("[data-field]").forEach(field=>{
+        const name=field.dataset.field;
+        let value=field.dataset.combo==="true"?comboValue(field):field.dataset.timeSelect==="true"?timeValue(field):field.value;
+        if(value==="true")value=true;
+        if(value==="false")value=false;
+        next[name]=value;
+      });
+      if(listName==="program"&&next.dateValue){
+        next.date=next.date||formatDate(next.dateValue);
+      }
+      if(listName==="program")normalizeProgramItem(next);
+      target[listName][index]=listName==="documents"?normalizeDocumentItem(next):next;
+    });
+    target.documents=target.documents.map(normalizeDocumentItem);
+    target.program.sort((a,b)=>`${a.dateValue||a.date} ${a.startTime||""}`.localeCompare(`${b.dateValue||b.date} ${b.startTime||""}`));
+    target.hotel=target.accommodations[0]||target.hotel||{};
+    return target;
+  }
+
+  function readMasterFields(customer){
+    const form=byId("masterForm");
+    if(!form)return ensureCollections(customer);
+    const previous=ensureCollections(customer);
+    const nextId=form.elements.customerId.value.trim()||generateId();
+    const next={...previous};
+    next.customerId=nextId;
+    next.customerName=form.elements.customerName.value.trim();
+    next.companions=form.elements.companions.value.trim();
+    next.tripName=form.elements.tripName.value.trim();
+    next.tripTitle=next.tripName;
+    next.startDatePlain=form.elements.startDatePlain.value;
+    next.endDatePlain=form.elements.endDatePlain.value;
+    next.travelPeriod=next.startDatePlain&&next.endDatePlain?`${formatDate(next.startDatePlain)} - ${formatDate(next.endDatePlain)}`:next.startDatePlain?formatDate(next.startDatePlain):"";
+    next.startDate=next.startDatePlain?`${next.startDatePlain}T10:00:00+02:00`:previous.startDate;
+    next.region=comboValue(form.elements.region);
+    next.latitude=form.elements.latitude.value.trim();
+    next.longitude=form.elements.longitude.value.trim();
+    ({latitude:next.latitude,longitude:next.longitude}=sanitizeCoordinates(next.latitude,next.longitude));
+    next.weatherLocationName=form.elements.weatherLocationName.value.trim()||next.region;
+    next.language=comboValue(form.elements.language);
+    next.concierge=form.elements.concierge.value.trim();
+    next.phone=form.elements.phone.value.trim();
+    next.email=form.elements.email.value.trim();
+    next.whatsapp=form.elements.whatsapp.value.trim();
+    next.status=comboValue(form.elements.status);
+    next.progressSteps=travelProgressSteps;
+    next.version=form.elements.version.value.trim()||"1.0";
+    next.updatedAt=form.elements.updatedAt.value.trim()||new Date().toLocaleDateString("de-DE");
+    next.publicationState=comboValue(form.elements.publicationState)||"Entwurf";
+    next.requirements=readRequirements();
+    next.publishStatus=next.publicationState==="Veröffentlicht"?"published":"draft";
+    next.contact={...(next.contact||{}),phone:next.phone,whatsapp:next.whatsapp,email:next.email};
+    return pushMasterFieldsToCrm(next);
+  }
+
+  function applyMasterData(customer){
+    const previousId=activeId;
+    const nextId=customer.customerId;
+    if(previousId!==nextId&&customers[previousId])delete customers[previousId];
+    activeId=nextId;
+    customers[activeId]=ensureCollections(customer);
+    return customers[activeId];
+  }
+
+  function readMasterInto(customer){
+    return applyMasterData(readMasterFields(customer));
+  }
+
+  function collectCustomerFromForms(){
+    const customer=readEditorsInto(ensureCollections(activeCustomer()));
+    return readMasterFields(customer);
+  }
+
+  async function saveCustomerDraft(options={}){
+    if(saveState.saving)return;
+    if(adminMode!=="edit"){
+      setSaveStatus("error","Speichern ist nur im Bearbeitungsmodus möglich.");
+      return;
+    }
+    const saveTargetId=activeId;
+    saveState.saving=true;
+    saveState.status="saving";
+    updateSaveStatusUI();
+    try{
+      let customer=collectCustomerFromForms();
+      const validation=validateCustomerForSave(customer);
+      if(!validation.valid){
+        saveState.dirty=true;
+        setSaveStatus("error",validation.errors.join(". "));
+        return;
+      }
+      if(activeId!==saveTargetId){
+        throw new Error("Der aktive Kunde hat sich während des Speicherns geändert.");
+      }
+      customer=applyMasterData(customer);
+      if(customer.publicationState!=="Veröffentlicht"){
+        customer.publicationState=customer.publicationState||"Entwurf";
+        customer.publishStatus="draft";
+      }
+      customer.updatedAt=new Date().toLocaleDateString("de-DE");
+      customer._lastSavedAt=new Date().toISOString();
+      const savedId=customer.customerId;
+      customer=commitCustomer(customer,savedId);
+      const expectedFingerprint=customerSaveFingerprint(customer);
+      customerLocalRevision[savedId]=(customerLocalRevision[savedId]||0)+1;
+      saveCustomers();
+      const savedFingerprint=customerSaveFingerprint(customers[savedId]);
+      if(expectedFingerprint!==savedFingerprint)throw new Error("Speicherkontrolle fehlgeschlagen");
+      if(activeId!==savedId)throw new Error("Es wurde ein anderer Kunde gespeichert als erwartet.");
+      const savedLocal=customers[savedId];
+      let cloudOk=false;
+      let cloudError="";
+      const db=firebaseDatabase();
+      if(db){
+        try{
+          const authCheck=await window.ACTFirebaseAuth?.requireAdmin?.();
+          if(authCheck?.allowed){
+            await db.saveDraftCustomer(clone(savedLocal));
+            cloudOk=true;
+          }else{
+            cloudError="Cloud-Sync: Keine Admin-Berechtigung";
+          }
+        }catch(error){
+          cloudError=error&&error.message?error.message:"Cloud-Sync fehlgeschlagen";
+        }
+      }else{
+        cloudError="Firebase nicht verfügbar";
+      }
+      saveState.dirty=false;
+      saveState.lastSavedAt=new Date();
+      if(cloudOk){
+        saveState.status="saved-cloud";
+        saveState.lastError="";
+        setFirebaseStatus("Entwurf wurde in Firestore gespeichert.");
+      }else{
+        saveState.status="sync-error";
+        saveState.lastError=cloudError;
+        setFirebaseStatus(`Lokal gespeichert. ${cloudError}`,true);
+      }
+      renderAll();
+      updateSaveStatusUI();
+      if(cloudOk){
+        window.setTimeout(()=>{
+          if(!saveState.dirty&&saveState.status==="saved-cloud")updateSaveStatusUI();
+        },2400);
+      }
+    }catch(error){
+      saveState.dirty=true;
+      setSaveStatus("error",error&&error.message?error.message:"Speichern fehlgeschlagen");
+    }finally{
+      saveState.saving=false;
+      updateSaveStatusUI();
+    }
+  }
+
+  async function retryCloudSync(){
+    if(saveState.saving||!activeId)return;
+    const customer=customers[activeId];
+    if(!customer){
+      setSaveStatus("error","Kein aktiver Kunde für die Synchronisation.");
+      return;
+    }
+    saveState.saving=true;
+    saveState.status="saving";
+    updateSaveStatusUI();
+    try{
+      const db=firebaseDatabase();
+      if(!db)throw new Error("Firebase nicht verfügbar");
+      const authCheck=await window.ACTFirebaseAuth?.requireAdmin?.();
+      if(!authCheck?.allowed)throw new Error("Keine Admin-Berechtigung für Cloud-Sync");
+      await db.saveDraftCustomer(clone(customer));
+      saveState.status="saved-cloud";
+      saveState.lastError="";
+      saveState.lastSavedAt=new Date();
+      setFirebaseStatus("Cloud-Synchronisation erfolgreich.");
+    }catch(error){
+      saveState.status="sync-error";
+      saveState.lastError=error&&error.message?error.message:"Cloud-Sync fehlgeschlagen";
+      setFirebaseStatus(`Cloud-Sync fehlgeschlagen. ${saveState.lastError}`,true);
+    }finally{
+      saveState.saving=false;
+      updateSaveStatusUI();
+    }
+  }
+
   function firebaseDatabase(){
     return window.ACTFirebaseDatabase||null;
   }
@@ -388,6 +714,7 @@
       return;
     }
     try{
+      firebaseLoadStartedAt=Date.now();
       const authCheck=await window.ACTFirebaseAuth?.requireAdmin?.();
       if(!authCheck||!authCheck.allowed){
         setFirebaseStatus(authCheck?.message||"Firebase Admin-Zugriff erst nach Anmeldung verfuegbar.",true);
@@ -395,7 +722,13 @@
       }
       const firebaseCustomers=await db.loadCustomersForAdmin();
       if(Object.keys(firebaseCustomers).length){
-        customers=normalizeCustomersMap(firebaseCustomers);
+        const merged={...customers};
+        Object.entries(firebaseCustomers).forEach(([id,remote])=>{
+          if(customerLocalRevision[id]>0)return;
+          if(saveState.dirty&&id===activeId)return;
+          merged[id]=remote;
+        });
+        customers=normalizeCustomersMap(merged);
         try{
           const crmMap=await db.loadAllCrmForAdmin(Object.keys(customers));
           const lib=crmLibrary();
@@ -435,17 +768,18 @@
     }
   }
 
-  function saveDraftToFirebase(customer){
+  async function saveDraftToFirebase(customer){
     const db=firebaseDatabase();
-    if(!db)return;
-    db.saveDraftCustomer(clone(customer)).then(()=>{
+    if(!db)return {cloud:false,error:"Firebase nicht geladen"};
+    try{
+      await db.saveDraftCustomer(clone(customer));
       setFirebaseStatus("Entwurf wurde in Firestore gespeichert.");
-      db.saveCrmRecord(clone(customer)).catch(error=>{
-        console.warn("[ACT Admin] CRM Firestore:",error&&error.message?error.message:"Fehler");
-      });
-    }).catch(error=>{
-      setFirebaseStatus(`Entwurf lokal gespeichert. Firebase-Speicherung nicht möglich: ${error&&error.message?error.message:""}`,true);
-    });
+      return {cloud:true};
+    }catch(error){
+      const message=error&&error.message?error.message:"Firebase-Speicherung nicht möglich";
+      setFirebaseStatus(`Entwurf lokal gespeichert. ${message}`,true);
+      return {cloud:false,error:message};
+    }
   }
 
   async function migrateLocalToFirebase(){
@@ -1649,43 +1983,14 @@
   }
 
   function readMaster(){
-    const form=byId("masterForm");
-    const previous=ensureCollections(activeCustomer());
-    const nextId=form.elements.customerId.value.trim()||generateId();
-    const next={...previous};
-    next.customerId=nextId;
-    next.customerName=form.elements.customerName.value.trim();
-    next.companions=form.elements.companions.value.trim();
-    next.tripName=form.elements.tripName.value.trim();
-    next.tripTitle=next.tripName;
-    next.startDatePlain=form.elements.startDatePlain.value;
-    next.endDatePlain=form.elements.endDatePlain.value;
-    next.travelPeriod=next.startDatePlain&&next.endDatePlain?`${formatDate(next.startDatePlain)} - ${formatDate(next.endDatePlain)}`:next.startDatePlain?formatDate(next.startDatePlain):"";
-    next.startDate=next.startDatePlain?`${next.startDatePlain}T10:00:00+02:00`:previous.startDate;
-    next.region=comboValue(form.elements.region);
-    next.latitude=form.elements.latitude.value.trim();
-    next.longitude=form.elements.longitude.value.trim();
-    ({latitude:next.latitude,longitude:next.longitude}=sanitizeCoordinates(next.latitude,next.longitude));
-    next.weatherLocationName=form.elements.weatherLocationName.value.trim()||next.region;
-    next.language=comboValue(form.elements.language);
-    next.concierge=form.elements.concierge.value.trim();
-    next.phone=form.elements.phone.value.trim();
-    next.email=form.elements.email.value.trim();
-    next.whatsapp=form.elements.whatsapp.value.trim();
-    next.status=comboValue(form.elements.status);
-    next.progressSteps=travelProgressSteps;
-    next.version=form.elements.version.value.trim()||"1.0";
-    next.updatedAt=form.elements.updatedAt.value.trim()||new Date().toLocaleDateString("de-DE");
-    next.publicationState=comboValue(form.elements.publicationState)||"Entwurf";
-    next.requirements=readRequirements();
-    next.publishStatus=next.publicationState==="Veröffentlicht"?"published":"draft";
-    next.contact={...(next.contact||{}),phone:next.phone,whatsapp:next.whatsapp,email:next.email};
-    delete customers[activeId];
-    activeId=nextId;
-    customers[activeId]=ensureCollections(next);
-    saveCustomers();
-    saveDraftToFirebase(customers[activeId]);
-    renderAll();
+    return readMasterInto(ensureCollections(activeCustomer()));
+  }
+
+  function readEditors(){
+    const customer=readEditorsInto(ensureCollections(activeCustomer()));
+    customer.updatedAt=new Date().toLocaleDateString("de-DE");
+    commitCustomer(customer);
+    return customer;
   }
 
   function formatDate(value){
@@ -1782,33 +2087,6 @@
     return `<label>${label}<input type="text" data-field="${name}" value="${escapeHtml(value)}">${hint}</label>`;
   }
 
-  function readEditors(){
-    const customer=ensureCollections(activeCustomer());
-    document.querySelectorAll("[data-editor]").forEach(card=>{
-      const listName=card.dataset.editor;
-      const index=Number(card.dataset.index);
-      const next={...(customer[listName][index]||{})};
-      card.querySelectorAll("[data-field]").forEach(field=>{
-        const name=field.dataset.field;
-        let value=field.dataset.combo==="true"?comboValue(field):field.dataset.timeSelect==="true"?timeValue(field):field.value;
-        if(value==="true")value=true;
-        if(value==="false")value=false;
-        next[name]=value;
-      });
-      if(listName==="program"&&next.dateValue){
-        next.date=next.date||formatDate(next.dateValue);
-      }
-      if(listName==="program")normalizeProgramItem(next);
-      customer[listName][index]=listName==="documents"?normalizeDocumentItem(next):next;
-    });
-    customer.documents=customer.documents.map(normalizeDocumentItem);
-    customer.program.sort((a,b)=>`${a.dateValue||a.date} ${a.startTime||""}`.localeCompare(`${b.dateValue||b.date} ${b.startTime||""}`));
-    customer.hotel=customer.accommodations[0]||customer.hotel||{};
-    customer.updatedAt=new Date().toLocaleDateString("de-DE");
-    commitCustomer(customer);
-    saveCustomers();
-  }
-
   function addItem(listName){
     readEditors();
     const customer=ensureCollections(activeCustomer());
@@ -1822,6 +2100,7 @@
     if(listName==="program")pendingScrollItemId=item.id;
     commitCustomer(customer);
     saveCustomers();
+    markDirty();
     renderAll();
     if(pendingScrollItemId)scrollToEditorItem(pendingScrollItemId);
   }
@@ -1855,6 +2134,7 @@
     if(!window.confirm(`Diesen Eintrag wirklich löschen?\n\n${label}`))return;
     activeCustomer()[listName].splice(index,1);
     saveCustomers();
+    markDirty();
     renderAll();
   }
 
@@ -2140,6 +2420,9 @@
     activeId=id;
     adminMode="edit";
     saveCustomers();
+    resetSaveStateForCustomer();
+    saveState.status="dirty";
+    updateSaveStatusUI();
     renderAll();
     scrollToMasterForm();
     window.setTimeout(()=>{
@@ -2178,6 +2461,9 @@
     activeId=nextId;
     adminMode="edit";
     saveCustomers();
+    resetSaveStateForCustomer();
+    saveState.status="dirty";
+    updateSaveStatusUI();
     renderAll();
     scrollToMasterForm();
   }
@@ -2221,8 +2507,7 @@
 
   function openPublishDialog(id){
     if(adminMode==="edit"){
-      readMaster();
-      readEditors();
+      applyMasterData(collectCustomerFromForms());
       id=activeId;
     }
     pendingPublishId=id;
@@ -2363,8 +2648,7 @@
     const id=pendingPublishId||activeId;
     const workflow=publishWorkflow();
     if(adminMode==="edit"){
-      readMaster();
-      readEditors();
+      applyMasterData(collectCustomerFromForms());
     }
     let customer=activeCustomer();
     const validation=workflow?workflow.validateForPublish(customer):{ok:true,errors:[]};
@@ -2727,8 +3011,7 @@
   function openSaveTemplateModal(){
     const lib=templateLib();
     if(!lib)return;
-    readMaster();
-    readEditors();
+    applyMasterData(collectCustomerFromForms());
     const customer=activeCustomer();
     renderTemplateTypeOptions("saveTemplateTypeSelect",null,"completeTrips");
     renderTemplateCategoryOptions("saveTemplateCategorySelect","");
@@ -2753,8 +3036,7 @@
   async function confirmSaveTemplate(){
     const lib=templateLib();
     if(!lib)return;
-    readMaster();
-    readEditors();
+    applyMasterData(collectCustomerFromForms());
     const customer=activeCustomer();
     const form=byId("saveTemplateForm");
     if(!form||!form.title.value.trim()){
@@ -3041,7 +3323,15 @@
     byId("newCustomerButton").addEventListener("click",newCustomer);
     byId("loadDemoExamplesButton")?.addEventListener("click",seedDemoExamples);
     byId("generateIdButton").addEventListener("click",()=>{byId("masterForm").elements.customerId.value=generateId()});
-    byId("masterForm").addEventListener("submit",event=>{event.preventDefault();readMaster()});
+    byId("masterForm").addEventListener("submit",event=>{event.preventDefault();applyMasterData(collectCustomerFromForms());markDirty()});
+    byId("masterForm").addEventListener("input",markDirty);
+    byId("masterForm").addEventListener("change",markDirty);
+    window.addEventListener("beforeunload",event=>{
+      if(saveState.dirty&&!saveState.saving){
+        event.preventDefault();
+        event.returnValue="";
+      }
+    });
     document.addEventListener("change",event=>{
       const upload=event.target.closest("[data-upload-document]");
       if(upload){
@@ -3050,13 +3340,13 @@
       }
       if(event.target.matches("select[data-combo-list]"))updateComboCustom(event.target);
       if(event.target.matches("select[data-time-select]"))updateTimeCustom(event.target);
-      if(event.target.closest("#requirementsPicker"))updateRequirementsCustom();
-      if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()}
+      if(event.target.closest("#requirementsPicker")){updateRequirementsCustom();markDirty()}
+      if(event.target.closest("[data-editor]")){readEditors();markDirty();renderLinks();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()}
     });
-    document.addEventListener("input",event=>{if(event.target.closest("[data-editor]")){readEditors();renderLinks();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()}});
+    document.addEventListener("input",event=>{if(event.target.closest("[data-editor]")){readEditors();markDirty();renderLinks();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()}});
     document.addEventListener("click",event=>{
       const edit=event.target.closest("[data-edit-customer]");
-      if(edit){activeId=edit.dataset.editCustomer;adminMode="edit";renderAll();scrollToMasterForm();}
+      if(edit){activeId=edit.dataset.editCustomer;adminMode="edit";resetSaveStateForCustomer();renderAll();scrollToMasterForm();}
       const openCrm=event.target.closest("[data-open-crm]");
       if(openCrm)openCrmAkte(openCrm.dataset.openCrm);
       const open=event.target.closest("[data-open-customer]");
@@ -3090,7 +3380,7 @@
       const editBooking=event.target.closest("[data-edit-booking]");
       if(editBooking){const booking=findBookingById(editBooking.dataset.editBooking);if(booking)openBookingModal(booking,booking.customerId);}
       const openBookingCustomer=event.target.closest("[data-open-booking-customer]");
-      if(openBookingCustomer){activeId=openBookingCustomer.dataset.openBookingCustomer;adminMode="edit";renderAll();scrollToMasterForm();}
+      if(openBookingCustomer){activeId=openBookingCustomer.dataset.openBookingCustomer;adminMode="edit";resetSaveStateForCustomer();renderAll();scrollToMasterForm();}
       const createBooking=event.target.closest("[data-create-booking]");
       if(createBooking)createBookingFromProgram(Number(createBooking.dataset.createBooking));
       const removeBookingDoc=event.target.closest("[data-remove-booking-doc]");
@@ -3186,7 +3476,8 @@
     byId("previewDraftButton").addEventListener("click",()=>{previewMode="draft";renderAdminPreview();renderPublishChanges()});
     byId("previewLiveButton").addEventListener("click",()=>{previewMode="live";renderAdminPreview()});
     byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId,{admin:true}),"_blank","noopener"));
-    byId("saveDraftButton").addEventListener("click",()=>{readMaster();readEditors();activeCustomer().publicationState="Entwurf";activeCustomer().publishStatus="draft";activeCustomer().updatedAt=new Date().toLocaleDateString("de-DE");saveCustomers();saveDraftToFirebase(activeCustomer());renderAll()});
+    byId("saveDraftButton").addEventListener("click",()=>saveCustomerDraft());
+    byId("retrySyncButton")?.addEventListener("click",()=>retryCloudSync());
     byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId,{admin:true}),"_blank","noopener"));
     byId("markPublishedButton").addEventListener("click",()=>openPublishDialog(activeId));
     byId("restorePublishedButton").addEventListener("click",restoreLastPublished);
@@ -3228,6 +3519,7 @@
     byId("loginScreen").hidden=true;
     byId("adminShell").hidden=false;
     try{
+      resetSaveStateForCustomer();
       renderAll();
       const hash=location.hash.replace(/^#/,"");
       if(hash&&byId(hash))navigateMainSection(hash);

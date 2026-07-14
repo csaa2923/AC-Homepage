@@ -420,8 +420,18 @@
         <div class="full" id="publishChangesPanel"></div>
         <label>Diesen Link erhält der Kunde<input id="portalLink" readonly></label>
         <p class="muted full">Alle Änderungen werden zuerst im Entwurf gespeichert. Das Kundenportal zeigt ausschließlich die veröffentlichte Live-Version.</p>
+        <div class="save-status-bar full">
+          <div class="form-actions save-actions">
+            <button class="button soft save-draft-button" id="saveDraftButton" type="button">
+              <span class="save-button-label">Speichern</span>
+              <span class="save-button-spinner" hidden aria-hidden="true"></span>
+              <span class="save-button-check" hidden aria-hidden="true">✓</span>
+            </button>
+            <button class="button soft" id="retrySyncButton" type="button" hidden>Erneut synchronisieren</button>
+          </div>
+          <p class="save-status" id="saveStatus" aria-live="polite"></p>
+        </div>
         <div class="form-actions">
-          <button class="button soft" id="saveDraftButton" type="button">Entwurf speichern</button>
           <button class="button soft" id="saveAsTemplateButton" type="button">Als Vorlage speichern</button>
           <button class="button primary" id="markPublishedButton" type="button">Veröffentlichen</button>
           <button class="button soft" id="restorePublishedButton" type="button">Letzte Veröffentlichung wiederherstellen</button>

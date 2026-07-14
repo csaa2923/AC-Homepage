@@ -142,6 +142,20 @@ Ein separater Public Snapshot ist sicherer als ein Share-Dokument, das nur auf `
 
 Das Share-Dokument behaelt trotzdem `publishedVersionId`, damit nachvollziehbar ist, aus welchem Veroeffentlichungsstand der Snapshot erzeugt wurde.
 
+### Verbindliche Entscheidungen fuer die Phase-1-Implementierung
+
+Fuer die spaetere Phase-1-Implementierung sind folgende Entscheidungen verbindlich festgelegt:
+
+- Serverplattform: **Firebase Functions v2**.
+- Token-Hashing: **HMAC-SHA-256**.
+- Secret-Verwaltung: **Google Secret Manager**.
+- Link-Ablauf: standardmaessig **kein Ablaufdatum**; `expiresAt` ist optional administrativ setzbar.
+- PIN-Schutz: standardmaessig **deaktiviert**; optionale Aktivierung bleibt vorbereitet.
+- Neue Veroeffentlichung: ein bestehender Share wird **nicht automatisch aktualisiert**.
+- Dokumentzugriff: ueber **kurzlebige signierte URLs** mit maximal **5 Minuten Laufzeit**.
+- Missbrauchsschutz Phase 1: zunaechst **Rate Limiting**.
+- App Check: erst in einem spaeteren Auftrag.
+
 ## 4. Datenmodell
 
 ### `portalShares/{shareId}`
@@ -149,7 +163,7 @@ Das Share-Dokument behaelt trotzdem `publishedVersionId`, damit nachvollziehbar 
 ```json
 {
   "shareId": "ps_...",
-  "tokenHash": "sha256:...",
+  "tokenHash": "hmac-sha256:...",
   "customerId": "customer-id",
   "tripId": "trip-id-or-current-customer-id",
   "publishedVersionId": "v1-2-...",
@@ -255,11 +269,12 @@ Storage-Pfad und Download-URL bleiben intern.
 - Speicherung als `tokenHash`, zum Beispiel:
 
 ```text
-sha256:<base64url-digest>
+hmac-sha256:<base64url-digest>
 ```
 
-- Optional zusaetzlich serverseitiger Pepper ueber Cloud Function Secret Manager.
-- Empfehlung: `SHA-256(rawToken + serverPepper)` oder HMAC-SHA-256 mit Secret-Manager-Key.
+- Verbindlich fuer Phase 1: HMAC-SHA-256 mit Secret aus Google Secret Manager.
+- Das Secret wird nicht im Repository, nicht im Client und nicht in Firestore gespeichert.
+- Secret-Rotation wird in einem spaeteren Betriebs-/Recovery-Auftrag festgelegt.
 
 ### Share-ID
 
@@ -355,7 +370,7 @@ match /customers/{customerId}/documents/{allPaths=**} {
 }
 ```
 
-Falls spaeter signierte URLs genutzt werden, muessen sie kurzlebig sein. Bei Widerruf des Share-Links bleiben bereits ausgegebene kurzlebige URLs nur bis zu ihrer kurzen Ablaufzeit gueltig. Empfohlen: 1 bis 5 Minuten.
+Dokumente werden in Phase 1 ueber kurzlebige signierte URLs ausgeliefert. Die maximale Laufzeit betraegt 5 Minuten. Bei Widerruf des Share-Links bleiben bereits ausgegebene kurzlebige URLs nur bis zu ihrer kurzen Ablaufzeit gueltig.
 
 ## 8. Admin-Workflow
 
@@ -392,12 +407,14 @@ Falls spaeter signierte URLs genutzt werden, muessen sie kurzlebig sein. Bei Wid
 ### Ablaufdatum setzen
 
 - Admin kann `expiresAt` setzen oder entfernen.
+- Standardmaessig wird kein Ablaufdatum gesetzt.
 - Ablauf wird serverseitig geprueft.
 - Abgelaufene Links koennen im Admin als `expired` angezeigt oder dynamisch als abgelaufen bewertet werden.
 
 ### Optional PIN setzen
 
 - Admin setzt PIN optional beim Erzeugen oder Bearbeiten.
+- Standardmaessig ist PIN-Schutz deaktiviert.
 - PIN wird serverseitig gehasht gespeichert.
 - Kunde muss PIN nach Linkaufruf eingeben.
 - Mehrere falsche PIN-Versuche werden rate-limitiert.
@@ -406,12 +423,12 @@ Falls spaeter signierte URLs genutzt werden, muessen sie kurzlebig sein. Bei Wid
 
 - Share zeigt auf `publishedVersionId`.
 - Snapshot enthaelt `version` und `contentHash`.
-- Neue Veroeffentlichung aktualisiert bestehende Shares nicht automatisch ohne klare Admin-Entscheidung.
+- Neue Veroeffentlichung aktualisiert bestehende Shares nicht automatisch.
 
-Empfehlung fuer Phase 1:
+Verbindlich fuer Phase 1:
 
 - Nach neuer Veroeffentlichung zeigt Admin den Share-Status "Aktualisierung verfuegbar".
-- Admin kann "Share auf neue Live-Version aktualisieren" klicken.
+- Admin kann spaeter bewusst "Share auf neue Live-Version aktualisieren" ausloesen.
 - Dadurch wird ein neuer Public Snapshot erzeugt, der bestehende Link bleibt aber gleich.
 
 ### Restore einer aelteren Version
@@ -591,15 +608,14 @@ Cache-Control: no-store
 - Ohne Emulator-Tests besteht Risiko falscher Rules.
 - Ohne Monitoring bleiben missbrauchte oder haeufig genutzte Share-Links unbemerkt.
 
-### Offene Entscheidungen
+### Verbleibende offene Entscheidungen
 
-- Genaue Cloud Function Plattform: Firebase Functions v2 oder Cloud Run.
-- Hash-Verfahren: SHA-256 plus Secret-Pepper oder HMAC-SHA-256.
-- Standard-Ablaufzeit fuer Links.
-- PIN standardmaessig aus oder fuer sensible Reisen an.
-- Ob bestehende Links bei neuer Veroeffentlichung automatisch aktualisiert werden duerfen.
-- Ob Dokumente gestreamt oder per kurzlebiger signierter URL ausgeliefert werden.
-- App Check fuer Portal-Function aktivieren oder zunaechst nur Rate Limiting.
+- Konkretes Rate-Limiting-Verfahren fuer Firebase Functions v2.
+- Secret-Rotation und Umgang mit alten Token-Hashes.
+- Standard-UI fuer optionales Ablaufdatum.
+- PIN-Hashing-Verfahren, falls PIN-Schutz spaeter aktiviert wird.
+- Ob Dokument-URLs 1, 3 oder exakt 5 Minuten gueltig sein sollen; Obergrenze bleibt 5 Minuten.
+- App Check Details fuer einen spaeteren Auftrag.
 
 ## 14. Konkrete Abnahmekriterien fuer die spaetere Implementierung
 
@@ -653,4 +669,3 @@ Cache-Control: no-store
 - `docs/PORTAL_SHARE_IMPLEMENTATION.md`
 - `docs/PORTAL_SHARE_RUNBOOK.md`
 - `docs/STORAGE_DOCUMENT_ACCESS.md`
-

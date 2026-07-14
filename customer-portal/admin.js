@@ -577,6 +577,11 @@
     return readMasterFields(customer);
   }
 
+  function syncFormsToMemory(){
+    if(adminMode!=="edit")return ensureCollections(activeCustomer());
+    return applyMasterData(collectCustomerFromForms());
+  }
+
   async function saveCustomerDraft(options={}){
     if(saveState.saving)return;
     if(adminMode!=="edit"){
@@ -2088,7 +2093,7 @@
   }
 
   function addItem(listName){
-    readEditors();
+    syncFormsToMemory();
     const customer=ensureCollections(activeCustomer());
     const factories={
       program:()=>({id:`item-${Date.now()}`,date:"",dateValue:"",endDateValue:"",startTime:"10:00",endTime:"11:00",title:"Neuer Programmpunkt",shortDescription:"",description:"",category:"Concierge-Service",meetingPoint:"",address:"",navigationUrl:"",outfit:"",notes:"",contactPerson:"",phone:"",status:"In Planung",calendarEnabled:true,colorClass:"type-concierge",images:[],documents:[]}),
@@ -2128,7 +2133,7 @@
   }
 
   function removeItem(listName,index){
-    readEditors();
+    syncFormsToMemory();
     const item=activeCustomer()[listName][index]||{};
     const label=item.title||item.name||item.id||`${listName} ${index+1}`;
     if(!window.confirm(`Diesen Eintrag wirklich löschen?\n\n${label}`))return;
@@ -2140,7 +2145,7 @@
 
   async function uploadDocument(index,file){
     if(!file)return;
-    readEditors();
+    syncFormsToMemory();
     const customer=ensureCollections(activeCustomer());
     const item=customer.documents[index]||{};
     const status=byId("documentsEditor")?.querySelector(`[data-upload-status="${index}"]`);

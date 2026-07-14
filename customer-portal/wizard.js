@@ -134,32 +134,37 @@
     if(state.step===6)renderOfferPreview();
   }
 
-  function onWizardChange(event){
-    if(event.target.matches("[data-wizard-wish]")){
-      const value=event.target.value;
-      const wishes=new Set(state.data.wishes);
-      if(event.target.checked)wishes.add(value);
-      else wishes.delete(value);
-      state.data.wishes=[...wishes];
-      scheduleDraftSave();
-      render();
-      return;
+  function toggleWizardChoice(group,key){
+    if(group==="portal"){
+      state.data.portal[key]=!state.data.portal[key];
+      return state.data.portal[key];
     }
+    if(group==="communication"){
+      state.data.communication[key]=!state.data.communication[key];
+      return state.data.communication[key];
+    }
+    if(group==="wishes"){
+      const wishes=new Set(state.data.wishes);
+      if(wishes.has(key))wishes.delete(key);
+      else wishes.add(key);
+      state.data.wishes=[...wishes];
+      return wishes.has(key);
+    }
+    return false;
+  }
+
+  function renderChoicePill(group,key,label,selected){
+    return `<div class="wizard-choice-pill${selected?" is-selected":""}" role="checkbox" aria-checked="${selected?"true":"false"}" tabindex="0" data-wizard-toggle="${escapeHtml(group)}" data-wizard-key="${escapeHtml(key)}">
+      <span class="wizard-option-indicator" aria-hidden="true"></span>
+      <span>${escapeHtml(label)}</span>
+    </div>`;
+  }
+
+  function onWizardChange(event){
     if(event.target.matches("[data-wizard-budget]")){
       state.data.budget=event.target.value;
       scheduleDraftSave();
       render();
-      return;
-    }
-    if(event.target.matches("[data-wizard-portal]")){
-      state.data.portal[event.target.dataset.wizardPortal]=event.target.checked;
-      scheduleDraftSave();
-      return;
-    }
-    if(event.target.matches("[data-wizard-comm]")){
-      state.data.communication[event.target.dataset.wizardComm]=event.target.checked;
-      scheduleDraftSave();
-      return;
     }
     if(event.target.matches("#wizardDocumentInput")){
       handleDocumentUpload(event.target.files);
@@ -168,6 +173,16 @@
   }
 
   function onWizardClick(event){
+    const toggle=event.target.closest("[data-wizard-toggle]");
+    if(toggle){
+      const group=toggle.dataset.wizardToggle;
+      const key=toggle.dataset.wizardKey;
+      const selected=toggleWizardChoice(group,key);
+      toggle.classList.toggle("is-selected",selected);
+      toggle.setAttribute("aria-checked",selected?"true":"false");
+      scheduleDraftSave();
+      return;
+    }
     if(event.target.closest("#wizardAddProgramButton")){
       state.showProgramForm=true;
       render();
@@ -563,14 +578,7 @@
 
   function renderWishesStep(){
     const d=state.data;
-    const pills=WISH_OPTIONS.map(wish=>{
-      const checked=d.wishes.includes(wish);
-      return `<label class="wizard-choice-pill${checked?" is-selected":""}">
-        <input type="checkbox" data-wizard-wish value="${escapeHtml(wish)}"${checked?" checked":""}>
-        <span class="wizard-option-indicator" aria-hidden="true"></span>
-        <span>${escapeHtml(wish)}</span>
-      </label>`;
-    }).join("");
+    const pills=WISH_OPTIONS.map(wish=>renderChoicePill("wishes",wish,wish,d.wishes.includes(wish))).join("");
     return `
       <div class="wizard-choice-grid">${pills}</div>
       <div class="wizard-field" style="margin-top:18px">
@@ -803,12 +811,7 @@
       {key:"publishDocuments",label:"Dokumente veröffentlichen"},
       {key:"publishProgram",label:"Reiseprogramm veröffentlichen"}
     ];
-    return `<div class="wizard-choice-grid">${checks.map(c=>`
-      <label class="wizard-choice-pill${p[c.key]?" is-selected":""}">
-        <input type="checkbox" data-wizard-portal="${c.key}"${p[c.key]?" checked":""}>
-        <span class="wizard-option-indicator" aria-hidden="true"></span>
-        <span>${escapeHtml(c.label)}</span>
-      </label>`).join("")}</div>`;
+    return `<div class="wizard-choice-grid cols-2">${checks.map(c=>renderChoicePill("portal",c.key,c.label,!!p[c.key])).join("")}</div>`;
   }
 
   function renderCommunicationStep(){
@@ -819,12 +822,7 @@
       {key:"qrCode",label:"QR-Code"},
       {key:"reminders",label:"Erinnerungen aktivieren"}
     ];
-    return `<div class="wizard-choice-grid">${checks.map(item=>`
-      <label class="wizard-choice-pill${c[item.key]?" is-selected":""}">
-        <input type="checkbox" data-wizard-comm="${item.key}"${c[item.key]?" checked":""}>
-        <span class="wizard-option-indicator" aria-hidden="true"></span>
-        <span>${escapeHtml(item.label)}</span>
-      </label>`).join("")}</div>`;
+    return `<div class="wizard-choice-grid cols-2">${checks.map(item=>renderChoicePill("communication",item.key,item.label,!!c[item.key])).join("")}</div>`;
   }
 
   function renderCompleteStep(){

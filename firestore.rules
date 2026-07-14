@@ -1,0 +1,143 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return signedIn() && request.auth.token.role is string
+        ? request.auth.token.role
+        : "";
+    }
+
+    function isOwner() {
+      return role() == "owner";
+    }
+
+    function isAdmin() {
+      return role() in ["owner", "admin"];
+    }
+
+    function isStaff() {
+      return role() in ["owner", "admin", "concierge", "editor"];
+    }
+
+    function isViewer() {
+      return role() in ["owner", "admin", "concierge", "editor", "viewer"];
+    }
+
+    function hasOrgAccess(orgId) {
+      return signedIn()
+        && (
+          request.auth.token.orgId == orgId
+          || (request.auth.token.orgIds is list && orgId in request.auth.token.orgIds)
+          || isOwner()
+        );
+    }
+
+    function sameOrgOnCreate() {
+      return !("orgId" in request.resource.data) || hasOrgAccess(request.resource.data.orgId);
+    }
+
+    function sameOrgOnExisting() {
+      return !("orgId" in resource.data) || hasOrgAccess(resource.data.orgId);
+    }
+
+    function adminRead() {
+      return isAdmin() && sameOrgOnExisting();
+    }
+
+    function adminWrite() {
+      return isAdmin() && sameOrgOnCreate();
+    }
+
+    function staffWrite() {
+      return isAdmin() && sameOrgOnCreate();
+    }
+
+    /*
+     * Secure draft.
+     *
+     * The current web app still signs in anonymously. Anonymous users do not
+     * receive role claims and are intentionally blocked by this ruleset.
+     *
+     * Future public portal access should use a separate share-token model,
+     * preferably with a dedicated collection that exposes only published,
+     * redacted snapshots. Until then, customer portal reads are denied here.
+     */
+
+    match /customers/{customerId} {
+      allow get, list: if adminRead();
+      allow create, update: if adminWrite();
+      allow delete: if isAdmin() && sameOrgOnExisting();
+
+      match /versions/{versionId} {
+        allow get, list: if adminRead();
+        allow create, update: if adminWrite();
+        allow delete: if isAdmin() && sameOrgOnExisting();
+      }
+    }
+
+    match /templates/library/{type}/{templateId} {
+      allow get, list: if isViewer() && sameOrgOnExisting();
+      allow create, update: if staffWrite();
+      allow delete: if isAdmin() && sameOrgOnExisting();
+    }
+
+    match /customerCrm/{customerId} {
+      allow get, list: if adminRead();
+      allow create, update: if adminWrite();
+      allow delete: if isAdmin() && sameOrgOnExisting();
+    }
+
+    match /customerNotes/{noteId} {
+      allow get, list: if adminRead();
+      allow create, update: if staffWrite();
+      allow delete: if isAdmin() && sameOrgOnExisting();
+    }
+
+    match /customerTasks/{taskId} {
+      allow get, list: if adminRead();
+      allow create, update: if staffWrite();
+      allow delete: if isAdmin() && sameOrgOnExisting();
+    }
+
+    match /customerHistory/{historyId} {
+      allow get, list: if adminRead();
+      allow create, update: if staffWrite();
+      allow delete: if isAdmin() && sameOrgOnExisting();
+    }
+
+    match /customerPreferences/{customerId} {
+      allow get, list: if adminRead();
+      allow create, update: if staffWrite();
+      allow delete: if isAdmin() && sameOrgOnExisting();
+    }
+
+    match /customerRatings/{ratingId} {
+      allow get, list: if adminRead();
+      allow create, update: if staffWrite();
+      allow delete: if isAdmin() && sameOrgOnExisting();
+    }
+
+    match /bookings/{bookingId} {
+      allow get, list: if adminRead();
+      allow create, update: if staffWrite();
+      allow delete: if isAdmin() && sameOrgOnExisting();
+    }
+
+    /*
+     * Optional future share layer. Kept closed until Auftrag 04/05 define
+     * token shape, redaction rules, expiry and rate limiting.
+     */
+    match /portalShares/{shareId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

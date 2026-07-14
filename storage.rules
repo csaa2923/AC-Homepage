@@ -1,0 +1,74 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return signedIn() && request.auth.token.role is string
+        ? request.auth.token.role
+        : "";
+    }
+
+    function isOwner() {
+      return role() == "owner";
+    }
+
+    function isAdmin() {
+      return role() in ["owner", "admin"];
+    }
+
+    function isStaff() {
+      return role() in ["owner", "admin", "concierge", "editor"];
+    }
+
+    function isViewer() {
+      return role() in ["owner", "admin", "concierge", "editor", "viewer"];
+    }
+
+    function hasOrgAccess(orgId) {
+      return signedIn()
+        && (
+          request.auth.token.orgId == orgId
+          || (request.auth.token.orgIds is list && orgId in request.auth.token.orgIds)
+          || isOwner()
+        );
+    }
+
+    function safeFile() {
+      return request.resource == null
+        || (
+          request.resource.size < 25 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|application/vnd.ms-excel|text/.*')
+        );
+    }
+
+    /*
+     * Current paths:
+     * - customers/{customerId}/documents/{category}/{timestamp}-{filename}
+     * - customers/{customerId}/documents/bookings/{bookingId}/{type}/{timestamp}-{filename}
+     * - templates/{type}/{templateId}/images/{timestamp}-{filename}
+     *
+     * Customer portal download access is intentionally closed until a signed
+     * share-token or backend-mediated download model exists.
+     */
+
+    match /customers/{customerId}/documents/{allPaths=**} {
+      allow read: if isAdmin();
+      allow write: if isAdmin() && safeFile();
+      allow delete: if isAdmin();
+    }
+
+    match /templates/{type}/{templateId}/images/{fileName} {
+      allow read: if isAdmin();
+      allow write: if isAdmin() && safeFile();
+      allow delete: if isAdmin();
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

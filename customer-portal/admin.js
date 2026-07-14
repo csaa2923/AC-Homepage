@@ -1885,10 +1885,7 @@
       setFirebaseStatus("Datei wurde hochgeladen und dem Kunden zugeordnet.");
     }catch(error){
       const message=error&&error.message?error.message:String(error);
-      console.error("[ACT Admin] Upload fehlgeschlagen:",{
-        code:error&&error.code,
-        message:error&&error.message
-      });
+      console.error(`[ACT Admin] Upload fehlgeschlagen: ${error&&error.code?error.code:"kein Fehlercode"} - ${error&&error.message?error.message:"Fehler"}`);
       if(status)status.textContent=`Upload fehlgeschlagen: ${message}`;
       setFirebaseStatus(`Upload fehlgeschlagen. localStorage bleibt aktiv. Bitte Firebase Authentication und Storage Rules prüfen. ${message}`,true);
     }

@@ -11,6 +11,8 @@
   let templateActiveType="all";
   let templateSearchQuery="";
   let crmSearchQuery="";
+  let customerQuickTab="all";
+  let customerListFilters={};
   let bookingTab="all";
   let bookingFilters={};
   let editingBookingId="";
@@ -1073,14 +1075,18 @@
   function renderCustomers(){
     const list=byId("customerList");
     if(!list)return;
+    renderCustomerQuickTabs();
+    renderCustomerFilterOptions();
+    const total=Object.keys(customers).length;
     const filtered=filteredCustomersForDisplay();
+    updateCustomerFilterMessage(filtered.length,total);
     const sorted=filtered.map(customer=>[customer.customerId,customer]).sort(([,a],[,b])=>{
       const dateCompare=sortDate(a).localeCompare(sortDate(b));
       if(dateCompare)return dateCompare;
       return String(a.customerName||"").localeCompare(String(b.customerName||""),"de");
     });
     if(!sorted.length){
-      list.innerHTML=`<article class="customer-card"><p class="muted">${crmSearchQuery?"Keine Kunden für diese Suche.":"Noch keine Kunden oder Reisen angelegt."}</p></article>`;
+      list.innerHTML=`<article class="customer-card"><p class="muted">${total?"Keine Kunden für die aktuelle Filterauswahl.":"Noch keine Kunden oder Reisen angelegt."}</p></article>`;
       return;
     }
     list.innerHTML=sorted.map(([fallbackId,raw],index)=>{
@@ -1127,12 +1133,166 @@
     el.style.color=isError?"#8c1f1f":"#244a3f";
   }
 
+  function currentCustomerListFilters(){
+    return {
+      query:byId("customerFilterSearch")?.value||customerListFilters.query||"",
+      status:byId("customerFilterStatusSelect")?.value||customerListFilters.status||"",
+      region:byId("customerFilterRegion")?.value||customerListFilters.region||"",
+      publication:byId("customerFilterPublication")?.value||customerListFilters.publication||"",
+      dateFrom:byId("customerFilterDateFrom")?.value||customerListFilters.dateFrom||"",
+      dateTo:byId("customerFilterDateTo")?.value||customerListFilters.dateTo||"",
+      quickTab:customerQuickTab||"all"
+    };
+  }
+
+  function customerFilterDate(value){
+    if(!value)return null;
+    const date=new Date(`${String(value).slice(0,10)}T12:00:00`);
+    return Number.isNaN(date.getTime())?null:date;
+  }
+
+  function isActiveCustomerTrip(customer){
+    const start=customerFilterDate(customer.startDatePlain);
+    const end=customerFilterDate(customer.endDatePlain||customer.startDatePlain);
+    if(!start&&!end)return false;
+    const today=new Date();
+    today.setHours(12,0,0,0);
+    const from=start||end;
+    const to=end||start;
+    return today>=from&&today<=to;
+  }
+
+  function isUpcomingCustomerTrip(customer){
+    const start=customerFilterDate(customer.startDatePlain);
+    if(!start)return false;
+    const today=new Date();
+    today.setHours(12,0,0,0);
+    return start>=today;
+  }
+
+  function customerMatchesQuickTab(customer,tab){
+    if(tab==="anfragen")return /anfrage/i.test(String(customer.status||""));
+    if(tab==="entwurf")return customer.publicationState!=="Veröffentlicht"&&customer.publishStatus!=="published";
+    if(tab==="veroeffentlicht")return customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published";
+    if(tab==="aktiv")return isActiveCustomerTrip(customer);
+    if(tab==="bevorstehend")return isUpcomingCustomerTrip(customer);
+    return true;
+  }
+
+  function customerMatchesDateRange(customer,filters){
+    const start=customerFilterDate(customer.startDatePlain);
+    const end=customerFilterDate(customer.endDatePlain||customer.startDatePlain);
+    const from=customerFilterDate(filters.dateFrom);
+    const to=customerFilterDate(filters.dateTo);
+    if(!from&&!to)return true;
+    const tripStart=start||end;
+    const tripEnd=end||start;
+    if(!tripStart&&!tripEnd)return false;
+    if(from&&tripEnd&&tripEnd<from)return false;
+    if(to&&tripStart&&tripStart>to)return false;
+    return true;
+  }
+
   function filteredCustomersForDisplay(){
     const lib=crmLibrary();
-    const q=String(crmSearchQuery||"").trim();
-    const list=Object.values(customers).map(ensureCollections);
-    if(!q||!lib)return list;
-    return lib.searchCustomers(customers,q).map(ensureCollections);
+    const filters=currentCustomerListFilters();
+    let list=Object.values(customers).map(ensureCollections);
+    const query=String(filters.query||crmSearchQuery||"").trim();
+    if(query){
+      if(lib){
+        const map=Object.fromEntries(list.map(customer=>[customer.customerId,customer]));
+        list=lib.searchCustomers(map,query).map(ensureCollections);
+      }else{
+        const q=query.toLowerCase();
+        list=list.filter(customer=>{
+          const haystack=[
+            customer.customerName,customer.tripName,customer.phone,customer.email,customer.region,customer.status
+          ].join(" ").toLowerCase();
+          return haystack.includes(q);
+        });
+      }
+    }
+    if(filters.status)list=list.filter(customer=>String(customer.status||"")===filters.status);
+    if(filters.region)list=list.filter(customer=>String(customer.region||"")===filters.region);
+    if(filters.publication)list=list.filter(customer=>String(customer.publicationState||customer.publishStatus||"Entwurf")===filters.publication);
+    if(filters.quickTab&&filters.quickTab!=="all")list=list.filter(customer=>customerMatchesQuickTab(customer,filters.quickTab));
+    list=list.filter(customer=>customerMatchesDateRange(customer,filters));
+    return list;
+  }
+
+  function renderCustomerQuickTabs(){
+    const tabs=byId("customerQuickTabs");
+    if(!tabs)return;
+    const items=[
+      {id:"all",label:"Alle"},
+      {id:"anfragen",label:"Anfragen"},
+      {id:"entwurf",label:"Entwürfe"},
+      {id:"veroeffentlicht",label:"Veröffentlicht"},
+      {id:"aktiv",label:"Laufende Reisen"},
+      {id:"bevorstehend",label:"Bevorstehend"}
+    ];
+    tabs.innerHTML=items.map(item=>`<button type="button" class="${customerQuickTab===item.id?"active":""}" data-customer-quick-tab="${item.id}">${item.label}</button>`).join("");
+  }
+
+  function renderCustomerFilterOptions(){
+    const statusSelect=byId("customerFilterStatusSelect");
+    const regionSelect=byId("customerFilterRegion");
+    const publicationSelect=byId("customerFilterPublication");
+    if(statusSelect){
+      const current=statusSelect.value;
+      statusSelect.innerHTML=`<option value="">Alle Status</option>${masterData.statuses.map(status=>`<option>${escapeHtml(status)}</option>`).join("")}`;
+      statusSelect.value=current;
+    }
+    if(regionSelect){
+      const current=regionSelect.value;
+      regionSelect.innerHTML=`<option value="">Alle Regionen</option>${masterData.regions.map(region=>`<option>${escapeHtml(region)}</option>`).join("")}`;
+      regionSelect.value=current;
+    }
+    if(publicationSelect){
+      const current=publicationSelect.value;
+      publicationSelect.innerHTML=`<option value="">Alle</option>${masterData.publicationStates.map(state=>`<option>${escapeHtml(state)}</option>`).join("")}`;
+      publicationSelect.value=current;
+    }
+  }
+
+  function updateCustomerFilterMessage(shown,total){
+    const el=byId("customerFilterMessage");
+    if(!el)return;
+    const filters=currentCustomerListFilters();
+    const hasFilters=!!(
+      filters.query||filters.status||filters.region||filters.publication||
+      filters.dateFrom||filters.dateTo||(filters.quickTab&&filters.quickTab!=="all")
+    );
+    if(!total)el.textContent="Noch keine Kunden oder Reisen angelegt.";
+    else if(!shown)el.textContent=hasFilters?"Keine Kunden für die aktuelle Filterauswahl.":"";
+    else if(hasFilters)el.textContent=`${shown} von ${total} Kunden/Reisen angezeigt.`;
+    else el.textContent=`${total} Kunden/Reisen.`;
+  }
+
+  function resetCustomerFilters(){
+    customerQuickTab="all";
+    customerListFilters={};
+    crmSearchQuery="";
+    const search=byId("customerFilterSearch");
+    if(search)search.value="";
+    const crmSearch=byId("crmSearchInput");
+    if(crmSearch)crmSearch.value="";
+    ["customerFilterStatusSelect","customerFilterRegion","customerFilterPublication","customerFilterDateFrom","customerFilterDateTo"].forEach(id=>{
+      const field=byId(id);
+      if(field)field.value="";
+    });
+    renderCustomers();
+    renderCrmDashboard();
+  }
+
+  function syncCustomerSearchFields(query){
+    const value=String(query||"");
+    crmSearchQuery=value;
+    customerListFilters.query=value;
+    const search=byId("customerFilterSearch");
+    const crmSearch=byId("crmSearchInput");
+    if(search&&search.value!==value)search.value=value;
+    if(crmSearch&&crmSearch.value!==value)crmSearch.value=value;
   }
 
   function renderCrmDashboard(){
@@ -3622,7 +3782,27 @@
     byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();updateMainNavActive("customers");byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
     byId("backFromCrmButton")?.addEventListener("click",()=>{adminMode="overview";renderAll();updateMainNavActive("crm-dashboard");byId("crm-dashboard").scrollIntoView({behavior:"smooth",block:"start"})});
     byId("saveCrmButton")?.addEventListener("click",saveCrmCustomer);
-    byId("crmSearchInput")?.addEventListener("input",event=>{crmSearchQuery=event.target.value;renderCrmDashboard();renderCustomers()});
+    byId("crmSearchInput")?.addEventListener("input",event=>{
+      syncCustomerSearchFields(event.target.value);
+      renderCrmDashboard();
+      renderCustomers();
+    });
+    byId("customerFilterSearch")?.addEventListener("input",event=>{
+      syncCustomerSearchFields(event.target.value);
+      renderCrmDashboard();
+      renderCustomers();
+    });
+    ["customerFilterStatusSelect","customerFilterRegion","customerFilterPublication","customerFilterDateFrom","customerFilterDateTo"].forEach(id=>{
+      byId(id)?.addEventListener("change",()=>renderCustomers());
+      byId(id)?.addEventListener("input",()=>renderCustomers());
+    });
+    byId("customerFilterResetButton")?.addEventListener("click",resetCustomerFilters);
+    byId("customerQuickTabs")?.addEventListener("click",event=>{
+      const tab=event.target.closest("[data-customer-quick-tab]");
+      if(!tab)return;
+      customerQuickTab=tab.dataset.customerQuickTab||"all";
+      renderCustomers();
+    });
     byId("migrateCrmFirebaseButton")?.addEventListener("click",migrateCrmToFirebase);
     byId("crmAddFamilyButton")?.addEventListener("click",addCrmFamilyMember);
     byId("crmAddCommButton")?.addEventListener("click",()=>{

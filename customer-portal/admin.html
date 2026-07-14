@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=39">
+<link rel="stylesheet" href="admin.css?v=40">
 <link rel="stylesheet" href="wizard.css?v=4">
 </head>
 <body>
@@ -134,6 +134,33 @@
       <div class="section-head">
         <p class="eyebrow">Kundenübersicht</p>
         <h2>Alle Kunden und Reisen</h2>
+      </div>
+      <div class="admin-card customer-toolbar">
+        <div class="customer-quick-tabs" id="customerQuickTabs" role="tablist" aria-label="Kundenfilter"></div>
+        <div class="form-grid customer-filters">
+          <label class="full">Suche
+            <input id="customerFilterSearch" type="search" placeholder="Name, Telefon, E-Mail, Reise, Region, Hotel, Programm ...">
+          </label>
+          <label>Status
+            <select id="customerFilterStatusSelect"><option value="">Alle Status</option></select>
+          </label>
+          <label>Region
+            <select id="customerFilterRegion"><option value="">Alle Regionen</option></select>
+          </label>
+          <label>Veröffentlichung
+            <select id="customerFilterPublication"><option value="">Alle</option></select>
+          </label>
+          <label>Reise von
+            <input id="customerFilterDateFrom" type="date">
+          </label>
+          <label>Reise bis
+            <input id="customerFilterDateTo" type="date">
+          </label>
+        </div>
+        <div class="form-actions customer-filter-actions">
+          <button class="button soft" id="customerFilterResetButton" type="button">Filter zurücksetzen</button>
+        </div>
+        <p class="form-message full" id="customerFilterMessage" aria-live="polite"></p>
       </div>
       <div class="customer-list" id="customerList"></div>
     </section>
@@ -691,7 +718,7 @@
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=3"></script>
 <script src="wizard.js?v=3"></script>
-<script src="admin.js?v=65"></script>
+<script src="admin.js?v=66"></script>
 </body>
 </html>
 

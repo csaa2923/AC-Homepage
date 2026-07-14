@@ -59,6 +59,12 @@ h3{font-size:25px}
 .inline-head{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .admin-card,.customer-card,.editor-card{width:min(1180px,100%);margin:0 auto;border:1px solid var(--line);border-radius:8px;background:var(--paper);box-shadow:var(--shadow);padding:20px}
 .customer-list,.editor-list{width:min(1180px,100%);margin:0 auto;display:grid;gap:14px}
+.customer-toolbar{width:min(1180px,100%);margin:0 auto 14px}
+.customer-quick-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.customer-quick-tabs button{min-height:36px;padding:8px 14px;border:1px solid rgba(216,183,106,.45);border-radius:999px;background:#fff;color:var(--green);font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.customer-quick-tabs button.active{background:linear-gradient(135deg,var(--gold-2),var(--gold));color:#102820;border-color:var(--gold)}
+.customer-filters{width:100%}
+.customer-filter-actions{margin-top:4px}
 .customer-card{display:grid;gap:18px}
 .customer-card h3{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .customer-number{display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:34px;padding:0 10px;border:1px solid var(--gold);border-radius:8px;background:linear-gradient(135deg,var(--gold-2),var(--gold));color:#102820;font-family:Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:.08em;box-shadow:0 3px 0 rgba(141,107,32,.22)}

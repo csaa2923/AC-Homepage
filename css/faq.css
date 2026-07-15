@@ -2,21 +2,21 @@
 .faq-section{padding:90px clamp(20px,5vw,72px);background:linear-gradient(180deg,#05251e,#00110d);color:#fffaf0}
 .faq-container{max-width:1050px;margin:0 auto}
 .faq-head{text-align:center;max-width:820px;margin:0 auto 34px}
-.faq-label{font-family:var(--font-ui);color:#d8b76a;text-transform:uppercase;font-size:var(--text-xs);font-weight:600;letter-spacing:var(--tracking-label);margin-bottom:14px}
-.faq-head h2{font-size:var(--text-3xl);line-height:var(--leading-tight);margin:0;color:#f3dea0}
-.faq-head p{font-family:var(--font-body);font-size:var(--text-md);font-weight:400;line-height:var(--leading-relaxed);color:#eadfbe;margin:18px auto 0;max-width:640px}
+.faq-label{color:#d8b76a;margin-bottom:14px}
+.faq-head h2{color:#f3dea0}
+.faq-head p{color:#eadfbe;margin:18px auto 0;max-width:640px;line-height:1.72}
 .faq-search-wrap{max-width:640px;margin:0 auto 28px}
-#faqSearch{width:100%;border:1px solid rgba(216,183,106,.42);border-radius:999px;background:rgba(255,255,255,.08);color:#fffaf0;padding:16px 22px;font-family:var(--font-body);font-size:var(--text-base);line-height:var(--leading-normal);outline:none}
+#faqSearch{width:100%;border:1px solid rgba(216,183,106,.42);border-radius:999px;background:rgba(255,255,255,.08);color:#fffaf0;padding:16px 22px;line-height:1.5;outline:none;min-height:48px}
 #faqSearch::placeholder{color:rgba(255,250,240,.65)}
 .faq-list{display:grid;gap:14px}
 .faq-item{border:1px solid rgba(216,183,106,.34);border-radius:18px;background:rgba(255,255,255,.055);overflow:hidden;box-shadow:0 18px 48px rgba(0,0,0,.16)}
 .faq-item.reveal.is-visible:hover{transform:none}
-.faq-item summary{list-style:none;cursor:pointer;padding:22px 62px 22px 24px;position:relative;color:#f3dea0;font-family:var(--font-display);font-size:var(--text-lg);font-weight:500;line-height:var(--leading-snug);letter-spacing:var(--tracking-tight)}
+.faq-item summary{list-style:none;cursor:pointer;padding:22px 62px 22px 24px;position:relative;color:#f3dea0;font-family:var(--font-heading);font-size:clamp(1.05rem,2vw,1.25rem);font-weight:500;line-height:1.35;letter-spacing:-0.01em}
 .faq-item summary::-webkit-details-marker{display:none}
-.faq-item summary::after{content:"+";position:absolute;right:24px;top:50%;transform:translateY(-50%);color:#d8b76a;font-family:var(--font-ui);font-size:1.75rem;font-weight:400}
+.faq-item summary::after{content:"+";position:absolute;right:24px;top:50%;transform:translateY(-50%);color:#d8b76a;font-family:var(--font-body);font-size:1.75rem;font-weight:400;line-height:1}
 .faq-item[open] summary::after{content:"−"}
-.faq-item p{margin:0;padding:0 24px 24px;color:#f5ecd4;font-family:var(--font-body);font-size:var(--text-base);font-weight:400;line-height:var(--leading-relaxed)}
+.faq-item p{padding:0 24px 24px;color:#f5ecd4;line-height:1.72}
 .faq-whatsapp{text-align:center;margin-top:36px;padding:28px;border:1px solid rgba(216,183,106,.30);border-radius:22px;background:rgba(255,255,255,.045)}
-.faq-whatsapp p{margin:0 0 16px;color:#f3dea0;font-size:var(--text-xl);line-height:var(--leading-snug)}
-.faq-whatsapp a{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:14px 26px;border-radius:999px;background:linear-gradient(135deg,#f3dea0,#d8b76a);color:#102820;text-decoration:none;font-family:var(--font-ui);font-size:var(--text-sm);font-weight:600;text-transform:uppercase;letter-spacing:var(--tracking-wide)}
-@media(max-width:760px){.faq-section{padding:68px 18px}.faq-item summary{padding:20px 54px 20px 20px;font-size:var(--text-base)}.faq-item p{padding:0 20px 22px;font-size:var(--text-md)}}
+.faq-whatsapp p{margin:0 0 16px;color:#f3dea0;font-family:var(--font-heading);font-size:clamp(1.2rem,2.5vw,1.45rem);line-height:1.25;font-weight:500}
+.faq-whatsapp a{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:14px 26px;border-radius:999px;background:linear-gradient(135deg,#f3dea0,#d8b76a);color:#102820;text-decoration:none;text-transform:uppercase;letter-spacing:0.06em}
+@media(max-width:760px){.faq-section{padding:68px 18px}.faq-item summary{padding:20px 54px 20px 20px;font-size:1rem}.faq-item p{padding:0 20px 22px}}

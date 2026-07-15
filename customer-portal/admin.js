@@ -1004,10 +1004,104 @@
     return `${href}?customer=${encodeURIComponent(id)}${admin}`;
   }
 
-  function portalPathForCustomer(id){
-    const customer=customers[id];
-    const published=customer&&(customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published");
-    return portalPath(id,{admin:!published});
+  function isCustomerPublished(customer){
+    return Boolean(customer&&(customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published"));
+  }
+
+  function customerShareMeta(customer){
+    return customer?.publishMeta?.activePortalShare||null;
+  }
+
+  function resolveCustomerPortalLink(customerId){
+    const customer=customers[customerId]||{};
+    const published=isCustomerPublished(customer);
+    if(!published){
+      return {
+        status:"draft",
+        url:portalPath(customerId,{admin:true}),
+        display:portalPath(customerId,{admin:true}),
+        hint:"Entwurf – nur interne Admin-Vorschau. Für Kunden zuerst veröffentlichen und sicheren Link erzeugen.",
+        canOpen:true,
+        canCopy:false
+      };
+    }
+    const sessionShare=activeShareToken(customerId);
+    if(sessionShare?.status==="revoked"){
+      return {
+        status:"revoked",
+        url:null,
+        display:"",
+        hint:"Link widerrufen – neuen Link erzeugen",
+        canOpen:false,
+        canCopy:false
+      };
+    }
+    if(sessionShare?.shareUrl){
+      return {
+        status:"active",
+        url:sessionShare.shareUrl,
+        display:sessionShare.shareUrl,
+        hint:`Aktiver Share-Link (Version ${sessionShare.publishedVersionId||customer.version||"1.0"}).`,
+        canOpen:true,
+        canCopy:true
+      };
+    }
+    const meta=customerShareMeta(customer);
+    if(meta?.status==="revoked"){
+      return {
+        status:"revoked",
+        url:null,
+        display:"",
+        hint:"Link widerrufen – neuen Link erzeugen",
+        canOpen:false,
+        canCopy:false
+      };
+    }
+    if(meta?.shareId){
+      return {
+        status:"session-lost",
+        url:null,
+        display:"",
+        hint:"Der sichere Link ist in dieser Sitzung nicht mehr verfügbar. Bitte neuen Link erzeugen.",
+        canOpen:false,
+        canCopy:false
+      };
+    }
+    return {
+      status:"none",
+      url:null,
+      display:"",
+      hint:"Noch kein sicherer Kunden-Link erzeugt",
+      canOpen:false,
+      canCopy:false
+    };
+  }
+
+  function openCustomerPortalLink(customerId){
+    const state=resolveCustomerPortalLink(customerId);
+    if(state.status==="draft"){
+      issuePortalPreviewGrant(customerId);
+      window.open(state.url,"_blank","noopener");
+      return;
+    }
+    if(state.canOpen&&state.url){
+      window.open(state.url,"_blank","noopener");
+      return;
+    }
+    window.alert(state.hint||"Bitte zuerst einen sicheren Portal-Link erzeugen.");
+  }
+
+  function copyCustomerPortalLink(customerId){
+    const state=resolveCustomerPortalLink(customerId);
+    if(state.canCopy&&state.url){
+      copyText(state.url);
+      return;
+    }
+    if(state.status==="draft"){
+      window.alert("Für Kundenversand bitte zuerst veröffentlichen und einen sicheren Share-Link erzeugen.");
+      return;
+    }
+    window.alert(state.hint||"Bitte zuerst einen sicheren Portal-Link erzeugen.");
   }
 
   function portalShareLibrary(){
@@ -1037,9 +1131,8 @@
   }
 
   function preferredPortalLink(customerId){
-    const share=activeShareToken(customerId);
-    if(share?.shareUrl)return share.shareUrl;
-    return portalPath(customerId);
+    const state=resolveCustomerPortalLink(customerId);
+    return state.status==="active"&&state.url?state.url:"";
   }
 
   async function createPortalShareLink(){
@@ -1123,7 +1216,12 @@
     const db=firebaseDatabase();
     try{
       if(db)await db.revokePortalShare(share.shareId);
-      saveShareToken(customer.customerId,null);
+      saveShareToken(customer.customerId,{
+        shareId:share.shareId,
+        status:"revoked",
+        shareUrl:null,
+        revokedAt:new Date().toISOString()
+      });
       customer.publishMeta={
         ...(customer.publishMeta||{}),
         activePortalShare:{
@@ -1228,8 +1326,9 @@
     list.innerHTML=sorted.map(([fallbackId,raw],index)=>{
       const customer=ensureCollections(raw);
       const id=customer.customerId||fallbackId;
-      const link=portalPath(id);
-      const published=customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published";
+      const linkState=resolveCustomerPortalLink(id);
+      const customerLinkDisplay=linkState.status==="active"?linkState.display:linkState.hint;
+      const published=isCustomerPublished(customer);
       const openTasks=(customer.crm?.tasks||[]).filter(task=>task.status!=="Erledigt").length;
       return `
         <article class="customer-card">
@@ -1245,7 +1344,7 @@
             </div>
             <div class="customer-link-row">
               <span>Diesen Link erhält der Kunde</span>
-              <code>${link}</code>
+              <code>${escapeHtml(customerLinkDisplay)}</code>
             </div>
           </div>
           <div class="form-actions">
@@ -2477,28 +2576,29 @@
 
   function renderLinks(){
     const customer=ensureCollections(activeCustomer());
-    const previewLink=portalPath(activeId);
-    const share=activeShareToken(activeId);
+    const previewLink=portalPath(activeId,{admin:true});
+    const linkState=resolveCustomerPortalLink(activeId);
     const shareInput=byId("portalShareLink");
     const shareStatus=byId("portalShareStatus");
     const revokeButton=byId("revokePortalShareButton");
     const createButton=byId("createPortalShareButton");
-    const published=customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published";
+    const published=isCustomerPublished(customer);
     if(shareInput){
-      shareInput.value=share?.shareUrl||"";
-      shareInput.placeholder=published?"Noch kein sicherer Link erzeugt":"Nach Veröffentlichung erzeugen";
+      shareInput.value=linkState.status==="active"?linkState.url:"";
+      shareInput.placeholder=linkState.status==="active"?"":linkState.hint||(published?"Noch kein sicherer Kunden-Link erzeugt":"Nach Veröffentlichung erzeugen");
     }
     if(shareStatus){
-      if(share?.status==="revoked")shareStatus.textContent="Der letzte Share-Link wurde widerrufen. Bitte neuen Link erzeugen.";
-      else if(share?.shareUrl)shareStatus.textContent=`Aktiver Share-Link (Version ${share.publishedVersionId||customer.version||"1.0"}).`;
-      else if(published)shareStatus.textContent="Für Kundenversand den sicheren Share-Link erzeugen. Der interne Link ist nur für Admin-Vorschau.";
+      if(linkState.status==="active")shareStatus.textContent=linkState.hint;
+      else if(published)shareStatus.textContent=`${linkState.hint} Der interne Vorschau-Link ist nur für Admin/Demo.`;
       else shareStatus.textContent="Nach der Veröffentlichung kann hier ein sicherer Kunden-Link erzeugt werden.";
     }
-    if(revokeButton)revokeButton.disabled=!share?.shareUrl||share?.status==="revoked";
-    if(createButton)createButton.disabled=!published;
+    if(revokeButton)revokeButton.disabled=linkState.status!=="active";
+    if(createButton)createButton.disabled=!published||linkState.status==="active";
     byId("portalLink").value=previewLink;
-    const customerLink=share?.shareUrl||previewLink;
-    byId("whatsappText").value=`Guten Tag, hier finden Sie Ihr persönliches Reiseprogramm von Alpine Concierge Tirol:\n${customerLink}\n\nBei Änderungswünschen können Sie uns jederzeit kontaktieren.`;
+    const whatsappLink=linkState.status==="active"&&linkState.url
+      ?linkState.url
+      :linkState.hint;
+    byId("whatsappText").value=`Guten Tag, hier finden Sie Ihr persönliches Reiseprogramm von Alpine Concierge Tirol:\n${whatsappLink}\n\nBei Änderungswünschen können Sie uns jederzeit kontaktieren.`;
   }
 
   function whatsappPhoneNumber(){
@@ -3898,9 +3998,9 @@
       const openCrm=event.target.closest("[data-open-crm]");
       if(openCrm)openCrmAkte(openCrm.dataset.openCrm);
       const open=event.target.closest("[data-open-customer]");
-      if(open)window.open(portalPathForCustomer(open.dataset.openCustomer),"_blank","noopener");
+      if(open)openCustomerPortalLink(open.dataset.openCustomer);
       const copy=event.target.closest("[data-copy-customer]");
-      if(copy)copyText(portalPath(copy.dataset.copyCustomer));
+      if(copy)copyCustomerPortalLink(copy.dataset.copyCustomer);
       const publish=event.target.closest("[data-publish-customer]");
       if(publish)publishCustomer(publish.dataset.publishCustomer);
       const copyTrip=event.target.closest("[data-copy-trip]");
@@ -3934,7 +4034,7 @@
       const removeBookingDoc=event.target.closest("[data-remove-booking-doc]");
       if(removeBookingDoc){editingBookingDocuments=editingBookingDocuments.filter((_,index)=>index!==Number(removeBookingDoc.dataset.removeBookingDoc));renderBookingDocumentsList();}
     });
-    byId("copyLinkButton").addEventListener("click",()=>copyText(byId("portalLink").value));
+    byId("copyLinkButton").addEventListener("click",()=>copyCustomerPortalLink(activeId));
     byId("copyShareLinkButton")?.addEventListener("click",()=>{
       const value=byId("portalShareLink")?.value||"";
       if(!value){
@@ -4053,13 +4153,13 @@
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()});
     byId("previewDraftButton").addEventListener("click",()=>{previewMode="draft";renderAdminPreview();renderPublishChanges()});
     byId("previewLiveButton").addEventListener("click",()=>{previewMode="live";renderAdminPreview()});
-    byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId,{admin:true}),"_blank","noopener"));
-    byId("saveDraftButton").addEventListener("click",()=>saveCustomerDraft());
-    byId("retrySyncButton")?.addEventListener("click",()=>retryCloudSync());
-    byId("openPreviewButton").addEventListener("click",()=>{
+    byId("openPortalPreviewButton").addEventListener("click",()=>{
       issuePortalPreviewGrant(activeId);
       window.open(portalPath(activeId,{admin:true}),"_blank","noopener");
     });
+    byId("saveDraftButton").addEventListener("click",()=>saveCustomerDraft());
+    byId("retrySyncButton")?.addEventListener("click",()=>retryCloudSync());
+    byId("openPreviewButton").addEventListener("click",()=>openCustomerPortalLink(activeId));
     byId("markPublishedButton").addEventListener("click",()=>openPublishDialog(activeId));
     byId("restorePublishedButton").addEventListener("click",restoreLastPublished);
     byId("publishDialogCancel").addEventListener("click",closePublishDialog);

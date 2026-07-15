@@ -3,7 +3,7 @@
 **Datum:** 2026-07-15  
 **Geprüfte Phasen:** Phase 0 + Phase 1  
 **Design-Referenz:** `docs/PORTAL_SHARE_DESIGN.md`  
-**Status nach Review:** Auftrag 09 abgeschlossen; **Auftrag 10 lokale Verifikation abgeschlossen** (2026-07-15, Java 17 + Emulator-Suite)
+**Status nach Review:** Auftrag 09/10 abgeschlossen; **Auftrag 12 Produktions-E2E Phase 1 durchgeführt** (2026-07-15) — Share-Erzeugung in Prod. blockiert (siehe unten)
 
 ---
 
@@ -159,7 +159,63 @@ node --test redaction.test.js portal-share-core.test.js share-logic.test.js
 
 ---
 
-## E. Freigabeentscheidung (Auftrag 10)
+## Auftrag 12 — Produktions-E2E Phase 1 (2026-07-15)
+
+### Voraussetzungen (vom Auftraggeber bestätigt)
+
+| Voraussetzung | Status |
+|---|---|
+| Functions ACTIVE `europe-west1` | **erfüllt** — `portalShare`, `createPortalShare`, `revokePortalShare` |
+| `PORTAL_SHARE_HMAC_SECRET` Version 3 | **erfüllt** — Secret Manager, an Functions gebunden |
+| Cleanup-Policy gesetzt | **erfüllt** (laut Auftraggeber) |
+| Kein weiteres Deployment während Test | **eingehalten** |
+
+**Produktions-URLs:** `https://www.alpineconcierge.info/customer-portal/admin.html` · `https://europe-west1-alpine-concierge-tirol.cloudfunctions.net/portalShare`
+
+### Ergebnisse (16 Tests)
+
+| # | Test | Ergebnis | Nachweis |
+|---|---|---|---|
+| 1 | Admin anmelden | **PASS** | Login `alpineconcierge.tirol@gmail.com` auf Prod.-Admin |
+| 2 | Rolle `admin`/`owner` | **PASS** | Custom Claim `role=owner`, `allowed=true` |
+| 3 | Veröffentlichte Testreise öffnen | **PASS** | Thomas Holzer · Seefeld Family Escape (`kunde-holzer`, Veröffentlicht) |
+| 4 | „Sicheren Portal-Link erzeugen“ | **FAIL** | Callable `createPortalShare` → HTTP **500** `INTERNAL` |
+| 5 | Link kopieren | **BLOCKIERT** | Kein Share erzeugt |
+| 6 | Privates Fenster / Kunde lädt | **BLOCKIERT** | Kein gültiger Share-Link verfügbar |
+| 7 | Reise korrekt geladen | **BLOCKIERT** | — |
+| 8 | Seite neu laden | **BLOCKIERT** | — |
+| 9 | Falscher Token | **PASS** | `portalShare` HTTP **403**, neutrale JSON-Meldung |
+| 10 | Unbekannte Share-ID | **PASS** | `portalShare` HTTP **403**, `{"ok":false,"error":"Dieser Portal-Link ist nicht gültig oder nicht mehr verfügbar."}` |
+| 11 | Link widerrufen | **BLOCKIERT** | Kein Share erzeugt |
+| 12 | Widerrufener Link erneut öffnen | **BLOCKIERT** | — |
+| 13 | Alter `?customer=`‑Link | **PASS** | `index.html?customer=kunde-holzer` → „Portal nicht verfügbar“ (Legacy blockiert) |
+| 14 | Keine direkten Firestore-Reads | **PASS** | Fehlerseite ohne Firestore-Client-Zugriff (nur statisches Portal) |
+| 15 | Netzwerk / Konsole / Security-Header | **PASS** (API) | `cache-control: private, no-store`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer` |
+| 16 | Mobile Darstellung | **PASS** | iPhone-Viewport 390×844 — lesbare Fehlerseite, Navigation sichtbar |
+
+### Produktionsfehler (Blocker)
+
+**Cloud-Log `createPortalShare` (2026-07-15T21:48:07Z):**
+
+```
+FirebaseAppError: The default Firebase app does not exist.
+  at getDb (/workspace/impl.js:31)
+  at createPortalShare (/workspace/impl.js:194)
+```
+
+**Ursache:** Lazy-Load-Refactor (Auftrag 11a) — `admin.initializeApp()` in `getDb()` wird auf Gen-2-Callable-Instanzen nicht zuverlässig ausgeführt (`admin.apps.length`-Check greift fehl).
+
+**Korrektur (lokal, noch nicht deployed):** `functions/impl.js` — `getDb()` nutzt `admin.app()` mit try/catch und Initialisierung als Fallback.
+
+**Auswirkung:** Admin-UI und Callable können **keinen** produktiven Share-Link erzeugen → vollständiger Kunden-E2E-Pfad (Schritte 4–8, 11–12) nicht testbar.
+
+### Automatisierte Regression (unverändert)
+
+**42/42 PASS** (Emulator-Suite, letzter Lauf Auftrag 10/11a) — lokal weiterhin grün; Produktions-Callable-Fehler ist deploymentspezifisch.
+
+---
+
+## E. Freigabeentscheidung (Auftrag 12 — Produktion)
 
 ```
 KEINE FREIGABE: Share-Link darf noch nicht an echte Kunden versendet werden.
@@ -167,21 +223,16 @@ KEINE FREIGABE: Share-Link darf noch nicht an echte Kunden versendet werden.
 
 **Begründung:**
 
-- **Lokale Sicherheitsverifikation abgeschlossen:** 42/42 automatisierte Tests PASS, Browser-Portal-E2E PASS (gültig/ungültig/widerrufen, kein Firestore-Client-Read)
-- **Admin-Flow:** Callable-Tests PASS; vollständiger Admin-UI-Klickpfad im Browser nicht automatisiert (Passwortfeld-Automation)
-- **Produktion ausstehend:** Secret nicht in Secret Manager, Functions/Rules nicht deployed, Admin-Claims produktiv nicht verifiziert
-- **Bekannte MVP-Limits:** Rate Limit in-memory (nicht verteilt), keine signierten Dokument-URLs (5 min) in Snapshots
+- **Admin & Rollen:** Produktions-Login und `role=owner` funktionieren.
+- **Negativpfade:** `portalShare` (falscher Token, unbekannte Share-ID), Legacy-`?customer=`, Security-Header und Mobile-Fehlerseite sind korrekt.
+- **Blocker:** `createPortalShare` schlägt in Produktion mit `FirebaseAppError: no-app` fehl — **kein Share-Link erzeugbar**, kein Kunden-Flow testbar.
+- **Nächster Schritt:** Korrektur in `functions/impl.js` deployen, dann Produktions-E2E Schritte 4–12 wiederholen.
 
-**Freigabe für nächsten Schritt (Deployment-Vorbereitung):**
-
-Die **Code- und Emulator-Sicherheitsprüfung** ist bestanden. Vor Kundenversand sind Deployment, Produktions-Secret und Produktions-E2E erforderlich.
-
-**Deployment-Befehl (erst nach expliziter Produktions-FREIGABE):**
+**Deployment (erst nach Fix-Verifikation):**
 
 ```powershell
 $env:PATH="C:\GitHub\AC-Homepage\.tools\node;$env:PATH"
-npx firebase-tools functions:secrets:set PORTAL_SHARE_HMAC_SECRET
-npx firebase-tools deploy --only functions,firestore:rules
+npx firebase-tools deploy --only functions
 ```
 
 ---
@@ -196,7 +247,7 @@ npx firebase-tools deploy --only functions,firestore:rules
 | Callable `revokePortalShare` | **vollständig** | Nur mit Admin-Rolle |
 | Separater `publicPortalSnapshots` | **vollständig** | Unveränderlicher Snapshot pro Share |
 | HMAC-SHA-256 serverseitig | **vollständig** | Secret nur Functions/Secret Manager |
-| Google Secret Manager | **teilweise** | Code vorbereitet; Secret in Prod. noch nicht gesetzt |
+| Google Secret Manager | **vollständig** | `PORTAL_SHARE_HMAC_SECRET` Version 3 in Prod. aktiv |
 | Firestore Rules geschlossen | **vollständig** | Nach Korrektur: Client-Writes auf Share-Collections blockiert |
 | Legacy `?customer=` Produktion | **vollständig** | Blockiert ohne vertrauenswürdigen Preview-Grant |
 | Demo-Fallback Produktion | **vollständig** | Deaktiviert auf Nicht-Localhost |

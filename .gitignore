@@ -20,6 +20,9 @@ functions/node_modules/
 firebase-debug.log
 firebase-debug.*.log
 ui-debug.log
+deploy-functions-debug.log
+functions/diag-*.js
+functions/_diag/
 
 # OS / editor
 .DS_Store

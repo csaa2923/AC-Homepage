@@ -46,7 +46,7 @@ describe("portalShare HTTP",()=>{
 
   it("returns security headers",async()=>{
     const res=await fetch(BASE);
-    assert.match(res.headers.get("cache-control")||"","no-store");
+    assert.ok((res.headers.get("cache-control")||"").includes("no-store"));
     assert.equal(res.headers.get("x-content-type-options"),"nosniff");
     assert.equal(res.headers.get("referrer-policy"),"no-referrer");
   });

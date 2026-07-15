@@ -23,12 +23,19 @@ function getAdmin(){
   return adminModule;
 }
 
-function getDb(){
+function getAdminApp(){
   const admin=getAdmin();
-  if(!admin.apps.length){
-    admin.initializeApp({projectId:process.env.GCLOUD_PROJECT||"alpine-concierge-tirol"});
+  try{
+    return admin.app();
+  }catch(_){
+    return admin.initializeApp({
+      projectId:process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||"alpine-concierge-tirol"
+    });
   }
-  return admin.firestore();
+}
+
+function getDb(){
+  return getAdminApp().firestore();
 }
 
 const {

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pers&ouml;nliches Kundenportal | Alpine Concierge Tirol</title>
 <meta name="description" content="Pers&ouml;nliches Kundenportal von Alpine Concierge Tirol.">
+<meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex,nofollow">
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
@@ -45,7 +46,7 @@
       <p class="hero-subtitle" id="tripTitle"></p>
       <div class="hero-meta" id="heroMeta"></div>
       <div class="hero-actions">
-        <a class="button primary" id="whatsappHero" href="#" target="_blank" rel="noopener">WhatsApp &ouml;ffnen</a>
+        <a class="button primary" id="whatsappHero" href="#" target="_blank" rel="noopener noreferrer">WhatsApp &ouml;ffnen</a>
         <button class="button soft" type="button" data-action="print">Drucken</button>
       </div>
     </div>
@@ -166,14 +167,25 @@
   </section>
 </template>
 
+<template id="shareErrorTemplate">
+  <section class="portal-section not-found">
+    <h1>Portal nicht verf&uuml;gbar</h1>
+    <p id="shareErrorMessage">Dieser Portal-Link ist nicht g&uuml;ltig oder nicht mehr verf&uuml;gbar.</p>
+    <a class="button primary" href="https://wa.me/4367761410679" target="_blank" rel="noopener">Alpine Concierge Tirol kontaktieren</a>
+  </section>
+</template>
+
+<script src="redact-allowlist.js?v=1"></script>
+<script src="redact-public-snapshot.js?v=2"></script>
+<script src="portal-share-library.js?v=2"></script>
 <script src="customer-data.js?v=2"></script>
 <script src="demo-examples.js?v=1"></script>
 <script src="booking-library.js?v=1"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=14"></script>
+<script src="firebase-service.js?v=18"></script>
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js"></script>
-<script src="customer-portal.js?v=27"></script>
+<script src="customer-portal.js?v=30"></script>
 </body>
 </html>

@@ -446,7 +446,14 @@
       </div>
       <div class="admin-card publish-grid">
         <div class="full" id="publishChangesPanel"></div>
-        <label>Diesen Link erhält der Kunde<input id="portalLink" readonly></label>
+        <label class="full">Sicherer Kunden-Link (empfohlen)<input id="portalShareLink" readonly placeholder="Nach Veröffentlichung erzeugen"></label>
+        <div class="form-actions full share-link-actions">
+          <button class="button primary" id="createPortalShareButton" type="button">Sicheren Portal-Link erzeugen</button>
+          <button class="button soft" id="copyShareLinkButton" type="button">Share-Link kopieren</button>
+          <button class="button soft" id="revokePortalShareButton" type="button">Share widerrufen</button>
+        </div>
+        <p class="muted full" id="portalShareStatus" aria-live="polite"></p>
+        <label class="full">Interner Vorschau-Link (nur Admin / Demo)<input id="portalLink" readonly></label>
         <p class="muted full">Alle Änderungen werden zuerst im Entwurf gespeichert. Das Kundenportal zeigt ausschließlich die veröffentlichte Live-Version.</p>
         <div class="save-status-bar full">
           <div class="form-actions save-actions">
@@ -706,6 +713,9 @@
   <button class="button soft workflow-dashboard-close" id="workflowDashboardClose" type="button">Schließen</button>
 </div>
 
+<script src="redact-allowlist.js?v=1"></script>
+<script src="redact-public-snapshot.js?v=2"></script>
+<script src="portal-share-library.js?v=2"></script>
 <script src="customer-data.js?v=2"></script>
 <script src="demo-examples.js?v=1"></script>
 <script src="publish-workflow.js?v=4"></script>
@@ -713,12 +723,12 @@
 <script src="crm-library.js?v=2"></script>
 <script src="booking-library.js?v=1"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=15"></script>
+<script src="firebase-service.js?v=17"></script>
 <script src="firebase-auth.js?v=2"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=3"></script>
 <script src="wizard.js?v=3"></script>
-<script src="admin.js?v=66"></script>
+<script src="admin.js?v=68"></script>
 </body>
 </html>
 

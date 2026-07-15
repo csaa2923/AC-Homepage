@@ -133,7 +133,13 @@ service cloud.firestore {
      * token shape, redaction rules, expiry and rate limiting.
      */
     match /portalShares/{shareId} {
-      allow read, write: if false;
+      allow get, list: if adminRead();
+      allow create, update, delete: if false;
+    }
+
+    match /publicPortalSnapshots/{snapshotId} {
+      allow get, list: if adminRead();
+      allow create, update, delete: if false;
     }
 
     match /{document=**} {

@@ -91,6 +91,14 @@
       state.app=appModule.initializeApp(firebaseConfig);
       state.auth=authModule.getAuth(state.app);
       state.db=firestoreModule.getFirestore(state.app);
+      const shareCfg=root.portalShare||{};
+      if(shareCfg.useAuthEmulator&&shareCfg.authEmulatorHost&&authModule.connectAuthEmulator){
+        authModule.connectAuthEmulator(state.auth,shareCfg.authEmulatorHost,{disableWarnings:true});
+      }
+      if(shareCfg.useFirestoreEmulator&&shareCfg.firestoreEmulatorHost&&firestoreModule.connectFirestoreEmulator){
+        const [host,port]=String(shareCfg.firestoreEmulatorHost).split(":");
+        firestoreModule.connectFirestoreEmulator(state.db,host,Number(port||8080));
+      }
       state.bucket=firebaseConfig.storageBucket||"";
       const bucketUrl=state.bucket?`gs://${state.bucket}`:undefined;
       state.storage=bucketUrl?storageModule.getStorage(state.app,bucketUrl):storageModule.getStorage(state.app);
@@ -847,6 +855,99 @@
     await firestoreModule.deleteDoc(firestoreModule.doc(bookingsCollectionRef(ready),safeSegment(bookingId)));
   }
 
+  function portalShareConfig(){
+    return configRoot().portalShare||{};
+  }
+
+  async function importFunctionsModule(){
+    const version=configRoot().firebaseVersion||"10.12.5";
+    return import(`https://www.gstatic.com/firebasejs/${version}/firebase-functions.js`);
+  }
+
+  function portalSharesCollectionRef(ready){
+    const {firestoreModule}=ready.modules;
+    return firestoreModule.collection(ready.db,"portalShares");
+  }
+
+  async function createPortalShareViaCallable(customerId){
+    const ready=await ensureDb();
+    const functionsModule=await importFunctionsModule();
+    const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
+    const shareCfg=portalShareConfig();
+    if(shareCfg.useFunctionsEmulator&&functionsModule.connectFunctionsEmulator){
+      const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
+      const [fnHost,fnPort]=host.split(":");
+      functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
+    }
+    const callable=functionsModule.httpsCallable(functions,"createPortalShare");
+    const result=await callable({customerId});
+    return result.data||{};
+  }
+
+  async function createPortalShare(customer){
+    const customerId=customerIdOf(customer);
+    if(!customerId)throw new Error("Kunden-ID fehlt.");
+    const published=customer.publishedSnapshot||null;
+    if(!published&&(customer.publishStatus!=="published"&&customer.publicationState!=="Veröffentlicht")){
+      throw new Error("Es gibt noch keine veröffentlichte Live-Version.");
+    }
+    return createPortalShareViaCallable(customerId);
+  }
+
+  async function listPortalSharesForCustomer(customerId){
+    const ready=await ensureDb();
+    const {firestoreModule}=ready.modules;
+    const snap=await firestoreModule.getDocs(
+      firestoreModule.query(
+        portalSharesCollectionRef(ready),
+        firestoreModule.where("customerId","==",safeSegment(customerId))
+      )
+    );
+    return snap.docs.map(docSnap=>docSnap.data()).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  }
+
+  async function revokePortalShare(shareId){
+    const functionsModule=await importFunctionsModule();
+    const ready=await ensureDb();
+    const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
+    const shareCfg=portalShareConfig();
+    if(shareCfg.useFunctionsEmulator&&functionsModule.connectFunctionsEmulator){
+      const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
+      const [fnHost,fnPort]=host.split(":");
+      functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
+    }
+    const callable=functionsModule.httpsCallable(functions,"revokePortalShare");
+    const result=await callable({shareId});
+    return result.data||{};
+  }
+
+  async function fetchPortalShareData(shareId,rawToken){
+    const shareLib=window.ACTPortalShareLibrary;
+    if(!shareLib)throw new Error("Portal-Share-Bibliothek fehlt.");
+    const baseUrl=shareLib.portalShareFunctionUrl();
+    if(!baseUrl)throw new Error("Portal-Share-Endpunkt ist nicht konfiguriert.");
+    const params=new URLSearchParams({share:shareId,token:rawToken});
+    let response;
+    try{
+      response=await fetch(`${baseUrl}?${params.toString()}`,{
+        method:"GET",
+        headers:{Accept:"application/json"},
+        cache:"no-store"
+      });
+    }catch(networkError){
+      const error=new Error("Dieser Portal-Link ist vorübergehend nicht verfügbar.");
+      error.code="share-network";
+      throw error;
+    }
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok||!payload.ok){
+      const error=new Error(payload.error||"Dieser Portal-Link ist nicht gültig oder nicht mehr verfügbar.");
+      error.code=response.status===403?"share-forbidden":response.status===404?"share-not-found":"share-error";
+      throw error;
+    }
+    return payload;
+  }
+
   window.ACTFirebaseService={
     init,
     authContext,
@@ -877,6 +978,10 @@
     loadBookingsForCustomer,
     loadAllBookingsForAdmin,
     deleteBookingRecord,
+    createPortalShare,
+    listPortalSharesForCustomer,
+    revokePortalShare,
+    fetchPortalShareData,
     denormalizeFromFirestore,
     normalizeForFirestore
   };

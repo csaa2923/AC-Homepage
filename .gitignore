@@ -1,0 +1,26 @@
+tests/security/emulator-seed-manifest.json
+
+# Local tooling (portable Node, not committed)
+.tools/
+tools/
+
+# Local secrets — never commit
+functions/.secret.local
+functions/.env
+functions/.env.*
+.env
+.env.*
+
+# Dependencies
+node_modules/
+functions/node_modules/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
+
+# OS / editor
+.DS_Store
+Thumbs.db

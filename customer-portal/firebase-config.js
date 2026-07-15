@@ -1,14 +1,32 @@
-window.ACTFirebaseConfig={
-  enabled:true,
-  collection:"customers",
-  firebaseVersion:"10.12.5",
-  config:{
-    apiKey:"AIzaSyAH86JOMuDdZm5igcZceMJl945GgMc4B1g",
-    authDomain:"alpine-concierge-tirol.firebaseapp.com",
-    projectId:"alpine-concierge-tirol",
-    storageBucket:"alpine-concierge-tirol.firebasestorage.app",
-    messagingSenderId:"122808915984",
-    appId:"1:122808915984:web:4515e3a42201372fd81295",
-    measurementId:"G-3BHM06FCDN"
+(function(){
+  const isLocalHost=/^(localhost|127\.0\.0\.1)$/.test(String(window.location.hostname||""));
+  const portalShare={
+    functionsRegion:"europe-west1",
+    allowLegacyCustomerParam:false
+  };
+  if(isLocalHost){
+    Object.assign(portalShare,{
+      useFunctionsEmulator:true,
+      functionsEmulatorHost:"http://127.0.0.1:5001/alpine-concierge-tirol/europe-west1",
+      useAuthEmulator:true,
+      authEmulatorHost:"http://127.0.0.1:9099",
+      useFirestoreEmulator:true,
+      firestoreEmulatorHost:"127.0.0.1:8080"
+    });
   }
-};
+  window.ACTFirebaseConfig={
+    enabled:true,
+    collection:"customers",
+    firebaseVersion:"10.12.5",
+    portalShare,
+    config:{
+      apiKey:"AIzaSyAH86JOMuDdZm5igcZceMJl945GgMc4B1g",
+      authDomain:"alpine-concierge-tirol.firebaseapp.com",
+      projectId:"alpine-concierge-tirol",
+      storageBucket:"alpine-concierge-tirol.firebasestorage.app",
+      messagingSenderId:"122808915984",
+      appId:"1:122808915984:web:4515e3a42201372fd81295",
+      measurementId:"G-3BHM06FCDN"
+    }
+  };
+})();

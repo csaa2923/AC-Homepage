@@ -1,9 +1,16 @@
 (function(){
   const dataRoot=window.CustomerPortalData||{customers:{}};
   const STORAGE_KEY="act_customer_portal_customers";
-  const params=new URLSearchParams(window.location.search);
-  const customerId=params.get("customer")||dataRoot.defaultCustomerId;
-  const isAdminPreview=params.get("admin")==="1";
+  const shareLib=window.ACTPortalShareLibrary||null;
+  const portalParams=shareLib?shareLib.parseShareParams(window.location.search):{
+    shareId:String(new URLSearchParams(window.location.search).get("share")||"").trim(),
+    rawToken:String(new URLSearchParams(window.location.search).get("token")||"").trim(),
+    customerId:String(new URLSearchParams(window.location.search).get("customer")||"").trim(),
+    isAdminPreview:new URLSearchParams(window.location.search).get("admin")==="1"
+  };
+  const customerId=portalParams.customerId||dataRoot.defaultCustomerId;
+  const isAdminPreview=portalParams.isAdminPreview;
+  const isShareAccess=Boolean(portalParams.shareId&&portalParams.rawToken);
   let customer=null;
   let dataSource="demo";
   const root=document.getElementById("portalRoot");
@@ -35,10 +42,60 @@
     }
   }
 
+  function isProductionHost(){
+    return shareLib?shareLib.isProductionHost():Boolean(window.location.hostname&&!/(localhost|127\.0\.0\.1)/.test(window.location.hostname));
+  }
+
+  function allowLegacyCustomerAccess(){
+    if(isShareAccess)return false;
+    if(shareLib&&shareLib.isTrustedAdminPreview(portalParams))return true;
+    if(shareLib)return shareLib.allowLegacyCustomerAccess(portalParams);
+    if(isAdminPreview)return false;
+    return !isProductionHost();
+  }
+
+  function showShareError(message){
+    root.removeAttribute("aria-busy");
+    const fragment=document.getElementById("shareErrorTemplate")?.content?.cloneNode(true);
+    if(fragment){
+      const target=fragment.getElementById("shareErrorMessage");
+      if(target)target.textContent=message||"Dieser Portal-Link ist nicht gültig oder nicht mehr verfügbar.";
+      root.replaceChildren(fragment);
+      return;
+    }
+    root.replaceChildren(document.getElementById("notFoundTemplate").content.cloneNode(true));
+  }
+
+  async function loadShareCustomerData(){
+    const db=window.ACTFirebaseDatabase;
+    if(!db||!db.fetchPortalShareData){
+      throw new Error("Portal-Zugang ist vorübergehend nicht verfügbar.");
+    }
+    const payload=await db.fetchPortalShareData(portalParams.shareId,portalParams.rawToken);
+    dataSource="share";
+    return payload.data||null;
+  }
+
   async function loadCustomerData(){
     root.setAttribute("aria-busy","true");
     text("portalTitle","Daten werden geladen ...");
     text("tripTitle","Ihr persönliches Reiseprogramm wird vorbereitet.");
+
+    if(isShareAccess){
+      try{
+        return await loadShareCustomerData();
+      }catch(error){
+        console.warn("Share-Link konnte nicht geladen werden.");
+        showShareError("Dieser Portal-Link ist nicht gültig oder nicht mehr verfügbar.");
+        return null;
+      }
+    }
+
+    if(!allowLegacyCustomerAccess()){
+      showShareError("Dieser Portal-Link ist nicht gültig oder nicht mehr verfügbar.");
+      return null;
+    }
+
     try{
       const db=window.ACTFirebaseDatabase;
       if(db){
@@ -54,7 +111,7 @@
 
     const stored=loadStoredCustomer(customerId);
     if(stored){
-      if(isAdminPreview){
+      if(shareLib&&shareLib.isTrustedAdminPreview(portalParams)){
         dataSource="local-draft";
         return buildAdminDraftPreview(stored);
       }
@@ -67,6 +124,10 @@
         dataSource="local";
         return stored;
       }
+    }
+
+    if(isProductionHost()){
+      return null;
     }
 
     dataSource="demo";
@@ -629,7 +690,7 @@
       </div>
       <div class="card-actions compact-actions">
         <a class="button primary" href="#${detailId(next)}">Details anzeigen</a>
-        <a class="button soft" href="${itemNavigationUrl(next)}" target="_blank" rel="noopener">Navigation öffnen</a>
+        <a class="button soft" href="${itemNavigationUrl(next)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>
       </div>
     `;
   }
@@ -775,8 +836,8 @@
             <a class="button soft" href="#overall-timeline">Zurück zur Gesamt-Timeline</a>
             ${previous?`<a class="button soft" href="#${detailId(previous)}">Vorheriger Programmpunkt</a>`:""}
             ${next?`<a class="button soft" href="#${detailId(next)}">Nächster Programmpunkt</a>`:""}
-            ${(linked?.navigationUrl||itemNavigationUrl(item))?`<a class="button soft" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener">Navigation öffnen</a>`:""}
-            ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener">Dokument öffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
+            ${(linked?.navigationUrl||itemNavigationUrl(item))?`<a class="button soft" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>`:""}
+            ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener noreferrer">Dokument öffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
             <button class="button soft" type="button" data-calendar-id="${item.id}" ${item.calendarEnabled?"":"disabled"}>In Kalender speichern</button>
           </div>
         </article>
@@ -810,8 +871,8 @@
             ["Hinweis",booking.customerNote||""]
           ])}
           <div class="card-actions">
-            ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener">Navigation</a>`:""}
-            ${docs.map(doc=>`<a class="button soft" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener">Dokument öffnen</a>`).join("")}
+            ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation</a>`:""}
+            ${docs.map(doc=>`<a class="button soft" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener noreferrer">Dokument öffnen</a>`).join("")}
           </div>
         </article>
       `;
@@ -831,7 +892,7 @@
         ["Kontakt",hotel.contact],
         ["Voucher",hotel.voucherStatus]
       ])}
-      ${navUrl?`<div class="card-actions"><a class="button primary" href="${navUrl}" target="_blank" rel="noopener">Navigation öffnen</a></div>`:""}
+      ${navUrl?`<div class="card-actions"><a class="button primary" href="${navUrl}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a></div>`:""}
     `;
   }
 
@@ -899,7 +960,7 @@
           ["Upload-Datum",formatUploadDate(item.uploadedAt)]
         ])}
         <div class="card-actions">
-          <a class="button primary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">Dokument öffnen</a>
+          <a class="button primary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Dokument öffnen</a>
         </div>
       </article>
     `).join(""):`<article class="document-card document-empty"><h3>Derzeit sind noch keine Dokumente verfügbar.</h3><p class="muted">Sobald Unterlagen freigegeben sind, erscheinen sie hier zum Download.</p></article>`;
@@ -917,7 +978,7 @@
         ["Lokale Notrufnummern",contact.localEmergency]
       ])}
       <div class="card-actions">
-        <a class="button primary" href="${whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.")}" target="_blank" rel="noopener">WhatsApp öffnen</a>
+        <a class="button primary" href="${whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.")}" target="_blank" rel="noopener noreferrer">WhatsApp öffnen</a>
         <a class="button soft" href="mailto:${contact.email}">E-Mail senden</a>
       </div>
     `;
@@ -1053,7 +1114,7 @@
     if(isAppleMobile()){
       const link=document.createElement("a");
       link.href=`data:text/calendar;charset=utf-8,${encodeURIComponent(content)}`;
-      link.rel="noopener";
+      link.rel="noopener noreferrer";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1160,7 +1221,7 @@
   function renderAdminVersionHint(){
     const hint=document.getElementById("adminVersionHint");
     if(!hint)return;
-    if(!isAdminPreview){
+    if(!shareLib||!shareLib.isTrustedAdminPreview(portalParams)){
       hint.hidden=true;
       return;
     }
@@ -1171,21 +1232,24 @@
   }
 
   function renderDataSourceNotice(){
+    if(!shareLib||!shareLib.isTrustedAdminPreview(portalParams))return;
     const target=document.getElementById("publicationStatus");
     if(!target)return;
     const visibleCount=(customer.documents||[]).filter(isPortalDocument).length;
-    const sourceLabel=dataSource==="firebase"?"Firestore publishedData":dataSource==="local"?"localStorage (veröffentlicht)":dataSource==="local-draft"?"Admin-Entwurf (localStorage)":"Demo";
+    const sourceLabel=dataSource==="share"?"Share-Link (öffentlicher Snapshot)":dataSource==="firebase"?"Firestore publishedData":dataSource==="local"?"localStorage (veröffentlicht)":dataSource==="local-draft"?"Admin-Entwurf (localStorage)":"Demo";
     target.textContent=`${target.textContent} · Datenquelle: ${sourceLabel} · ${visibleCount} sichtbare Dokumente`;
   }
 
   async function initPortal(){
     const loaded=await loadCustomerData();
     if(!loaded){
-      root.removeAttribute("aria-busy");
-      root.replaceChildren(document.getElementById("notFoundTemplate").content.cloneNode(true));
+      if(!root.querySelector(".not-found")){
+        root.removeAttribute("aria-busy");
+        root.replaceChildren(document.getElementById("notFoundTemplate").content.cloneNode(true));
+      }
       return;
     }
-    customer=normalizeCustomerData(loaded,customerId);
+    customer=normalizeCustomerData(loaded,isShareAccess?loaded.customerId||"":customerId);
     renderPortal();
   }
 

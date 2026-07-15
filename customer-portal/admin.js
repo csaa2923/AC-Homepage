@@ -1,6 +1,7 @@
 (function(){
   const STORAGE_KEY="act_customer_portal_customers";
   const SESSION_KEY="act_customer_portal_admin_unlocked";
+  const SHARE_TOKEN_KEY="act_portal_share_session";
   const demoRoot=window.CustomerPortalData||{customers:{}};
   let customers={};
   let activeId="";
@@ -1007,6 +1008,141 @@
     const customer=customers[id];
     const published=customer&&(customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published");
     return portalPath(id,{admin:!published});
+  }
+
+  function portalShareLibrary(){
+    return window.ACTPortalShareLibrary||null;
+  }
+
+  function loadShareTokens(){
+    try{return JSON.parse(sessionStorage.getItem(SHARE_TOKEN_KEY)||"{}");}catch(error){
+      return {};
+    }
+  }
+
+  function saveShareToken(customerId,data){
+    const all=loadShareTokens();
+    if(data)all[customerId]=data;
+    else delete all[customerId];
+    sessionStorage.setItem(SHARE_TOKEN_KEY,JSON.stringify(all));
+  }
+
+  function activeShareToken(customerId){
+    return loadShareTokens()[customerId||activeId]||null;
+  }
+
+  function buildShareLink(shareId,rawToken){
+    const lib=portalShareLibrary();
+    return lib?lib.buildShareUrl(shareId,rawToken):"";
+  }
+
+  function preferredPortalLink(customerId){
+    const share=activeShareToken(customerId);
+    if(share?.shareUrl)return share.shareUrl;
+    return portalPath(customerId);
+  }
+
+  async function createPortalShareLink(){
+    const customer=ensureCollections(activeCustomer());
+    const published=customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published";
+    if(!published||!customer.publishedSnapshot){
+      window.alert("Bitte zuerst veröffentlichen, bevor ein sicherer Kunden-Link erzeugt wird.");
+      return;
+    }
+    const statusEl=byId("portalShareStatus");
+    const button=byId("createPortalShareButton");
+    if(button)button.disabled=true;
+    if(statusEl)statusEl.textContent="Sicherer Portal-Link wird erzeugt ...";
+    const db=firebaseDatabase();
+    try{
+      let result=null;
+      if(db){
+        result=await db.createPortalShare(clone(customer));
+      }else{
+        throw new Error("Firebase nicht verfügbar.");
+      }
+      const shareUrl=buildShareLink(result.shareId,result.rawToken);
+      saveShareToken(customer.customerId,{
+        shareId:result.shareId,
+        shareUrl,
+        createdAt:result.createdAt||new Date().toISOString(),
+        publishedVersionId:result.publishedVersionId||customer.version||"1.0",
+        status:"active"
+      });
+      customer.publishMeta={
+        ...(customer.publishMeta||{}),
+        activePortalShare:{
+          shareId:result.shareId,
+          createdAt:result.createdAt||new Date().toISOString(),
+          publishedVersionId:result.publishedVersionId||customer.version||"1.0",
+          status:"active"
+        }
+      };
+      commitCustomer(customer);
+      saveCustomers();
+      renderLinks();
+      openShareCreatedDialog(shareUrl,result.publishedVersionId||customer.version||"1.0");
+      setFirebaseStatus("Sicherer Portal-Link wurde erzeugt.");
+    }catch(error){
+      const message=error&&error.message?error.message:String(error);
+      if(statusEl)statusEl.textContent=`Share-Link konnte nicht erzeugt werden: ${message}`;
+      setFirebaseStatus(`Share-Link fehlgeschlagen: ${message}`,true);
+    }finally{
+      if(button)button.disabled=false;
+    }
+  }
+
+  function openShareCreatedDialog(shareUrl,version){
+    const statusEl=byId("portalShareStatus");
+    if(statusEl)statusEl.textContent=`Sicherer Link erzeugt (Version ${version}). Bitte jetzt kopieren – nach Schließen des Dialogs ist der Token nur noch in der URL verfügbar.`;
+    const existing=byId("shareCreatedDialog");
+    if(existing){
+      byId("shareCreatedLinkInput").value=shareUrl;
+      existing.hidden=false;
+      return;
+    }
+    window.alert(`Sicherer Portal-Link erzeugt (Version ${version}).\n\nBitte den Link jetzt kopieren. Er ist nur in dieser Admin-Sitzung gespeichert.`);
+    copyText(shareUrl);
+  }
+
+  function issuePortalPreviewGrant(customerId){
+    const lib=portalShareLibrary();
+    if(lib&&lib.issueAdminPreviewGrant)lib.issueAdminPreviewGrant(customerId);
+  }
+
+  async function revokeActivePortalShare(){
+    const customer=ensureCollections(activeCustomer());
+    const share=activeShareToken(customer.customerId);
+    if(!share?.shareId){
+      window.alert("Kein aktiver Share-Link vorhanden.");
+      return;
+    }
+    if(!window.confirm("Diesen sicheren Portal-Link wirklich widerrufen?\n\nBereits versendete Links funktionieren danach nicht mehr."))return;
+    const statusEl=byId("portalShareStatus");
+    if(statusEl)statusEl.textContent="Share wird widerrufen ...";
+    const db=firebaseDatabase();
+    try{
+      if(db)await db.revokePortalShare(share.shareId);
+      saveShareToken(customer.customerId,null);
+      customer.publishMeta={
+        ...(customer.publishMeta||{}),
+        activePortalShare:{
+          ...(customer.publishMeta?.activePortalShare||{}),
+          shareId:share.shareId,
+          status:"revoked",
+          revokedAt:new Date().toISOString()
+        }
+      };
+      commitCustomer(customer);
+      saveCustomers();
+      renderLinks();
+      if(statusEl)statusEl.textContent="Share-Link wurde widerrufen.";
+      setFirebaseStatus("Portal-Share wurde widerrufen.");
+    }catch(error){
+      const message=error&&error.message?error.message:String(error);
+      if(statusEl)statusEl.textContent=`Widerruf fehlgeschlagen: ${message}`;
+      setFirebaseStatus(`Share-Widerruf fehlgeschlagen: ${message}`,true);
+    }
   }
 
   function formatPeriod(customer){
@@ -2340,9 +2476,29 @@
   }
 
   function renderLinks(){
-    const link=portalPath(activeId);
-    byId("portalLink").value=link;
-    byId("whatsappText").value=`Guten Tag, hier finden Sie Ihr persönliches Reiseprogramm von Alpine Concierge Tirol:\n${link}\n\nBei Änderungswünschen können Sie uns jederzeit kontaktieren.`;
+    const customer=ensureCollections(activeCustomer());
+    const previewLink=portalPath(activeId);
+    const share=activeShareToken(activeId);
+    const shareInput=byId("portalShareLink");
+    const shareStatus=byId("portalShareStatus");
+    const revokeButton=byId("revokePortalShareButton");
+    const createButton=byId("createPortalShareButton");
+    const published=customer.publicationState==="Veröffentlicht"||customer.publishStatus==="published";
+    if(shareInput){
+      shareInput.value=share?.shareUrl||"";
+      shareInput.placeholder=published?"Noch kein sicherer Link erzeugt":"Nach Veröffentlichung erzeugen";
+    }
+    if(shareStatus){
+      if(share?.status==="revoked")shareStatus.textContent="Der letzte Share-Link wurde widerrufen. Bitte neuen Link erzeugen.";
+      else if(share?.shareUrl)shareStatus.textContent=`Aktiver Share-Link (Version ${share.publishedVersionId||customer.version||"1.0"}).`;
+      else if(published)shareStatus.textContent="Für Kundenversand den sicheren Share-Link erzeugen. Der interne Link ist nur für Admin-Vorschau.";
+      else shareStatus.textContent="Nach der Veröffentlichung kann hier ein sicherer Kunden-Link erzeugt werden.";
+    }
+    if(revokeButton)revokeButton.disabled=!share?.shareUrl||share?.status==="revoked";
+    if(createButton)createButton.disabled=!published;
+    byId("portalLink").value=previewLink;
+    const customerLink=share?.shareUrl||previewLink;
+    byId("whatsappText").value=`Guten Tag, hier finden Sie Ihr persönliches Reiseprogramm von Alpine Concierge Tirol:\n${customerLink}\n\nBei Änderungswünschen können Sie uns jederzeit kontaktieren.`;
   }
 
   function whatsappPhoneNumber(){
@@ -2983,7 +3139,7 @@
 
   function openNotifyDialog(customer,meta){
     const workflow=publishWorkflow();
-    const texts=workflow?workflow.buildNotificationTexts(customer,{...meta,portalLink:portalPath(customer.customerId)}):{whatsapp:"",email:""};
+    const texts=workflow?workflow.buildNotificationTexts(customer,{...meta,portalLink:preferredPortalLink(customer.customerId)}):{whatsapp:"",email:""};
     const success=byId("notifySuccessNote");
     if(success)success.textContent=`Version ${meta.version||customer.version||"1.0"} wurde veröffentlicht. Das Kundenportal zeigt jetzt die Live-Version.`;
     byId("notifyPreparedText").value=texts.whatsapp;
@@ -3779,6 +3935,16 @@
       if(removeBookingDoc){editingBookingDocuments=editingBookingDocuments.filter((_,index)=>index!==Number(removeBookingDoc.dataset.removeBookingDoc));renderBookingDocumentsList();}
     });
     byId("copyLinkButton").addEventListener("click",()=>copyText(byId("portalLink").value));
+    byId("copyShareLinkButton")?.addEventListener("click",()=>{
+      const value=byId("portalShareLink")?.value||"";
+      if(!value){
+        window.alert("Bitte zuerst einen sicheren Portal-Link erzeugen.");
+        return;
+      }
+      copyText(value);
+    });
+    byId("createPortalShareButton")?.addEventListener("click",createPortalShareLink);
+    byId("revokePortalShareButton")?.addEventListener("click",revokeActivePortalShare);
     byId("backToCustomersButton").addEventListener("click",()=>{adminMode="overview";renderAll();updateMainNavActive("customers");byId("customers").scrollIntoView({behavior:"smooth",block:"start"})});
     byId("backFromCrmButton")?.addEventListener("click",()=>{adminMode="overview";renderAll();updateMainNavActive("crm-dashboard");byId("crm-dashboard").scrollIntoView({behavior:"smooth",block:"start"})});
     byId("saveCrmButton")?.addEventListener("click",saveCrmCustomer);
@@ -3890,7 +4056,10 @@
     byId("openPortalPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId,{admin:true}),"_blank","noopener"));
     byId("saveDraftButton").addEventListener("click",()=>saveCustomerDraft());
     byId("retrySyncButton")?.addEventListener("click",()=>retryCloudSync());
-    byId("openPreviewButton").addEventListener("click",()=>window.open(portalPath(activeId,{admin:true}),"_blank","noopener"));
+    byId("openPreviewButton").addEventListener("click",()=>{
+      issuePortalPreviewGrant(activeId);
+      window.open(portalPath(activeId,{admin:true}),"_blank","noopener");
+    });
     byId("markPublishedButton").addEventListener("click",()=>openPublishDialog(activeId));
     byId("restorePublishedButton").addEventListener("click",restoreLastPublished);
     byId("publishDialogCancel").addEventListener("click",closePublishDialog);

@@ -25,6 +25,10 @@
     saveCustomerBookings:customer=>service().saveCustomerBookings(customer),
     loadBookingsForCustomer:id=>service().loadBookingsForCustomer(id),
     loadAllBookingsForAdmin:()=>service().loadAllBookingsForAdmin(),
-    deleteBookingRecord:id=>service().deleteBookingRecord(id)
+    deleteBookingRecord:id=>service().deleteBookingRecord(id),
+    createPortalShare:customer=>service().createPortalShare(customer),
+    listPortalSharesForCustomer:id=>service().listPortalSharesForCustomer(id),
+    revokePortalShare:shareId=>service().revokePortalShare(shareId),
+    fetchPortalShareData:(shareId,rawToken)=>service().fetchPortalShareData(shareId,rawToken)
   };
 })();

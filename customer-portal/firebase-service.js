@@ -37,7 +37,8 @@
       snapshot.programItems=applied.program;
       snapshot.bookings=window.ACTBookingLibrary.publishedBookings(snapshot);
     }
-    return snapshot;
+    const redact=window.ACTRedactPublicSnapshot?.redactPublicSnapshot||window.ACTRedactAllowlist?.redactPublicSnapshot;
+    return redact?redact(snapshot,{customerId:customerIdOf(snapshot)}):snapshot;
   }
 
   function nowText(){
@@ -298,7 +299,11 @@
       lastUpdated:nowText()
     };
     if(!existing.exists()||!("publishedData" in (existing.data()||{})))payload.publishedData=null;
-    await firestoreModule.setDoc(docRef(id),payload,{merge:true});
+    if(existing.exists())await firestoreModule.updateDoc(docRef(id),payload);
+    else await firestoreModule.setDoc(docRef(id),{
+      ...payload,
+      createdAt:new Date().toISOString()
+    });
     try{await saveCrmRecord(customer);}catch(error){console.warn("[ACT Firebase] CRM-Speicherung:",error&&error.message?error.message:"Fehler");}
     try{await saveCustomerBookings(customer);}catch(error){console.warn("[ACT Firebase] Buchungs-Speicherung:",error&&error.message?error.message:"Fehler");}
     return draftData;
@@ -345,7 +350,7 @@
       publishError:""
     };
     console.log("[ACT Firebase] Veröffentlichung wird gespeichert.");
-    await firestoreModule.setDoc(docRef(id),{
+    const payload={
       customerId:id,
       draftData,
       publishedData,
@@ -354,7 +359,12 @@
       publishHistory:(customer.publishHistory||[]).slice(0,30),
       updatedAt:new Date().toISOString(),
       lastUpdated:nowText()
-    },{merge:true});
+    };
+    if(existing.exists())await firestoreModule.updateDoc(docRef(id),payload);
+    else await firestoreModule.setDoc(docRef(id),{
+      ...payload,
+      createdAt:new Date().toISOString()
+    });
     return {publishedData:denormalizeFromFirestore(publishedData),publishMeta:publishRecord};
   }
 

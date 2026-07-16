@@ -55,10 +55,13 @@
 
   function readAdminPreviewGrant(customerId){
     try{
-      const raw=sessionStorage.getItem(ADMIN_PREVIEW_GRANT_KEY);
+      const raw=localStorage.getItem(ADMIN_PREVIEW_GRANT_KEY)||sessionStorage.getItem(ADMIN_PREVIEW_GRANT_KEY);
       if(!raw)return null;
       const grant=JSON.parse(raw);
-      if(!grant||Date.now()>Number(grant.expiresAt||0))return null;
+      if(!grant||Date.now()>Number(grant.expiresAt||0)){
+        clearAdminPreviewGrant();
+        return null;
+      }
       if(customerId&&grant.customerId&&grant.customerId!==customerId)return null;
       return grant;
     }catch(error){
@@ -66,11 +69,18 @@
     }
   }
 
+  function clearAdminPreviewGrant(){
+    localStorage.removeItem(ADMIN_PREVIEW_GRANT_KEY);
+    sessionStorage.removeItem(ADMIN_PREVIEW_GRANT_KEY);
+  }
+
   function issueAdminPreviewGrant(customerId){
-    sessionStorage.setItem(ADMIN_PREVIEW_GRANT_KEY,JSON.stringify({
+    const grant=JSON.stringify({
       customerId:customerId||"",
       expiresAt:Date.now()+ADMIN_PREVIEW_TTL_MS
-    }));
+    });
+    localStorage.setItem(ADMIN_PREVIEW_GRANT_KEY,grant);
+    sessionStorage.setItem(ADMIN_PREVIEW_GRANT_KEY,grant);
   }
 
   function isTrustedAdminPreview(params){

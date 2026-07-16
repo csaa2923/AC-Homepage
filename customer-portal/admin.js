@@ -19,6 +19,8 @@
   let editingBookingId="";
   let editingBookingDocuments=[];
   let saveState={status:"saved-local",dirty:false,saving:false,lastSavedAt:null,lastError:""};
+  let activeSavePromise=null;
+  let publishInProgress=false;
   const customerLocalRevision={};
   let firebaseLoadStartedAt=0;
   const PUBLISH_EDITOR="Alpine Concierge Tirol";
@@ -456,6 +458,21 @@
     updateSaveStatusUI();
   }
 
+  function confirmDiscardUnsavedChanges(){
+    if(!saveState.dirty||saveState.saving)return true;
+    return window.confirm("Es gibt noch ungespeicherte Änderungen.\n\nKundenwechsel fortsetzen und lokale Änderungen verwerfen?");
+  }
+
+  function switchActiveCustomer(id,mode="edit"){
+    if(!id)return false;
+    if(id!==activeId&&!confirmDiscardUnsavedChanges())return false;
+    activeId=id;
+    adminMode=mode;
+    resetSaveStateForCustomer();
+    renderAll();
+    return true;
+  }
+
   function customerSaveFingerprint(customer){
     const c=ensureCollections(customer);
     return JSON.stringify({
@@ -586,10 +603,20 @@
   }
 
   async function saveCustomerDraft(options={}){
-    if(saveState.saving)return;
+    if(saveState.saving&&activeSavePromise)return activeSavePromise;
+    activeSavePromise=saveCustomerDraftInternal(options);
+    try{
+      return await activeSavePromise;
+    }finally{
+      activeSavePromise=null;
+    }
+  }
+
+  async function saveCustomerDraftInternal(options={}){
+    if(saveState.saving)return {ok:false,local:false,cloud:false,error:"Speicherung laeuft bereits."};
     if(adminMode!=="edit"){
       setSaveStatus("error","Speichern ist nur im Bearbeitungsmodus möglich.");
-      return;
+      return {ok:false,local:false,cloud:false,error:"Speichern ist nur im Bearbeitungsmodus möglich."};
     }
     const saveTargetId=activeId;
     saveState.saving=true;
@@ -601,7 +628,7 @@
       if(!validation.valid){
         saveState.dirty=true;
         setSaveStatus("error",validation.errors.join(". "));
-        return;
+        return {ok:false,local:false,cloud:false,error:validation.errors.join(". ")};
       }
       if(activeId!==saveTargetId){
         throw new Error("Der aktive Kunde hat sich während des Speicherns geändert.");
@@ -640,16 +667,17 @@
       }else{
         cloudError="Firebase nicht verfügbar";
       }
-      saveState.dirty=false;
       saveState.lastSavedAt=new Date();
       if(cloudOk){
+        saveState.dirty=false;
         saveState.status="saved-cloud";
         saveState.lastError="";
         setFirebaseStatus("Entwurf wurde in Firestore gespeichert.");
       }else{
+        saveState.dirty=true;
         saveState.status="sync-error";
         saveState.lastError=cloudError;
-        setFirebaseStatus(`Lokal gespeichert. ${cloudError}`,true);
+        setFirebaseStatus(`Lokal gesichert, aber nicht vollständig synchronisiert. ${cloudError}`,true);
       }
       renderAll();
       updateSaveStatusUI();
@@ -658,9 +686,14 @@
           if(!saveState.dirty&&saveState.status==="saved-cloud")updateSaveStatusUI();
         },2400);
       }
+      if(options.requireCloud&&!cloudOk)throw new Error(cloudError||"Cloud-Speicherung fehlgeschlagen");
+      return {ok:cloudOk,local:true,cloud:cloudOk,customer:clone(savedLocal),error:cloudError};
     }catch(error){
       saveState.dirty=true;
-      setSaveStatus("error",error&&error.message?error.message:"Speichern fehlgeschlagen");
+      const message=error&&error.message?error.message:"Speichern fehlgeschlagen";
+      console.error(`[SaveDraft] Kunde ${saveTargetId||"(unbekannt)"} konnte nicht gespeichert werden.`,error);
+      setSaveStatus("error",message);
+      return {ok:false,local:false,cloud:false,error:message};
     }finally{
       saveState.saving=false;
       updateSaveStatusUI();
@@ -1081,7 +1114,7 @@
     const id=customerId||activeId;
     if(!id)return;
     issuePortalPreviewGrant(id);
-    window.open(portalPath(id,{admin:true}),"_blank","noopener");
+    window.open(portalPath(id,{admin:true}),"_blank");
   }
 
   function openCustomerPortalLink(customerId){
@@ -1833,9 +1866,7 @@
   }
 
   function openCrmAkte(id){
-    activeId=id;
-    adminMode="crm";
-    renderAll();
+    if(!switchActiveCustomer(id,"crm"))return;
     byId("crm-akte")?.scrollIntoView({behavior:"smooth",block:"start"});
   }
 
@@ -3247,7 +3278,8 @@
       snapshot.programItems=applied.program;
       snapshot.bookings=bl.publishedBookings(snapshot);
     }
-    return snapshot;
+    const redact=window.ACTRedactPublicSnapshot?.redactPublicSnapshot||window.ACTRedactAllowlist?.redactPublicSnapshot;
+    return redact?redact(snapshot,{customerId:snapshot.customerId}):snapshot;
   }
 
   function applyLocalPublish(customer,meta){
@@ -3338,7 +3370,7 @@
     openPublishDialog(id);
   }
 
-  async function confirmPublish(){
+  async function confirmPublishLegacy(){
     const id=pendingPublishId||activeId;
     const workflow=publishWorkflow();
     if(adminMode==="edit"){
@@ -3384,6 +3416,76 @@
     closePublishDialog();
     renderAll();
     openNotifyDialog(customer,meta);
+  }
+
+  async function confirmPublish(){
+    if(publishInProgress)return;
+    const id=pendingPublishId||activeId;
+    const workflow=publishWorkflow();
+    const db=firebaseDatabase();
+    const confirmButton=byId("publishDialogConfirm");
+    publishInProgress=true;
+    if(confirmButton)confirmButton.disabled=true;
+    try{
+      if(!db)throw new Error("Firebase nicht verfuegbar.");
+      const authCheck=await window.ACTFirebaseAuth?.requireAdmin?.();
+      if(!authCheck?.allowed)throw new Error(authCheck?.message||"Keine Admin-Berechtigung fuer Veroeffentlichung.");
+      const draftSave=await saveCustomerDraft({requireCloud:true});
+      if(!draftSave?.ok)throw new Error(draftSave?.error||"Entwurf konnte nicht gespeichert werden.");
+      let customer=normalizeCustomerData(draftSave.customer||customers[id],id);
+      if(customer.customerId!==id)throw new Error("Kunden-ID hat sich waehrend der Veroeffentlichung geaendert.");
+      const validation=workflow?workflow.validateForPublish(customer):{ok:true,errors:[]};
+      if(!validation.ok){
+        renderPublishValidationErrors(byId("publishValidationErrors"),validation);
+        return;
+      }
+      const comparison=getDraftComparison(customer);
+      const nextVersion=workflow?workflow.bumpVersion(customer.version||"1.0"):customer.version;
+      const comment=byId("publishCommentInput").value.trim();
+      const meta={
+        version:nextVersion,
+        comment,
+        publisher:PUBLISH_EDITOR,
+        publishedAt:new Date().toISOString(),
+        changes:comparison.changes
+      };
+      const publishCandidate=normalizeCustomerData(clone(customer),id);
+      publishCandidate.version=nextVersion;
+      publishCandidate.publicationState="Veröffentlicht";
+      publishCandidate.publishStatus="published";
+      publishCandidate.updatedAt=new Date().toLocaleDateString("de-DE");
+      applyLocalPublish(publishCandidate,meta);
+      const result=await db.publishCustomer(clone(publishCandidate),meta);
+      if(result?.publishedData)publishCandidate.publishedSnapshot=normalizePublishedSnapshot(result.publishedData,id);
+      publishCandidate.publishMeta={
+        ...(publishCandidate.publishMeta||{}),
+        ...(result?.publishMeta||{}),
+        contentHash:publishContentHash(publishCandidate),
+        publishError:""
+      };
+      customer=commitCustomer(publishCandidate,id);
+      saveCustomers();
+      saveState.dirty=false;
+      setFirebaseStatus(`Version ${nextVersion} wurde veröffentlicht.`);
+      closePublishDialog();
+      renderAll();
+      openNotifyDialog(customer,meta);
+    }catch(error){
+      const message=error&&error.message?error.message:String(error);
+      console.error(`[PublishCustomer] Veröffentlichung fuer ${id||"(unbekannt)"} fehlgeschlagen.`,error);
+      if(customers[id]){
+        customers[id]=normalizeCustomerData({
+          ...customers[id],
+          publishMeta:{...(customers[id].publishMeta||{}),publishError:message}
+        },id);
+        saveCustomers();
+      }
+      setFirebaseStatus(`Veröffentlichung fehlgeschlagen. ${message}`,true);
+      renderAll();
+    }finally{
+      publishInProgress=false;
+      if(confirmButton)confirmButton.disabled=false;
+    }
   }
 
   async function restoreLastPublished(){
@@ -4041,7 +4143,7 @@
     document.addEventListener("input",event=>{if(event.target.closest("[data-editor]")){readEditors();markDirty();renderLinks();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()}});
     document.addEventListener("click",event=>{
       const edit=event.target.closest("[data-edit-customer]");
-      if(edit){activeId=edit.dataset.editCustomer;adminMode="edit";resetSaveStateForCustomer();renderAll();scrollToMasterForm();}
+      if(edit&&switchActiveCustomer(edit.dataset.editCustomer,"edit"))scrollToMasterForm();
       const openCrm=event.target.closest("[data-open-crm]");
       if(openCrm)openCrmAkte(openCrm.dataset.openCrm);
       const open=event.target.closest("[data-open-customer]");
@@ -4075,7 +4177,7 @@
       const editBooking=event.target.closest("[data-edit-booking]");
       if(editBooking){const booking=findBookingById(editBooking.dataset.editBooking);if(booking)openBookingModal(booking,booking.customerId);}
       const openBookingCustomer=event.target.closest("[data-open-booking-customer]");
-      if(openBookingCustomer){activeId=openBookingCustomer.dataset.openBookingCustomer;adminMode="edit";resetSaveStateForCustomer();renderAll();scrollToMasterForm();}
+      if(openBookingCustomer&&switchActiveCustomer(openBookingCustomer.dataset.openBookingCustomer,"edit"))scrollToMasterForm();
       const createBooking=event.target.closest("[data-create-booking]");
       if(createBooking)createBookingFromProgram(Number(createBooking.dataset.createBooking));
       const removeBookingDoc=event.target.closest("[data-remove-booking-doc]");

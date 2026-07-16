@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alpine Concierge Tirol 2.0 | Klickbarer UX-Prototyp</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Hauptnavigation">
+      <button class="brand" type="button" data-route="dashboard" aria-label="Dashboard öffnen">
+        <img src="../../images/logo/logo.jpg" alt="Alpine Concierge Tirol">
+        <span>ACT 2.0</span>
+      </button>
+      <nav class="side-nav">
+        <button class="nav-item active" type="button" data-route="dashboard"><span class="icon">⌂</span>Dashboard</button>
+        <button class="nav-item" type="button" data-route="customers"><span class="icon">◎</span>Kunden</button>
+        <button class="nav-item" type="button" data-route="calendar"><span class="icon">□</span>Kalender</button>
+        <button class="nav-item" type="button" data-route="documents"><span class="icon">▣</span>Dokumente</button>
+        <button class="nav-item" type="button" data-route="settings"><span class="icon">⚙</span>Einstellungen</button>
+      </nav>
+      <button class="create-button" type="button" data-open-wizard>Neuer Kunde</button>
+      <button class="sidebar-card action-card" type="button" data-route="calendar">
+        <span class="tiny-label">Heute</span>
+        <strong>3 Reisen aktiv</strong>
+        <p>Familie Müller landet um 14:20 in Innsbruck.</p>
+      </button>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <span class="tiny-label">Alpine Concierge Tirol</span>
+          <h1 id="pageTitle">Dashboard</h1>
+        </div>
+        <div class="top-actions">
+          <label class="search">
+            <span class="icon">⌕</span>
+            <input id="globalSearch" type="search" placeholder="Kunden, Reisen, Dokumente suchen">
+          </label>
+          <button class="round-button" type="button" data-action="notifications" title="Benachrichtigungen">!</button>
+        </div>
+      </header>
+
+      <section class="view active" id="dashboard" data-title="Dashboard">
+        <div class="hero-card">
+          <div>
+            <span class="tiny-label">Concierge Cockpit</span>
+            <h2>Guten Abend, Wolfgang.</h2>
+            <p>Alle wichtigen Reisen, Aufgaben und Veröffentlichungen sind bereit für den nächsten Schritt.</p>
+            <div class="hero-actions">
+              <button class="button primary" type="button" data-open-wizard>Neue Reise planen</button>
+              <button class="button ghost" type="button" data-route="customers">Alle Kunden</button>
+              <button class="button ghost" type="button" data-route="calendar">Kalender öffnen</button>
+            </div>
+          </div>
+          <img src="../../images/hero/hero.jpg" alt="Alpine Reiseimpression">
+        </div>
+
+        <div class="metric-grid">
+          <button class="metric-card action-card" type="button" data-route="calendar">
+            <span class="tiny-label">Heute</span><strong>5</strong><p>Programmpunkte</p>
+          </button>
+          <button class="metric-card action-card" type="button" data-action="open-tasks">
+            <span class="tiny-label">Offen</span><strong id="openTaskCount">8</strong><p>Aufgaben</p>
+          </button>
+          <button class="metric-card action-card" type="button" data-action="publish-status">
+            <span class="tiny-label">Live</span><strong id="livePortalCount">12</strong><p>Kundenportale</p>
+          </button>
+          <button class="metric-card action-card" type="button" data-route="documents">
+            <span class="tiny-label">Dokumente</span><strong id="releasedDocCount">31</strong><p>freigegeben</p>
+          </button>
+        </div>
+
+        <div class="content-grid">
+          <section class="panel wide">
+            <div class="panel-head">
+              <div>
+                <span class="tiny-label">Heute</span>
+                <h3>Reisen und Aufgaben</h3>
+              </div>
+              <button class="button small" type="button" data-route="calendar">Kalender</button>
+            </div>
+            <div class="timeline-list" id="dashboardTasks"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <span class="tiny-label">Aktivitäten</span>
+                <h3>Zuletzt geändert</h3>
+              </div>
+            </div>
+            <div class="activity-list" id="activityList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="customers" data-title="Kunden">
+        <div class="section-toolbar">
+          <div>
+            <span class="tiny-label">Kundenverwaltung</span>
+            <h2>Kundenkarten statt Formularwand</h2>
+          </div>
+          <button class="button primary" type="button" data-open-wizard>Neuer Kunde</button>
+        </div>
+        <div class="filter-bar">
+          <label class="field compact"><span>Kunde suchen</span><input id="customerSearch" type="search" placeholder="Name, Region, Reise"></label>
+          <label class="field compact"><span>Status</span><select id="statusFilter"></select></label>
+          <label class="field compact"><span>Region</span><select id="regionFilter"></select></label>
+          <button class="button ghost" type="button" data-action="reset-filters">Filter zurücksetzen</button>
+        </div>
+        <div class="empty-state" id="customerEmpty" hidden>
+          <h3>Kein Suchergebnis</h3>
+          <p>Für diese Mock-Filter gibt es keinen passenden Kunden.</p>
+        </div>
+        <div class="customer-grid" id="customerGrid"></div>
+      </section>
+
+      <section class="view" id="customer-detail" data-title="Kundenkarte">
+        <button class="back-button" type="button" data-route="customers">← Zurück zur Kundenliste</button>
+        <div class="customer-hero" id="customerHero"></div>
+        <nav class="tabbar" aria-label="Kundentabs">
+          <button class="tab active" type="button" data-tab="customer">Kunde</button>
+          <button class="tab" type="button" data-tab="trip">Reise</button>
+          <button class="tab" type="button" data-tab="program">Programm</button>
+          <button class="tab" type="button" data-tab="docs">Dokumente</button>
+          <button class="tab" type="button" data-tab="communication">Kommunikation</button>
+          <button class="tab" type="button" data-tab="publish">Veröffentlichung</button>
+        </nav>
+        <div class="tab-view active" id="tab-customer"></div>
+        <div class="tab-view" id="tab-trip"></div>
+        <div class="tab-view" id="tab-program"></div>
+        <div class="tab-view" id="tab-docs"></div>
+        <div class="tab-view" id="tab-communication"></div>
+        <div class="tab-view" id="tab-publish"></div>
+      </section>
+
+      <section class="view" id="calendar" data-title="Kalender">
+        <div class="section-toolbar">
+          <div>
+            <span class="tiny-label">Kalender</span>
+            <h2>Reisen nach Tagen planen</h2>
+          </div>
+          <div class="segmented" role="group" aria-label="Kalenderansicht">
+            <button class="active" type="button" data-calendar-mode="week">Woche</button>
+            <button type="button" data-calendar-mode="day">Tag</button>
+          </div>
+        </div>
+        <div class="calendar-board" id="calendarBoard"></div>
+      </section>
+
+      <section class="view" id="documents" data-title="Dokumente">
+        <div class="section-toolbar">
+          <div>
+            <span class="tiny-label">Dokumente</span>
+            <h2>Alle Unterlagen als Karten</h2>
+          </div>
+          <label class="button primary file-button">
+            Mock-Datei hinzufügen
+            <input id="mockFileInput" type="file">
+          </label>
+        </div>
+        <div class="document-grid" id="documentGrid"></div>
+      </section>
+
+      <section class="view" id="settings" data-title="Einstellungen">
+        <div class="settings-grid">
+          <button class="panel action-card" type="button" data-action="design-system">
+            <span class="tiny-label">Design</span>
+            <h3>Concierge Designsystem</h3>
+            <p>Farben, Status, Karten, Buttons und Bewegungen werden zentral definiert.</p>
+          </button>
+          <button class="panel action-card" type="button" data-action="planned-integration">
+            <span class="tiny-label">Integrationen</span>
+            <h3>Technik bleibt bestehen</h3>
+            <p>Firebase, Uploads, Publish, Wetter und Share-Links werden später angebunden.</p>
+          </button>
+          <button class="panel action-card" type="button" data-action="roles">
+            <span class="tiny-label">Rollen</span>
+            <h3>Admin-Berechtigungen</h3>
+            <p>Die bestehende Rollenprüfung bleibt Grundlage. UX 2.0 ändert daran nichts.</p>
+          </button>
+        </div>
+      </section>
+
+      <section class="view portal-view" id="portal" data-title="Kundenportal">
+        <button class="back-button" type="button" data-route="customer-detail">← Zurück zum Kunden</button>
+        <div class="phone-shell">
+          <div class="phone-screen">
+            <section class="portal-welcome">
+              <span class="tiny-label" id="portalGreeting">Willkommen</span>
+              <h2>Ihre Tirol-Reise beginnt bald.</h2>
+              <img src="../../images/services/natur.jpg" alt="Tirol Natur">
+            </section>
+            <nav class="portal-nav" aria-label="Portalbereiche">
+              <button class="active" type="button" data-portal-tab="today">Heute</button>
+              <button type="button" data-portal-tab="program">Mein Programm</button>
+              <button type="button" data-portal-tab="docs">Dokumente</button>
+              <button type="button" data-portal-tab="weather">Wetter</button>
+              <button type="button" data-portal-tab="concierge">Concierge</button>
+            </nav>
+            <div id="portalContent"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="wizard-dialog" id="wizardDialog">
+    <button class="round-button close" type="button" data-close-dialog="wizardDialog" aria-label="Schließen">×</button>
+    <div class="wizard-layout">
+      <aside>
+        <span class="tiny-label">Neuer Kunde</span>
+        <h2>Concierge Wizard</h2>
+        <div class="progress"><span id="wizardProgress"></span></div>
+        <ol id="wizardSteps"></ol>
+      </aside>
+      <section id="wizardContent"></section>
+    </div>
+  </dialog>
+
+  <dialog class="modal" id="detailDialog">
+    <button class="round-button close" type="button" data-close-dialog="detailDialog" aria-label="Schließen">×</button>
+    <div id="detailContent"></div>
+  </dialog>
+
+  <dialog class="modal" id="confirmDialog">
+    <div id="confirmContent"></div>
+  </dialog>
+
+  <script src="prototype.js"></script>
+</body>
+</html>

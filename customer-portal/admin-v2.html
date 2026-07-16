@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=2">
+<link rel="stylesheet" href="admin-v2.css?v=3">
 </head>
 <body>
 <main>
@@ -39,11 +39,11 @@
         <span>ACT 2.0</span>
       </button>
       <nav class="v2-nav">
-        <button class="v2-nav-item active" type="button" data-v2-route="dashboard">Dashboard</button>
-        <button class="v2-nav-item" type="button" data-v2-route="customers">Kunden</button>
-        <button class="v2-nav-item" type="button" data-v2-route="calendar">Kalender</button>
-        <button class="v2-nav-item" type="button" data-v2-route="documents">Dokumente</button>
-        <button class="v2-nav-item" type="button" data-v2-route="settings">Einstellungen</button>
+        <button class="v2-nav-item active" type="button" data-v2-route="dashboard" data-icon="D">Dashboard</button>
+        <button class="v2-nav-item" type="button" data-v2-route="customers" data-icon="K">Kunden</button>
+        <button class="v2-nav-item" type="button" data-v2-route="calendar" data-icon="C">Kalender</button>
+        <button class="v2-nav-item" type="button" data-v2-route="documents" data-icon="A">Dokumente</button>
+        <button class="v2-nav-item" type="button" data-v2-route="settings" data-icon="S">Einstellungen</button>
       </nav>
       <button class="v2-create" type="button" id="newCustomerButton">Neuer Kunde</button>
       <a class="v2-classic-link" href="admin.html">Klassischer Admin</a>
@@ -60,49 +60,65 @@
             <span aria-hidden="true">⌕</span>
             <input id="globalSearchInput" type="search" placeholder="Kunden, Region, Status suchen">
           </label>
-          <span class="v2-user" id="userLabel"></span>
           <button class="v2-button soft" type="button" id="refreshButton">Aktualisieren</button>
-          <button class="v2-button soft" type="button" id="logoutButton">Abmelden</button>
+          <div class="v2-profile" aria-label="Benutzerbereich">
+            <span>Admin</span>
+            <strong id="userLabel">Admin</strong>
+            <button class="v2-profile-logout" type="button" id="logoutButton">Abmelden</button>
+          </div>
         </div>
       </header>
 
       <div class="v2-status" id="loadStatus" aria-live="polite"></div>
 
       <section class="v2-view active" id="dashboardView" data-title="Dashboard">
-        <div class="v2-hero">
+        <div class="v2-dashboard-hero">
           <div>
             <p class="v2-eyebrow">Concierge Cockpit</p>
-            <h2>Dashboard mit echten Kundendaten</h2>
-            <p>Diese Ansicht liest die vorhandenen Firebase-Kunden und fuehrt in die bestehende Bearbeitung zurueck.</p>
-            <div class="v2-actions">
-              <button class="v2-button primary" type="button" id="dashboardNewCustomerButton">Neuer Kunde</button>
-              <button class="v2-button soft" type="button" data-v2-route="customers">Alle Kunden</button>
-            </div>
+            <h2>Heute im Blick</h2>
+            <p>Kompakte Tagesuebersicht fuer Reisen, Status und naechste Schritte.</p>
           </div>
-          <img src="../images/hero/hero.jpg" alt="Alpine Reiseimpression">
+          <div class="v2-dashboard-actions">
+            <button class="v2-button primary" type="button" id="dashboardNewCustomerButton">Neuer Kunde</button>
+            <button class="v2-button soft" type="button" data-v2-route="customers">Kunden ansehen</button>
+          </div>
         </div>
 
         <div class="v2-metric-grid" id="metricGrid"></div>
 
-        <div class="v2-content-grid">
+        <div class="v2-dashboard-grid">
           <section class="v2-panel">
             <div class="v2-panel-head">
               <div>
-                <p class="v2-eyebrow">Naechste Reisen</p>
-                <h3>Anstehende Anreisen</h3>
+                <p class="v2-eyebrow">Heute</p>
+                <h3>Reisen des Tages</h3>
               </div>
-              <button class="v2-button small" type="button" data-filter-preset="upcoming">Alle anzeigen</button>
             </div>
-            <div class="v2-list" id="upcomingList"></div>
+            <div class="v2-list" id="todayList"></div>
           </section>
           <section class="v2-panel">
             <div class="v2-panel-head">
               <div>
                 <p class="v2-eyebrow">Aktivitaet</p>
-                <h3>Zuletzt bearbeitet</h3>
+                <h3>Letzte Aktivitaeten</h3>
               </div>
             </div>
-            <div class="v2-list" id="recentList"></div>
+            <div class="v2-list" id="activityList"></div>
+          </section>
+          <section class="v2-panel v2-quick-panel">
+            <div class="v2-panel-head">
+              <div>
+                <p class="v2-eyebrow">Schnellzugriffe</p>
+                <h3>Direkt weiter</h3>
+              </div>
+            </div>
+            <div class="v2-quick-grid">
+              <button class="v2-quick-action" type="button" id="dashboardQuickNewCustomerButton">Neuer Kunde</button>
+              <button class="v2-quick-action" type="button" data-v2-route="customers">Kunden</button>
+              <button class="v2-quick-action" type="button" data-v2-route="calendar">Kalender</button>
+              <button class="v2-quick-action" type="button" data-v2-route="documents">Dokumente</button>
+              <button class="v2-quick-action" type="button" data-v2-route="settings">Einstellungen</button>
+            </div>
           </section>
         </div>
       </section>
@@ -137,7 +153,7 @@
               <option value="publication">Veroeffentlichungsstatus</option>
             </select>
           </label>
-          <button class="v2-button soft" type="button" id="resetFiltersButton">Reset</button>
+          <button class="v2-button small" type="button" id="resetFiltersButton">Zuruecksetzen</button>
         </div>
 
         <div class="v2-empty" id="customerEmpty" hidden>
@@ -179,6 +195,6 @@
 <script src="firebase-service.js?v=19"></script>
 <script src="firebase-auth.js?v=3"></script>
 <script src="firebase-database.js"></script>
-<script src="admin-v2.js?v=4"></script>
+<script src="admin-v2.js?v=5"></script>
 </body>
 </html>

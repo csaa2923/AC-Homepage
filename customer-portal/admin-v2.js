@@ -88,6 +88,21 @@
     return start>=today;
   }
 
+  function isTodayValue(value){
+    const date=dateValue(value);
+    if(!date)return false;
+    const today=new Date();
+    return date.getFullYear()===today.getFullYear()&&date.getMonth()===today.getMonth()&&date.getDate()===today.getDate();
+  }
+
+  function isArrivalToday(customer){
+    return isTodayValue(customer.startDatePlain);
+  }
+
+  function isDepartureToday(customer){
+    return isTodayValue(customer.endDatePlain);
+  }
+
   function documentCount(customer){
     return Array.isArray(customer.documents)?customer.documents.length:0;
   }
@@ -296,7 +311,9 @@
   }
 
   function renderSkeletons(){
-    byId("metricGrid").innerHTML=[1,2,3,4].map(()=>`<article class="v2-card v2-metric v2-skeleton"></article>`).join("");
+    byId("metricGrid").innerHTML=[1,2,3,4,5,6].map(()=>`<article class="v2-card v2-metric v2-skeleton"></article>`).join("");
+    byId("todayList").innerHTML=`<article class="v2-card v2-skeleton"></article>`;
+    byId("activityList").innerHTML=`<article class="v2-card v2-skeleton"></article>`;
     byId("customerGrid").innerHTML=[1,2,3].map(()=>`<article class="v2-card v2-skeleton"></article>`).join("");
   }
 
@@ -305,7 +322,9 @@
     const active=state.customers.filter(isActiveTrip).length;
     const published=state.customers.filter(isPublished).length;
     const drafts=state.customers.filter(customer=>!isPublished(customer)).length;
-    return {total,active,published,drafts};
+    const arrivals=state.customers.filter(isArrivalToday).length;
+    const departures=state.customers.filter(isDepartureToday).length;
+    return {total,active,published,drafts,arrivals,departures};
   }
 
   function filteredCustomers(){
@@ -325,6 +344,8 @@
     }
     if(state.status==="active")list=list.filter(isActiveTrip);
     else if(state.status==="upcoming")list=list.filter(isUpcomingTrip);
+    else if(state.status==="arrivals")list=list.filter(isArrivalToday);
+    else if(state.status==="departures")list=list.filter(isDepartureToday);
     else if(state.status==="draft")list=list.filter(customer=>!isPublished(customer));
     else if(state.status==="published")list=list.filter(isPublished);
     else if(state.status)list=list.filter(customer=>String(customer.status||"")===state.status);
@@ -368,6 +389,48 @@
   function listItem(customer){
     return `<button class="v2-list-item" type="button" data-open-editor="${escapeHtml(customer.customerId)}">
       <span><strong>${escapeHtml(customer.customerName||"Unbenannter Kunde")}</strong><br><span class="v2-muted">${escapeHtml(customer.tripName||customer.tripTitle||"")} · ${escapeHtml(formatPeriod(customer)||"Zeitraum nicht verfügbar")}</span></span>
+      ${badge(publicationState(customer))}
+    </button>`;
+  }
+
+  function renderMetrics(){
+    const data=stats();
+    const metrics=[
+      {label:"Kunden gesamt",value:data.total,preset:"all",tone:"blue",icon:"K"},
+      {label:"Aktive Reisen",value:data.active,preset:"active",tone:"green",icon:"A"},
+      {label:"Entwuerfe",value:data.drafts,preset:"draft",tone:"amber",icon:"E"},
+      {label:"Veroeffentlicht",value:data.published,preset:"published",tone:"green",icon:"V"},
+      {label:"Heute Anreisen",value:data.arrivals,preset:"arrivals",tone:"rose",icon:"IN"},
+      {label:"Heute Abreisen",value:data.departures,preset:"departures",tone:"blue",icon:"OUT"}
+    ];
+    byId("metricGrid").innerHTML=metrics.map(item=>`
+      <button class="v2-card v2-metric ${item.tone}" type="button" data-filter-preset="${item.preset}">
+        <span class="v2-card-icon">${escapeHtml(item.icon)}</span>
+        <strong>${item.value}</strong>
+        <span>${escapeHtml(item.label)}</span>
+      </button>
+    `).join("");
+  }
+
+  function renderDashboardLists(){
+    const today=state.customers.filter(customer=>isArrivalToday(customer)||isDepartureToday(customer)||isActiveTrip(customer)).sort(compareCustomers).slice(0,6);
+    const recent=[...state.customers].sort((a,b)=>timestampValue(b)-timestampValue(a)).slice(0,6);
+    byId("todayList").innerHTML=today.length?today.map(todayItem).join(""):`<p class="v2-muted">Heute sind keine Reisen mit passendem Datum hinterlegt.</p>`;
+    byId("activityList").innerHTML=recent.length?recent.map(activityItem).join(""):`<p class="v2-muted">Noch keine Aktivitaeten verfuegbar.</p>`;
+  }
+
+  function todayItem(customer){
+    const label=isArrivalToday(customer)?"Anreise":isDepartureToday(customer)?"Abreise":"Reise aktiv";
+    return `<button class="v2-list-item" type="button" data-open-editor="${escapeHtml(customer.customerId)}">
+      <span><strong>${escapeHtml(customer.customerName||"Unbenannter Kunde")}</strong><br><span class="v2-muted">${escapeHtml(label)} - ${escapeHtml(formatPeriod(customer)||"Zeitraum nicht verfuegbar")}</span></span>
+      ${badge(customer.region||publicationState(customer))}
+    </button>`;
+  }
+
+  function activityItem(customer){
+    const updated=timestampValue(customer)?formatDate(new Date(timestampValue(customer)).toISOString()):"kein Datum";
+    return `<button class="v2-list-item" type="button" data-open-editor="${escapeHtml(customer.customerId)}">
+      <span><strong>${escapeHtml(customer.customerName||"Unbenannter Kunde")}</strong><br><span class="v2-muted">Letzte Aenderung - ${escapeHtml(updated)}</span></span>
       ${badge(publicationState(customer))}
     </button>`;
   }
@@ -419,9 +482,10 @@
             <span>${escapeHtml(customer.region||"Region nicht verfügbar")}</span>
             <span>${programCount(customer)} Programmpunkte</span>
             <span>${documentCount(customer)} Dokumente</span>
+            <span>Geaendert ${escapeHtml(timestampValue(customer)?formatDate(new Date(timestampValue(customer)).toISOString()):"unbekannt")}</span>
           </div>
           <div class="v2-actions">
-            <button class="v2-button soft" type="button" data-open-editor="${escapeHtml(customer.customerId)}">Bearbeiten</button>
+            <span class="v2-button soft">Kunde oeffnen</span>
             <a class="v2-button soft" href="admin.html#customers">Alter Admin</a>
           </div>
         </div>
@@ -487,6 +551,7 @@
     byId("refreshButton").addEventListener("click",loadCustomers);
     byId("newCustomerButton").addEventListener("click",openNewCustomer);
     byId("dashboardNewCustomerButton").addEventListener("click",openNewCustomer);
+    byId("dashboardQuickNewCustomerButton").addEventListener("click",openNewCustomer);
     byId("customerNewButton").addEventListener("click",openNewCustomer);
     byId("resetFiltersButton").addEventListener("click",resetFilters);
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);

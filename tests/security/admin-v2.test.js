@@ -32,9 +32,26 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=2/);
-    assert.match(html,/admin-v2\.js\?v=4/);
+    assert.match(html,/admin-v2\.css\?v=3/);
+    assert.match(html,/admin-v2\.js\?v=5/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
+  });
+
+  it("keeps dashboard as cockpit and customer cards in the customer view only",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const html=readProjectFile("customer-portal/admin-v2.html");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(html,/id="todayList"/);
+    assert.match(html,/id="activityList"/);
+    assert.match(html,/class="v2-quick-grid"/);
+    assert.match(html,/id="customerGrid"/);
+    assert.match(js,/Heute Anreisen/);
+    assert.match(js,/Heute Abreisen/);
+    assert.match(js,/function todayItem\(customer\)/);
+    assert.match(js,/function activityItem\(customer\)/);
+    assert.match(css,/\.v2-dashboard-grid/);
+    assert.match(css,/\.v2-customer-card:hover/);
+    assert.match(js,/class="v2-card v2-customer-card" tabindex="0" role="button" data-open-editor/);
   });
 
   it("keeps login and dashboard mutually exclusive after auth state changes",()=>{

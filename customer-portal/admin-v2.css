@@ -15,6 +15,7 @@
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink)}
 button,input,select{font:inherit}
 button{cursor:pointer}

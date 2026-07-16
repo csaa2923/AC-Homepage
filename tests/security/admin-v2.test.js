@@ -20,6 +20,7 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("guards admin v2 authentication against permanent loading states",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
+    const css=readProjectFile("customer-portal/admin-v2.css");
     assert.match(js,/const AUTH_TIMEOUT_MS=15000/);
     assert.match(js,/function withTimeout\(promise,timeoutMs,label\)/);
     assert.match(js,/function startLoginDeadline\(attemptId\)/);
@@ -31,7 +32,18 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.js\?v=3/);
+    assert.match(html,/admin-v2\.css\?v=2/);
+    assert.match(html,/admin-v2\.js\?v=4/);
+    assert.match(css,/\[hidden\]\{display:none!important\}/);
+  });
+
+  it("keeps login and dashboard mutually exclusive after auth state changes",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/function setScreenVisibility\(loginVisible\)/);
+    assert.match(js,/login\.hidden=!loginVisible/);
+    assert.match(js,/shell\.hidden=loginVisible/);
+    assert.match(js,/function showShell\(authState\)\{\s*setLoginLoading\(false\);\s*clearPassword\(\);\s*setScreenVisibility\(false\);/);
+    assert.match(js,/window\.scrollTo\(\{top:0,behavior:"auto"\}\)/);
   });
 
   it("bounds Firebase auth and claim operations used by admin login",()=>{

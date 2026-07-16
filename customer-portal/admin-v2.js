@@ -150,6 +150,19 @@
     if(input)input.value="";
   }
 
+  function setScreenVisibility(loginVisible){
+    const login=byId("loginScreen");
+    const shell=byId("adminShell");
+    if(login){
+      login.hidden=!loginVisible;
+      login.setAttribute("aria-hidden",loginVisible?"false":"true");
+    }
+    if(shell){
+      shell.hidden=loginVisible;
+      shell.setAttribute("aria-hidden",loginVisible?"true":"false");
+    }
+  }
+
   function withTimeout(promise,timeoutMs,label){
     let timeoutId=0;
     const timeout=new Promise((_,reject)=>{
@@ -187,8 +200,7 @@
 
   function showLogin(message,isError){
     setLoginLoading(false);
-    byId("loginScreen").hidden=false;
-    byId("adminShell").hidden=true;
+    setScreenVisibility(true);
     const el=byId("loginMessage");
     if(el){
       el.textContent=message||"";
@@ -197,9 +209,11 @@
   }
 
   function showShell(authState){
-    byId("loginScreen").hidden=true;
-    byId("adminShell").hidden=false;
+    setLoginLoading(false);
+    clearPassword();
+    setScreenVisibility(false);
     byId("userLabel").textContent=authState?.email||"Admin";
+    window.scrollTo({top:0,behavior:"auto"});
   }
 
   async function signIn(){
@@ -467,6 +481,7 @@
       }catch(error){
         console.error("[ACT Admin V2] Abmeldung:",error&&error.message?error.message:"Fehler");
       }
+      clearPassword();
       showLogin("Abgemeldet.");
     });
     byId("refreshButton").addEventListener("click",loadCustomers);

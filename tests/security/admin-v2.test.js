@@ -12,9 +12,22 @@ function readProjectFile(relativePath){
 describe("admin v2 dashboard and customer overview",()=>{
   it("loads real admin customers through the existing Firebase database facade",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
-    assert.match(js,/ACTFirebaseAuth\.requireAdmin\(\)/);
-    assert.match(js,/ACTFirebaseDatabase\.loadCustomersForAdmin\(\)/);
+    assert.match(js,/withTimeout\(window\.ACTFirebaseAuth\.requireAdmin\(\),AUTH_TIMEOUT_MS,"requireAdmin"\)/);
+    assert.match(js,/withTimeout\(window\.ACTFirebaseDatabase\.loadCustomersForAdmin\(\),AUTH_TIMEOUT_MS,"loadCustomersForAdmin"\)/);
     assert.doesNotMatch(js,/Familie Müller|Familie Rossi|Herr Schneider|mockCustomers|Mock-Daten/i);
+  });
+
+  it("guards admin v2 authentication against permanent loading states",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const html=readProjectFile("customer-portal/admin-v2.html");
+    assert.match(js,/const AUTH_TIMEOUT_MS=15000/);
+    assert.match(js,/function withTimeout\(promise,timeoutMs,label\)/);
+    assert.match(js,/setLoginLoading\(true,"Anmeldung wird geprüft \.\.\."\)/);
+    assert.match(js,/button\.disabled=Boolean\(isLoading\)/);
+    assert.match(js,/const TECHNICAL_LOGIN_ERROR="Die Anmeldung konnte nicht abgeschlossen werden\. Bitte erneut versuchen\."/);
+    assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung für den Adminbereich\."/);
+    assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
+    assert.match(html,/admin-v2\.js\?v=2/);
   });
 
   it("keeps customer editing and creation in the classic admin workflow",()=>{

@@ -13,6 +13,9 @@
 
   const byId=id=>document.getElementById(id);
   const all=selector=>Array.from(document.querySelectorAll(selector));
+  const AUTH_TIMEOUT_MS=15000;
+  const TECHNICAL_LOGIN_ERROR="Die Anmeldung konnte nicht abgeschlossen werden. Bitte erneut versuchen.";
+  const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung für den Adminbereich.";
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -123,7 +126,56 @@
     el.style.color=isError?"#8c1f1f":"#697872";
   }
 
+  function loginButton(){
+    return byId("loginButton");
+  }
+
+  function setLoginLoading(isLoading,message){
+    const button=loginButton();
+    if(button){
+      button.disabled=Boolean(isLoading);
+      button.setAttribute("aria-busy",isLoading?"true":"false");
+      button.textContent=isLoading?"Bitte warten ...":"Anmelden";
+    }
+    const el=byId("loginMessage");
+    if(el&&message){
+      el.textContent=message;
+      el.style.color="#244a3f";
+    }
+  }
+
+  function clearPassword(){
+    const input=byId("adminPasswordInput");
+    if(input)input.value="";
+  }
+
+  function withTimeout(promise,timeoutMs,label){
+    let timeoutId=0;
+    const timeout=new Promise((_,reject)=>{
+      timeoutId=window.setTimeout(()=>{
+        const error=new Error(`${label||"Firebase"} timeout`);
+        error.code="act/timeout";
+        reject(error);
+      },timeoutMs);
+    });
+    return Promise.race([Promise.resolve(promise),timeout]).finally(()=>window.clearTimeout(timeoutId));
+  }
+
+  function loginErrorMessage(authState){
+    if(authState?.missingRole||authState?.signedIn&&!authState?.allowed)return MISSING_ROLE_ERROR;
+    return authState?.error||TECHNICAL_LOGIN_ERROR;
+  }
+
+  async function signOutAfterMissingRole(){
+    try{
+      await withTimeout(window.ACTFirebaseAuth.signOut?.(),AUTH_TIMEOUT_MS,"signOut");
+    }catch(error){
+      console.error("[ACT Admin V2] Abmeldung nach Rollenprüfung:",error&&error.message?error.message:"Fehler");
+    }
+  }
+
   function showLogin(message,isError){
+    setLoginLoading(false);
     byId("loginScreen").hidden=false;
     byId("adminShell").hidden=true;
     const el=byId("loginMessage");
@@ -140,17 +192,25 @@
   }
 
   async function signIn(){
+    if(loginButton()?.disabled)return;
     const email=byId("adminEmailInput")?.value.trim()||"";
     const password=byId("adminPasswordInput")?.value||"";
-    byId("loginMessage").textContent="Anmeldung wird geprüft ...";
-    const authState=await window.ACTFirebaseAuth.signIn(email,password);
-    byId("adminPasswordInput").value="";
-    if(!authState.allowed){
-      showLogin(authState.error||"Dieses Konto hat keine Admin-Berechtigung.",true);
-      return;
+    setLoginLoading(true,"Anmeldung wird geprüft ...");
+    try{
+      const authState=await withTimeout(window.ACTFirebaseAuth.signIn(email,password),AUTH_TIMEOUT_MS,"signIn");
+      clearPassword();
+      if(!authState.allowed){
+        if(authState.missingRole)await signOutAfterMissingRole();
+        showLogin(loginErrorMessage(authState),true);
+        return;
+      }
+      showShell(authState);
+      await loadCustomers();
+    }catch(error){
+      clearPassword();
+      console.error("[ACT Admin V2] Anmeldung:",error&&error.message?error.message:"Fehler");
+      showLogin(TECHNICAL_LOGIN_ERROR,true);
     }
-    showShell(authState);
-    await loadCustomers();
   }
 
   async function prepareAuth(){
@@ -158,13 +218,23 @@
       showLogin("Firebase Auth ist nicht erreichbar.",true);
       return;
     }
-    showLogin("Bitte mit Firebase-Admin-Konto anmelden.");
-    const authState=await window.ACTFirebaseAuth.prepareAuth();
-    if(authState.allowed){
-      showShell(authState);
-      await loadCustomers();
-    }else if(authState.error||authState.missingRole){
-      showLogin(authState.error||"Dieses Konto hat keine Admin-Berechtigung.",true);
+    setLoginLoading(false,"Bitte mit Firebase-Admin-Konto anmelden.");
+    try{
+      const authState=await withTimeout(window.ACTFirebaseAuth.prepareAuth(),AUTH_TIMEOUT_MS,"prepareAuth");
+      if(authState.allowed){
+        showShell(authState);
+        await loadCustomers();
+      }else if(authState.missingRole){
+        await signOutAfterMissingRole();
+        showLogin(MISSING_ROLE_ERROR,true);
+      }else if(authState.error){
+        showLogin(authState.error,true);
+      }else{
+        showLogin("Bitte mit Firebase-Admin-Konto anmelden.");
+      }
+    }catch(error){
+      console.error("[ACT Admin V2] Auth-Vorbereitung:",error&&error.message?error.message:"Fehler");
+      showLogin(TECHNICAL_LOGIN_ERROR,true);
     }
   }
 
@@ -174,9 +244,9 @@
     setStatus("Kundendaten werden aus Firebase geladen ...");
     renderSkeletons();
     try{
-      const authCheck=await window.ACTFirebaseAuth.requireAdmin();
+      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
       if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
-      const map=await window.ACTFirebaseDatabase.loadCustomersForAdmin();
+      const map=await withTimeout(window.ACTFirebaseDatabase.loadCustomersForAdmin(),AUTH_TIMEOUT_MS,"loadCustomersForAdmin");
       state.customers=Object.values(map||{}).filter(Boolean);
       state.loading=false;
       setStatus(state.customers.length?`${state.customers.length} Kunden aus Firebase geladen.`:"Noch keine Kunden in Firebase vorhanden.");
@@ -370,7 +440,14 @@
 
   function bind(){
     byId("adminLoginForm").addEventListener("submit",event=>{event.preventDefault();signIn();});
-    byId("logoutButton").addEventListener("click",async()=>{await window.ACTFirebaseAuth?.signOut?.();showLogin("Abgemeldet.");});
+    byId("logoutButton").addEventListener("click",async()=>{
+      try{
+        await withTimeout(window.ACTFirebaseAuth?.signOut?.(),AUTH_TIMEOUT_MS,"signOut");
+      }catch(error){
+        console.error("[ACT Admin V2] Abmeldung:",error&&error.message?error.message:"Fehler");
+      }
+      showLogin("Abgemeldet.");
+    });
     byId("refreshButton").addEventListener("click",loadCustomers);
     byId("newCustomerButton").addEventListener("click",openNewCustomer);
     byId("dashboardNewCustomerButton").addEventListener("click",openNewCustomer);
@@ -409,7 +486,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

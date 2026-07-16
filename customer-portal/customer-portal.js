@@ -160,12 +160,18 @@
     next.visible=documentVisibleValue(next);
     delete next.visibleForCustomer;
     delete next.customerVisible;
-    next.title=String(next.title||next.fileName||"").trim();
+    next.title=String(next.title||next.fileName||next.originalName||"").trim();
     next.type=String(next.type||"Sonstiges").trim();
     if(next.type==="Platzhalter"||next.type==="Dokument")next.type=next.title?"Sonstiges":"";
     next.url=String(next.url||next.downloadUrl||next.downloadURL||"").trim();
     next.note=String(next.note||"").trim();
-    next.fileName=String(next.fileName||"").trim();
+    next.fileName=String(next.fileName||next.originalName||"").trim();
+    next.originalName=String(next.originalName||next.fileName||"").trim();
+    next.mimeType=String(next.mimeType||next.contentType||"").trim();
+    next.contentType=String(next.contentType||next.mimeType||"").trim();
+    const size=Number(next.fileSize||next.size||0);
+    next.fileSize=Number.isFinite(size)&&size>0?size:0;
+    next.size=next.fileSize;
     next.uploadedAt=next.uploadedAt||next.uploadDate||"";
     return next;
   }
@@ -192,7 +198,7 @@
 
   function isPortalDocument(item){
     const doc=normalizeDocument(item);
-    return doc.visible===true&&hasDisplayValue(doc.url);
+    return doc.visible===true;
   }
 
   function normalizeCustomerData(data,id){
@@ -488,6 +494,11 @@
     if(/^https?:\/\//i.test(value))return value;
     const destination=value||fallbacks.map(item=>String(item||"").trim()).find(Boolean)||"";
     return destination?mapsLink(destination):"";
+  }
+
+  function safeDocumentUrl(value){
+    const url=String(value||"").trim();
+    return /^https?:\/\//i.test(url)?url:"";
   }
 
   function itemNavigationUrl(item){
@@ -811,7 +822,7 @@
       const previous=items[index-1];
       const next=items[index+1];
       const linked=linkedBookingForItem(item);
-      const bookingDocs=(linked?.documents||[]).filter(doc=>doc.url&&doc.visible!==false);
+      const bookingDocs=(linked?.documents||[]).filter(doc=>safeDocumentUrl(doc.url)&&doc.visible!==false);
       return `
         <article class="program-detail-card" id="${detailId(item)}">
           <span class="tag">${item.category} · ${programStatusLabel(item)}</span>
@@ -837,7 +848,7 @@
             ${previous?`<a class="button soft" href="#${detailId(previous)}">Vorheriger Programmpunkt</a>`:""}
             ${next?`<a class="button soft" href="#${detailId(next)}">Nächster Programmpunkt</a>`:""}
             ${(linked?.navigationUrl||itemNavigationUrl(item))?`<a class="button soft" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>`:""}
-            ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener noreferrer">Dokument öffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
+            ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(safeDocumentUrl(doc.url))}" target="_blank" rel="noopener noreferrer">Dokument oeffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
             <button class="button soft" type="button" data-calendar-id="${item.id}" ${item.calendarEnabled?"":"disabled"}>In Kalender speichern</button>
           </div>
         </article>
@@ -856,7 +867,7 @@
     const lib=window.ACTBookingLibrary;
     grid.innerHTML=bookings.map(booking=>{
       const meta=lib?lib.statusMeta(booking.bookingStatus):{icon:"•"};
-      const docs=(booking.documents||[]).filter(doc=>doc.url&&doc.visible!==false);
+      const docs=(booking.documents||[]).filter(doc=>safeDocumentUrl(doc.url)&&doc.visible!==false);
       const navUrl=booking.navigationUrl||"";
       return `
         <article class="portal-booking-card">
@@ -872,7 +883,7 @@
           ])}
           <div class="card-actions">
             ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation</a>`:""}
-            ${docs.map(doc=>`<a class="button soft" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener noreferrer">Dokument öffnen</a>`).join("")}
+            ${docs.map(doc=>`<a class="button soft" href="${escapeHtml(safeDocumentUrl(doc.url))}" target="_blank" rel="noopener noreferrer">Dokument oeffnen</a>`).join("")}
           </div>
         </article>
       `;
@@ -950,8 +961,11 @@
   function renderDocuments(){
     const documents=(customer.documents||[]).map(normalizeDocument);
     const visibleDocuments=documents.filter(isPortalDocument);
-    document.getElementById("documentGrid").innerHTML=visibleDocuments.length?visibleDocuments.map(item=>`
-      <article class="document-card">
+    document.getElementById("documentGrid").innerHTML=visibleDocuments.length?visibleDocuments.map(item=>{
+      const url=safeDocumentUrl(item.url);
+      if(!url)console.warn(`[PortalDocuments] Dokument ${item.documentId||item.id||item.title||"unbekannt"} konnte nicht geladen werden.`);
+      return `
+      <article class="document-card ${url?"":"document-unavailable"}">
         <h3>${escapeHtml(item.title||item.fileName||"Dokument")}</h3>
         ${definitionList([
           ["Dokumenttyp",item.type||"Sonstiges"],
@@ -960,10 +974,11 @@
           ["Upload-Datum",formatUploadDate(item.uploadedAt)]
         ])}
         <div class="card-actions">
-          <a class="button primary" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Dokument öffnen</a>
+          ${url?`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Dokument oeffnen</a>`:`<span class="button soft document-disabled" aria-disabled="true">Dieses Dokument ist derzeit nicht verfuegbar.</span>`}
         </div>
       </article>
-    `).join(""):`<article class="document-card document-empty"><h3>Derzeit sind noch keine Dokumente verfügbar.</h3><p class="muted">Sobald Unterlagen freigegeben sind, erscheinen sie hier zum Download.</p></article>`;
+      `;
+    }).join(""):`<article class="document-card document-empty"><h3>Derzeit sind noch keine Dokumente verfügbar.</h3><p class="muted">Sobald Unterlagen freigegeben sind, erscheinen sie hier zum Download.</p></article>`;
   }
 
   function renderContact(){

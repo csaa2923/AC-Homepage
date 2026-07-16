@@ -12,6 +12,18 @@
     bucket:"",
     initPromise:null
   };
+  const MAX_UPLOAD_BYTES=24*1024*1024;
+  const DOCUMENT_MIME_TYPES=new Set([
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ]);
+  const DOCUMENT_EXTENSIONS=new Set(["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx"]);
 
   function configRoot(){
     return window.ACTFirebaseConfig||{};
@@ -201,11 +213,17 @@
     next.visible=visible===undefined?true:visible===true||visible==="true"||visible==="Ja"||visible==="ja"||visible===1||visible==="1";
     delete next.visibleForCustomer;
     delete next.customerVisible;
-    next.title=String(next.title||next.fileName||"").trim();
+    next.title=String(next.title||next.fileName||next.originalName||"").trim();
     next.type=String(next.type||"Sonstiges").trim();
     next.url=String(next.url||next.downloadUrl||next.downloadURL||"").trim();
     next.note=String(next.note||"").trim();
-    next.fileName=String(next.fileName||"").trim();
+    next.fileName=String(next.fileName||next.originalName||"").trim();
+    next.originalName=String(next.originalName||next.fileName||"").trim();
+    next.mimeType=String(next.mimeType||next.contentType||"").trim();
+    next.contentType=String(next.contentType||next.mimeType||"").trim();
+    const size=Number(next.fileSize||next.size||0);
+    next.fileSize=Number.isFinite(size)&&size>0?size:0;
+    next.size=next.fileSize;
     next.uploadedAt=next.uploadedAt||next.uploadDate||"";
     return next;
   }
@@ -448,6 +466,31 @@
     return String(value||"datei").normalize("NFKD").replace(/[^\w.-]+/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"").slice(0,90)||"datei";
   }
 
+  function fileExtension(name){
+    const match=String(name||"").toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match?match[1]:"";
+  }
+
+  function validateUploadFile(file,options){
+    if(!file)throw new Error("Datei fehlt.");
+    const kind=options&&options.kind==="image"?"Bild":"Datei";
+    if(!String(file.name||"").trim())throw new Error(`${kind} hat keinen gÃ¼ltigen Dateinamen.`);
+    if(!Number.isFinite(file.size)||file.size<=0)throw new Error(`${kind} ist leer und wurde nicht hochgeladen.`);
+    if(file.size>MAX_UPLOAD_BYTES)throw new Error(`${kind} ist zu groÃŸ. Maximal erlaubt sind 24 MB.`);
+    const extension=fileExtension(file.name);
+    const mime=String(file.type||"").toLowerCase();
+    const mimeAllowed=options&&options.kind==="image"?/^image\/(jpeg|png|webp)$/.test(mime):DOCUMENT_MIME_TYPES.has(mime);
+    const extensionAllowed=options&&options.kind==="image"?["jpg","jpeg","png","webp"].includes(extension):DOCUMENT_EXTENSIONS.has(extension);
+    if(!mimeAllowed||!extensionAllowed){
+      throw new Error(`${kind} wird nicht unterstÃ¼tzt. Bitte PDF, JPG, PNG, WEBP oder vorgesehene Office-Dateien verwenden.`);
+    }
+  }
+
+  function uniqueUploadId(){
+    if(window.crypto&&typeof window.crypto.randomUUID==="function")return window.crypto.randomUUID();
+    return `${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
+  }
+
   function withTimeout(promise,ms,message){
     let timer;
     const timeout=new Promise((_,reject)=>{
@@ -460,21 +503,24 @@
     const ready=await ensureDb();
     const {storageModule}=ready.modules;
     if(!customerId)throw new Error("Kunden-ID fehlt.");
-    if(!file)throw new Error("Datei fehlt.");
+    validateUploadFile(file,{kind:"document"});
     if(!ready.auth.currentUser){
       throw new Error("Firebase Upload abgebrochen: Kein angemeldeter Benutzer vorhanden.");
     }
     const category=safeSegment(meta&&meta.type||"dokument");
     const filename=safeSegment(file.name);
-    const path=`customers/${safeSegment(customerId)}/documents/${category}/${Date.now()}-${filename}`;
+    const documentId=uniqueUploadId();
+    const path=`customers/${safeSegment(customerId)}/documents/${category}/${Date.now()}-${documentId}-${filename}`;
     const fileRef=storageModule.ref(ready.storage,path);
     console.log("[ACT Firebase] Upload vorbereitet.");
     const metadata={
       contentType:file.type||"application/octet-stream",
       customMetadata:{
         customerId:String(customerId),
+        documentId,
         documentType:String(meta&&meta.type||""),
-        title:String(meta&&meta.title||file.name)
+        title:String(meta&&meta.title||file.name),
+        originalName:String(file.name)
       }
     };
     const uploadPromise=new Promise((resolve,reject)=>{
@@ -495,12 +541,18 @@
     const snapshot=await withTimeout(uploadPromise,25000,"Firebase Storage nimmt keine Daten an. Bitte prüfen: Anonymous Authentication aktiv, Storage Rules erlauben Uploads für angemeldete Nutzer, Storage Bucket korrekt.");
     const url=await storageModule.getDownloadURL(snapshot.ref);
     return {
+      id:documentId,
+      documentId,
       title:meta&&meta.title?meta.title:file.name,
       type:meta&&meta.type?meta.type:"Dokument",
       url,
+      downloadUrl:url,
       storagePath:path,
       fileName:file.name,
+      originalName:file.name,
       fileSize:file.size,
+      size:file.size,
+      mimeType:file.type||"",
       contentType:file.type||"",
       uploadedAt:new Date().toISOString(),
       status:"Hochgeladen",
@@ -604,7 +656,7 @@
   async function uploadTemplateImage(templateType,templateId,file,meta,onProgress){
     const ready=await ensureDb();
     const {storageModule}=ready.modules;
-    if(!file)throw new Error("Datei fehlt.");
+    validateUploadFile(file,{kind:"image"});
     if(!ready.auth.currentUser)throw new Error("Firebase Upload abgebrochen: Kein angemeldeter Benutzer vorhanden.");
     const type=safeSegment(templateType||"template");
     const id=safeSegment(templateId||"draft");

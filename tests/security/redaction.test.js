@@ -41,8 +41,9 @@ const SENSITIVE_FIXTURE={
   whatsapp:"+43123",
   contact:{company:"AC",phone:"+43123",email:"kunde@example.com",emergency:"112"},
   documents:[
-    {id:"d1",title:"Ticket",type:"Ticket",visible:true,url:"https://storage.example/ticket.pdf",storagePath:"customers/x/ticket.pdf",internalMeta:"secret"},
-    {id:"d2",title:"Intern",visible:false,url:"https://storage.example/hidden.pdf"}
+    {id:"d1",title:"Ticket",type:"Ticket",visible:true,url:"https://storage.example/ticket.pdf",storagePath:"customers/x/ticket.pdf",internalMeta:"secret",fileName:"ticket.pdf",contentType:"application/pdf",fileSize:1234},
+    {id:"d2",title:"Intern",visible:false,url:"https://storage.example/hidden.pdf"},
+    {id:"d3",title:"Defekt",visible:true,url:"javascript:alert(1)",storagePath:"customers/x/bad.pdf"}
   ],
   program:[
     {id:"p1",title:"Ankunft",date:"2026-08-01",supplier:"Lift AG",margin:10,internalNote:"vip"},
@@ -81,9 +82,13 @@ describe("redaction allowlist",()=>{
       "dropdownCustomValues","storagePath","downloadUrl"
     ];
     blocked.forEach(token=>assert.equal(serialized.includes(token),false,`leaked ${token}`));
-    assert.equal(redacted.documents.length,1);
-    assert.equal(redacted.documents[0].url,undefined);
+    assert.equal(redacted.documents.length,2);
+    assert.equal(redacted.documents[0].url,"https://storage.example/ticket.pdf");
+    assert.equal(redacted.documents[0].fileName,"ticket.pdf");
+    assert.equal(redacted.documents[0].mimeType,"application/pdf");
+    assert.equal(redacted.documents[0].fileSize,1234);
     assert.equal(redacted.documents[0].storagePath,undefined);
+    assert.equal(redacted.documents[1].url,"");
     assert.equal(redacted.bookings.length,1);
     assert.equal(redacted.customerName,"Test Familie");
     assert.equal(redacted.contact.email,"kunde@example.com");
@@ -94,6 +99,7 @@ describe("redaction allowlist",()=>{
     const redacted=redactPublicSnapshot(SENSITIVE_FIXTURE,{customerId:"kunde-test"});
     const paths=collectKeys(redacted);
     BLOCKED_VALUE_KEYS.forEach(key=>{
+      if(key==="url")return;
       assert.equal(paths.some(path=>path===key||path.endsWith(`.${key}`)),false,`blocked key present: ${key}`);
     });
   });

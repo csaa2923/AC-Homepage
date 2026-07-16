@@ -33,7 +33,9 @@
   ]);
 
   const DOCUMENT_PUBLIC_FIELDS=new Set([
-    "documentId","id","title","type","mimeType","visible","note"
+    "documentId","id","title","type","url","downloadUrl","downloadURL",
+    "mimeType","contentType","visible","note","fileName","originalName",
+    "uploadedAt","uploadDate","fileSize","size"
   ]);
 
   const CONTACT_FIELDS=new Set([
@@ -73,15 +75,38 @@
     return value===true||value==="true"||value==="Ja"||value==="ja"||value===1||value==="1";
   }
 
+  function stringValue(value){
+    return String(value||"").trim();
+  }
+
+  function publicDocumentUrl(item){
+    const url=stringValue(item.url||item.downloadUrl||item.downloadURL);
+    return /^https?:\/\//i.test(url)?url:"";
+  }
+
+  function documentSize(item){
+    const size=Number(item.fileSize||item.size||0);
+    return Number.isFinite(size)&&size>0?size:0;
+  }
+
   function redactDocument(item,index){
-    const base=pickFields(item||{},DOCUMENT_PUBLIC_FIELDS);
+    const source=item||{};
+    const base=pickFields(source,DOCUMENT_PUBLIC_FIELDS);
+    const fileSize=documentSize(source);
     return {
       documentId:base.documentId||base.id||`doc-${index+1}`,
       id:base.id||base.documentId||`doc-${index+1}`,
       title:base.title||"Dokument",
       type:base.type||"Sonstiges",
-      mimeType:base.mimeType||"",
-      visible:documentVisible(base),
+      url:publicDocumentUrl(source),
+      mimeType:base.mimeType||base.contentType||"",
+      contentType:base.contentType||base.mimeType||"",
+      fileName:base.fileName||base.originalName||"",
+      originalName:base.originalName||base.fileName||"",
+      uploadedAt:base.uploadedAt||base.uploadDate||"",
+      fileSize,
+      size:fileSize,
+      visible:documentVisible(source),
       note:base.note||""
     };
   }

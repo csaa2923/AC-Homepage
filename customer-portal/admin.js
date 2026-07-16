@@ -39,6 +39,19 @@
   ];
   const dateFieldNames=new Set(["date","dateValue","endDate","endDateValue","checkIn","checkOut","startDatePlain","endDatePlain"]);
   const timeFieldNames=new Set(["startTime","endTime","time"]);
+  const MAX_UPLOAD_BYTES=24*1024*1024;
+  const uploadLocks=new Set();
+  const documentMimeTypes=new Set([
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ]);
+  const documentExtensions=new Set(["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx"]);
   const timeSlotOptions=(()=>{
     const slots=[];
     for(let hour=0;hour<24;hour++){
@@ -1313,16 +1326,40 @@
     return value===true||value==="true"||value==="Ja"||value==="ja"||value===1||value==="1";
   }
 
+  function fileExtension(name){
+    const match=String(name||"").toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match?match[1]:"";
+  }
+
+  function validateDocumentUploadFile(file){
+    if(!file)throw new Error("Datei fehlt.");
+    if(!String(file.name||"").trim())throw new Error("Die Datei hat keinen gueltigen Namen.");
+    if(!Number.isFinite(file.size)||file.size<=0)throw new Error("Die Datei ist leer.");
+    if(file.size>MAX_UPLOAD_BYTES)throw new Error("Die Datei ist zu gross. Maximal erlaubt sind 24 MB.");
+    const mime=String(file.type||"").toLowerCase();
+    const extension=fileExtension(file.name);
+    if(!documentMimeTypes.has(mime)||!documentExtensions.has(extension)){
+      throw new Error("Dateityp nicht vorgesehen. Bitte PDF, JPG, PNG, WEBP oder vorgesehene Office-Dateien verwenden.");
+    }
+  }
+
   function normalizeDocumentItem(item){
     const next={...(item||{})};
     next.visible=documentVisibleValue(next);
     delete next.visibleForCustomer;
     delete next.customerVisible;
-    next.title=String(next.title||next.fileName||"").trim();
+    next.title=String(next.title||next.fileName||next.originalName||"").trim();
     next.type=String(next.type||"Sonstiges").trim();
     next.url=String(next.url||next.downloadUrl||next.downloadURL||"").trim();
+    next.downloadUrl=String(next.downloadUrl||next.url||"").trim();
     next.note=String(next.note||"").trim();
-    next.fileName=String(next.fileName||"").trim();
+    next.fileName=String(next.fileName||next.originalName||"").trim();
+    next.originalName=String(next.originalName||next.fileName||"").trim();
+    next.mimeType=String(next.mimeType||next.contentType||"").trim();
+    next.contentType=String(next.contentType||next.mimeType||"").trim();
+    const size=Number(next.fileSize||next.size||0);
+    next.fileSize=Number.isFinite(size)&&size>0?size:0;
+    next.size=next.fileSize;
     next.uploadedAt=next.uploadedAt||next.uploadDate||"";
     return next;
   }
@@ -2582,12 +2619,25 @@
   async function uploadDocument(index,file){
     if(!file)return;
     syncFormsToMemory();
+    const initialActiveId=activeId;
     const customer=ensureCollections(activeCustomer());
+    const uploadCustomerId=customer.customerId||initialActiveId;
     const item=customer.documents[index]||{};
     const status=byId("documentsEditor")?.querySelector(`[data-upload-status="${index}"]`);
-    const allowed=/^(application\/pdf|image\/|application\/msword|application\/vnd\.openxmlformats-officedocument|application\/vnd\.ms-excel)/;
-    if(file.type&&!allowed.test(file.type)){
-      if(status)status.textContent="Dateityp nicht vorgesehen. Bitte PDF, Bild, Voucher, Rechnung oder Ticket verwenden.";
+    const input=byId("documentsEditor")?.querySelector(`[data-upload-document="${index}"]`);
+    const lockKey=`${uploadCustomerId}:${index}`;
+    if(!uploadCustomerId){
+      if(status)status.textContent="Die Datei konnte keinem gueltigen Kunden zugeordnet werden.";
+      return;
+    }
+    if(uploadLocks.has(lockKey)){
+      if(status)status.textContent="Upload laeuft bereits.";
+      return;
+    }
+    try{
+      validateDocumentUploadFile(file);
+    }catch(error){
+      if(status)status.textContent=error&&error.message?error.message:"Datei wird nicht unterstuetzt.";
       return;
     }
     if(!window.ACTFirebaseStorage){
@@ -2595,23 +2645,38 @@
       return;
     }
     try{
+      uploadLocks.add(lockKey);
+      if(input)input.disabled=true;
       if(status)status.textContent="Upload wird gestartet ...";
-      const uploadCustomerId=customer.customerId||activeId;
       const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(uploadCustomerId,file,{title:item.title,type:item.type},percent=>{
         if(status)status.textContent=percent>0?`Upload läuft ... ${percent}%`:"Upload wartet auf Firebase Storage ... 0%";
       });
-      customer.documents[index]=normalizeDocumentItem({...item,...uploaded});
+      const target=customers[uploadCustomerId]?ensureCollections(customers[uploadCustomerId]):customer;
+      target.documents[index]=normalizeDocumentItem({...item,...uploaded,customerId:uploadCustomerId});
       customer.updatedAt=new Date().toLocaleDateString("de-DE");
-      commitCustomer(customer);
+      target.updatedAt=customer.updatedAt;
+      const viewActiveId=activeId;
+      commitCustomer(target,uploadCustomerId);
+      if(viewActiveId!==uploadCustomerId)activeId=viewActiveId;
       saveCustomers();
-      saveDraftToFirebase(customers[activeId]);
+      const draftResult=await saveDraftToFirebase(customers[uploadCustomerId]);
+      if(!draftResult.cloud){
+        console.error(`[UploadDocument] Draft-Speicherung fuer Kunde ${uploadCustomerId} fehlgeschlagen. Storage-Pfad: ${uploaded.storagePath||"unbekannt"}`);
+        if(status)status.textContent="Upload abgeschlossen, aber Entwurf wurde nicht in Firebase gespeichert. Bitte erneut speichern.";
+        setFirebaseStatus(`Upload abgeschlossen, aber Entwurf wurde nur lokal gespeichert. ${draftResult.error||""}`,true);
+        renderAll();
+        return;
+      }
       renderAll();
       setFirebaseStatus("Datei wurde hochgeladen und dem Kunden zugeordnet.");
     }catch(error){
       const message=error&&error.message?error.message:String(error);
-      console.error(`[ACT Admin] Upload fehlgeschlagen: ${error&&error.code?error.code:"kein Fehlercode"} - ${error&&error.message?error.message:"Fehler"}`);
+      console.error(`[UploadDocument] Upload fuer Kunde ${uploadCustomerId} fehlgeschlagen: ${error&&error.code?error.code:"kein Fehlercode"} - ${error&&error.message?error.message:"Fehler"}`);
       if(status)status.textContent=`Upload fehlgeschlagen: ${message}`;
       setFirebaseStatus(`Upload fehlgeschlagen. localStorage bleibt aktiv. Bitte Firebase Authentication und Storage Rules prüfen. ${message}`,true);
+    }finally{
+      uploadLocks.delete(lockKey);
+      if(input)input.disabled=false;
     }
   }
 

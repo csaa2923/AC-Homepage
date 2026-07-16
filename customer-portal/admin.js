@@ -1077,15 +1077,25 @@
     };
   }
 
+  function openAdminPortalPreview(customerId){
+    const id=customerId||activeId;
+    if(!id)return;
+    issuePortalPreviewGrant(id);
+    window.open(portalPath(id,{admin:true}),"_blank","noopener");
+  }
+
   function openCustomerPortalLink(customerId){
     const state=resolveCustomerPortalLink(customerId);
     if(state.status==="draft"){
-      issuePortalPreviewGrant(customerId);
-      window.open(state.url,"_blank","noopener");
+      openAdminPortalPreview(customerId);
       return;
     }
     if(state.canOpen&&state.url){
       window.open(state.url,"_blank","noopener");
+      return;
+    }
+    if(isCustomerPublished(customers[customerId]||{})){
+      openAdminPortalPreview(customerId);
       return;
     }
     window.alert(state.hint||"Bitte zuerst einen sicheren Portal-Link erzeugen.");
@@ -3039,6 +3049,24 @@
     if(window.ACTCrmLibrary){
       customer=window.ACTCrmLibrary.pushMasterFieldsToCrm(customer);
     }
+    if(wizardData.portal?.publishPortal){
+      const workflow=publishWorkflow();
+      const validation=workflow?workflow.validateForPublish(customer):{ok:true,errors:[]};
+      if(validation.ok){
+        const meta={
+          version:customer.version||"1.0",
+          comment:"Automatisch über Concierge-Wizard veröffentlicht",
+          publisher:PUBLISH_EDITOR,
+          publishedAt:new Date().toISOString(),
+          changes:[]
+        };
+        customer.publicationState="Veröffentlicht";
+        customer.publishStatus="published";
+        applyLocalPublish(customer,meta);
+      }else{
+        setFirebaseStatus(`Wizard: Veröffentlichung übersprungen – ${validation.errors.join(". ")}`,true);
+      }
+    }
     customers[id]=customer;
     activeId=id;
     adminMode="edit";
@@ -3050,6 +3078,25 @@
     renderAll();
     scrollToMasterForm();
     showWorkflowDashboard();
+    openAdminPortalPreview(id);
+    if(wizardData.portal?.publishPortal&&isCustomerPublished(customer)){
+      setFirebaseStatus("Kunde angelegt und veröffentlicht. Admin-Vorschau geöffnet – für Kundenversand sicheren Share-Link erzeugen.");
+      const db=firebaseDatabase();
+      if(db){
+        db.publishCustomer(clone(customer),{
+          version:customer.version||"1.0",
+          comment:"Automatisch über Concierge-Wizard veröffentlicht",
+          publisher:PUBLISH_EDITOR,
+          publishedAt:new Date().toISOString(),
+          changes:[]
+        }).catch(error=>{
+          const message=error&&error.message?error.message:String(error);
+          setFirebaseStatus(`Lokal veröffentlicht. Firebase-Fehler: ${message}`,true);
+        });
+      }
+    }else{
+      setFirebaseStatus("Kunde angelegt. Entwurfs-Vorschau geöffnet – zum Kundenversand veröffentlichen und sicheren Share-Link erzeugen.");
+    }
     saveCustomerDraft();
   }
 
@@ -4153,10 +4200,7 @@
     byId("refreshPreviewButton").addEventListener("click",()=>{readEditors();renderPublishDashboard();renderPublishChanges();renderPublishHistory();renderAdminPreview()});
     byId("previewDraftButton").addEventListener("click",()=>{previewMode="draft";renderAdminPreview();renderPublishChanges()});
     byId("previewLiveButton").addEventListener("click",()=>{previewMode="live";renderAdminPreview()});
-    byId("openPortalPreviewButton").addEventListener("click",()=>{
-      issuePortalPreviewGrant(activeId);
-      window.open(portalPath(activeId,{admin:true}),"_blank","noopener");
-    });
+    byId("openPortalPreviewButton").addEventListener("click",()=>openAdminPortalPreview(activeId));
     byId("saveDraftButton").addEventListener("click",()=>saveCustomerDraft());
     byId("retrySyncButton")?.addEventListener("click",()=>retryCloudSync());
     byId("openPreviewButton").addEventListener("click",()=>openCustomerPortalLink(activeId));

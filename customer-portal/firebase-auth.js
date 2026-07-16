@@ -1,5 +1,6 @@
 (function(){
   const ALLOWED_ROLES=["owner","admin"];
+  const AUTH_OPERATION_TIMEOUT_MS=15000;
   const subscribers=[];
   let observerReady=false;
   let authAvailable=false;
@@ -13,6 +14,7 @@
 
   function neutralError(error){
     const code=error&&error.code?String(error.code):"";
+    if(code==="auth/operation-timeout")return "Die Anmeldung konnte nicht abgeschlossen werden. Bitte erneut versuchen.";
     if(["auth/invalid-credential","auth/wrong-password","auth/user-not-found","auth/invalid-email"].includes(code)){
       return "Zugangsdaten nicht korrekt.";
     }
@@ -27,6 +29,18 @@
     return "Anmeldung fehlgeschlagen.";
   }
 
+  function withTimeout(promise,ms,label){
+    let timer=0;
+    const timeout=new Promise((_,reject)=>{
+      timer=window.setTimeout(()=>{
+        const error=new Error(`${label||"Firebase Auth"} timeout`);
+        error.code="auth/operation-timeout";
+        reject(error);
+      },ms);
+    });
+    return Promise.race([Promise.resolve(promise),timeout]).finally(()=>window.clearTimeout(timer));
+  }
+
   function service(){
     return window.ACTFirebaseService||null;
   }
@@ -38,7 +52,7 @@
       error.code="service-missing";
       throw error;
     }
-    const ready=await firebaseService.init({anonymous:false});
+    const ready=await withTimeout(firebaseService.init({anonymous:false}),AUTH_OPERATION_TIMEOUT_MS,"Firebase init");
     const context=firebaseService.authContext?firebaseService.authContext():null;
     if(!ready.available||!context||!context.auth||!context.authModule){
       const error=new Error(ready.error||"Firebase Auth nicht erreichbar.");
@@ -79,7 +93,7 @@
       return getState();
     }
     try{
-      tokenResult=await currentUser.getIdTokenResult(Boolean(forceRefresh));
+      tokenResult=await withTimeout(currentUser.getIdTokenResult(Boolean(forceRefresh)),AUTH_OPERATION_TIMEOUT_MS,"Firebase claims");
       authError="";
     }catch(error){
       tokenResult=null;
@@ -126,7 +140,11 @@
     }
     try{
       const context=await authContext();
-      const credential=await context.authModule.signInWithEmailAndPassword(context.auth,email,password);
+      const credential=await withTimeout(
+        context.authModule.signInWithEmailAndPassword(context.auth,email,password),
+        AUTH_OPERATION_TIMEOUT_MS,
+        "Firebase signIn"
+      );
       currentUser=credential.user||context.auth.currentUser;
       await refreshClaims(true);
       if(!getState().allowed)authError="Dieses Konto hat keine Admin-Berechtigung.";
@@ -143,7 +161,7 @@
   async function signOutAdmin(){
     try{
       const context=await authContext();
-      await context.authModule.signOut(context.auth);
+      await withTimeout(context.authModule.signOut(context.auth),AUTH_OPERATION_TIMEOUT_MS,"Firebase signOut");
     }catch(error){
       authError=neutralError(error);
     }

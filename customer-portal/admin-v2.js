@@ -16,6 +16,7 @@
   const AUTH_TIMEOUT_MS=15000;
   const TECHNICAL_LOGIN_ERROR="Die Anmeldung konnte nicht abgeschlossen werden. Bitte erneut versuchen.";
   const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung für den Adminbereich.";
+  let activeLoginAttempt=0;
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -166,6 +167,16 @@
     return authState?.error||TECHNICAL_LOGIN_ERROR;
   }
 
+  function startLoginDeadline(attemptId){
+    return window.setTimeout(()=>{
+      if(activeLoginAttempt!==attemptId||!loginButton()?.disabled)return;
+      console.error("[ACT Admin V2] Anmeldung: UI-Deadline erreicht");
+      activeLoginAttempt=0;
+      clearPassword();
+      showLogin(TECHNICAL_LOGIN_ERROR,true);
+    },AUTH_TIMEOUT_MS+1000);
+  }
+
   async function signOutAfterMissingRole(){
     try{
       await withTimeout(window.ACTFirebaseAuth.signOut?.(),AUTH_TIMEOUT_MS,"signOut");
@@ -193,23 +204,33 @@
 
   async function signIn(){
     if(loginButton()?.disabled)return;
+    const attemptId=Date.now();
+    activeLoginAttempt=attemptId;
+    const deadline=startLoginDeadline(attemptId);
     const email=byId("adminEmailInput")?.value.trim()||"";
     const password=byId("adminPasswordInput")?.value||"";
     setLoginLoading(true,"Anmeldung wird geprüft ...");
     try{
       const authState=await withTimeout(window.ACTFirebaseAuth.signIn(email,password),AUTH_TIMEOUT_MS,"signIn");
+      if(activeLoginAttempt!==attemptId)return;
       clearPassword();
       if(!authState.allowed){
         if(authState.missingRole)await signOutAfterMissingRole();
+        if(activeLoginAttempt!==attemptId)return;
         showLogin(loginErrorMessage(authState),true);
         return;
       }
       showShell(authState);
       await loadCustomers();
     }catch(error){
+      if(activeLoginAttempt!==attemptId)return;
       clearPassword();
       console.error("[ACT Admin V2] Anmeldung:",error&&error.message?error.message:"Fehler");
       showLogin(TECHNICAL_LOGIN_ERROR,true);
+    }finally{
+      window.clearTimeout(deadline);
+      if(activeLoginAttempt===attemptId)activeLoginAttempt=0;
+      if(!byId("loginScreen")?.hidden)setLoginLoading(false);
     }
   }
 

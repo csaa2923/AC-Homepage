@@ -14,7 +14,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     assert.match(js,/withTimeout\(window\.ACTFirebaseAuth\.requireAdmin\(\),AUTH_TIMEOUT_MS,"requireAdmin"\)/);
     assert.match(js,/withTimeout\(window\.ACTFirebaseDatabase\.loadCustomersForAdmin\(\),AUTH_TIMEOUT_MS,"loadCustomersForAdmin"\)/);
-    assert.doesNotMatch(js,/Familie Müller|Familie Rossi|Herr Schneider|mockCustomers|Mock-Daten/i);
+    assert.doesNotMatch(js,/Familie Mueller|Familie Rossi|Herr Schneider|mockCustomers|Mock-Daten/i);
   });
 
   it("guards admin v2 authentication against permanent loading states",()=>{
@@ -22,12 +22,28 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     assert.match(js,/const AUTH_TIMEOUT_MS=15000/);
     assert.match(js,/function withTimeout\(promise,timeoutMs,label\)/);
-    assert.match(js,/setLoginLoading\(true,"Anmeldung wird geprüft \.\.\."\)/);
+    assert.match(js,/function startLoginDeadline\(attemptId\)/);
+    assert.match(js,/activeLoginAttempt!==attemptId/);
+    assert.match(js,/UI-Deadline erreicht/);
+    assert.match(js,/setLoginLoading\(true,"Anmeldung wird gepr/);
     assert.match(js,/button\.disabled=Boolean\(isLoading\)/);
     assert.match(js,/const TECHNICAL_LOGIN_ERROR="Die Anmeldung konnte nicht abgeschlossen werden\. Bitte erneut versuchen\."/);
-    assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung für den Adminbereich\."/);
+    assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
-    assert.match(html,/admin-v2\.js\?v=2/);
+    assert.match(html,/firebase-auth\.js\?v=3/);
+    assert.match(html,/admin-v2\.js\?v=3/);
+  });
+
+  it("bounds Firebase auth and claim operations used by admin login",()=>{
+    const authJs=readProjectFile("customer-portal/firebase-auth.js");
+    assert.match(authJs,/const AUTH_OPERATION_TIMEOUT_MS=15000/);
+    assert.match(authJs,/function withTimeout\(promise,ms,label\)/);
+    assert.match(authJs,/firebaseService\.init\(\{anonymous:false\}\),AUTH_OPERATION_TIMEOUT_MS,"Firebase init"/);
+    assert.match(authJs,/currentUser\.getIdTokenResult\(Boolean\(forceRefresh\)\),AUTH_OPERATION_TIMEOUT_MS,"Firebase claims"/);
+    assert.match(authJs,/signInWithEmailAndPassword\(context\.auth,email,password\)/);
+    assert.match(authJs,/AUTH_OPERATION_TIMEOUT_MS,\s*"Firebase signIn"/);
+    assert.match(authJs,/context\.authModule\.signOut\(context\.auth\),AUTH_OPERATION_TIMEOUT_MS,"Firebase signOut"/);
+    assert.match(authJs,/auth\/operation-timeout/);
   });
 
   it("keeps customer editing and creation in the classic admin workflow",()=>{

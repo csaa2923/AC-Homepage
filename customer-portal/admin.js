@@ -14,6 +14,7 @@
   let crmSearchQuery="";
   let customerQuickTab="all";
   let customerListFilters={};
+  let initialAdminActionDone=false;
   let bookingTab="all";
   let bookingFilters={};
   let editingBookingId="";
@@ -486,6 +487,30 @@
     return true;
   }
 
+  function initialAdminAction(){
+    const params=new URLSearchParams(window.location.search||"");
+    return {
+      editCustomer:params.get("editCustomer")||"",
+      newCustomer:params.get("newCustomer")==="1"
+    };
+  }
+
+  function runInitialAdminAction(){
+    if(initialAdminActionDone)return false;
+    const action=initialAdminAction();
+    if(!action.newCustomer&&!action.editCustomer)return false;
+    initialAdminActionDone=true;
+    if(action.newCustomer){
+      newCustomer();
+      return true;
+    }
+    if(action.editCustomer&&customers[action.editCustomer]){
+      if(switchActiveCustomer(action.editCustomer,"edit"))window.setTimeout(scrollToMasterForm,120);
+      return true;
+    }
+    return false;
+  }
+
   function customerSaveFingerprint(customer){
     const c=ensureCollections(customer);
     return JSON.stringify({
@@ -813,6 +838,7 @@
         activeId=Object.keys(customers)[0]||activeId;
         saveCustomers();
         renderAll();
+        runInitialAdminAction();
         setFirebaseStatus("Firebase verbunden. Kundendaten wurden aus Firestore geladen.");
       }else{
         setFirebaseStatus("Firebase verbunden. Noch keine Firestore-Kunden gefunden - lokale Daten bleiben aktiv.");
@@ -3666,7 +3692,7 @@
       if(passwordInput)passwordInput.value="";
       setLoginMessage("");
       unlock();
-      loadFirebaseCustomers();
+      loadFirebaseCustomers().then(runInitialAdminAction);
       loadFirebaseTemplates();
       return;
     }
@@ -4476,7 +4502,7 @@
     if(authState.allowed){
       setLoginMessage("");
       unlock();
-      loadFirebaseCustomers();
+      loadFirebaseCustomers().then(runInitialAdminAction);
       loadFirebaseTemplates();
       return;
     }

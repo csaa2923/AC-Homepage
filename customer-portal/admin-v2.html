@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin 2.0 | Alpine Concierge Tirol</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<meta name="theme-color" content="#0d3b2f">
+<link rel="icon" href="../favicon.ico">
+<link rel="stylesheet" href="admin-v2.css?v=1">
+</head>
+<body>
+<main>
+  <section class="v2-login" id="loginScreen">
+    <div class="v2-login-card">
+      <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol Logo" width="118" height="88">
+      <p class="v2-eyebrow">Interne Verwaltung</p>
+      <h1>Admin 2.0</h1>
+      <p class="v2-muted">Mit freigegebenem Firebase-Admin-Konto anmelden. Die bestehende Rollenpruefung bleibt unveraendert.</p>
+      <form id="adminLoginForm">
+        <label>E-Mail
+          <input id="adminEmailInput" type="email" autocomplete="username" placeholder="admin@example.com">
+        </label>
+        <label>Passwort
+          <input id="adminPasswordInput" type="password" autocomplete="current-password" placeholder="Passwort eingeben">
+        </label>
+        <button class="v2-button primary" id="loginButton" type="submit">Anmelden</button>
+      </form>
+      <p class="v2-form-message" id="loginMessage" aria-live="polite"></p>
+      <a class="v2-text-link" href="admin.html">Zum klassischen Admin</a>
+    </div>
+  </section>
+
+  <section class="v2-shell" id="adminShell" hidden>
+    <aside class="v2-sidebar" aria-label="Hauptnavigation">
+      <button class="v2-brand" type="button" data-v2-route="dashboard" aria-label="Dashboard oeffnen">
+        <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol">
+        <span>ACT 2.0</span>
+      </button>
+      <nav class="v2-nav">
+        <button class="v2-nav-item active" type="button" data-v2-route="dashboard">Dashboard</button>
+        <button class="v2-nav-item" type="button" data-v2-route="customers">Kunden</button>
+        <button class="v2-nav-item" type="button" data-v2-route="calendar">Kalender</button>
+        <button class="v2-nav-item" type="button" data-v2-route="documents">Dokumente</button>
+        <button class="v2-nav-item" type="button" data-v2-route="settings">Einstellungen</button>
+      </nav>
+      <button class="v2-create" type="button" id="newCustomerButton">Neuer Kunde</button>
+      <a class="v2-classic-link" href="admin.html">Klassischer Admin</a>
+    </aside>
+
+    <section class="v2-main">
+      <header class="v2-topbar">
+        <div>
+          <p class="v2-eyebrow">Alpine Concierge Tirol</p>
+          <h1 id="pageTitle">Dashboard</h1>
+        </div>
+        <div class="v2-top-actions">
+          <label class="v2-search" aria-label="Globale Kundensuche">
+            <span aria-hidden="true">⌕</span>
+            <input id="globalSearchInput" type="search" placeholder="Kunden, Region, Status suchen">
+          </label>
+          <span class="v2-user" id="userLabel"></span>
+          <button class="v2-button soft" type="button" id="refreshButton">Aktualisieren</button>
+          <button class="v2-button soft" type="button" id="logoutButton">Abmelden</button>
+        </div>
+      </header>
+
+      <div class="v2-status" id="loadStatus" aria-live="polite"></div>
+
+      <section class="v2-view active" id="dashboardView" data-title="Dashboard">
+        <div class="v2-hero">
+          <div>
+            <p class="v2-eyebrow">Concierge Cockpit</p>
+            <h2>Dashboard mit echten Kundendaten</h2>
+            <p>Diese Ansicht liest die vorhandenen Firebase-Kunden und fuehrt in die bestehende Bearbeitung zurueck.</p>
+            <div class="v2-actions">
+              <button class="v2-button primary" type="button" id="dashboardNewCustomerButton">Neuer Kunde</button>
+              <button class="v2-button soft" type="button" data-v2-route="customers">Alle Kunden</button>
+            </div>
+          </div>
+          <img src="../images/hero/hero.jpg" alt="Alpine Reiseimpression">
+        </div>
+
+        <div class="v2-metric-grid" id="metricGrid"></div>
+
+        <div class="v2-content-grid">
+          <section class="v2-panel">
+            <div class="v2-panel-head">
+              <div>
+                <p class="v2-eyebrow">Naechste Reisen</p>
+                <h3>Anstehende Anreisen</h3>
+              </div>
+              <button class="v2-button small" type="button" data-filter-preset="upcoming">Alle anzeigen</button>
+            </div>
+            <div class="v2-list" id="upcomingList"></div>
+          </section>
+          <section class="v2-panel">
+            <div class="v2-panel-head">
+              <div>
+                <p class="v2-eyebrow">Aktivitaet</p>
+                <h3>Zuletzt bearbeitet</h3>
+              </div>
+            </div>
+            <div class="v2-list" id="recentList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="v2-view" id="customersView" data-title="Kunden">
+        <div class="v2-section-toolbar">
+          <div>
+            <p class="v2-eyebrow">Kundenuebersicht</p>
+            <h2>Kundenkarten</h2>
+          </div>
+          <button class="v2-button primary" type="button" id="customerNewButton">Neuer Kunde</button>
+        </div>
+
+        <div class="v2-filterbar">
+          <label>Kunde suchen
+            <input id="customerSearchInput" type="search" placeholder="Name, Region, Status, Zeitraum">
+          </label>
+          <label>Status
+            <select id="statusFilter"></select>
+          </label>
+          <label>Veröffentlichung
+            <select id="publicationFilter"></select>
+          </label>
+          <label>Region
+            <select id="regionFilter"></select>
+          </label>
+          <label>Sortieren
+            <select id="sortSelect">
+              <option value="arrival">Naechste Anreise</option>
+              <option value="updated">Letzte Aenderung</option>
+              <option value="name">Kundenname</option>
+              <option value="publication">Veroeffentlichungsstatus</option>
+            </select>
+          </label>
+          <button class="v2-button soft" type="button" id="resetFiltersButton">Reset</button>
+        </div>
+
+        <div class="v2-empty" id="customerEmpty" hidden>
+          <h3>Keine Kunden gefunden</h3>
+          <p>Die aktuelle Suche oder Filterauswahl liefert kein Ergebnis.</p>
+          <button class="v2-button soft" type="button" id="clearEmptyFiltersButton">Filter loeschen</button>
+        </div>
+        <div class="v2-customer-grid" id="customerGrid"></div>
+      </section>
+
+      <section class="v2-view" id="calendarView" data-title="Kalender">
+        <div class="v2-placeholder">
+          <h2>Kalender</h2>
+          <p>Dieser Bereich wird in einer spaeteren Ausbaustufe angebunden.</p>
+          <a class="v2-button soft" href="admin.html#bookings-dashboard">Buchungen im klassischen Admin oeffnen</a>
+        </div>
+      </section>
+
+      <section class="v2-view" id="documentsView" data-title="Dokumente">
+        <div class="v2-placeholder">
+          <h2>Dokumente</h2>
+          <p>Dieser Bereich wird in einem spaeteren Auftrag technisch angebunden.</p>
+          <a class="v2-button soft" href="admin.html#customers">Klassischen Admin oeffnen</a>
+        </div>
+      </section>
+
+      <section class="v2-view" id="settingsView" data-title="Einstellungen">
+        <div class="v2-placeholder">
+          <h2>Einstellungen</h2>
+          <p>Dieser Bereich wird in einer spaeteren Ausbaustufe angebunden.</p>
+          <a class="v2-button soft" href="admin.html">Klassischen Admin oeffnen</a>
+        </div>
+      </section>
+    </section>
+  </section>
+</main>
+
+<script src="firebase-config.js"></script>
+<script src="firebase-service.js?v=19"></script>
+<script src="firebase-auth.js?v=2"></script>
+<script src="firebase-database.js"></script>
+<script src="admin-v2.js?v=1"></script>
+</body>
+</html>

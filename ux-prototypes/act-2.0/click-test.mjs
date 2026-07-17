@@ -187,5 +187,10 @@ console.log(JSON.stringify({ total: results.length, pass, fail, results }, null,
 
 ws.close();
 chrome.kill();
-rmSync(userDataDir, { recursive: true, force: true });
+await sleep(500);
+try {
+  rmSync(userDataDir, { recursive: true, force: true });
+} catch (error) {
+  if (error?.code !== "EBUSY") throw error;
+}
 process.exitCode = fail ? 1 : 0;

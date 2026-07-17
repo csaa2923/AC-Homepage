@@ -102,8 +102,16 @@ p{color:var(--muted);line-height:1.55}
 .icon-button{width:36px;height:36px;border:1px solid var(--line);background:var(--surface);font-weight:900}
 .calendar-board{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px}
 .calendar-day{padding:16px;min-height:420px}
+.calendar-day-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .calendar-day h3{font-size:18px}
-.calendar-event{display:block;width:100%;padding:12px;border-radius:16px;margin-top:10px;background:#f8faf7;border:1px solid var(--line);color:var(--ink)}
+.calendar-count{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:var(--mint);color:var(--green);font-size:12px;font-weight:850}
+.calendar-trip-strip{display:grid;gap:8px;margin:12px 0}
+.calendar-trip-strip span{display:grid;gap:2px;padding:10px 12px;border-radius:14px;background:#edf5ee;color:var(--ink);font-size:13px;font-weight:850}
+.calendar-trip-strip small{color:var(--muted);font-size:12px;font-weight:750}
+.calendar-event{display:grid;gap:6px;width:100%;padding:12px;border-radius:16px;margin-top:10px;background:#f8faf7;border:1px solid var(--line);color:var(--ink)}
+.calendar-trip-badge{display:inline-flex;width:max-content;max-width:100%;min-height:24px;align-items:center;padding:0 8px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--green);font-size:11px;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.calendar-event p{margin:0;color:var(--muted)}
+.calendar-event em{font-style:normal;color:var(--green-2);font-size:12px;font-weight:850}
 .doc-card{padding:16px;display:grid;gap:12px}
 .doc-icon{width:48px;height:48px;border-radius:16px;background:var(--green);color:white;display:grid;place-items:center;font-weight:900}
 .settings-grid{grid-template-columns:repeat(3,1fr)}

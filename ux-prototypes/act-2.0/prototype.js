@@ -80,6 +80,33 @@ const state={
     {id:"p2",time:"11:00",title:"Nordkette",meta:"Tickets · Navigation",note:"Wetterhinweis prüfen",open:false},
     {id:"p3",time:"19:30",title:"Dinner im Stüva",meta:"Restaurant",note:"Reservierung bestätigt",open:false}
   ],
+  calendarTrips:[
+    {
+      dayOffset:0,
+      customerId:"mueller",
+      program:[
+        {id:"cal-mueller-breakfast",time:"09:00",title:"Frühstück",meta:"Hotel Klosterbräu",status:"Vorbereitet"},
+        {id:"cal-mueller-nordkette",time:"11:00",title:"Nordkette",meta:"Tickets · Navigation",status:"Tickets bereit"},
+        {id:"cal-mueller-dinner",time:"19:30",title:"Dinner im Stüva",meta:"Restaurant",status:"Bestätigt"}
+      ]
+    },
+    {
+      dayOffset:1,
+      customerId:"rossi",
+      program:[
+        {id:"cal-rossi-transfer",time:"10:30",title:"Private Anreise",meta:"Transfer · Kitzbühel",status:"Offen"},
+        {id:"cal-rossi-wine",time:"17:00",title:"Weinverkostung",meta:"Sommelier Termin",status:"Wartet"}
+      ]
+    },
+    {
+      dayOffset:2,
+      customerId:"schneider",
+      program:[
+        {id:"cal-schneider-spa",time:"14:00",title:"Spa Check-in",meta:"Achensee Resort",status:"Prüfen"},
+        {id:"cal-schneider-walk",time:"16:30",title:"Leichte Wanderung",meta:"Route · Wetter",status:"Entwurf"}
+      ]
+    }
+  ],
   documents:[
     {id:"d1",title:"Voucher Hotel Klosterbräu",category:"Hotel",date:"18.07.2026",visibility:"Sichtbar",state:"Veröffentlicht",short:"PDF"},
     {id:"d2",title:"Nordkette Tickets",category:"Aktivität",date:"18.07.2026",visibility:"Sichtbar",state:"Veröffentlicht",short:"TKT"},
@@ -332,13 +359,35 @@ function publishCheckCard(check){
 function renderCalendar(){
   $all("[data-calendar-mode]").forEach(button=>button.classList.toggle("active",button.dataset.calendarMode===state.calendarMode));
   const days=state.calendarMode==="week"?["Mo 18.08.","Di 19.08.","Mi 20.08.","Do 21.08."]:["Heute"];
-  $("#calendarBoard").innerHTML=days.map((day,index)=>`
+  $("#calendarBoard").innerHTML=days.map((day,index)=>{
+    const tripGroups=state.calendarTrips.filter(group=>group.dayOffset<=index);
+    const events=tripGroups.flatMap(group=>{
+      const customer=state.customers.find(item=>item.id===group.customerId)||state.customers[0];
+      return group.program.map(item=>({...item,customer}));
+    });
+    return `
     <section class="calendar-day">
-      <span class="tiny-label">Tag ${index+1}</span>
-      <h3>${day}</h3>
-      ${state.program.map(item=>`<button class="calendar-event action-card" type="button" data-program-id="${item.id}" data-action="open-program-from-calendar"><strong>${escapeHtml(item.time)} ${escapeHtml(item.title)}</strong><p>${escapeHtml(item.meta)}</p></button>`).join("")}
-    </section>
-  `).join("");
+      <div class="calendar-day-head">
+        <div>
+          <span class="tiny-label">Tag ${index+1}</span>
+          <h3>${day}</h3>
+        </div>
+        <span class="calendar-count">${tripGroups.length} Reise${tripGroups.length===1?"":"n"}</span>
+      </div>
+      <div class="calendar-trip-strip" aria-label="Reisen an diesem Tag">
+        ${tripGroups.map(group=>{
+          const customer=state.customers.find(item=>item.id===group.customerId)||state.customers[0];
+          return `<span>${escapeHtml(customer.name)}<small>${escapeHtml(customer.trip)}</small></span>`;
+        }).join("")}
+      </div>
+      ${events.map(item=>`<button class="calendar-event action-card" type="button" data-program-id="${item.id}" data-action="open-program-from-calendar">
+        <span class="calendar-trip-badge">${escapeHtml(item.customer.name)} · ${escapeHtml(item.customer.trip)}</span>
+        <strong>${escapeHtml(item.time)} ${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.meta)} · ${escapeHtml(item.customer.region)}</p>
+        <em>${escapeHtml(item.status)}</em>
+      </button>`).join("")}
+    </section>`;
+  }).join("");
 }
 
 function renderDocuments(){

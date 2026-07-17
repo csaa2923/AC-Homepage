@@ -1,5 +1,6 @@
 const $=(selector,root=document)=>root.querySelector(selector);
 const $all=(selector,root=document)=>[...root.querySelectorAll(selector)];
+const tripToneClasses=["green","blue","violet","amber","petrol","terra","sage","rose"];
 
 const state={
   route:"dashboard",
@@ -10,6 +11,7 @@ const state={
   customerSearch:"",
   statusFilter:"Alle",
   regionFilter:"Alle",
+  calendarFilters:{},
   loading:false,
   wizardIndex:0,
   wizardData:{
@@ -66,12 +68,12 @@ const state={
     }
   ],
   tasks:[
-    {time:"09:00",title:"Frühstück & Check-in Reminder",text:"Familie Müller · Hotel Klosterbräu · Seefeld",status:"bereit",route:"customer-detail"},
-    {time:"11:00",title:"Nordkette Tickets prüfen",text:"Tickets, Navigation und Wetterhinweis ergänzen",status:"offen",tab:"program"},
+    {time:"09:00",title:"Frühstück & Check-in Reminder",text:"Hotel Klosterbräu · Seefeld",status:"bereit",route:"customer-detail",customerId:"mueller"},
+    {time:"11:00",title:"Nordkette Tickets prüfen",text:"Tickets, Navigation und Wetterhinweis ergänzen",status:"offen",tab:"program",customerId:"mueller"},
     {time:"17:30",title:"Restaurantbestätigung",text:"Familie Rossi · Stüva · Menüpräferenz vegan",status:"wartet",route:"customer-detail",customerId:"rossi"}
   ],
   activities:[
-    {label:"Dokument",text:"Voucher Müller hochgeladen",route:"documents"},
+    {label:"Dokument",text:"Voucher Müller hochgeladen",route:"documents",customerId:"mueller"},
     {label:"Publish",text:"Herr Schneider Version 2.4 geprüft",tab:"publish",customerId:"schneider"},
     {label:"Wetter",text:"Ort für Achensee präzisiert",route:"customer-detail",tab:"trip",customerId:"schneider"}
   ],
@@ -133,6 +135,18 @@ function escapeHtml(value){
   return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
 }
 
+function stableHash(value){
+  return String(value||"").split("").reduce((hash,char)=>((hash<<5)-hash)+char.charCodeAt(0),0);
+}
+
+function tripTone(customer,tripId=""){
+  const key=[customer?.id,tripId||customer?.trip||customer?.dates].filter(Boolean).join(":");
+  const customerIndex=state.customers.findIndex(item=>item.id===customer?.id);
+  if(customerIndex>=0&&!tripId)return tripToneClasses[customerIndex%tripToneClasses.length];
+  const baseIndex=customerIndex>=0?customerIndex:0;
+  return tripToneClasses[(baseIndex+Math.abs(stableHash(key)))%tripToneClasses.length];
+}
+
 function badgeClass(value){
   if(["Veröffentlicht","Sichtbar","bereit"].includes(value))return "green";
   if(["Prüfung","offen","Entwurf"].includes(value))return "amber";
@@ -142,6 +156,13 @@ function badgeClass(value){
 
 function badge(value){
   return `<span class="badge ${badgeClass(value)}">${escapeHtml(value)}</span>`;
+}
+
+function travelContext(item){
+  const customer=state.customers.find(entry=>entry.id===item.customerId);
+  if(!customer)return "";
+  const tone=tripTone(customer,item.tripId);
+  return `<span class="travel-context trip-tone-${tone}"><i aria-hidden="true"></i><span><strong>${escapeHtml(customer.name)}</strong><small>${escapeHtml(customer.trip)} · ${escapeHtml(customer.region)}</small></span></span>`;
 }
 
 function toast(message,type="success"){
@@ -195,13 +216,18 @@ function renderDashboard(){
   $("#dashboardTasks").innerHTML=state.tasks.map((task,index)=>`
     <button class="timeline-item action-card" type="button" data-task-index="${index}">
       <time>${task.time}</time>
-      <div><strong>${escapeHtml(task.title)}</strong><p>${escapeHtml(task.text)}</p></div>
+      <div>
+        ${travelContext(task)}
+        <strong>${escapeHtml(task.title)}</strong>
+        <p>${escapeHtml(task.text)}</p>
+      </div>
       ${badge(task.status)}
     </button>
   `).join("");
   $("#activityList").innerHTML=state.activities.map((activity,index)=>`
     <button class="activity-item action-card" type="button" data-activity-index="${index}">
       <strong>${escapeHtml(activity.label)}</strong>
+      ${travelContext(activity)}
       <span>${escapeHtml(activity.text)}</span>
     </button>
   `).join("");
@@ -361,10 +387,12 @@ function renderCalendar(){
   const days=state.calendarMode==="week"?["Mo 18.08.","Di 19.08.","Mi 20.08.","Do 21.08."]:["Heute"];
   $("#calendarBoard").innerHTML=days.map((day,index)=>{
     const tripGroups=state.calendarTrips.filter(group=>group.dayOffset<=index);
+    const activeFilter=state.calendarFilters[index]||"";
+    const visibleGroups=activeFilter?tripGroups.filter(group=>group.customerId===activeFilter):tripGroups;
     const events=tripGroups.flatMap(group=>{
       const customer=state.customers.find(item=>item.id===group.customerId)||state.customers[0];
-      return group.program.map(item=>({...item,customer}));
-    });
+      return group.program.map(item=>({...item,customer,tripTone:tripTone(customer,group.tripId)}));
+    }).filter(item=>!activeFilter||item.customer.id===activeFilter);
     return `
     <section class="calendar-day">
       <div class="calendar-day-head">
@@ -372,22 +400,41 @@ function renderCalendar(){
           <span class="tiny-label">Tag ${index+1}</span>
           <h3>${day}</h3>
         </div>
-        <span class="calendar-count">${tripGroups.length} Reise${tripGroups.length===1?"":"n"}</span>
+        <span class="calendar-count">${visibleGroups.length} / ${tripGroups.length} Reise${tripGroups.length===1?"":"n"}</span>
       </div>
       <div class="calendar-trip-strip" aria-label="Reisen an diesem Tag">
         ${tripGroups.map(group=>{
           const customer=state.customers.find(item=>item.id===group.customerId)||state.customers[0];
-          return `<span>${escapeHtml(customer.name)}<small>${escapeHtml(customer.trip)}</small></span>`;
+          const isActive=activeFilter===group.customerId;
+          return `<button class="calendar-trip-filter trip-tone-${tripTone(customer,group.tripId)} ${isActive?"active":""}" type="button" data-action="filter-calendar-trip" data-day-index="${index}" data-customer-id="${escapeHtml(customer.id)}" aria-pressed="${isActive?"true":"false"}"><i aria-hidden="true"></i>${escapeHtml(customer.name)}</button>`;
         }).join("")}
+        ${activeFilter?`<button class="calendar-trip-clear" type="button" data-action="clear-calendar-filter" data-day-index="${index}">Alle</button>`:""}
       </div>
-      ${events.map(item=>`<button class="calendar-event action-card" type="button" data-program-id="${item.id}" data-action="open-program-from-calendar">
-        <span class="calendar-trip-badge">${escapeHtml(item.customer.name)} · ${escapeHtml(item.customer.trip)}</span>
-        <strong>${escapeHtml(item.time)} ${escapeHtml(item.title)}</strong>
-        <p>${escapeHtml(item.meta)} · ${escapeHtml(item.customer.region)}</p>
-        <em>${escapeHtml(item.status)}</em>
+      ${events.map(item=>`<button class="calendar-event action-card trip-tone-${escapeHtml(item.tripTone)}" type="button" data-program-id="${item.id}" data-action="open-program-from-calendar">
+        <span class="calendar-trip-context">
+          <strong><i aria-hidden="true"></i>${escapeHtml(item.customer.name)}</strong>
+          <small>${escapeHtml(item.customer.trip)} · ${escapeHtml(item.customer.region)}</small>
+        </span>
+        <span class="calendar-event-main">
+          <strong>${escapeHtml(item.time)} ${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.meta)}</p>
+        </span>
+        <em class="calendar-status">${escapeHtml(item.status)}</em>
       </button>`).join("")}
     </section>`;
   }).join("");
+}
+
+function toggleCalendarTripFilter(dayIndex,customerId){
+  const key=String(dayIndex);
+  if(state.calendarFilters[key]===customerId)delete state.calendarFilters[key];
+  else state.calendarFilters[key]=customerId;
+  renderCalendar();
+}
+
+function clearCalendarTripFilter(dayIndex){
+  delete state.calendarFilters[String(dayIndex)];
+  renderCalendar();
 }
 
 function renderDocuments(){
@@ -527,6 +574,8 @@ function handleAction(action,target){
   if(action?.startsWith("move-program")||action==="toggle-program"||action==="edit-program"||action==="delete-program")return handleProgramAction(action,target.dataset.programId);
   if(action==="open-program-from-calendar"){openCustomer(state.selectedCustomerId,"program");return handleProgramAction("toggle-program",target.dataset.programId);}
   if(action?.includes("doc"))return handleDocAction(action,target.dataset.docId);
+  if(action==="filter-calendar-trip")return toggleCalendarTripFilter(target.dataset.dayIndex,target.dataset.customerId);
+  if(action==="clear-calendar-filter")return clearCalendarTripFilter(target.dataset.dayIndex);
   if(action==="open-publish-check"){const check=state.publishChecks.find(item=>item.id===target.dataset.checkId);openCustomer(state.selectedCustomerId,check?.tab||"publish");return toast(`${check?.label||"Prüfpunkt"} geöffnet.`);}
   if(action==="start-publish")return openPublishFlow();
   if(action==="cancel-confirm")return $("#confirmDialog").close();

@@ -133,6 +133,16 @@ for (let i = 0; i < 50; i += 1) {
 await check("Hauptnavigation", "Dashboard", () => click('[data-route="dashboard"]'), () => exists("#dashboard.view.active"));
 await check("Hauptnavigation", "Kunden", () => click('[data-route="customers"]'), () => exists("#customers.view.active"));
 await check("Hauptnavigation", "Kalender", () => click('[data-route="calendar"]'), () => exists("#calendar.view.active"));
+await check("Kalender", "Reise pro Tag filtern", async () => {
+  await click('[data-route="calendar"]');
+  await click('.calendar-day:nth-child(2) [data-action="filter-calendar-trip"][data-customer-id="rossi"]');
+}, async () => {
+  const visibleEvents = await count(".calendar-day:nth-child(2) .calendar-event");
+  const activeFilters = await count('.calendar-day:nth-child(2) .calendar-trip-filter.active');
+  const allButton = await count('.calendar-day:nth-child(2) [data-action="clear-calendar-filter"]');
+  return visibleEvents === 2 && activeFilters === 1 && allButton === 1;
+});
+await check("Kalender", "Reisefilter zurücksetzen", () => click('.calendar-day:nth-child(2) [data-action="clear-calendar-filter"]'), async () => (await count(".calendar-day:nth-child(2) .calendar-event")) > 2);
 await check("Hauptnavigation", "Dokumente", () => click('[data-route="documents"]'), () => exists("#documents.view.active"));
 await check("Hauptnavigation", "Einstellungen", () => click('[data-route="settings"]'), () => exists("#settings.view.active"));
 await check("Dashboard", "Alle Kunden", async () => { await click('[data-route="dashboard"]'); await click(".hero-actions [data-route='customers']"); }, () => exists("#customers.view.active"));

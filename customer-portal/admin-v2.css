@@ -17,9 +17,9 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink)}
-button,input,select{font:inherit}
+button,input,select,textarea{font:inherit}
 button{cursor:pointer}
-button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid rgba(31,107,84,.35);outline-offset:3px}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(31,107,84,.35);outline-offset:3px}
 a{color:inherit}
 h1,h2,h3,p{margin-top:0}
 h1{font-size:34px;margin-bottom:0}
@@ -114,6 +114,7 @@ p{color:var(--muted);line-height:1.55}
 .v2-tab:hover{transform:translateY(-1px);border-color:rgba(31,107,84,.35);color:var(--ink)}
 .v2-tab[aria-selected="true"]{background:var(--green);border-color:var(--green);color:white}
 .v2-tab-panel{display:grid;gap:16px}
+.v2-tab-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .v2-read-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .v2-read-card{padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow)}
 .v2-read-card h3{margin-bottom:14px}
@@ -122,6 +123,26 @@ p{color:var(--muted);line-height:1.55}
 .v2-read-field.full{grid-column:1 / -1}
 .v2-read-list{display:flex;gap:8px;flex-wrap:wrap}
 .v2-technical-id{font-family:"SFMono-Regular",Consolas,monospace;font-size:12px;color:var(--muted)}
+.v2-edit-form{display:grid;gap:16px}
+.v2-edit-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px;border:1px solid var(--line);border-radius:20px;background:var(--surface);box-shadow:var(--shadow)}
+.v2-edit-head h3{margin-bottom:6px}
+.v2-edit-status{min-height:32px;display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;color:var(--muted);font-weight:850}
+.v2-edit-status.dirty{background:var(--amber);color:#7a5c1f}
+.v2-edit-status.saving{background:var(--blue);color:#315f96}
+.v2-edit-status.success{background:var(--mint);color:#1f6b3f}
+.v2-edit-status.error{background:var(--rose);color:#8b3d31}
+.v2-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.v2-edit-field{display:grid;gap:7px;color:var(--muted);font-weight:850}
+.v2-edit-field.full{grid-column:1 / -1}
+.v2-edit-field input,.v2-edit-field textarea{width:100%;min-height:48px;border:1px solid var(--line);border-radius:16px;padding:12px 14px;background:#fbfcfa;color:var(--ink);font-size:16px}
+.v2-edit-field textarea{min-height:118px;resize:vertical;line-height:1.45}
+.v2-edit-field input:focus,.v2-edit-field textarea:focus{border-color:var(--green-2);box-shadow:0 0 0 4px rgba(31,107,84,.10);outline:0}
+.v2-edit-field input[aria-invalid="true"],.v2-edit-field textarea[aria-invalid="true"]{border-color:#8b3d31;background:#fff8f6}
+.v2-field-error,.v2-field-hint{font-size:13px;line-height:1.35}
+.v2-field-error{color:#8b3d31}
+.v2-field-hint{color:var(--muted)}
+.v2-edit-actions{position:sticky;bottom:16px;z-index:20;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;padding:12px;border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.92);box-shadow:0 16px 42px rgba(20,38,31,.13);backdrop-filter:blur(14px)}
+.v2-edit-actions .v2-button{min-height:48px}
 .v2-skeleton{min-height:120px;border-radius:18px;background:linear-gradient(90deg,#eef3ed,#fff,#eef3ed);background-size:200% 100%;animation:v2pulse 1.2s infinite}
 @keyframes v2pulse{to{background-position:-200% 0}}
 @media (max-width:1100px){
@@ -141,10 +162,13 @@ p{color:var(--muted);line-height:1.55}
   .v2-profile strong{max-width:100%}
   .v2-dashboard-hero{align-items:flex-start;flex-direction:column}
   .v2-dashboard-actions{width:100%;justify-content:flex-start}
-  .v2-hero,.v2-filterbar,.v2-customer-grid,.v2-content-grid,.v2-dashboard-grid,.v2-metric-grid,.v2-detail-summary,.v2-read-grid,.v2-read-fields{grid-template-columns:1fr}
+  .v2-hero,.v2-filterbar,.v2-customer-grid,.v2-content-grid,.v2-dashboard-grid,.v2-metric-grid,.v2-detail-summary,.v2-read-grid,.v2-read-fields,.v2-edit-grid{grid-template-columns:1fr}
   .v2-detail-head{padding:18px}
   .v2-detail-actions .v2-button{width:100%}
   .v2-detail-tabs{margin-left:-2px;margin-right:-2px}
+  .v2-tab-actions,.v2-edit-head{align-items:stretch;flex-direction:column}
+  .v2-edit-actions{bottom:98px;display:grid;grid-template-columns:1fr;max-width:100%}
+  .v2-edit-actions .v2-button{width:100%}
   .v2-metric{min-height:122px}
   h1{font-size:28px}
   h2{font-size:26px}

@@ -10,7 +10,14 @@
     region:"",
     sort:"arrival",
     selectedCustomerId:"",
-    selectedTab:"kunde"
+    selectedTab:"kunde",
+    customerEditMode:false,
+    customerEditDraft:null,
+    customerEditOriginal:"",
+    customerEditErrors:{},
+    customerEditSaving:false,
+    customerEditMessage:"",
+    customerEditMessageKind:""
   };
 
   const byId=id=>document.getElementById(id);
@@ -28,6 +35,7 @@
     ["veroeffentlichung","Veroeffentlichung"]
   ];
   let activeLoginAttempt=0;
+  let customerSavePromise=null;
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -151,6 +159,21 @@
     return text||fallback;
   }
 
+  function clone(value){
+    return JSON.parse(JSON.stringify(value||{}));
+  }
+
+  function compactObject(value){
+    if(Array.isArray(value))return value.map(compactObject).filter(item=>item!==undefined);
+    if(value&&typeof value==="object"){
+      return Object.entries(value).reduce((result,[key,item])=>{
+        if(item!==undefined)result[key]=compactObject(item);
+        return result;
+      },{});
+    }
+    return value;
+  }
+
   function customerById(id){
     return state.customers.find(customer=>String(customer.customerId||"")===String(id||""))||null;
   }
@@ -182,11 +205,185 @@
     return {route:"dashboard",customerId:"",tab:""};
   }
 
+  function currentRouteHash(){
+    if(state.route==="customerDetail"&&state.selectedCustomerId)return detailHash(state.selectedCustomerId,state.selectedTab);
+    return `#${state.route||"dashboard"}`;
+  }
+
   function setStatus(message,isError){
     const el=byId("loadStatus");
     if(!el)return;
     el.textContent=message||"";
     el.style.color=isError?"#8c1f1f":"#697872";
+  }
+
+  function customerEditValues(customer){
+    const contact=customer?.contact&&typeof customer.contact==="object"?customer.contact:{};
+    return {
+      customerName:String(customer?.customerName||"").trim(),
+      companions:Array.isArray(customer?.companions)?customer.companions.filter(Boolean).join(", "):String(customer?.companions||"").trim(),
+      language:String(customer?.language||"").trim(),
+      concierge:String(customer?.concierge||customer?.conciergeName||"").trim(),
+      phone:String(customer?.phone||contact.phone||"").trim(),
+      email:String(customer?.email||contact.email||"").trim(),
+      whatsapp:String(customer?.whatsapp||customer?.whatsappLink||contact.whatsapp||"").trim(),
+      requirements:Array.isArray(customer?.requirements)?customer.requirements.filter(Boolean).join("\n"):String(customer?.requirements||"").trim(),
+      contactInfo:String(contact.name||contact.primary||contact.note||"").trim()
+    };
+  }
+
+  function normalizedEditDraft(draft){
+    const next={...(draft||{})};
+    Object.keys(next).forEach(key=>{
+      next[key]=String(next[key]??"").trim();
+    });
+    next.requirements=String(next.requirements||"")
+      .split(/\n|,/)
+      .map(item=>item.trim())
+      .filter(Boolean);
+    return next;
+  }
+
+  function editFingerprint(values){
+    return JSON.stringify(normalizedEditDraft(values));
+  }
+
+  function hasDirtyCustomerEdit(){
+    return state.customerEditMode&&editFingerprint(state.customerEditDraft||{})!==state.customerEditOriginal;
+  }
+
+  function setCustomerEditMessage(message,kind=""){
+    state.customerEditMessage=message||"";
+    state.customerEditMessageKind=kind;
+    const el=byId("customerEditStatus");
+    if(el){
+      el.textContent=state.customerEditMessage;
+      el.dataset.kind=kind;
+    }
+  }
+
+  function updateCustomerEditActions(){
+    const saving=state.customerEditSaving;
+    all("[data-customer-edit-action]").forEach(button=>{
+      button.disabled=saving;
+      button.setAttribute("aria-busy",saving&&button.dataset.customerEditAction==="save"?"true":"false");
+    });
+  }
+
+  function confirmDiscardCustomerEdit(){
+    if(!hasDirtyCustomerEdit())return true;
+    return window.confirm("Ungespeicherte Aenderungen verwerfen?");
+  }
+
+  function resetCustomerEditState({keepMessage=false}={}){
+    state.customerEditMode=false;
+    state.customerEditDraft=null;
+    state.customerEditOriginal="";
+    state.customerEditErrors={};
+    state.customerEditSaving=false;
+    if(!keepMessage){
+      state.customerEditMessage="";
+      state.customerEditMessageKind="";
+    }
+  }
+
+  function startCustomerEdit(customer){
+    const draft=customerEditValues(customer);
+    state.customerEditMode=true;
+    state.customerEditDraft={...draft};
+    state.customerEditOriginal=editFingerprint(draft);
+    state.customerEditErrors={};
+    state.customerEditSaving=false;
+    setCustomerEditMessage("","");
+    renderCustomerDetail();
+  }
+
+  function cancelCustomerEdit(){
+    if(!confirmDiscardCustomerEdit())return;
+    resetCustomerEditState();
+    renderCustomerDetail();
+  }
+
+  function validateCustomerEdit(draft){
+    const values=normalizedEditDraft(draft);
+    const errors={};
+    if(!values.customerName)errors.customerName="Bitte einen Kundennamen eingeben.";
+    if(values.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email))errors.email="Bitte eine gueltige E-Mail-Adresse eingeben.";
+    return {valid:!Object.keys(errors).length,errors,values};
+  }
+
+  function mergeCustomerEdit(customer,values){
+    const next=clone(customer);
+    next.customerName=values.customerName;
+    next.companions=values.companions;
+    next.language=values.language;
+    next.concierge=values.concierge;
+    next.conciergeName=values.concierge;
+    next.phone=values.phone;
+    next.email=values.email;
+    next.whatsapp=values.whatsapp;
+    next.whatsappLink=values.whatsapp;
+    next.requirements=values.requirements;
+    next.contact={
+      ...(next.contact&&typeof next.contact==="object"?next.contact:{}),
+      phone:values.phone,
+      email:values.email,
+      whatsapp:values.whatsapp
+    };
+    if(values.contactInfo)next.contact.note=values.contactInfo;
+    else if(next.contact)delete next.contact.note;
+    next.updatedAt=new Date().toLocaleDateString("de-DE");
+    next._lastSavedAt=new Date().toISOString();
+    return compactObject(next);
+  }
+
+  function updateLocalCustomer(savedCustomer){
+    const index=state.customers.findIndex(customer=>String(customer.customerId||"")===String(savedCustomer.customerId||""));
+    if(index>=0)state.customers.splice(index,1,savedCustomer);
+    else state.customers.push(savedCustomer);
+  }
+
+  async function saveCustomerEdit(){
+    if(state.customerEditSaving||customerSavePromise)return customerSavePromise;
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return null;
+    const validation=validateCustomerEdit(state.customerEditDraft||{});
+    state.customerEditErrors=validation.errors;
+    if(!validation.valid){
+      setCustomerEditMessage("Bitte pruefen Sie die markierten Felder.","error");
+      renderCustomerDetail();
+      return null;
+    }
+    const fullCustomer=mergeCustomerEdit(customer,validation.values);
+    state.customerEditSaving=true;
+    setCustomerEditMessage("Wird gespeichert ...","saving");
+    updateCustomerEditActions();
+    customerSavePromise=(async()=>{
+      try{
+        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+        updateLocalCustomer(fullCustomer);
+        resetCustomerEditState({keepMessage:true});
+        setCustomerEditMessage("Aenderungen gespeichert","success");
+        render();
+        window.setTimeout(()=>{
+          if(!state.customerEditMode&&state.customerEditMessageKind==="success"){
+            setCustomerEditMessage("","");
+          }
+        },3200);
+        return fullCustomer;
+      }catch(error){
+        console.error("[ACT Admin V2] Kundendaten speichern:",error&&error.message?error.message:"Fehler");
+        state.customerEditSaving=false;
+        setCustomerEditMessage("Die Aenderungen konnten nicht gespeichert werden. Bitte erneut versuchen.","error");
+        updateCustomerEditActions();
+        return null;
+      }finally{
+        customerSavePromise=null;
+      }
+    })();
+    return customerSavePromise;
   }
 
   function loginButton(){
@@ -535,7 +732,7 @@
           </div>
           <div class="v2-actions">
             <span class="v2-button soft">Kunde oeffnen</span>
-            <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Alter Admin</a>
+            <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Alter Admin</a>
           </div>
         </div>
       </article>
@@ -578,7 +775,7 @@
       <header class="v2-detail-head">
         <div class="v2-detail-actions">
           <button class="v2-button soft" type="button" data-v2-route="customers">Zur Kundenuebersicht</button>
-          <a class="v2-button primary" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a>
+          <a class="v2-button primary" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Im klassischen Admin bearbeiten</a>
         </div>
         <div class="v2-detail-title">
           <p class="v2-eyebrow">Kundendetail</p>
@@ -621,7 +818,12 @@
 
   function customerTabMarkup(customer){
     const contact=customer.contact&&typeof customer.contact==="object"?customer.contact:{};
+    if(state.customerEditMode)return customerEditFormMarkup(customer);
     return `
+      <div class="v2-tab-actions">
+        <button class="v2-button primary" type="button" data-customer-edit-action="edit">Bearbeiten</button>
+        <span class="v2-edit-status ${state.customerEditMessageKind}" id="customerEditStatus" aria-live="polite">${escapeHtml(state.customerEditMessage)}</span>
+      </div>
       <div class="v2-read-grid">
         <article class="v2-read-card">
           <h3>Kundendaten</h3>
@@ -647,6 +849,63 @@
     `;
   }
 
+  function customerEditFormMarkup(customer){
+    const draft=state.customerEditDraft||customerEditValues(customer);
+    const errors=state.customerEditErrors||{};
+    const dirty=hasDirtyCustomerEdit();
+    const status=state.customerEditMessage||(dirty?"Ungespeicherte Aenderungen":"");
+    const statusKind=state.customerEditMessageKind||(dirty?"dirty":"");
+    return `
+      <form class="v2-edit-form" id="customerEditForm" novalidate>
+        <div class="v2-edit-head">
+          <div>
+            <h3>Kundendaten bearbeiten</h3>
+            <p class="v2-muted">Es werden nur die Felder dieses Tabs geaendert. Reise, Programm, Dokumente und Publish-Daten bleiben erhalten.</p>
+          </div>
+          <span class="v2-edit-status ${escapeHtml(statusKind)}" id="customerEditStatus" aria-live="polite">${escapeHtml(status)}</span>
+        </div>
+        <div class="v2-edit-grid">
+          ${inputField("customerName","Kundenname",draft.customerName,{required:true,error:errors.customerName,autocomplete:"name"})}
+          ${inputField("companions","Begleitpersonen",draft.companions)}
+          ${inputField("language","Sprache",draft.language,{autocomplete:"language"})}
+          ${inputField("concierge","Concierge",draft.concierge)}
+          ${inputField("phone","Telefonnummer",draft.phone,{type:"tel",autocomplete:"tel"})}
+          ${inputField("email","E-Mail",draft.email,{type:"email",error:errors.email,autocomplete:"email"})}
+          ${inputField("whatsapp","WhatsApp",draft.whatsapp,{type:"tel"})}
+          ${textareaField("requirements","Anforderungen / besondere Wuensche",draft.requirements,{hint:"Eine Anforderung pro Zeile oder kommagetrennt."})}
+          ${textareaField("contactInfo","Kontaktinformationen",draft.contactInfo)}
+        </div>
+        <div class="v2-edit-actions">
+          <button class="v2-button primary" type="submit" data-customer-edit-action="save" ${state.customerEditSaving?"disabled aria-busy=\"true\"":""}>Speichern</button>
+          <button class="v2-button soft" type="button" data-customer-edit-action="cancel" ${state.customerEditSaving?"disabled":""}>Abbrechen</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function inputField(name,label,value,{type="text",required=false,error="",autocomplete=""}={}){
+    const id=`customerEdit-${name}`;
+    return `
+      <label class="v2-edit-field" for="${id}">
+        <span>${escapeHtml(label)}${required?" *":""}</span>
+        <input id="${id}" name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value||"")}" ${required?"required":""} ${autocomplete?`autocomplete="${escapeHtml(autocomplete)}"`:""} aria-invalid="${error?"true":"false"}" aria-describedby="${error?`${id}-error`:""}">
+        ${error?`<small class="v2-field-error" id="${id}-error">${escapeHtml(error)}</small>`:""}
+      </label>
+    `;
+  }
+
+  function textareaField(name,label,value,{hint="",error=""}={}){
+    const id=`customerEdit-${name}`;
+    return `
+      <label class="v2-edit-field full" for="${id}">
+        <span>${escapeHtml(label)}</span>
+        <textarea id="${id}" name="${escapeHtml(name)}" rows="4" aria-invalid="${error?"true":"false"}" aria-describedby="${error?`${id}-error`:hint?`${id}-hint`:""}">${escapeHtml(value||"")}</textarea>
+        ${hint?`<small class="v2-field-hint" id="${id}-hint">${escapeHtml(hint)}</small>`:""}
+        ${error?`<small class="v2-field-error" id="${id}-error">${escapeHtml(error)}</small>`:""}
+      </label>
+    `;
+  }
+
   function placeholderTabMarkup(){
     return `<article class="v2-placeholder"><h3>Bereich noch nicht angebunden</h3><p>Dieser Bereich wird in einem folgenden Auftrag angebunden.</p></article>`;
   }
@@ -661,6 +920,12 @@
 
   function routeTo(route,{replace=false}={}){
     const parsed=parseRoute(route.startsWith("#")?route:`#${route}`);
+    const nextHash=parsed.route==="customerDetail"?detailHash(parsed.customerId,parsed.tab):`#${parsed.route}`;
+    const isSameRoute=nextHash===currentRouteHash();
+    if(!isSameRoute&&hasDirtyCustomerEdit()){
+      if(!confirmDiscardCustomerEdit())return false;
+      resetCustomerEditState();
+    }
     state.route=parsed.route;
     state.selectedCustomerId=parsed.customerId||"";
     state.selectedTab=parsed.tab||"kunde";
@@ -672,10 +937,10 @@
     });
     const title=parsed.route==="customerDetail"?"Kundendetail":byId(viewId)?.dataset.title||"Dashboard";
     byId("pageTitle").textContent=title;
-    const hash=parsed.route==="customerDetail"?detailHash(parsed.customerId,parsed.tab):`#${parsed.route}`;
-    if(replace)history.replaceState({route:parsed.route},"",hash);
-    else if(location.hash!==hash)history.pushState({route:parsed.route},"",hash);
+    if(replace)history.replaceState({route:parsed.route},"",nextHash);
+    else if(location.hash!==nextHash)history.pushState({route:parsed.route},"",nextHash);
     render();
+    return true;
   }
 
   function resetFilters(){
@@ -701,12 +966,34 @@
   }
 
   function openNewCustomer(){
+    if(!confirmDiscardCustomerEdit())return;
     window.location.href="admin.html?newCustomer=1#master-data";
+  }
+
+  function openClassicEditor(id){
+    if(!confirmDiscardCustomerEdit())return;
+    resetCustomerEditState();
+    window.location.href=classicEditorUrl(id);
+  }
+
+  function handleCustomerEditInput(event){
+    const field=event.target.closest("#customerEditForm input,#customerEditForm textarea");
+    if(!field||!state.customerEditDraft)return;
+    state.customerEditDraft[field.name]=field.value;
+    if(state.customerEditErrors[field.name]){
+      delete state.customerEditErrors[field.name];
+      const error=byId(`customerEdit-${field.name}-error`);
+      if(error)error.remove();
+      field.setAttribute("aria-invalid","false");
+    }
+    const dirty=hasDirtyCustomerEdit();
+    setCustomerEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
   }
 
   function bind(){
     byId("adminLoginForm").addEventListener("submit",event=>{event.preventDefault();signIn();});
     byId("logoutButton").addEventListener("click",async()=>{
+      if(!confirmDiscardCustomerEdit())return;
       try{
         await withTimeout(window.ACTFirebaseAuth?.signOut?.(),AUTH_TIMEOUT_MS,"signOut");
       }catch(error){
@@ -715,7 +1002,7 @@
       clearPassword();
       showLogin("Abgemeldet.");
     });
-    byId("refreshButton").addEventListener("click",loadCustomers);
+    byId("refreshButton").addEventListener("click",()=>{if(confirmDiscardCustomerEdit())loadCustomers();});
     byId("newCustomerButton").addEventListener("click",openNewCustomer);
     byId("dashboardNewCustomerButton").addEventListener("click",openNewCustomer);
     byId("dashboardQuickNewCustomerButton").addEventListener("click",openNewCustomer);
@@ -727,14 +1014,31 @@
       if(route){routeTo(route.dataset.v2Route);return;}
       const preset=event.target.closest("[data-filter-preset]");
       if(preset){applyPreset(preset.dataset.filterPreset);return;}
+      const editAction=event.target.closest("[data-customer-edit-action]");
+      if(editAction){
+        const action=editAction.dataset.customerEditAction;
+        const customer=customerById(state.selectedCustomerId);
+        if(action==="edit"&&customer)startCustomerEdit(customer);
+        if(action==="cancel")cancelCustomerEdit();
+        return;
+      }
+      const classic=event.target.closest("[data-classic-editor]");
+      if(classic){event.preventDefault();openClassicEditor(classic.dataset.classicEditor);return;}
       if(event.target.closest("a"))return;
       const open=event.target.closest("[data-open-editor]");
       if(open){openCustomerDetail(open.dataset.openEditor);return;}
       const tab=event.target.closest("[data-detail-tab]");
       if(tab&&state.selectedCustomerId){routeTo(`customers/${encodeURIComponent(state.selectedCustomerId)}/${tab.dataset.detailTab}`);return;}
       if(event.target.closest("[data-new-customer]"))openNewCustomer();
-      if(event.target.id==="retryInlineButton")loadCustomers();
-      if(event.target.id==="retryDetailButton")loadCustomers();
+      if(event.target.id==="retryInlineButton"&&confirmDiscardCustomerEdit())loadCustomers();
+      if(event.target.id==="retryDetailButton"&&confirmDiscardCustomerEdit())loadCustomers();
+    });
+    document.addEventListener("input",handleCustomerEditInput);
+    document.addEventListener("submit",event=>{
+      if(event.target.id==="customerEditForm"){
+        event.preventDefault();
+        saveCustomerEdit();
+      }
     });
     document.addEventListener("keydown",event=>{
       if((event.key==="Enter"||event.key===" ")&&event.target.matches("[data-open-editor]")){
@@ -748,7 +1052,14 @@
     byId("publicationFilter").addEventListener("change",event=>{state.publication=event.target.value;renderCustomers();});
     byId("regionFilter").addEventListener("change",event=>{state.region=event.target.value;renderCustomers();});
     byId("sortSelect").addEventListener("change",event=>{state.sort=event.target.value;renderCustomers();});
-    window.addEventListener("popstate",()=>routeTo(location.hash||"#dashboard",{replace:true}));
+    window.addEventListener("popstate",()=>{
+      if(!routeTo(location.hash||"#dashboard",{replace:true}))history.pushState({route:state.route},"",currentRouteHash());
+    });
+    window.addEventListener("beforeunload",event=>{
+      if(!hasDirtyCustomerEdit())return;
+      event.preventDefault();
+      event.returnValue="";
+    });
   }
 
   function init(){

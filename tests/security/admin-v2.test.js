@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=4/);
-    assert.match(html,/admin-v2\.js\?v=6/);
+    assert.match(html,/admin-v2\.css\?v=5/);
+    assert.match(html,/admin-v2\.js\?v=7/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
   });
 
@@ -86,7 +86,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function openCustomerDetail\(id\)/);
     assert.match(js,/routeTo\(`customers\/\$\{encodeURIComponent\(id\)\}\/kunde`\)/);
     assert.match(js,/data-open-editor="\$\{escapeHtml\(customer\.customerId\)\}"/);
-    assert.match(js,/window\.addEventListener\("popstate",\(\)=>routeTo\(location\.hash\|\|"#dashboard",\{replace:true\}\)\)/);
+    assert.match(js,/window\.addEventListener\("popstate",\(\)=>\{/);
+    assert.match(js,/if\(!routeTo\(location\.hash\|\|"#dashboard",\{replace:true\}\)\)history\.pushState\(\{route:state\.route\},"",currentRouteHash\(\)\)/);
   });
 
   it("renders customer tab from loaded customer data without mock data or inputs",()=>{
@@ -102,8 +103,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/aria-selected="\$\{key===tab\?"true":"false"\}"/);
     assert.match(js,/Dieser Bereich wird in einem folgenden Auftrag angebunden\./);
     assert.doesNotMatch(js,/Familie Mueller|Familie Rossi|Herr Schneider|mockCustomers|Mock-Daten/i);
-    assert.doesNotMatch(js,/customerDetailRoot[\s\S]*<input/i);
-    assert.doesNotMatch(js,/save-button|Save-Button|Speichern<\/button>/i);
+    assert.match(js,/data-customer-edit-action="edit">Bearbeiten/);
   });
 
   it("handles invalid customer ids and keeps the classic edit fallback",()=>{
@@ -116,15 +116,55 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/Zur Kundenuebersicht/);
   });
 
-  it("keeps creation in classic admin and does not introduce write flows in admin v2",()=>{
+  it("uses the existing draft save facade without direct Firestore, upload, publish or share flows",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     assert.match(js,/admin\.html\?newCustomer=1#master-data/);
-    assert.doesNotMatch(js,/saveDraftCustomer\(/);
-    assert.doesNotMatch(js,/publishCustomer\(/);
+    assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
+    assert.match(js,/function mergeCustomerEdit\(customer,values\)/);
+    assert.match(js,/const next=clone\(customer\)/);
+    assert.match(js,/updateLocalCustomer\(fullCustomer\)/);
+    assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
+    assert.doesNotMatch(js,/\.publishCustomer\(/);
     assert.doesNotMatch(js,/uploadCustomerDocument\(/);
     assert.doesNotMatch(js,/createPortalShare\(/);
     assert.doesNotMatch(js,/revokePortalShare\(/);
-    assert.doesNotMatch(js,/saveDraftCustomer:|publishCustomer:/);
+  });
+
+  it("supports controlled customer edit mode, cancel, dirty warning and validation",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/customerEditMode:false/);
+    assert.match(js,/customerEditDraft:null/);
+    assert.match(js,/function startCustomerEdit\(customer\)/);
+    assert.match(js,/function cancelCustomerEdit\(\)/);
+    assert.match(js,/function hasDirtyCustomerEdit\(\)/);
+    assert.match(js,/function confirmDiscardCustomerEdit\(\)/);
+    assert.match(js,/Ungespeicherte Aenderungen verwerfen\?/);
+    assert.match(js,/function validateCustomerEdit\(draft\)/);
+    assert.match(js,/errors\.customerName="Bitte einen Kundennamen eingeben\."/);
+    assert.match(js,/Bitte eine gueltige E-Mail-Adresse eingeben\./);
+    assert.match(js,/aria-invalid="\$\{error\?"true":"false"\}"/);
+    assert.match(js,/data-customer-edit-action="save"/);
+    assert.match(js,/data-customer-edit-action="cancel"/);
+  });
+
+  it("preserves non-customer data by merging edits into the full customer object",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/const fullCustomer=mergeCustomerEdit\(customer,validation\.values\)/);
+    assert.match(js,/next\.customerName=values\.customerName/);
+    assert.match(js,/next\.contact=\{/);
+    assert.match(js,/next\.updatedAt=new Date\(\)\.toLocaleDateString\("de-DE"\)/);
+    assert.doesNotMatch(js,/next\.program=\[\]|next\.documents=\[\]|next\.publishedSnapshot=null|next\.publishMeta=\{\}/);
+  });
+
+  it("keeps mobile customer edit form usable at narrow widths",()=>{
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(css,/\.v2-edit-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+    assert.match(css,/\.v2-edit-field input,\.v2-edit-field textarea\{[^}]*font-size:16px/);
+    assert.match(css,/\.v2-edit-actions\{position:sticky/);
+    assert.match(css,/@media \(max-width:820px\)/);
+    assert.match(css,/\.v2-edit-grid\{grid-template-columns:1fr\}/);
+    assert.match(css,/\.v2-edit-actions \.v2-button\{width:100%\}/);
+    assert.match(css,/min-height:48px/);
   });
 
   it("provides search, filter, sorting, empty and retry states",()=>{

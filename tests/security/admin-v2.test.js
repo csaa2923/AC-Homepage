@@ -35,6 +35,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/admin-v2\.css\?v=6/);
     assert.match(html,/admin-v2\.js\?v=7/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
+    assert.doesNotMatch(html,/data-icon="[DKCAS]"/);
+    assert.match(html,/data-v2-route="dashboard" data-icon="⌂"/);
+    assert.match(html,/data-v2-route="settings" data-icon="⚙"/);
   });
 
   it("keeps dashboard as cockpit and customer cards in the customer view only",()=>{

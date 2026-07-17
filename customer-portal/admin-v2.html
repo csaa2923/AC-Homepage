@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=6">
+<link rel="stylesheet" href="admin-v2.css?v=7">
 </head>
 <body>
 <main>
@@ -39,11 +39,26 @@
         <span>ACT 2.0</span>
       </button>
       <nav class="v2-nav">
-        <button class="v2-nav-item active" type="button" data-v2-route="dashboard" data-icon="D">Dashboard</button>
-        <button class="v2-nav-item" type="button" data-v2-route="customers" data-icon="K">Kunden</button>
-        <button class="v2-nav-item" type="button" data-v2-route="calendar" data-icon="C">Kalender</button>
-        <button class="v2-nav-item" type="button" data-v2-route="documents" data-icon="A">Dokumente</button>
-        <button class="v2-nav-item" type="button" data-v2-route="settings" data-icon="S">Einstellungen</button>
+        <button class="v2-nav-item active" type="button" data-v2-route="dashboard">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="v2-nav-item" type="button" data-v2-route="customers">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19"/><path d="M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/><path d="M20 19v-1.2a3 3 0 0 0-2.2-2.9"/><path d="M16 5.3a3 3 0 0 1 0 5.4"/></svg>
+          <span>Kunden</span>
+        </button>
+        <button class="v2-nav-item" type="button" data-v2-route="calendar">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
+          <span>Kalender</span>
+        </button>
+        <button class="v2-nav-item" type="button" data-v2-route="documents">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v6h5M9 14h6M9 18h6"/></svg>
+          <span>Dokumente</span>
+        </button>
+        <button class="v2-nav-item" type="button" data-v2-route="settings">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a8 8 0 0 0 .1-2l2-1.5-2-3.5-2.4 1a8 8 0 0 0-1.7-1L15 5.5h-6L8.6 8a8 8 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a8 8 0 0 0 .1 2l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 1.7 1l.4 2.5h6l.4-2.5a8 8 0 0 0 1.7-1l2.4 1 2-3.5z"/></svg>
+          <span>Einstellungen</span>
+        </button>
       </nav>
       <button class="v2-create" type="button" id="newCustomerButton">Neuer Kunde</button>
       <a class="v2-classic-link" href="admin.html">Klassischer Admin</a>
@@ -199,6 +214,6 @@
 <script src="firebase-service.js?v=19"></script>
 <script src="firebase-auth.js?v=3"></script>
 <script src="firebase-database.js"></script>
-<script src="admin-v2.js?v=7"></script>
+<script src="admin-v2.js?v=8"></script>
 </body>
 </html>

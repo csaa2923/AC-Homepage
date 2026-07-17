@@ -32,9 +32,11 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=6/);
-    assert.match(html,/admin-v2\.js\?v=7/);
+    assert.match(html,/admin-v2\.css\?v=7/);
+    assert.match(html,/admin-v2\.js\?v=8/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
+    assert.doesNotMatch(html,/data-icon=/);
+    assert.match(html,/class="v2-nav-icon"/);
   });
 
   it("keeps dashboard as cockpit and customer cards in the customer view only",()=>{
@@ -44,6 +46,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="todayList"/);
     assert.match(html,/id="activityList"/);
     assert.match(html,/class="v2-quick-grid"/);
+    assert.match(js,/icon:"users"/);
+    assert.match(js,/class="v2-card-icon \$\{escapeHtml\(item\.icon\)\}"/);
+    assert.match(css,/\.v2-metric-copy\{position:relative;z-index:1;display:grid/);
+    assert.match(css,/\.v2-card-icon\.check::after/);
     assert.match(html,/id="customerGrid"/);
     assert.match(js,/Heute Anreisen/);
     assert.match(js,/Heute Abreisen/);
@@ -176,6 +182,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-brand,\.v2-create,\.v2-classic-link\{display:none\}/);
     assert.match(css,/\.v2-nav\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\);gap:6px;overflow:visible\}/);
     assert.match(css,/\.v2-nav-item\{white-space:normal;min-height:54px/);
+    assert.match(css,/\.v2-nav-icon\{width:24px;height:24px/);
     assert.match(css,/bottom:calc\(12px \+ var\(--mobile-safe-bottom\)\)/);
     assert.match(css,/padding-bottom:calc\(var\(--mobile-nav-height\) \+ var\(--mobile-nav-gap\) \+ var\(--mobile-safe-bottom\) \+ 32px\)/);
     assert.match(css,/bottom:calc\(var\(--mobile-nav-height\) \+ var\(--mobile-nav-gap\) \+ var\(--mobile-safe-bottom\)\)/);

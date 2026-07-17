@@ -642,18 +642,20 @@
   function renderMetrics(){
     const data=stats();
     const metrics=[
-      {label:"Kunden gesamt",value:data.total,preset:"all",tone:"blue",icon:"K"},
-      {label:"Aktive Reisen",value:data.active,preset:"active",tone:"green",icon:"A"},
-      {label:"Entwuerfe",value:data.drafts,preset:"draft",tone:"amber",icon:"E"},
-      {label:"Veroeffentlicht",value:data.published,preset:"published",tone:"green",icon:"V"},
-      {label:"Heute Anreisen",value:data.arrivals,preset:"arrivals",tone:"rose",icon:"IN"},
-      {label:"Heute Abreisen",value:data.departures,preset:"departures",tone:"blue",icon:"OUT"}
+      {label:"Kunden gesamt",value:data.total,preset:"all",tone:"blue",icon:"users"},
+      {label:"Aktive Reisen",value:data.active,preset:"active",tone:"green",icon:"map"},
+      {label:"Entwuerfe",value:data.drafts,preset:"draft",tone:"amber",icon:"edit"},
+      {label:"Veroeffentlicht",value:data.published,preset:"published",tone:"green",icon:"check"},
+      {label:"Heute Anreisen",value:data.arrivals,preset:"arrivals",tone:"rose",icon:"arrival"},
+      {label:"Heute Abreisen",value:data.departures,preset:"departures",tone:"blue",icon:"departure"}
     ];
     byId("metricGrid").innerHTML=metrics.map(item=>`
       <button class="v2-card v2-metric ${item.tone}" type="button" data-filter-preset="${item.preset}">
-        <span class="v2-card-icon">${escapeHtml(item.icon)}</span>
-        <strong>${item.value}</strong>
-        <span>${escapeHtml(item.label)}</span>
+        <span class="v2-card-icon ${escapeHtml(item.icon)}" aria-hidden="true"></span>
+        <span class="v2-metric-copy">
+          <strong>${item.value}</strong>
+          <span>${escapeHtml(item.label)}</span>
+        </span>
       </button>
     `).join("");
   }

@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=3/);
-    assert.match(html,/admin-v2\.js\?v=5/);
+    assert.match(html,/admin-v2\.css\?v=4/);
+    assert.match(html,/admin-v2\.js\?v=6/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
   });
 
@@ -75,12 +75,55 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(authJs,/auth\/operation-timeout/);
   });
 
-  it("keeps customer editing and creation in the classic admin workflow",()=>{
+  it("opens customer cards in a read-only v2 detail route",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
-    assert.match(js,/admin\.html\?editCustomer=\$\{encodeURIComponent\(id\)\}#master-data/);
+    const html=readProjectFile("customer-portal/admin-v2.html");
+    assert.match(html,/id="customerDetailView"/);
+    assert.match(html,/id="customerDetailRoot"/);
+    assert.match(js,/function parseRoute\(hashValue\)/);
+    assert.match(js,/route:"customerDetail"/);
+    assert.match(js,/function detailHash\(id,tab="kunde"\)/);
+    assert.match(js,/function openCustomerDetail\(id\)/);
+    assert.match(js,/routeTo\(`customers\/\$\{encodeURIComponent\(id\)\}\/kunde`\)/);
+    assert.match(js,/data-open-editor="\$\{escapeHtml\(customer\.customerId\)\}"/);
+    assert.match(js,/window\.addEventListener\("popstate",\(\)=>routeTo\(location\.hash\|\|"#dashboard",\{replace:true\}\)\)/);
+  });
+
+  it("renders customer tab from loaded customer data without mock data or inputs",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/function renderCustomerDetail\(\)/);
+    assert.match(js,/const customer=customerById\(state\.selectedCustomerId\)/);
+    assert.match(js,/function customerTabMarkup\(customer\)/);
+    assert.match(js,/Kundenname/);
+    assert.match(js,/Begleitpersonen/);
+    assert.match(js,/Telefonnummer/);
+    assert.match(js,/Anforderungen \/ Wuensche/);
+    assert.match(js,/role="tablist"/);
+    assert.match(js,/aria-selected="\$\{key===tab\?"true":"false"\}"/);
+    assert.match(js,/Dieser Bereich wird in einem folgenden Auftrag angebunden\./);
+    assert.doesNotMatch(js,/Familie Mueller|Familie Rossi|Herr Schneider|mockCustomers|Mock-Daten/i);
+    assert.doesNotMatch(js,/customerDetailRoot[\s\S]*<input/i);
+    assert.doesNotMatch(js,/save-button|Save-Button|Speichern<\/button>/i);
+  });
+
+  it("handles invalid customer ids and keeps the classic edit fallback",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/const CUSTOMER_NOT_FOUND_ERROR="Der ausgewaehlte Kunde konnte nicht gefunden werden\."/);
+    assert.match(js,/CUSTOMER_NOT_FOUND_ERROR/);
+    assert.match(js,/function classicEditorUrl\(id\)/);
+    assert.match(js,/admin\.html\?editCustomer=\$\{encodeURIComponent\(id\|\|""\)\}#master-data/);
+    assert.match(js,/Im klassischen Admin bearbeiten/);
+    assert.match(js,/Zur Kundenuebersicht/);
+  });
+
+  it("keeps creation in classic admin and does not introduce write flows in admin v2",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
     assert.match(js,/admin\.html\?newCustomer=1#master-data/);
     assert.doesNotMatch(js,/saveDraftCustomer\(/);
     assert.doesNotMatch(js,/publishCustomer\(/);
+    assert.doesNotMatch(js,/uploadCustomerDocument\(/);
+    assert.doesNotMatch(js,/createPortalShare\(/);
+    assert.doesNotMatch(js,/revokePortalShare\(/);
     assert.doesNotMatch(js,/saveDraftCustomer:|publishCustomer:/);
   });
 

@@ -8,7 +8,9 @@
     status:"",
     publication:"",
     region:"",
-    sort:"arrival"
+    sort:"arrival",
+    selectedCustomerId:"",
+    selectedTab:"kunde"
   };
 
   const byId=id=>document.getElementById(id);
@@ -16,6 +18,15 @@
   const AUTH_TIMEOUT_MS=15000;
   const TECHNICAL_LOGIN_ERROR="Die Anmeldung konnte nicht abgeschlossen werden. Bitte erneut versuchen.";
   const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung für den Adminbereich.";
+  const CUSTOMER_NOT_FOUND_ERROR="Der ausgewaehlte Kunde konnte nicht gefunden werden.";
+  const detailTabs=[
+    ["kunde","Kunde"],
+    ["reise","Reise"],
+    ["programm","Programm"],
+    ["dokumente","Dokumente"],
+    ["kommunikation","Kommunikation"],
+    ["veroeffentlichung","Veroeffentlichung"]
+  ];
   let activeLoginAttempt=0;
 
   function escapeHtml(value){
@@ -133,6 +144,42 @@
 
   function badge(value){
     return `<span class="v2-badge ${badgeClass(value)}">${escapeHtml(value||"Nicht verfügbar")}</span>`;
+  }
+
+  function displayValue(value,fallback="Nicht hinterlegt"){
+    const text=Array.isArray(value)?value.filter(Boolean).join(", "):String(value??"").trim();
+    return text||fallback;
+  }
+
+  function customerById(id){
+    return state.customers.find(customer=>String(customer.customerId||"")===String(id||""))||null;
+  }
+
+  function classicEditorUrl(id){
+    return `admin.html?editCustomer=${encodeURIComponent(id||"")}#master-data`;
+  }
+
+  function detailHash(id,tab="kunde"){
+    const safeTab=detailTabs.some(([key])=>key===tab)?tab:"kunde";
+    return `#customers/${encodeURIComponent(id||"")}/${safeTab}`;
+  }
+
+  function parseRoute(hashValue){
+    const raw=String(hashValue||"").replace(/^#/,"").replace(/^\/+/,"")||"dashboard";
+    const parts=raw.split("/").filter(Boolean);
+    const main=parts[0]||"dashboard";
+    if(["dashboard","customers","calendar","documents","settings"].includes(main)&&parts.length===1){
+      return {route:main,customerId:"",tab:""};
+    }
+    if(main==="customers"&&parts[1]){
+      const tab=parts[2]||"kunde";
+      return {
+        route:"customerDetail",
+        customerId:decodeURIComponent(parts[1]),
+        tab:detailTabs.some(([key])=>key===tab)?tab:"kunde"
+      };
+    }
+    return {route:"dashboard",customerId:"",tab:""};
   }
 
   function setStatus(message,isError){
@@ -315,6 +362,8 @@
     byId("todayList").innerHTML=`<article class="v2-card v2-skeleton"></article>`;
     byId("activityList").innerHTML=`<article class="v2-card v2-skeleton"></article>`;
     byId("customerGrid").innerHTML=[1,2,3].map(()=>`<article class="v2-card v2-skeleton"></article>`).join("");
+    const detailRoot=byId("customerDetailRoot");
+    if(detailRoot)detailRoot.innerHTML=`<article class="v2-card v2-skeleton"></article>`;
   }
 
   function stats(){
@@ -486,11 +535,120 @@
           </div>
           <div class="v2-actions">
             <span class="v2-button soft">Kunde oeffnen</span>
-            <a class="v2-button soft" href="admin.html#customers">Alter Admin</a>
+            <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Alter Admin</a>
           </div>
         </div>
       </article>
     `).join("");
+  }
+
+  function renderCustomerDetail(){
+    const root=byId("customerDetailRoot");
+    if(!root)return;
+    if(state.loading){
+      root.innerHTML=`<article class="v2-card v2-skeleton"></article>`;
+      return;
+    }
+    if(state.error){
+      root.innerHTML=`
+        <article class="v2-empty">
+          <h2>Kundendaten konnten nicht geladen werden</h2>
+          <p>${escapeHtml(state.error)}</p>
+          <div class="v2-detail-actions">
+            <button class="v2-button soft" type="button" id="retryDetailButton">Erneut versuchen</button>
+            <button class="v2-button soft" type="button" data-v2-route="customers">Zur Kundenuebersicht</button>
+          </div>
+        </article>
+      `;
+      return;
+    }
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer){
+      root.innerHTML=`
+        <article class="v2-empty">
+          <h2>${CUSTOMER_NOT_FOUND_ERROR}</h2>
+          <p>Bitte kehren Sie zur Kundenuebersicht zurueck und oeffnen Sie den Kunden erneut.</p>
+          <button class="v2-button soft" type="button" data-v2-route="customers">Zur Kundenuebersicht</button>
+        </article>
+      `;
+      return;
+    }
+    const tab=detailTabs.some(([key])=>key===state.selectedTab)?state.selectedTab:"kunde";
+    root.innerHTML=`
+      <header class="v2-detail-head">
+        <div class="v2-detail-actions">
+          <button class="v2-button soft" type="button" data-v2-route="customers">Zur Kundenuebersicht</button>
+          <a class="v2-button primary" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a>
+        </div>
+        <div class="v2-detail-title">
+          <p class="v2-eyebrow">Kundendetail</p>
+          <h2>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</h2>
+          <p>${escapeHtml(displayValue(customer.tripName||customer.tripTitle,"Kein Reisetitel"))}</p>
+          <div class="v2-meta">${badge(customer.status||"Status nicht hinterlegt")}${badge(publicationState(customer))}</div>
+        </div>
+        <div class="v2-detail-summary" aria-label="Kundenzusammenfassung">
+          ${summaryItem("Region",displayValue(customer.region,"Keine Region"))}
+          ${summaryItem("Reisezeitraum",displayValue(formatPeriod(customer),"Kein Reisezeitraum"))}
+          ${summaryItem("Letzte Aenderung",timestampValue(customer)?formatDate(new Date(timestampValue(customer)).toISOString()):displayValue(customer.updatedAt))}
+          ${summaryItem("Kunden-ID",customer.customerId||"Nicht hinterlegt","v2-technical-id")}
+        </div>
+      </header>
+      <div class="v2-detail-tabs" role="tablist" aria-label="Kundendetailbereiche">
+        ${detailTabs.map(([key,label])=>`
+          <button class="v2-tab" type="button" role="tab" id="tab-${key}" aria-selected="${key===tab?"true":"false"}" aria-controls="panel-${key}" data-detail-tab="${key}">
+            ${escapeHtml(label)}
+          </button>
+        `).join("")}
+      </div>
+      <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
+        ${tab==="kunde"?customerTabMarkup(customer):placeholderTabMarkup()}
+      </section>
+    `;
+  }
+
+  function summaryItem(label,value,className=""){
+    return `<div class="v2-summary-item"><span>${escapeHtml(label)}</span><strong class="${className}">${escapeHtml(value)}</strong></div>`;
+  }
+
+  function fieldItem(label,value,{full=false,technical=false}={}){
+    return `<div class="v2-read-field ${full?"full":""}"><span>${escapeHtml(label)}</span><strong class="${technical?"v2-technical-id":""}">${escapeHtml(displayValue(value))}</strong></div>`;
+  }
+
+  function listFieldItem(label,values){
+    const list=Array.isArray(values)?values.filter(Boolean):String(values||"").split(",").map(item=>item.trim()).filter(Boolean);
+    return `<div class="v2-read-field full"><span>${escapeHtml(label)}</span><div class="v2-read-list">${list.length?list.map(item=>badge(item)).join(""):`<strong>${escapeHtml("Nicht hinterlegt")}</strong>`}</div></div>`;
+  }
+
+  function customerTabMarkup(customer){
+    const contact=customer.contact&&typeof customer.contact==="object"?customer.contact:{};
+    return `
+      <div class="v2-read-grid">
+        <article class="v2-read-card">
+          <h3>Kundendaten</h3>
+          <div class="v2-read-fields">
+            ${fieldItem("Kundenname",customer.customerName)}
+            ${fieldItem("Begleitpersonen",customer.companions)}
+            ${fieldItem("Sprache",customer.language)}
+            ${fieldItem("Concierge",customer.concierge||customer.conciergeName)}
+            ${listFieldItem("Anforderungen / Wuensche",customer.requirements)}
+            ${fieldItem("Interne Kunden-ID",customer.customerId,{full:true,technical:true})}
+          </div>
+        </article>
+        <article class="v2-read-card">
+          <h3>Kontakt</h3>
+          <div class="v2-read-fields">
+            ${fieldItem("Telefonnummer",customer.phone||contact.phone)}
+            ${fieldItem("E-Mail",customer.email||contact.email)}
+            ${fieldItem("WhatsApp",customer.whatsapp||customer.whatsappLink||contact.whatsapp,{full:true})}
+            ${fieldItem("Kontaktinformationen",contact.name||contact.primary||contact.note,{full:true})}
+          </div>
+        </article>
+      </div>
+    `;
+  }
+
+  function placeholderTabMarkup(){
+    return `<article class="v2-placeholder"><h3>Bereich noch nicht angebunden</h3><p>Dieser Bereich wird in einem folgenden Auftrag angebunden.</p></article>`;
   }
 
   function render(){
@@ -498,17 +656,26 @@
     renderMetrics();
     renderDashboardLists();
     renderCustomers();
+    renderCustomerDetail();
   }
 
   function routeTo(route,{replace=false}={}){
-    const valid=["dashboard","customers","calendar","documents","settings"].includes(route)?route:"dashboard";
-    state.route=valid;
-    all(".v2-view").forEach(view=>view.classList.toggle("active",view.id===`${valid}View`));
-    all("[data-v2-route]").forEach(button=>button.classList.toggle("active",button.dataset.v2Route===valid));
-    byId("pageTitle").textContent=byId(`${valid}View`)?.dataset.title||"Dashboard";
-    const hash=`#${valid}`;
-    if(replace)history.replaceState({route:valid},"",hash);
-    else if(location.hash!==hash)history.pushState({route:valid},"",hash);
+    const parsed=parseRoute(route.startsWith("#")?route:`#${route}`);
+    state.route=parsed.route;
+    state.selectedCustomerId=parsed.customerId||"";
+    state.selectedTab=parsed.tab||"kunde";
+    const viewId=parsed.route==="customerDetail"?"customerDetailView":`${parsed.route}View`;
+    all(".v2-view").forEach(view=>view.classList.toggle("active",view.id===viewId));
+    all("[data-v2-route]").forEach(button=>{
+      const active=parsed.route==="customerDetail"?button.dataset.v2Route==="customers":button.dataset.v2Route===parsed.route;
+      button.classList.toggle("active",active);
+    });
+    const title=parsed.route==="customerDetail"?"Kundendetail":byId(viewId)?.dataset.title||"Dashboard";
+    byId("pageTitle").textContent=title;
+    const hash=parsed.route==="customerDetail"?detailHash(parsed.customerId,parsed.tab):`#${parsed.route}`;
+    if(replace)history.replaceState({route:parsed.route},"",hash);
+    else if(location.hash!==hash)history.pushState({route:parsed.route},"",hash);
+    render();
   }
 
   function resetFilters(){
@@ -528,9 +695,9 @@
     renderCustomers();
   }
 
-  function openCustomerEditor(id){
+  function openCustomerDetail(id){
     if(!id)return;
-    window.location.href=`admin.html?editCustomer=${encodeURIComponent(id)}#master-data`;
+    routeTo(`customers/${encodeURIComponent(id)}/kunde`);
   }
 
   function openNewCustomer(){
@@ -562,14 +729,17 @@
       if(preset){applyPreset(preset.dataset.filterPreset);return;}
       if(event.target.closest("a"))return;
       const open=event.target.closest("[data-open-editor]");
-      if(open){openCustomerEditor(open.dataset.openEditor);return;}
+      if(open){openCustomerDetail(open.dataset.openEditor);return;}
+      const tab=event.target.closest("[data-detail-tab]");
+      if(tab&&state.selectedCustomerId){routeTo(`customers/${encodeURIComponent(state.selectedCustomerId)}/${tab.dataset.detailTab}`);return;}
       if(event.target.closest("[data-new-customer]"))openNewCustomer();
       if(event.target.id==="retryInlineButton")loadCustomers();
+      if(event.target.id==="retryDetailButton")loadCustomers();
     });
     document.addEventListener("keydown",event=>{
       if((event.key==="Enter"||event.key===" ")&&event.target.matches("[data-open-editor]")){
         event.preventDefault();
-        openCustomerEditor(event.target.dataset.openEditor);
+        openCustomerDetail(event.target.dataset.openEditor);
       }
     });
     byId("globalSearchInput").addEventListener("input",event=>{state.query=event.target.value;routeTo("customers");renderCustomers();});
@@ -578,16 +748,16 @@
     byId("publicationFilter").addEventListener("change",event=>{state.publication=event.target.value;renderCustomers();});
     byId("regionFilter").addEventListener("change",event=>{state.region=event.target.value;renderCustomers();});
     byId("sortSelect").addEventListener("change",event=>{state.sort=event.target.value;renderCustomers();});
-    window.addEventListener("popstate",()=>routeTo(location.hash.replace("#","")||"dashboard",{replace:true}));
+    window.addEventListener("popstate",()=>routeTo(location.hash||"#dashboard",{replace:true}));
   }
 
   function init(){
     bind();
-    routeTo(location.hash.replace("#","")||"dashboard",{replace:true});
+    routeTo(location.hash||"#dashboard",{replace:true});
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

@@ -183,16 +183,28 @@ p{color:var(--muted);line-height:1.55}
   .v2-profile strong{max-width:100%}
   .v2-dashboard-hero{align-items:flex-start;flex-direction:column}
   .v2-dashboard-actions{width:100%;justify-content:flex-start}
-  .v2-hero,.v2-filterbar,.v2-customer-grid,.v2-content-grid,.v2-dashboard-grid,.v2-metric-grid,.v2-detail-summary,.v2-read-grid,.v2-read-fields,.v2-edit-grid{grid-template-columns:1fr}
+  .v2-hero,.v2-filterbar,.v2-customer-grid,.v2-content-grid,.v2-dashboard-grid,.v2-detail-summary,.v2-read-grid,.v2-read-fields,.v2-edit-grid{grid-template-columns:1fr}
+  .v2-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .v2-detail-head{padding:18px}
   .v2-detail-actions .v2-button{width:100%}
   .v2-detail-tabs{margin-left:-2px;margin-right:-2px}
   .v2-tab-actions,.v2-edit-head{align-items:stretch;flex-direction:column}
   .v2-edit-actions{bottom:calc(var(--mobile-nav-height) + var(--mobile-nav-gap) + var(--mobile-safe-bottom));display:grid;grid-template-columns:1fr;max-width:100%}
   .v2-edit-actions .v2-button{width:100%}
-  .v2-metric{min-height:122px}
+  .v2-metric{min-height:112px;padding:14px}
+  .v2-metric strong{font-size:34px}
+  .v2-metric-copy{font-size:14px}
   h1{font-size:28px}
   h2{font-size:26px}
+}
+
+@media (max-width:360px){
+  .v2-metric-grid{gap:8px}
+  .v2-metric{min-height:104px;padding:12px}
+  .v2-metric::after{width:44px;height:44px}
+  .v2-card-icon{width:34px;height:34px;border-radius:13px}
+  .v2-metric strong{font-size:30px}
+  .v2-metric-copy{font-size:13px}
 }
 
 @media (max-width:820px) and (orientation:landscape){

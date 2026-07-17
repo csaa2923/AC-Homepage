@@ -167,6 +167,18 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/min-height:48px/);
   });
 
+  it("protects mobile content from bottom navigation and safe-area overlap",()=>{
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(css,/--mobile-nav-height:0px/);
+    assert.match(css,/--mobile-safe-bottom:env\(safe-area-inset-bottom,0px\)/);
+    assert.match(css,/:root\{--mobile-nav-height:76px;--mobile-nav-gap:20px\}/);
+    assert.match(css,/html,body\{min-width:320px;overflow-x:hidden\}/);
+    assert.match(css,/bottom:calc\(12px \+ var\(--mobile-safe-bottom\)\)/);
+    assert.match(css,/padding-bottom:calc\(var\(--mobile-nav-height\) \+ var\(--mobile-nav-gap\) \+ var\(--mobile-safe-bottom\) \+ 32px\)/);
+    assert.match(css,/bottom:calc\(var\(--mobile-nav-height\) \+ var\(--mobile-nav-gap\) \+ var\(--mobile-safe-bottom\)\)/);
+    assert.match(css,/@media \(max-width:820px\) and \(orientation:landscape\)/);
+  });
+
   it("provides search, filter, sorting, empty and retry states",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");

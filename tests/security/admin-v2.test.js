@@ -32,7 +32,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=5/);
+    assert.match(html,/admin-v2\.css\?v=6/);
     assert.match(html,/admin-v2\.js\?v=7/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
   });
@@ -171,8 +171,11 @@ describe("admin v2 dashboard and customer overview",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     assert.match(css,/--mobile-nav-height:0px/);
     assert.match(css,/--mobile-safe-bottom:env\(safe-area-inset-bottom,0px\)/);
-    assert.match(css,/:root\{--mobile-nav-height:76px;--mobile-nav-gap:20px\}/);
+    assert.match(css,/:root\{--mobile-nav-height:136px;--mobile-nav-gap:20px\}/);
     assert.match(css,/html,body\{min-width:320px;overflow-x:hidden\}/);
+    assert.match(css,/\.v2-brand,\.v2-create,\.v2-classic-link\{display:none\}/);
+    assert.match(css,/\.v2-nav\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\);gap:6px;overflow:visible\}/);
+    assert.match(css,/\.v2-nav-item\{white-space:normal;min-height:54px/);
     assert.match(css,/bottom:calc\(12px \+ var\(--mobile-safe-bottom\)\)/);
     assert.match(css,/padding-bottom:calc\(var\(--mobile-nav-height\) \+ var\(--mobile-nav-gap\) \+ var\(--mobile-safe-bottom\) \+ 32px\)/);
     assert.match(css,/bottom:calc\(var\(--mobile-nav-height\) \+ var\(--mobile-nav-gap\) \+ var\(--mobile-safe-bottom\)\)/);

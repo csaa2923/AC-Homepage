@@ -1,5 +1,6 @@
 const $=(selector,root=document)=>root.querySelector(selector);
 const $all=(selector,root=document)=>[...root.querySelectorAll(selector)];
+const tripToneClasses=["green","blue","violet","amber","petrol","terra","sage","rose"];
 
 const state={
   route:"dashboard",
@@ -131,6 +132,18 @@ function selectedCustomer(){
 
 function escapeHtml(value){
   return String(value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
+}
+
+function stableHash(value){
+  return String(value||"").split("").reduce((hash,char)=>((hash<<5)-hash)+char.charCodeAt(0),0);
+}
+
+function tripTone(customer,tripId=""){
+  const key=[customer?.id,tripId||customer?.trip||customer?.dates].filter(Boolean).join(":");
+  const customerIndex=state.customers.findIndex(item=>item.id===customer?.id);
+  if(customerIndex>=0&&!tripId)return tripToneClasses[customerIndex%tripToneClasses.length];
+  const baseIndex=customerIndex>=0?customerIndex:0;
+  return tripToneClasses[(baseIndex+Math.abs(stableHash(key)))%tripToneClasses.length];
 }
 
 function badgeClass(value){
@@ -363,7 +376,7 @@ function renderCalendar(){
     const tripGroups=state.calendarTrips.filter(group=>group.dayOffset<=index);
     const events=tripGroups.flatMap(group=>{
       const customer=state.customers.find(item=>item.id===group.customerId)||state.customers[0];
-      return group.program.map(item=>({...item,customer}));
+      return group.program.map(item=>({...item,customer,tripTone:tripTone(customer,group.tripId)}));
     });
     return `
     <section class="calendar-day">
@@ -377,14 +390,19 @@ function renderCalendar(){
       <div class="calendar-trip-strip" aria-label="Reisen an diesem Tag">
         ${tripGroups.map(group=>{
           const customer=state.customers.find(item=>item.id===group.customerId)||state.customers[0];
-          return `<span>${escapeHtml(customer.name)}<small>${escapeHtml(customer.trip)}</small></span>`;
+          return `<span class="trip-tone-${tripTone(customer,group.tripId)}"><i aria-hidden="true"></i>${escapeHtml(customer.name)}</span>`;
         }).join("")}
       </div>
-      ${events.map(item=>`<button class="calendar-event action-card" type="button" data-program-id="${item.id}" data-action="open-program-from-calendar">
-        <span class="calendar-trip-badge">${escapeHtml(item.customer.name)} · ${escapeHtml(item.customer.trip)}</span>
-        <strong>${escapeHtml(item.time)} ${escapeHtml(item.title)}</strong>
-        <p>${escapeHtml(item.meta)} · ${escapeHtml(item.customer.region)}</p>
-        <em>${escapeHtml(item.status)}</em>
+      ${events.map(item=>`<button class="calendar-event action-card trip-tone-${escapeHtml(item.tripTone)}" type="button" data-program-id="${item.id}" data-action="open-program-from-calendar">
+        <span class="calendar-trip-context">
+          <strong><i aria-hidden="true"></i>${escapeHtml(item.customer.name)}</strong>
+          <small>${escapeHtml(item.customer.trip)} · ${escapeHtml(item.customer.region)}</small>
+        </span>
+        <span class="calendar-event-main">
+          <strong>${escapeHtml(item.time)} ${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.meta)}</p>
+        </span>
+        <em class="calendar-status">${escapeHtml(item.status)}</em>
       </button>`).join("")}
     </section>`;
   }).join("");

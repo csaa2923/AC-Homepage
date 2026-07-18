@@ -32,7 +32,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=8/);
+    assert.match(html,/admin-v2\.css\?v=9/);
     assert.match(html,/admin-v2\.js\?v=8/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
@@ -165,6 +165,7 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("keeps mobile customer edit form usable at narrow widths",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     assert.match(css,/\.v2-edit-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+    assert.match(css,/input,select,textarea\{font-size:16px;line-height:1\.3\}/);
     assert.match(css,/\.v2-edit-field input,\.v2-edit-field textarea\{[^}]*font-size:16px/);
     assert.match(css,/\.v2-edit-actions\{position:sticky/);
     assert.match(css,/@media \(max-width:820px\)/);
@@ -174,11 +175,14 @@ describe("admin v2 dashboard and customer overview",()=>{
   });
 
   it("protects mobile content from bottom navigation and safe-area overlap",()=>{
+    const html=readProjectFile("customer-portal/admin-v2.html");
     const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(html,/width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content/);
+    assert.match(css,/html\{width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%\}/);
     assert.match(css,/--mobile-nav-height:0px/);
     assert.match(css,/--mobile-safe-bottom:env\(safe-area-inset-bottom,0px\)/);
     assert.match(css,/:root\{--mobile-nav-height:136px;--mobile-nav-gap:20px\}/);
-    assert.match(css,/html,body\{min-width:320px;overflow-x:hidden\}/);
+    assert.match(css,/html,body\{width:100%;min-width:320px;max-width:100%;overflow-x:hidden\}/);
     assert.match(css,/\.v2-brand,\.v2-create,\.v2-classic-link\{display:none\}/);
     assert.match(css,/\.v2-nav\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\);gap:6px;overflow:visible\}/);
     assert.match(css,/\.v2-nav-item\{white-space:normal;min-height:54px/);

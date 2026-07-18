@@ -165,6 +165,53 @@ function travelContext(item){
   return `<span class="travel-context trip-tone-${tone}"><i aria-hidden="true"></i><span><strong>${escapeHtml(customer.name)}</strong><small>${escapeHtml(customer.trip)} · ${escapeHtml(customer.region)}</small></span></span>`;
 }
 
+function timeValue(item){
+  return item.startTime||item.timeStart||item.beginn||item.time||"";
+}
+
+function endTimeValue(item){
+  return item.endTime||item.timeEnd||item.ende||"";
+}
+
+function normalizeClock(value){
+  const text=String(value||"").trim().toLowerCase();
+  if(!text)return null;
+  const match=text.match(/(\d{1,2})(?:[:.](\d{1,2}))?/);
+  if(!match)return null;
+  const hours=Number(match[1]);
+  const minutes=Number(match[2]||0);
+  if(!Number.isInteger(hours)||!Number.isInteger(minutes)||hours<0||hours>23||minutes<0||minutes>59)return null;
+  return hours*60+minutes;
+}
+
+function calendarTimeLabel(item){
+  if(item.allDay)return "Ganztag";
+  const value=timeValue(item);
+  const minutes=normalizeClock(value);
+  if(minutes===null)return "Ohne Uhrzeit";
+  return `${String(Math.floor(minutes/60)).padStart(2,"0")}:${String(minutes%60).padStart(2,"0")}`;
+}
+
+function compareCalendarEvents(a,b){
+  const aAllDay=Boolean(a.allDay);
+  const bAllDay=Boolean(b.allDay);
+  if(aAllDay!==bAllDay)return aAllDay?-1:1;
+  const aStart=normalizeClock(timeValue(a));
+  const bStart=normalizeClock(timeValue(b));
+  const aTimed=aStart!==null;
+  const bTimed=bStart!==null;
+  if(aTimed!==bTimed)return aTimed?-1:1;
+  if(aTimed&&aStart!==bStart)return aStart-bStart;
+  const aEnd=normalizeClock(endTimeValue(a));
+  const bEnd=normalizeClock(endTimeValue(b));
+  if(aEnd!==null&&bEnd!==null&&aEnd!==bEnd)return aEnd-bEnd;
+  if(aEnd!==null&&bEnd===null)return -1;
+  if(aEnd===null&&bEnd!==null)return 1;
+  const aTrip=`${a.customer?.name||""} ${a.customer?.trip||""} ${a.title||""}`;
+  const bTrip=`${b.customer?.name||""} ${b.customer?.trip||""} ${b.title||""}`;
+  return aTrip.localeCompare(bTrip,"de");
+}
+
 function toast(message,type="success"){
   const node=document.createElement("div");
   node.className=`toast ${type}`;
@@ -392,7 +439,7 @@ function renderCalendar(){
     const events=tripGroups.flatMap(group=>{
       const customer=state.customers.find(item=>item.id===group.customerId)||state.customers[0];
       return group.program.map(item=>({...item,customer,tripTone:tripTone(customer,group.tripId)}));
-    }).filter(item=>!activeFilter||item.customer.id===activeFilter);
+    }).filter(item=>!activeFilter||item.customer.id===activeFilter).sort(compareCalendarEvents);
     return `
     <section class="calendar-day">
       <div class="calendar-day-head">
@@ -416,7 +463,7 @@ function renderCalendar(){
           <small>${escapeHtml(item.customer.trip)} · ${escapeHtml(item.customer.region)}</small>
         </span>
         <span class="calendar-event-main">
-          <strong>${escapeHtml(item.time)} ${escapeHtml(item.title)}</strong>
+          <strong>${escapeHtml(calendarTimeLabel(item))} ${escapeHtml(item.title)}</strong>
           <p>${escapeHtml(item.meta)}</p>
         </span>
         <em class="calendar-status">${escapeHtml(item.status)}</em>

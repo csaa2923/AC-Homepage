@@ -142,7 +142,16 @@ await check("Kalender", "Reise pro Tag filtern", async () => {
   const allButton = await count('.calendar-day:nth-child(2) [data-action="clear-calendar-filter"]');
   return visibleEvents === 2 && activeFilters === 1 && allButton === 1;
 });
+await check("Kalender", "Gefilterte Reise chronologisch sortiert", async () => true, async () => evaluate(`(() => {
+  const labels=[...document.querySelectorAll(".calendar-day:nth-child(2) .calendar-event-main strong")].map(node=>node.textContent.trim());
+  return labels[0].startsWith("10:30")&&labels[1].startsWith("17:00");
+})()`));
 await check("Kalender", "Reisefilter zurücksetzen", () => click('.calendar-day:nth-child(2) [data-action="clear-calendar-filter"]'), async () => (await count(".calendar-day:nth-child(2) .calendar-event")) > 2);
+await check("Kalender", "Tag chronologisch sortiert", async () => click('[data-route="calendar"]'), async () => evaluate(`(() => {
+  const labels=[...document.querySelectorAll(".calendar-day:nth-child(2) .calendar-event-main strong")].map(node=>node.textContent.trim());
+  const expected=["09:00","10:30","11:00","17:00","19:30"];
+  return expected.every((time,index)=>labels[index]?.startsWith(time));
+})()`));
 await check("Hauptnavigation", "Dokumente", () => click('[data-route="documents"]'), () => exists("#documents.view.active"));
 await check("Hauptnavigation", "Einstellungen", () => click('[data-route="settings"]'), () => exists("#settings.view.active"));
 await check("Dashboard", "Alle Kunden", async () => { await click('[data-route="dashboard"]'); await click(".hero-actions [data-route='customers']"); }, () => exists("#customers.view.active"));

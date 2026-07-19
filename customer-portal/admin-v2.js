@@ -18,7 +18,14 @@
     customerEditErrors:{},
     customerEditSaving:false,
     customerEditMessage:"",
-    customerEditMessageKind:""
+    customerEditMessageKind:"",
+    tripEditMode:false,
+    tripEditDraft:null,
+    tripEditOriginal:"",
+    tripEditErrors:{},
+    tripEditSaving:false,
+    tripEditMessage:"",
+    tripEditMessageKind:""
   };
 
   const byId=id=>document.getElementById(id);
@@ -37,6 +44,7 @@
   ];
   let activeLoginAttempt=0;
   let customerSavePromise=null;
+  let tripSavePromise=null;
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -349,6 +357,14 @@
     return state.customerEditMode&&editFingerprint(state.customerEditDraft||{})!==state.customerEditOriginal;
   }
 
+  function hasDirtyTripEdit(){
+    return state.tripEditMode&&tripEditFingerprint(state.tripEditDraft||{})!==state.tripEditOriginal;
+  }
+
+  function hasDirtyEdits(){
+    return hasDirtyCustomerEdit()||hasDirtyTripEdit();
+  }
+
   function setCustomerEditMessage(message,kind=""){
     state.customerEditMessage=message||"";
     state.customerEditMessageKind=kind;
@@ -368,7 +384,7 @@
   }
 
   function confirmDiscardCustomerEdit(){
-    if(!hasDirtyCustomerEdit())return true;
+    if(!hasDirtyEdits())return true;
     return window.confirm("Ungespeicherte Aenderungen verwerfen?");
   }
 
@@ -384,7 +400,20 @@
     }
   }
 
+  function resetTripEditState({keepMessage=false}={}){
+    state.tripEditMode=false;
+    state.tripEditDraft=null;
+    state.tripEditOriginal="";
+    state.tripEditErrors={};
+    state.tripEditSaving=false;
+    if(!keepMessage){
+      state.tripEditMessage="";
+      state.tripEditMessageKind="";
+    }
+  }
+
   function startCustomerEdit(customer){
+    resetTripEditState();
     const draft=customerEditValues(customer);
     state.customerEditMode=true;
     state.customerEditDraft={...draft};
@@ -481,6 +510,196 @@
       }
     })();
     return customerSavePromise;
+  }
+
+  function dateInputValue(value){
+    const date=dateValue(value);
+    if(!date)return "";
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+  }
+
+  function tripEditValues(customer){
+    const travel=objectValue(customer.travel,customer.trip,customer.tripData,customer.travelData,customer.journey,customer.reise,customer.profile?.travel);
+    const stay=objectValue(customer.stay,customer.accommodation,customer.accommodationData);
+    const hotel=objectValue(arrayValue(customer.accommodations)[0],customer.hotel,stay.hotel,travel.hotel);
+    return {
+      tripName:firstValue(customer.tripName,customer.tripTitle,travel.title,travel.name,customer.travelTitle),
+      description:firstValue(customer.tripDescription,customer.description,travel.description,travel.summary,customer.travelDescription),
+      startDate:dateInputValue(firstValue(customer.startDatePlain,customer.dateFrom,customer.arrival,customer.arrivalDate,travel.startDate,travel.arrival,travel.dateFrom,customer.startDate)),
+      endDate:dateInputValue(firstValue(customer.endDatePlain,customer.dateTo,customer.departure,customer.departureDate,travel.endDate,travel.departure,travel.dateTo,customer.endDate)),
+      adults:String(numericValue(customer.adults,customer.guests?.adults,travel.adults,travel.guests?.adults,customer.profile?.travel?.adults)??""),
+      children:String(numericValue(customer.children,customer.guests?.children,travel.children,travel.guests?.children,customer.profile?.travel?.children)??""),
+      childAges:compactList(customer.childAges,customer.childrenAges,customer.guests?.childAges,travel.childAges,travel.childrenAges,customer.profile?.travel?.childrenAges).join(", "),
+      accommodationName:firstValue(hotel.name,stay.name,customer.accommodationName,customer.hotelName),
+      accommodationAddress:firstValue(hotel.address,stay.address,customer.accommodationAddress),
+      accommodationCity:firstValue(hotel.city,hotel.town,stay.city,customer.accommodationCity,customer.destination,customer.destinationName),
+      accommodationCountry:firstValue(hotel.country,stay.country,customer.accommodationCountry),
+      arrivalType:firstValue(customer.arrivalType,customer.arrivalMode,travel.arrivalType,travel.transport,customer.transport),
+      arrivalText:firstValue(customer.arrivalDetails,customer.arrivalInfo,customer.transferInfo,customer.transfer,travel.arrivalDetails,travel.transferInfo,travel.transfer,customer.flightNumber,customer.trainNumber),
+      notes:compactList(customer.tripNotes,customer.travelNotes,customer.internalTravelNotes,travel.notes,customer.notes).join("\n")
+    };
+  }
+
+  function normalizedTripDraft(draft){
+    const values={...(draft||{})};
+    Object.keys(values).forEach(key=>{values[key]=String(values[key]??"").trim();});
+    values.childAges=String(values.childAges||"").split(/[,;\n]+/).map(item=>item.trim()).filter(Boolean);
+    values.notes=String(values.notes||"").split(/\n+/).map(item=>item.trim()).filter(Boolean);
+    return values;
+  }
+
+  function tripEditFingerprint(values){
+    return JSON.stringify(normalizedTripDraft(values));
+  }
+
+  function setTripEditMessage(message,kind=""){
+    state.tripEditMessage=message||"";
+    state.tripEditMessageKind=kind;
+    const el=byId("tripEditStatus");
+    if(el){
+      el.textContent=state.tripEditMessage;
+      el.dataset.kind=kind;
+    }
+  }
+
+  function updateTripEditActions(){
+    const saving=state.tripEditSaving;
+    all("[data-trip-edit-action]").forEach(button=>{
+      button.disabled=saving;
+      button.setAttribute("aria-busy",saving&&button.dataset.tripEditAction==="save"?"true":"false");
+    });
+  }
+
+  function startTripEdit(customer){
+    resetCustomerEditState();
+    const draft=tripEditValues(customer);
+    state.tripEditMode=true;
+    state.tripEditDraft={...draft};
+    state.tripEditOriginal=tripEditFingerprint(draft);
+    state.tripEditErrors={};
+    state.tripEditSaving=false;
+    setTripEditMessage("","");
+    renderCustomerDetail();
+  }
+
+  function cancelTripEdit(){
+    if(!confirmDiscardCustomerEdit())return;
+    resetTripEditState();
+    renderCustomerDetail();
+  }
+
+  function validateTripEdit(draft){
+    const values=normalizedTripDraft(draft);
+    const errors={};
+    if(!values.tripName)errors.tripName="Bitte einen Reisenamen eingeben.";
+    if(values.startDate&&values.endDate){
+      const start=dateValue(values.startDate);
+      const end=dateValue(values.endDate);
+      if(start&&end&&start.getTime()>end.getTime())errors.endDate="Das Bis-Datum darf nicht vor dem Von-Datum liegen.";
+    }
+    ["adults","children"].forEach(key=>{
+      if(values[key]&&!/^\d+$/.test(values[key]))errors[key]="Bitte eine ganze Zahl eingeben.";
+    });
+    return {valid:!Object.keys(errors).length,errors,values};
+  }
+
+  function updateTripObjects(next,values){
+    const travelTargets=[next.travel,next.trip,next.tripData,next.travelData,next.journey,next.reise,next.profile?.travel].filter(item=>item&&typeof item==="object");
+    travelTargets.forEach(target=>{
+      if("title" in target||!("name" in target))target.title=values.tripName;
+      if("name" in target)target.name=values.tripName;
+      if("description" in target)target.description=values.description;
+      if("summary" in target)target.summary=values.description;
+      target.startDate=values.startDate;
+      target.endDate=values.endDate;
+      target.arrival=values.startDate;
+      target.departure=values.endDate;
+      target.adults=values.adults;
+      target.children=values.children;
+      target.childrenAges=values.childAges;
+      target.arrivalType=values.arrivalType;
+      target.transport=values.arrivalType;
+      target.arrivalDetails=values.arrivalText;
+      target.notes=values.notes;
+    });
+    const stayTargets=[next.stay,next.accommodation,next.accommodationData,next.hotel,...arrayValue(next.accommodations)].filter(item=>item&&typeof item==="object");
+    stayTargets.forEach(target=>{
+      target.name=values.accommodationName;
+      target.address=values.accommodationAddress;
+      target.city=values.accommodationCity;
+      target.country=values.accommodationCountry;
+    });
+  }
+
+  function mergeTripEdit(customer,values){
+    const next=clone(customer);
+    next.tripName=values.tripName;
+    if("tripTitle" in next)next.tripTitle=values.tripName;
+    if("travelTitle" in next)next.travelTitle=values.tripName;
+    if(values.description||"tripDescription" in next)next.tripDescription=values.description;
+    if("description" in next)next.description=values.description;
+    if("travelDescription" in next)next.travelDescription=values.description;
+    next.startDatePlain=values.startDate;
+    next.endDatePlain=values.endDate;
+    next.travelPeriod=values.startDate&&values.endDate?`${formatDate(values.startDate)} - ${formatDate(values.endDate)}`:firstValue(values.startDate,values.endDate,"");
+    next.adults=values.adults;
+    next.children=values.children;
+    next.childAges=values.childAges;
+    next.childrenAges=values.childAges;
+    next.accommodationName=values.accommodationName;
+    next.hotelName=values.accommodationName;
+    next.accommodationAddress=values.accommodationAddress;
+    next.accommodationCity=values.accommodationCity;
+    next.accommodationCountry=values.accommodationCountry;
+    next.arrivalType=values.arrivalType;
+    next.arrivalDetails=values.arrivalText;
+    if(values.notes.length||"travelNotes" in next)next.travelNotes=values.notes;
+    if("tripNotes" in next)next.tripNotes=values.notes;
+    updateTripObjects(next,values);
+    next.updatedAt=new Date().toLocaleDateString("de-DE");
+    next._lastSavedAt=new Date().toISOString();
+    return compactObject(next);
+  }
+
+  async function saveTripEdit(){
+    if(state.tripEditSaving||tripSavePromise)return tripSavePromise;
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return null;
+    const validation=validateTripEdit(state.tripEditDraft||{});
+    state.tripEditErrors=validation.errors;
+    if(!validation.valid){
+      setTripEditMessage("Bitte pruefen Sie die markierten Felder.","error");
+      renderCustomerDetail();
+      return null;
+    }
+    const fullCustomer=mergeTripEdit(customer,validation.values);
+    state.tripEditSaving=true;
+    setTripEditMessage("Reise wird gespeichert ...","saving");
+    updateTripEditActions();
+    tripSavePromise=(async()=>{
+      try{
+        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+        updateLocalCustomer(fullCustomer);
+        resetTripEditState({keepMessage:true});
+        setTripEditMessage("Reise erfolgreich gespeichert.","success");
+        render();
+        window.setTimeout(()=>{
+          if(!state.tripEditMode&&state.tripEditMessageKind==="success")setTripEditMessage("","");
+        },3200);
+        return fullCustomer;
+      }catch(error){
+        console.error("[ACT Admin V2] Reisedaten speichern:",error&&error.message?error.message:"Fehler");
+        state.tripEditSaving=false;
+        setTripEditMessage("Die Reise konnte nicht gespeichert werden. Bitte erneut versuchen.","error");
+        updateTripEditActions();
+        return null;
+      }finally{
+        tripSavePromise=null;
+      }
+    })();
+    return tripSavePromise;
   }
 
   function loginButton(){
@@ -1035,6 +1254,7 @@
   }
 
   function tripTabMarkup(customer){
+    if(state.tripEditMode)return tripEditFormMarkup(customer);
     const trip=buildTripViewModel(customer);
     if(trip.error){
       return `<article class="v2-empty"><h3>Reisedaten konnten nicht angezeigt werden</h3><p>Der Kundentab bleibt verfuegbar. Bitte versuchen Sie es erneut oder oeffnen Sie den klassischen Admin.</p><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a></article>`;
@@ -1088,10 +1308,14 @@
       ])
     ].filter(Boolean);
     if(!cards.length){
-      return `<article class="v2-empty v2-trip-empty"><span class="v2-trip-empty-icon" aria-hidden="true"></span><h3>Fuer diesen Kunden sind noch keine Reisedaten hinterlegt.</h3><p>Die Bearbeitung der Reisedaten wird in einem spaeteren Auftrag ergaenzt.</p><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a></article>`;
+      return `<article class="v2-empty v2-trip-empty"><span class="v2-trip-empty-icon" aria-hidden="true"></span><h3>Fuer diesen Kunden sind noch keine Reisedaten hinterlegt.</h3><p>Sie koennen die Reisedaten jetzt direkt in Admin 2.0 erfassen.</p><div class="v2-tab-actions"><button class="v2-button primary" type="button" data-trip-edit-action="edit">Reise bearbeiten</button><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a></div></article>`;
     }
     return `
       <section class="v2-trip-overview">
+        <div class="v2-tab-actions">
+          <button class="v2-button primary" type="button" data-trip-edit-action="edit">Reise bearbeiten</button>
+          <span class="v2-edit-status ${state.tripEditMessageKind}" id="tripEditStatus" aria-live="polite">${escapeHtml(state.tripEditMessage)}</span>
+        </div>
         <article class="v2-trip-hero">
           <p class="v2-eyebrow">Reise</p>
           <h3>${escapeHtml(displayValue(trip.title,"Reise ohne Bezeichnung"))}</h3>
@@ -1100,6 +1324,85 @@
         </article>
         <div class="v2-read-grid v2-trip-grid">${cards.join("")}</div>
       </section>
+    `;
+  }
+
+  function tripEditFormMarkup(customer){
+    const draft=state.tripEditDraft||tripEditValues(customer);
+    const errors=state.tripEditErrors||{};
+    const dirty=hasDirtyTripEdit();
+    const status=state.tripEditMessage||(dirty?"Ungespeicherte Aenderungen":"");
+    const statusKind=state.tripEditMessageKind||(dirty?"dirty":"");
+    return `
+      <form class="v2-edit-form v2-trip-edit-form" id="tripEditForm" novalidate>
+        <div class="v2-edit-head">
+          <div>
+            <h3>Reise bearbeiten</h3>
+            <p class="v2-muted">Es werden nur bestehende Reisedaten dieses Kunden aktualisiert. Programm, Dokumente, Uploads, Publish und Share-Links bleiben unveraendert.</p>
+          </div>
+          <span class="v2-edit-status ${escapeHtml(statusKind)}" id="tripEditStatus" aria-live="polite">${escapeHtml(status)}</span>
+        </div>
+        <div class="v2-edit-grid">
+          ${tripInputField("tripName","Reisename",draft.tripName,{required:true,error:errors.tripName})}
+          ${tripTextareaField("description","Beschreibung",draft.description)}
+          ${tripInputField("startDate","Von",draft.startDate,{type:"date",error:errors.startDate})}
+          ${tripInputField("endDate","Bis",draft.endDate,{type:"date",error:errors.endDate})}
+          ${tripInputField("adults","Erwachsene",draft.adults,{type:"number",min:"0",inputmode:"numeric",error:errors.adults})}
+          ${tripInputField("children","Kinder",draft.children,{type:"number",min:"0",inputmode:"numeric",error:errors.children})}
+          ${tripInputField("childAges","Alter der Kinder",draft.childAges,{hint:"Optional, kommagetrennt."})}
+          ${tripInputField("accommodationName","Unterkunft",draft.accommodationName)}
+          ${tripInputField("accommodationAddress","Adresse",draft.accommodationAddress,{full:true})}
+          ${tripInputField("accommodationCity","Ort",draft.accommodationCity)}
+          ${tripInputField("accommodationCountry","Land",draft.accommodationCountry)}
+          ${tripSelectField("arrivalType","Anreise",draft.arrivalType,["","Auto","Bahn","Flug","Bus","Sonstiges"])}
+          ${tripTextareaField("arrivalText","Anreise Freitext",draft.arrivalText)}
+          ${tripTextareaField("notes","Hinweise",Array.isArray(draft.notes)?draft.notes.join("\n"):draft.notes)}
+        </div>
+        <div class="v2-edit-actions">
+          <button class="v2-button primary" type="submit" data-trip-edit-action="save" ${state.tripEditSaving?"disabled aria-busy=\"true\"":""}>Speichern</button>
+          <button class="v2-button soft" type="button" data-trip-edit-action="cancel" ${state.tripEditSaving?"disabled":""}>Abbrechen</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function tripInputField(name,label,value,{type="text",required=false,error="",hint="",full=false,min="",inputmode=""}={}){
+    const id=`tripEdit-${name}`;
+    return `
+      <label class="v2-edit-field ${full?"full":""}" for="${id}">
+        <span>${escapeHtml(label)}${required?" *":""}</span>
+        <input id="${id}" name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value||"")}" ${required?"required":""} ${min!==""?`min="${escapeHtml(min)}"`:""} ${inputmode?`inputmode="${escapeHtml(inputmode)}"`:""} aria-invalid="${error?"true":"false"}" aria-describedby="${error?`${id}-error`:hint?`${id}-hint`:""}">
+        ${hint?`<small class="v2-field-hint" id="${id}-hint">${escapeHtml(hint)}</small>`:""}
+        ${error?`<small class="v2-field-error" id="${id}-error">${escapeHtml(error)}</small>`:""}
+      </label>
+    `;
+  }
+
+  function tripTextareaField(name,label,value,{error="",hint=""}={}){
+    const id=`tripEdit-${name}`;
+    return `
+      <label class="v2-edit-field full" for="${id}">
+        <span>${escapeHtml(label)}</span>
+        <textarea id="${id}" name="${escapeHtml(name)}" rows="4" aria-invalid="${error?"true":"false"}" aria-describedby="${error?`${id}-error`:hint?`${id}-hint`:""}">${escapeHtml(value||"")}</textarea>
+        ${hint?`<small class="v2-field-hint" id="${id}-hint">${escapeHtml(hint)}</small>`:""}
+        ${error?`<small class="v2-field-error" id="${id}-error">${escapeHtml(error)}</small>`:""}
+      </label>
+    `;
+  }
+
+  function tripSelectField(name,label,value,options){
+    const id=`tripEdit-${name}`;
+    const normalized=normalizeText(value);
+    return `
+      <label class="v2-edit-field" for="${id}">
+        <span>${escapeHtml(label)}</span>
+        <select id="${id}" name="${escapeHtml(name)}">
+          ${options.map(option=>{
+            const selected=normalizeText(option)===normalized?"selected":"";
+            return `<option value="${escapeHtml(option)}" ${selected}>${escapeHtml(option||"Bitte waehlen")}</option>`;
+          }).join("")}
+        </select>
+      </label>
     `;
   }
 
@@ -1209,9 +1512,10 @@
     const parsed=parseRoute(route.startsWith("#")?route:`#${route}`);
     const nextHash=parsed.route==="customerDetail"?detailHash(parsed.customerId,parsed.tab):`#${parsed.route}`;
     const isSameRoute=nextHash===currentRouteHash();
-    if(!isSameRoute&&hasDirtyCustomerEdit()){
+    if(!isSameRoute&&hasDirtyEdits()){
       if(!confirmDiscardCustomerEdit())return false;
       resetCustomerEditState();
+      resetTripEditState();
     }
     state.route=parsed.route;
     state.selectedCustomerId=parsed.customerId||"";
@@ -1266,6 +1570,7 @@
   function openClassicEditor(id){
     if(!confirmDiscardCustomerEdit())return;
     resetCustomerEditState();
+    resetTripEditState();
     window.location.href=classicEditorUrl(id);
   }
 
@@ -1281,6 +1586,20 @@
     }
     const dirty=hasDirtyCustomerEdit();
     setCustomerEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
+  }
+
+  function handleTripEditInput(event){
+    const field=event.target.closest("#tripEditForm input,#tripEditForm textarea,#tripEditForm select");
+    if(!field||!state.tripEditDraft)return;
+    state.tripEditDraft[field.name]=field.value;
+    if(state.tripEditErrors[field.name]){
+      delete state.tripEditErrors[field.name];
+      const error=byId(`tripEdit-${field.name}-error`);
+      if(error)error.remove();
+      field.setAttribute("aria-invalid","false");
+    }
+    const dirty=hasDirtyTripEdit();
+    setTripEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
   }
 
   function bind(){
@@ -1313,6 +1632,14 @@
         if(action==="cancel")cancelCustomerEdit();
         return;
       }
+      const tripAction=event.target.closest("[data-trip-edit-action]");
+      if(tripAction){
+        const action=tripAction.dataset.tripEditAction;
+        const customer=customerById(state.selectedCustomerId);
+        if(action==="edit"&&customer)startTripEdit(customer);
+        if(action==="cancel")cancelTripEdit();
+        return;
+      }
       const classic=event.target.closest("[data-classic-editor]");
       if(classic){event.preventDefault();openClassicEditor(classic.dataset.classicEditor);return;}
       if(event.target.closest("a"))return;
@@ -1324,11 +1651,16 @@
       if(event.target.id==="retryInlineButton"&&confirmDiscardCustomerEdit())loadCustomers();
       if(event.target.id==="retryDetailButton"&&confirmDiscardCustomerEdit())loadCustomers();
     });
-    document.addEventListener("input",handleCustomerEditInput);
+    document.addEventListener("input",event=>{handleCustomerEditInput(event);handleTripEditInput(event);});
+    document.addEventListener("change",handleTripEditInput);
     document.addEventListener("submit",event=>{
       if(event.target.id==="customerEditForm"){
         event.preventDefault();
         saveCustomerEdit();
+      }
+      if(event.target.id==="tripEditForm"){
+        event.preventDefault();
+        saveTripEdit();
       }
     });
     document.addEventListener("keydown",event=>{
@@ -1347,7 +1679,7 @@
       if(!routeTo(location.hash||"#dashboard",{replace:true}))history.pushState({route:state.route},"",currentRouteHash());
     });
     window.addEventListener("beforeunload",event=>{
-      if(!hasDirtyCustomerEdit())return;
+      if(!hasDirtyEdits())return;
       event.preventDefault();
       event.returnValue="";
     });

@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=13/);
-    assert.match(html,/admin-v2\.js\?v=12/);
+    assert.match(html,/admin-v2\.css\?v=14/);
+    assert.match(html,/admin-v2\.js\?v=13/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -132,10 +132,46 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/tripReadCard\("Wuensche und Hinweise"/);
     assert.match(js,/Fuer diesen Kunden sind noch keine Reisedaten hinterlegt\./);
     assert.match(js,/Im klassischen Admin bearbeiten/);
-    assert.doesNotMatch(js,/data-trip-edit-action|tripEditMode|saveTrip|saveTravel/);
+    assert.match(js,/data-trip-edit-action="edit">Reise bearbeiten/);
     assert.match(css,/\.v2-trip-hero/);
     assert.match(css,/\.v2-trip-grid/);
     assert.match(css,/\.v2-internal-field span::after\{content:" intern"/);
+  });
+
+  it("supports controlled trip edit mode with validation, cancel and dirty warning",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/tripEditMode:false/);
+    assert.match(js,/tripEditDraft:null/);
+    assert.match(js,/function tripEditValues\(customer\)/);
+    assert.match(js,/function startTripEdit\(customer\)/);
+    assert.match(js,/function cancelTripEdit\(\)/);
+    assert.match(js,/function hasDirtyTripEdit\(\)/);
+    assert.match(js,/function hasDirtyEdits\(\)/);
+    assert.match(js,/id="tripEditForm"/);
+    assert.match(js,/data-trip-edit-action="save"/);
+    assert.match(js,/data-trip-edit-action="cancel"/);
+    assert.match(js,/tripInputField\("startDate","Von",draft\.startDate,\{type:"date"/);
+    assert.match(js,/tripInputField\("endDate","Bis",draft\.endDate,\{type:"date"/);
+    assert.match(js,/errors\.tripName="Bitte einen Reisenamen eingeben\."/);
+    assert.match(js,/Das Bis-Datum darf nicht vor dem Von-Datum liegen\./);
+    assert.match(js,/Ungespeicherte Aenderungen verwerfen\?/);
+    assert.match(js,/if\(!hasDirtyEdits\(\)\)return/);
+  });
+
+  it("saves trip edits through the existing draft facade without replacing other flows",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/function mergeTripEdit\(customer,values\)/);
+    assert.match(js,/const next=clone\(customer\)/);
+    assert.match(js,/const fullCustomer=mergeTripEdit\(customer,validation\.values\)/);
+    assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
+    assert.match(js,/updateLocalCustomer\(fullCustomer\)/);
+    assert.match(js,/Reise erfolgreich gespeichert\./);
+    assert.match(js,/next\.startDatePlain=values\.startDate/);
+    assert.match(js,/next\.endDatePlain=values\.endDate/);
+    assert.match(js,/next\.accommodationName=values\.accommodationName/);
+    assert.match(js,/target\.arrivalType=values\.arrivalType/);
+    assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
+    assert.doesNotMatch(js,/\.publishCustomer\(|uploadCustomerDocument\(|createPortalShare\(|revokePortalShare\(/);
   });
 
   it("normalizes dates, statuses and partial legacy trip data without mutating storage",()=>{
@@ -209,7 +245,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     assert.match(css,/\.v2-edit-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
     assert.match(css,/input,select,textarea\{font-size:16px;line-height:1\.3\}/);
-    assert.match(css,/\.v2-edit-field input,\.v2-edit-field textarea\{[^}]*font-size:16px/);
+    assert.match(css,/\.v2-edit-field input,\.v2-edit-field textarea,\.v2-edit-field select\{[^}]*font-size:16px/);
     assert.match(css,/\.v2-edit-actions\{position:sticky/);
     assert.match(css,/@media \(max-width:820px\),\(max-width:920px\) and \(max-height:520px\)/);
     assert.match(css,/\.v2-edit-grid\{grid-template-columns:1fr\}/);

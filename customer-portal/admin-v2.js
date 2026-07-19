@@ -25,7 +25,14 @@
     tripEditErrors:{},
     tripEditSaving:false,
     tripEditMessage:"",
-    tripEditMessageKind:""
+    tripEditMessageKind:"",
+    programEditMode:false,
+    programEditDraft:null,
+    programEditOriginal:"",
+    programEditErrors:{},
+    programEditSaving:false,
+    programEditMessage:"",
+    programEditMessageKind:""
   };
 
   const byId=id=>document.getElementById(id);
@@ -45,6 +52,7 @@
   let activeLoginAttempt=0;
   let customerSavePromise=null;
   let tripSavePromise=null;
+  let programSavePromise=null;
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -153,7 +161,7 @@
   }
 
   function programCount(customer){
-    return Array.isArray(customer.program)?customer.program.length:Array.isArray(customer.programItems)?customer.programItems.length:0;
+    return generatedProgramDays(customer).reduce((sum,day)=>sum+day.items.length,0);
   }
 
   function customerImage(customer){
@@ -401,8 +409,12 @@
     return state.tripEditMode&&tripEditFingerprint(state.tripEditDraft||{})!==state.tripEditOriginal;
   }
 
+  function hasDirtyProgramEdit(){
+    return state.programEditMode&&programEditFingerprint(state.programEditDraft||{})!==state.programEditOriginal;
+  }
+
   function hasDirtyEdits(){
-    return hasDirtyCustomerEdit()||hasDirtyTripEdit();
+    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit();
   }
 
   function setCustomerEditMessage(message,kind=""){
@@ -452,8 +464,21 @@
     }
   }
 
+  function resetProgramEditState({keepMessage=false}={}){
+    state.programEditMode=false;
+    state.programEditDraft=null;
+    state.programEditOriginal="";
+    state.programEditErrors={};
+    state.programEditSaving=false;
+    if(!keepMessage){
+      state.programEditMessage="";
+      state.programEditMessageKind="";
+    }
+  }
+
   function startCustomerEdit(customer){
     resetTripEditState();
+    resetProgramEditState();
     const draft=customerEditValues(customer);
     state.customerEditMode=true;
     state.customerEditDraft={...draft};
@@ -635,6 +660,7 @@
 
   function startTripEdit(customer){
     resetCustomerEditState();
+    resetProgramEditState();
     const draft=tripEditValues(customer);
     state.tripEditMode=true;
     state.tripEditDraft={...draft};
@@ -778,6 +804,335 @@
       }
     })();
     return tripSavePromise;
+  }
+
+  const PROGRAM_SOURCE_KEYS=["program","programme","itineraryDays","dailyProgram","travelProgram","itinerary","activities","agenda","timeline"];
+  const PROGRAM_ITEM_KEYS=["items","activities","program","programItems","entries","timeline","agenda"];
+  const PROGRAM_CATEGORIES=["Unterkunft","Fruehstueck","Mittagessen","Abendessen","Restaurant","Aktivitaet","Transfer","Flug","Bahn","Bus","Taxi","Wanderung","Wellness","Shopping","Freizeit","Termin","Ticket","Sonstiges"];
+
+  function dateIsoOffset(startValue,index){
+    const start=dateValue(startValue);
+    if(!start)return "";
+    const date=new Date(start.getTime()+index*86400000);
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+  }
+
+  function tripDateRange(customer){
+    const trip=buildTripViewModel(customer);
+    const start=dateInputValue(trip.start);
+    const end=dateInputValue(trip.end);
+    if(!start&&!end)return [];
+    const from=dateValue(start||end);
+    const to=dateValue(end||start);
+    if(!from||!to)return [];
+    const days=[];
+    const maxDays=45;
+    for(let date=new Date(from),index=0;date<=to&&index<maxDays;date=new Date(date.getTime()+86400000),index+=1){
+      days.push(`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`);
+    }
+    return days;
+  }
+
+  function programSource(customer){
+    const travel=objectValue(customer.travel,customer.trip,customer.tripData,customer.travelData,customer.journey,customer.reise,customer.profile?.travel);
+    for(const key of PROGRAM_SOURCE_KEYS){
+      if(Array.isArray(customer[key])&&customer[key].length)return {scope:"root",key,value:customer[key]};
+      if(Array.isArray(travel[key])&&travel[key].length)return {scope:"travel",key,value:travel[key]};
+    }
+    return {scope:"root",key:"program",value:[]};
+  }
+
+  function itemArrayFromDay(day){
+    if(!day||typeof day!=="object")return [];
+    for(const key of PROGRAM_ITEM_KEYS){
+      if(Array.isArray(day[key]))return day[key];
+    }
+    return [];
+  }
+
+  function normalizeProgramTime(value){
+    const text=cleanValue(value);
+    if(!text)return "";
+    const match=text.match(/^(\d{1,2})(?:[:.](\d{1,2}))?/);
+    if(!match)return "";
+    const hours=Number(match[1]);
+    const minutes=Number(match[2]||0);
+    if(hours<0||hours>23||minutes<0||minutes>59)return "";
+    return `${String(hours).padStart(2,"0")}:${String(minutes).padStart(2,"0")}`;
+  }
+
+  function programItemFromValue(value,index=0){
+    const item=value&&typeof value==="object"?value:{};
+    const allDay=Boolean(item.allDay||item.fullDay||normalizeText(firstValue(item.time,item.startTime,item.timeStart,item.beginn,item.start))==="ganztagig");
+    return {
+      time:allDay?"":normalizeProgramTime(firstValue(item.time,item.startTime,item.timeStart,item.beginn,item.start,item.hour)),
+      allDay,
+      title:firstValue(item.title,item.name,item.heading,item.label,item.activity,item.programTitle),
+      description:firstValue(item.description,item.text,item.details,item.summary,item.info),
+      category:firstValue(item.category,item.type,item.kind,item.icon,"Sonstiges"),
+      location:firstValue(item.location,item.place,item.ort,item.address,item.venue),
+      duration:firstValue(item.duration,item.length,item.dauer),
+      notes:firstValue(item.notes,item.note,item.hint,item.remark,item.internalNote),
+      order:Number.isFinite(Number(item.order))?Number(item.order):index
+    };
+  }
+
+  function programDayFromValue(value,index=0,fallbackDate=""){
+    const day=value&&typeof value==="object"?value:{};
+    const itemCandidates=itemArrayFromDay(day);
+    const isFlatItem=!itemCandidates.length&&(day.title||day.name||day.activity||day.time||day.startTime);
+    const items=(isFlatItem?[day]:itemCandidates).map(programItemFromValue);
+    const date=dateInputValue(firstValue(day.date,day.dayDate,day.startDate,day.datum,fallbackDate));
+    const title=firstValue(day.title,day.label,day.name,date?`Tag ${index+1}`:`Tag ${index+1}`);
+    return {date,title,items:sortProgramItems(items)};
+  }
+
+  function isFlatProgramItem(value){
+    if(!value||typeof value!=="object"||Array.isArray(value))return false;
+    return !itemArrayFromDay(value).length&&Boolean(value.title||value.name||value.activity||value.programTitle||value.time||value.startTime||value.location||value.place);
+  }
+
+  function groupFlatProgramItems(items,dates){
+    const grouped=[];
+    items.forEach((item,index)=>{
+      const explicitDay=wholeNumberValue(firstValue(item.dayIndex,item.dayNumber,item.day));
+      const explicitDate=dateInputValue(firstValue(item.date,item.dayDate,item.startDate,item.datum));
+      const date=explicitDate||dates[(explicitDay||1)-1]||dates[0]||"";
+      let dayIndex=grouped.findIndex(day=>day.date===date&&date);
+      if(dayIndex<0&&explicitDay)dayIndex=explicitDay-1;
+      if(dayIndex<0)dayIndex=0;
+      if(!grouped[dayIndex])grouped[dayIndex]={date,title:`Tag ${dayIndex+1}`,items:[]};
+      grouped[dayIndex].items.push(programItemFromValue(item,index));
+    });
+    return grouped.map((day,index)=>({date:day.date||dates[index]||"",title:day.title||`Tag ${index+1}`,items:sortProgramItems(day.items)}));
+  }
+
+  function generatedProgramDays(customer){
+    const dates=tripDateRange(customer);
+    const source=programSource(customer);
+    const sourceDays=source.value.length&&source.value.every(isFlatProgramItem)
+      ?groupFlatProgramItems(source.value,dates)
+      :source.value.map((day,index)=>programDayFromValue(day,index,dates[index]||""));
+    const days=sourceDays.length?sourceDays:dates.map((date,index)=>({date,title:`Tag ${index+1}`,items:[]}));
+    if(!days.length)return [{date:"",title:"Tag 1",items:[]}];
+    dates.forEach((date,index)=>{
+      if(!days[index])days[index]={date,title:`Tag ${index+1}`,items:[]};
+      else if(!days[index].date)days[index].date=date;
+    });
+    return days;
+  }
+
+  function programEditValues(customer){
+    const source=programSource(customer);
+    return {sourceKey:source.key,sourceScope:source.scope,days:generatedProgramDays(customer)};
+  }
+
+  function normalizedProgramDraft(draft){
+    const values={sourceKey:draft?.sourceKey||"program",sourceScope:draft?.sourceScope||"root",days:[]};
+    values.days=arrayValue(draft?.days).map((day,index)=>({
+      date:dateInputValue(day.date),
+      title:firstValue(day.title,`Tag ${index+1}`),
+      items:arrayValue(day.items).map((item,itemIndex)=>({
+        time:item.allDay?"":normalizeProgramTime(item.time),
+        allDay:Boolean(item.allDay),
+        title:cleanValue(item.title),
+        description:cleanValue(item.description),
+        category:firstValue(item.category,"Sonstiges"),
+        location:cleanValue(item.location),
+        duration:cleanValue(item.duration),
+        notes:cleanValue(item.notes),
+        order:itemIndex
+      }))
+    }));
+    return values;
+  }
+
+  function programEditFingerprint(values){
+    return JSON.stringify(normalizedProgramDraft(values));
+  }
+
+  function sortProgramItems(items){
+    return [...arrayValue(items)].sort((a,b)=>{
+      if(a.allDay!==b.allDay)return a.allDay?-1:1;
+      const at=normalizeProgramTime(a.time);
+      const bt=normalizeProgramTime(b.time);
+      if(at&&bt&&at!==bt)return at.localeCompare(bt);
+      if(at&&!bt)return -1;
+      if(!at&&bt)return 1;
+      return String(a.title||"").localeCompare(String(b.title||""),"de")||Number(a.order||0)-Number(b.order||0);
+    });
+  }
+
+  function setProgramEditMessage(message,kind=""){
+    state.programEditMessage=message||"";
+    state.programEditMessageKind=kind;
+    const el=byId("programEditStatus");
+    if(el){
+      el.textContent=state.programEditMessage;
+      el.dataset.kind=kind;
+    }
+  }
+
+  function updateProgramEditActions(){
+    const saving=state.programEditSaving;
+    all("[data-program-edit-action]").forEach(button=>{
+      button.disabled=saving;
+      button.setAttribute("aria-busy",saving&&button.dataset.programEditAction==="save"?"true":"false");
+    });
+  }
+
+  function startProgramEdit(customer){
+    resetCustomerEditState();
+    resetTripEditState();
+    const draft=programEditValues(customer);
+    state.programEditMode=true;
+    state.programEditDraft=clone(draft);
+    state.programEditOriginal=programEditFingerprint(draft);
+    state.programEditErrors={};
+    state.programEditSaving=false;
+    setProgramEditMessage("","");
+    renderCustomerDetail();
+  }
+
+  function cancelProgramEdit(){
+    if(!confirmDiscardCustomerEdit())return;
+    resetProgramEditState();
+    renderCustomerDetail();
+  }
+
+  function addProgramItem(dayIndex){
+    const day=state.programEditDraft?.days?.[dayIndex];
+    if(!day)return;
+    day.items.push({time:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",duration:"",notes:""});
+    setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+    renderCustomerDetail();
+  }
+
+  function addProgramDay(){
+    const days=state.programEditDraft?.days;
+    if(!Array.isArray(days))return;
+    const last=days[days.length-1];
+    const nextDate=dateIsoOffset(last?.date,1);
+    days.push({date:nextDate,title:`Tag ${days.length+1}`,items:[]});
+    setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+    renderCustomerDetail();
+  }
+
+  function deleteProgramDay(dayIndex){
+    const days=state.programEditDraft?.days;
+    if(!Array.isArray(days)||days.length<=1)return;
+    if(!window.confirm("Programmtag loeschen?"))return;
+    days.splice(dayIndex,1);
+    days.forEach((day,index)=>{if(/^Tag \d+$/.test(cleanValue(day.title)))day.title=`Tag ${index+1}`;});
+    setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+    renderCustomerDetail();
+  }
+
+  function deleteProgramItem(dayIndex,itemIndex){
+    const items=state.programEditDraft?.days?.[dayIndex]?.items;
+    if(!Array.isArray(items))return;
+    items.splice(itemIndex,1);
+    setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+    renderCustomerDetail();
+  }
+
+  function moveProgramItem(dayIndex,itemIndex,direction){
+    const items=state.programEditDraft?.days?.[dayIndex]?.items;
+    if(!Array.isArray(items))return;
+    const nextIndex=itemIndex+direction;
+    if(nextIndex<0||nextIndex>=items.length)return;
+    const [item]=items.splice(itemIndex,1);
+    items.splice(nextIndex,0,item);
+    setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+    renderCustomerDetail();
+  }
+
+  function validateProgramEdit(draft){
+    const values=normalizedProgramDraft(draft);
+    const errors={};
+    values.days.forEach((day,dayIndex)=>{
+      day.items.forEach((item,itemIndex)=>{
+        if(!item.title)errors[`program-${dayIndex}-${itemIndex}-title`]="Bitte einen Titel eingeben.";
+      });
+    });
+    return {valid:!Object.keys(errors).length,errors,values};
+  }
+
+  function programSaveDays(values){
+    return values.days.map((day,dayIndex)=>({
+      date:day.date,
+      title:day.title||`Tag ${dayIndex+1}`,
+      items:day.items.map((item,itemIndex)=>({
+        time:item.allDay?"":item.time,
+        allDay:item.allDay,
+        title:item.title,
+        description:item.description,
+        category:item.category||"Sonstiges",
+        location:item.location,
+        duration:item.duration,
+        notes:item.notes,
+        order:itemIndex
+      }))
+    }));
+  }
+
+  function updateProgramObjects(next,values,days){
+    const travelTargets=[next.travel,next.trip,next.tripData,next.travelData,next.journey,next.reise,next.profile?.travel].filter(item=>item&&typeof item==="object");
+    if(values.sourceScope==="travel"&&values.sourceKey){
+      travelTargets.forEach(target=>{if(values.sourceKey in target)target[values.sourceKey]=days;});
+    }
+  }
+
+  function mergeProgramEdit(customer,values){
+    const next=clone(customer);
+    const days=programSaveDays(values);
+    const key=values.sourceKey||"program";
+    if(values.sourceScope==="root"||key in next)next[key]=days;
+    updateProgramObjects(next,values,days);
+    next.updatedAt=new Date().toLocaleDateString("de-DE");
+    next._lastSavedAt=new Date().toISOString();
+    return compactObject(next);
+  }
+
+  async function saveProgramEdit(){
+    if(state.programEditSaving||programSavePromise)return programSavePromise;
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return null;
+    const validation=validateProgramEdit(state.programEditDraft||{});
+    state.programEditErrors=validation.errors;
+    if(!validation.valid){
+      setProgramEditMessage("Bitte pruefen Sie die markierten Programmpunkte.","error");
+      renderCustomerDetail();
+      return null;
+    }
+    const fullCustomer=mergeProgramEdit(customer,validation.values);
+    state.programEditSaving=true;
+    setProgramEditMessage("Programm wird gespeichert ...","saving");
+    updateProgramEditActions();
+    programSavePromise=(async()=>{
+      try{
+        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+        updateLocalCustomer(fullCustomer);
+        resetProgramEditState({keepMessage:true});
+        setProgramEditMessage("Programm erfolgreich gespeichert.","success");
+        render();
+        window.setTimeout(()=>{
+          if(!state.programEditMode&&state.programEditMessageKind==="success")setProgramEditMessage("","");
+        },3200);
+        return fullCustomer;
+      }catch(error){
+        console.error("[ACT Admin V2] Programm speichern:",error&&error.message?error.message:"Fehler");
+        state.programEditSaving=false;
+        setProgramEditMessage("Das Programm konnte nicht gespeichert werden. Bitte erneut versuchen.","error");
+        updateProgramEditActions();
+        return null;
+      }finally{
+        programSavePromise=null;
+      }
+    })();
+    return programSavePromise;
   }
 
   function loginButton(){
@@ -1226,7 +1581,7 @@
         `).join("")}
       </div>
       <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):placeholderTabMarkup()}
+        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):placeholderTabMarkup()}
       </section>
     `;
   }
@@ -1607,6 +1962,160 @@
     `;
   }
 
+  function programTabMarkup(customer){
+    if(state.programEditMode)return programEditFormMarkup(customer);
+    const draft=programEditValues(customer);
+    const days=draft.days;
+    return `
+      <section class="v2-program-overview">
+        <div class="v2-tab-actions">
+          <button class="v2-button primary" type="button" data-program-edit-action="edit">Programm bearbeiten</button>
+          <span class="v2-edit-status ${state.programEditMessageKind}" id="programEditStatus" aria-live="polite">${escapeHtml(state.programEditMessage)}</span>
+        </div>
+        <article class="v2-trip-hero v2-program-hero">
+          <p class="v2-eyebrow">Programm</p>
+          <h3>Tagesablauf</h3>
+          <p>${escapeHtml(days.length)} Tag${days.length===1?"":"e"} · ${escapeHtml(days.reduce((sum,day)=>sum+day.items.length,0))} Programmpunkt${days.reduce((sum,day)=>sum+day.items.length,0)===1?"":"e"}</p>
+        </article>
+        <div class="v2-program-days">
+          ${days.map((day,index)=>programReadDay(day,index)).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function programReadDay(day,index){
+    const items=sortProgramItems(day.items);
+    return `
+      <article class="v2-program-day">
+        <header>
+          <p class="v2-eyebrow">Tag ${index+1}</p>
+          <h3>${escapeHtml(day.date?`${formatLongDate(day.date)}`:displayValue(day.title,`Tag ${index+1}`))}</h3>
+          ${day.title&&!/^Tag \d+$/.test(day.title)?`<p>${escapeHtml(day.title)}</p>`:""}
+        </header>
+        <div class="v2-program-timeline">
+          ${items.length?items.map(programTimelineItem).join(""):`<p class="v2-muted">Noch keine Programmpunkte hinterlegt.</p>`}
+        </div>
+      </article>
+    `;
+  }
+
+  function programTimelineItem(item){
+    const time=item.allDay?"Ganztagig":item.time?`${item.time} Uhr`:"Ohne Uhrzeit";
+    return `
+      <article class="v2-program-item">
+        <div class="v2-program-time">${escapeHtml(time)}</div>
+        <div>
+          <div class="v2-meta">${badge(item.category||"Sonstiges")}</div>
+          <h4>${escapeHtml(displayValue(item.title,"Programmpunkt ohne Titel"))}</h4>
+          ${item.location?`<p>${escapeHtml(item.location)}</p>`:""}
+          ${item.description?`<p>${escapeHtml(item.description)}</p>`:""}
+          ${item.duration||item.notes?`<p class="v2-muted">${escapeHtml([item.duration,item.notes].filter(Boolean).join(" · "))}</p>`:""}
+        </div>
+      </article>
+    `;
+  }
+
+  function programEditFormMarkup(customer){
+    const draft=state.programEditDraft||programEditValues(customer);
+    const dirty=hasDirtyProgramEdit();
+    const status=state.programEditMessage||(dirty?"Ungespeicherte Aenderungen":"");
+    const statusKind=state.programEditMessageKind||(dirty?"dirty":"");
+    return `
+      <form class="v2-edit-form v2-program-edit-form" id="programEditForm" novalidate>
+        <div class="v2-edit-head">
+          <div>
+            <h3>Programm bearbeiten</h3>
+            <p class="v2-muted">Tage und Programmpunkte werden im bestehenden Kundenentwurf gespeichert. Dokumente, Publish, Uploads und Share-Links bleiben unveraendert.</p>
+          </div>
+          <span class="v2-edit-status ${escapeHtml(statusKind)}" id="programEditStatus" aria-live="polite">${escapeHtml(status)}</span>
+        </div>
+        <div class="v2-program-editor">
+          ${arrayValue(draft.days).map((day,index)=>programEditDayMarkup(day,index)).join("")}
+        </div>
+        <div class="v2-program-add-day">
+          <button class="v2-button soft" type="button" data-program-edit-action="add-day">+ Tag</button>
+        </div>
+        <div class="v2-edit-actions">
+          <button class="v2-button primary" type="submit" data-program-edit-action="save" ${state.programEditSaving?"disabled aria-busy=\"true\"":""}>Speichern</button>
+          <button class="v2-button soft" type="button" data-program-edit-action="cancel" ${state.programEditSaving?"disabled":""}>Abbrechen</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function programEditDayMarkup(day,dayIndex){
+    const titleId=`program-${dayIndex}-title`;
+    const dateId=`program-${dayIndex}-date`;
+    return `
+      <article class="v2-program-day v2-program-edit-day" data-program-day="${dayIndex}">
+        <header class="v2-program-day-head">
+          <div>
+            <p class="v2-eyebrow">Tag ${dayIndex+1}</p>
+            <h3>${escapeHtml(day.date?formatLongDate(day.date):displayValue(day.title,`Tag ${dayIndex+1}`))}</h3>
+          </div>
+          <button class="v2-button small soft" type="button" data-program-edit-action="delete-day" data-day-index="${dayIndex}" ${arrayValue(state.programEditDraft?.days).length<=1?"disabled":""}>Tag loeschen</button>
+        </header>
+        <div class="v2-edit-grid">
+          <label class="v2-edit-field" for="${titleId}"><span>Titel</span><input id="${titleId}" name="title" data-day-index="${dayIndex}" value="${escapeHtml(day.title||"")}"></label>
+          <label class="v2-edit-field" for="${dateId}"><span>Datum</span><input id="${dateId}" name="date" type="date" data-day-index="${dayIndex}" value="${escapeHtml(day.date||"")}"></label>
+        </div>
+        <div class="v2-program-edit-items">
+          ${arrayValue(day.items).map((item,itemIndex)=>programEditItemMarkup(item,dayIndex,itemIndex)).join("")}
+        </div>
+        <button class="v2-button soft" type="button" data-program-edit-action="add-item" data-day-index="${dayIndex}">+ Programmpunkt</button>
+      </article>
+    `;
+  }
+
+  function programEditItemMarkup(item,dayIndex,itemIndex){
+    const prefix=`program-${dayIndex}-${itemIndex}`;
+    const error=state.programEditErrors?.[`${prefix}-title`]||"";
+    return `
+      <article class="v2-program-edit-item" data-program-item="${itemIndex}">
+        <div class="v2-program-item-toolbar">
+          <strong>Programmpunkt ${itemIndex+1}</strong>
+          <div>
+            <button class="v2-icon-button" type="button" title="Nach oben" data-program-edit-action="move-up" data-day-index="${dayIndex}" data-item-index="${itemIndex}" ${itemIndex===0?"disabled":""}>↑</button>
+            <button class="v2-icon-button" type="button" title="Nach unten" data-program-edit-action="move-down" data-day-index="${dayIndex}" data-item-index="${itemIndex}" ${itemIndex>=arrayValue(state.programEditDraft?.days?.[dayIndex]?.items).length-1?"disabled":""}>↓</button>
+            <button class="v2-icon-button" type="button" title="Loeschen" data-program-edit-action="delete-item" data-day-index="${dayIndex}" data-item-index="${itemIndex}">×</button>
+          </div>
+        </div>
+        <div class="v2-edit-grid">
+          ${programInput(prefix,"time","Uhrzeit",item.time,{type:"time",dayIndex,itemIndex,disabled:item.allDay})}
+          ${programCheckbox(prefix,"allDay","Ganztagig",item.allDay,{dayIndex,itemIndex})}
+          ${programInput(prefix,"title","Titel",item.title,{required:true,error,dayIndex,itemIndex})}
+          ${programSelect(prefix,"category","Kategorie",item.category,PROGRAM_CATEGORIES,{dayIndex,itemIndex})}
+          ${programInput(prefix,"location","Ort",item.location,{dayIndex,itemIndex})}
+          ${programInput(prefix,"duration","Dauer",item.duration,{dayIndex,itemIndex})}
+          ${programTextarea(prefix,"description","Beschreibung",item.description,{dayIndex,itemIndex})}
+          ${programTextarea(prefix,"notes","Hinweise",item.notes,{dayIndex,itemIndex})}
+        </div>
+      </article>
+    `;
+  }
+
+  function programInput(prefix,name,label,value,{type="text",required=false,error="",dayIndex,itemIndex,disabled=false}={}){
+    const id=`${prefix}-${name}`;
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}${required?" *":""}</span><input id="${id}" name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value||"")}" data-day-index="${dayIndex}" ${itemIndex!==undefined?`data-item-index="${itemIndex}"`:""} ${required?"required":""} ${disabled?"disabled":""} aria-invalid="${error?"true":"false"}" aria-describedby="${error?`${id}-error`:""}">${error?`<small class="v2-field-error" id="${id}-error">${escapeHtml(error)}</small>`:""}</label>`;
+  }
+
+  function programTextarea(prefix,name,label,value,{dayIndex,itemIndex}={}){
+    const id=`${prefix}-${name}`;
+    return `<label class="v2-edit-field full" for="${id}"><span>${escapeHtml(label)}</span><textarea id="${id}" name="${escapeHtml(name)}" rows="3" data-day-index="${dayIndex}" data-item-index="${itemIndex}">${escapeHtml(value||"")}</textarea></label>`;
+  }
+
+  function programSelect(prefix,name,label,value,options,{dayIndex,itemIndex}={}){
+    const id=`${prefix}-${name}`;
+    const normalized=normalizeText(value);
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-day-index="${dayIndex}" data-item-index="${itemIndex}">${options.map(option=>`<option value="${escapeHtml(option)}" ${normalizeText(option)===normalized?"selected":""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
+  }
+
+  function programCheckbox(prefix,name,label,checked,{dayIndex,itemIndex}={}){
+    const id=`${prefix}-${name}`;
+    return `<label class="v2-edit-check" for="${id}"><input id="${id}" name="${escapeHtml(name)}" type="checkbox" data-day-index="${dayIndex}" data-item-index="${itemIndex}" ${checked?"checked":""}><span>${escapeHtml(label)}</span></label>`;
+  }
+
   function placeholderTabMarkup(){
     return `<article class="v2-placeholder"><h3>Bereich noch nicht angebunden</h3><p>Dieser Bereich wird in einem folgenden Auftrag angebunden.</p></article>`;
   }
@@ -1627,6 +2136,7 @@
       if(!confirmDiscardCustomerEdit())return false;
       resetCustomerEditState();
       resetTripEditState();
+      resetProgramEditState();
     }
     state.route=parsed.route;
     state.selectedCustomerId=parsed.customerId||"";
@@ -1682,6 +2192,7 @@
     if(!confirmDiscardCustomerEdit())return;
     resetCustomerEditState();
     resetTripEditState();
+    resetProgramEditState();
     window.location.href=classicEditorUrl(id);
   }
 
@@ -1728,6 +2239,33 @@
     if(field.name==="children")renderCustomerDetail();
   }
 
+  function handleProgramEditInput(event){
+    const field=event.target.closest("#programEditForm input,#programEditForm textarea,#programEditForm select");
+    if(!field||!state.programEditDraft)return;
+    const dayIndex=Number(field.dataset.dayIndex);
+    const itemIndex=field.dataset.itemIndex!==undefined?Number(field.dataset.itemIndex):null;
+    const day=state.programEditDraft.days?.[dayIndex];
+    if(!day)return;
+    if(itemIndex===null||Number.isNaN(itemIndex)){
+      day[field.name]=field.value;
+    }else{
+      const item=day.items?.[itemIndex];
+      if(!item)return;
+      item[field.name]=field.type==="checkbox"?field.checked:field.value;
+      if(field.name==="allDay"&&field.checked)item.time="";
+    }
+    const errorKey=itemIndex===null?`program-${dayIndex}-${field.name}`:`program-${dayIndex}-${itemIndex}-${field.name}`;
+    if(state.programEditErrors[errorKey]){
+      delete state.programEditErrors[errorKey];
+      const error=byId(`${errorKey}-error`);
+      if(error)error.remove();
+      field.setAttribute("aria-invalid","false");
+    }
+    const dirty=hasDirtyProgramEdit();
+    setProgramEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
+    if(field.name==="allDay")renderCustomerDetail();
+  }
+
   function bind(){
     byId("adminLoginForm").addEventListener("submit",event=>{event.preventDefault();signIn();});
     byId("logoutButton").addEventListener("click",async()=>{
@@ -1766,6 +2304,22 @@
         if(action==="cancel")cancelTripEdit();
         return;
       }
+      const programAction=event.target.closest("[data-program-edit-action]");
+      if(programAction){
+        const action=programAction.dataset.programEditAction;
+        const customer=customerById(state.selectedCustomerId);
+        const dayIndex=Number(programAction.dataset.dayIndex);
+        const itemIndex=Number(programAction.dataset.itemIndex);
+        if(action==="edit"&&customer)startProgramEdit(customer);
+        if(action==="cancel")cancelProgramEdit();
+        if(action==="add-day")addProgramDay();
+        if(action==="delete-day")deleteProgramDay(dayIndex);
+        if(action==="add-item")addProgramItem(dayIndex);
+        if(action==="delete-item")deleteProgramItem(dayIndex,itemIndex);
+        if(action==="move-up")moveProgramItem(dayIndex,itemIndex,-1);
+        if(action==="move-down")moveProgramItem(dayIndex,itemIndex,1);
+        return;
+      }
       const classic=event.target.closest("[data-classic-editor]");
       if(classic){event.preventDefault();openClassicEditor(classic.dataset.classicEditor);return;}
       if(event.target.closest("a"))return;
@@ -1777,8 +2331,8 @@
       if(event.target.id==="retryInlineButton"&&confirmDiscardCustomerEdit())loadCustomers();
       if(event.target.id==="retryDetailButton"&&confirmDiscardCustomerEdit())loadCustomers();
     });
-    document.addEventListener("input",event=>{handleCustomerEditInput(event);handleTripEditInput(event);});
-    document.addEventListener("change",handleTripEditInput);
+    document.addEventListener("input",event=>{handleCustomerEditInput(event);handleTripEditInput(event);handleProgramEditInput(event);});
+    document.addEventListener("change",event=>{handleTripEditInput(event);handleProgramEditInput(event);});
     document.addEventListener("submit",event=>{
       if(event.target.id==="customerEditForm"){
         event.preventDefault();
@@ -1787,6 +2341,10 @@
       if(event.target.id==="tripEditForm"){
         event.preventDefault();
         saveTripEdit();
+      }
+      if(event.target.id==="programEditForm"){
+        event.preventDefault();
+        saveProgramEdit();
       }
     });
     document.addEventListener("keydown",event=>{
@@ -1817,7 +2375,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=15/);
-    assert.match(html,/admin-v2\.js\?v=14/);
+    assert.match(html,/admin-v2\.css\?v=16/);
+    assert.match(html,/admin-v2\.js\?v=15/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -111,7 +111,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/Anforderungen \/ Wuensche/);
     assert.match(js,/role="tablist"/);
     assert.match(js,/aria-selected="\$\{key===tab\?"true":"false"\}"/);
-    assert.match(js,/Dieser Bereich wird in einem folgenden Auftrag angebunden\./);
+    assert.match(js,/tab==="programm"\?programTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.doesNotMatch(js,/Familie Mueller|Familie Rossi|Herr Schneider|mockCustomers|Mock-Daten/i);
     assert.match(js,/data-customer-edit-action="edit">Bearbeiten/);
   });
@@ -119,7 +119,7 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("renders the trip tab read-only from the already loaded customer object",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(js,/tab==="reise"\?tripTabMarkup\(customer\):placeholderTabMarkup\(\)/);
+    assert.match(js,/tab==="reise"\?tripTabMarkup\(customer\):tab==="programm"\?programTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function buildTripViewModel\(customer\)/);
     assert.match(js,/function tripTabMarkup\(customer\)/);
     assert.match(js,/const travel=objectValue\(customer\.travel,customer\.trip,customer\.tripData,customer\.travelData,customer\.journey,customer\.reise,customer\.profile\?\.travel\)/);
@@ -197,6 +197,51 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/values\.childAges=values\.childAges\.slice\(0,childCount\)/);
     assert.match(js,/next\.childAges=values\.childAges/);
     assert.match(js,/next\.childrenAges=values\.childAges/);
+    assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
+    assert.doesNotMatch(js,/\.publishCustomer\(|uploadCustomerDocument\(|createPortalShare\(|revokePortalShare\(/);
+  });
+
+  it("activates the program tab with editable itinerary days and items",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(js,/programEditMode:false/);
+    assert.match(js,/programEditDraft:null/);
+    assert.match(js,/let programSavePromise=null/);
+    assert.match(js,/const PROGRAM_SOURCE_KEYS=\["program","programme","itineraryDays","dailyProgram","travelProgram","itinerary","activities","agenda","timeline"\]/);
+    assert.match(js,/function programSource\(customer\)/);
+    assert.match(js,/function programEditValues\(customer\)/);
+    assert.match(js,/function generatedProgramDays\(customer\)/);
+    assert.match(js,/function groupFlatProgramItems\(items,dates\)/);
+    assert.match(js,/source\.value\.length&&source\.value\.every\(isFlatProgramItem\)/);
+    assert.match(js,/function programTabMarkup\(customer\)/);
+    assert.match(js,/function programEditFormMarkup\(customer\)/);
+    assert.match(js,/data-program-edit-action="edit">Programm bearbeiten/);
+    assert.match(js,/data-program-edit-action="add-item"/);
+    assert.match(js,/data-program-edit-action="add-day"/);
+    assert.match(js,/data-program-edit-action="delete-day"/);
+    assert.match(js,/data-program-edit-action="move-up"/);
+    assert.match(js,/data-program-edit-action="move-down"/);
+    assert.match(js,/programInput\(prefix,"time","Uhrzeit",item\.time,\{type:"time"/);
+    assert.match(js,/programCheckbox\(prefix,"allDay","Ganztagig"/);
+    assert.match(js,/Ganztagig/);
+    assert.match(css,/\.v2-program-overview,\.v2-program-days,\.v2-program-editor,\.v2-program-edit-items\{display:grid;gap:16px\}/);
+    assert.match(css,/\.v2-program-item\{display:grid;grid-template-columns:minmax\(76px,96px\) minmax\(0,1fr\)/);
+    assert.match(css,/\.v2-icon-button\{width:44px;height:44px/);
+  });
+
+  it("saves program edits through the existing draft facade without direct Firestore",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/function validateProgramEdit\(draft\)/);
+    assert.match(js,/errors\[`program-\$\{dayIndex\}-\$\{itemIndex\}-title`\]="Bitte einen Titel eingeben\."/);
+    assert.match(js,/function mergeProgramEdit\(customer,values\)/);
+    assert.match(js,/const fullCustomer=mergeProgramEdit\(customer,validation\.values\)/);
+    assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
+    assert.match(js,/Programm erfolgreich gespeichert\./);
+    assert.match(js,/if\(values\.sourceScope==="root"\|\|key in next\)next\[key\]=days/);
+    assert.match(js,/updateProgramObjects\(next,values,days\)/);
+    assert.match(js,/function sortProgramItems\(items\)/);
+    assert.match(js,/state\.programEditMode&&programEditFingerprint/);
+    assert.match(js,/hasDirtyCustomerEdit\(\)\|\|hasDirtyTripEdit\(\)\|\|hasDirtyProgramEdit\(\)/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
     assert.doesNotMatch(js,/\.publishCustomer\(|uploadCustomerDocument\(|createPortalShare\(|revokePortalShare\(/);
   });

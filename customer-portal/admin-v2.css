@@ -228,6 +228,8 @@ p{color:var(--muted);line-height:1.55}
 .v2-upload-head h3{margin-bottom:6px}
 .v2-upload-actions{display:flex;gap:10px;flex-wrap:wrap}
 .v2-upload-actions .v2-button{min-height:48px}
+.v2-upload-actions .v2-button.disabled{opacity:.48;pointer-events:none;box-shadow:none}
+.v2-upload-warning{margin:0;padding:10px 12px;border-radius:14px;background:var(--rose);color:#8b3d31;font-weight:850}
 .v2-file-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .v2-upload-drop-text{display:grid;gap:3px;padding:16px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.72);color:var(--muted)}
 .v2-upload-drop-text strong{color:var(--ink)}

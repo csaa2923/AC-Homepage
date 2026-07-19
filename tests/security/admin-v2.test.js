@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=21/);
-    assert.match(html,/admin-v2\.js\?v=20/);
+    assert.match(html,/admin-v2\.css\?v=22/);
+    assert.match(html,/admin-v2\.js\?v=21/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -353,8 +353,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=21/);
-    assert.match(html,/admin-v2\.js\?v=20/);
+    assert.match(html,/admin-v2\.css\?v=22/);
+    assert.match(html,/firebase-database\.js"><\/script>\s*<script src="firebase-storage\.js\?v=3"><\/script>\s*<script src="admin-v2\.js\?v=21"><\/script>/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/const DOCUMENT_MIME_TYPES=new Set\(\[/);
     assert.match(js,/const DOCUMENT_EXTENSIONS=new Set\(\["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx"\]\)/);
@@ -368,6 +368,11 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/type="file" accept="image\/\*" capture="environment" data-document-upload/);
     assert.match(js,/data-upload-drop-zone/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
+    assert.match(js,/function documentUploadReady\(\)/);
+    assert.match(js,/typeof window\.ACTFirebaseStorage\?\.uploadCustomerDocument==="function"/);
+    assert.match(js,/Der Datei-Upload konnte nicht initialisiert werden\. Firebase Storage ist derzeit nicht verfuegbar\./);
+    assert.match(js,/aria-disabled="\$\{uploadReady\?"false":"true"\}"/);
+    assert.match(js,/if\(!documentUploadReady\(\)\)\{/);
     assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
     assert.match(js,/function persistUploadedDocument\(customer,documentItem\)/);
     assert.match(js,/function retryDocumentUpload\(id\)/);
@@ -377,6 +382,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-upload-panel/);
     assert.match(css,/\.v2-upload-row progress/);
     assert.match(css,/\.v2-upload-actions \.v2-button\{min-height:48px/);
+    assert.match(css,/\.v2-upload-actions \.v2-button\.disabled/);
+    assert.match(css,/\.v2-upload-warning/);
     assert.match(css,/\.v2-file-input/);
     assert.doesNotMatch(js,/uploadBytesResumable\(|getDownloadURL\(|ref\(ready\.storage/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);

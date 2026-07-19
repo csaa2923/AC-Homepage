@@ -1438,6 +1438,14 @@
     return "";
   }
 
+  function documentUploadReady(){
+    return typeof window.ACTFirebaseStorage?.uploadCustomerDocument==="function";
+  }
+
+  function documentUploadUnavailableMessage(){
+    return "Der Datei-Upload konnte nicht initialisiert werden. Firebase Storage ist derzeit nicht verfuegbar.";
+  }
+
   function uploadRowsMarkup(){
     if(!state.documentUploads.length)return "";
     return `
@@ -1460,6 +1468,9 @@
   function uploadPanelMarkup(customer=null){
     const selected=selectedUploadCustomer(customer);
     const targetId=selected?.customerId||"";
+    const uploadReady=documentUploadReady();
+    const disabledAttr=uploadReady?"":"disabled";
+    const disabledClass=uploadReady?"":" disabled";
     return `
       <article class="v2-upload-panel ${state.documentDropActive?"drag-active":""}" data-upload-drop-zone>
         <div class="v2-upload-head">
@@ -1476,13 +1487,14 @@
           </label>
         `}
         <div class="v2-upload-actions">
-          <label class="v2-button primary" for="${customer?"customerDocumentUploadInput":"globalDocumentUploadInput"}">Dokument hochladen</label>
-          <input class="v2-file-input" id="${customer?"customerDocumentUploadInput":"globalDocumentUploadInput"}" type="file" accept=".pdf,image/*,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" data-document-upload ${customer?`data-upload-customer="${escapeHtml(targetId)}"`:""}>
-          <label class="v2-button soft" for="${customer?"customerMultiDocumentUploadInput":"globalMultiDocumentUploadInput"}">Mehrere Dateien hochladen</label>
-          <input class="v2-file-input" id="${customer?"customerMultiDocumentUploadInput":"globalMultiDocumentUploadInput"}" type="file" accept=".pdf,image/*,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" data-document-upload ${customer?`data-upload-customer="${escapeHtml(targetId)}"`:""} multiple>
-          <label class="v2-button soft" for="${customer?"customerCameraUploadInput":"globalCameraUploadInput"}">Foto aufnehmen</label>
-          <input class="v2-file-input" id="${customer?"customerCameraUploadInput":"globalCameraUploadInput"}" type="file" accept="image/*" capture="environment" data-document-upload ${customer?`data-upload-customer="${escapeHtml(targetId)}"`:""}>
+          <label class="v2-button primary${disabledClass}" aria-disabled="${uploadReady?"false":"true"}" for="${customer?"customerDocumentUploadInput":"globalDocumentUploadInput"}">Dokument hochladen</label>
+          <input class="v2-file-input" id="${customer?"customerDocumentUploadInput":"globalDocumentUploadInput"}" type="file" accept=".pdf,image/*,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" data-document-upload ${customer?`data-upload-customer="${escapeHtml(targetId)}"`:""} ${disabledAttr}>
+          <label class="v2-button soft${disabledClass}" aria-disabled="${uploadReady?"false":"true"}" for="${customer?"customerMultiDocumentUploadInput":"globalMultiDocumentUploadInput"}">Mehrere Dateien hochladen</label>
+          <input class="v2-file-input" id="${customer?"customerMultiDocumentUploadInput":"globalMultiDocumentUploadInput"}" type="file" accept=".pdf,image/*,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" data-document-upload ${customer?`data-upload-customer="${escapeHtml(targetId)}"`:""} multiple ${disabledAttr}>
+          <label class="v2-button soft${disabledClass}" aria-disabled="${uploadReady?"false":"true"}" for="${customer?"customerCameraUploadInput":"globalCameraUploadInput"}">Foto aufnehmen</label>
+          <input class="v2-file-input" id="${customer?"customerCameraUploadInput":"globalCameraUploadInput"}" type="file" accept="image/*" capture="environment" data-document-upload ${customer?`data-upload-customer="${escapeHtml(targetId)}"`:""} ${disabledAttr}>
         </div>
+        ${uploadReady?"":`<p class="v2-upload-warning">${documentUploadUnavailableMessage()}</p>`}
         <div class="v2-upload-drop-text">
           <strong>Dateien hier ablegen</strong>
           <span>Mehrfachupload ist moeglich. Auf Smartphones bitte die Buttons verwenden.</span>
@@ -1775,7 +1787,7 @@
     const customer=customerById(upload.customerId);
     if(!customer)throw new Error("Die Datei konnte keinem gueltigen Kunden zugeordnet werden.");
     validateDocumentUploadFile(upload.file);
-    if(!window.ACTFirebaseStorage?.uploadCustomerDocument)throw new Error("Firebase Storage ist nicht geladen. Bitte den klassischen Admin verwenden.");
+    if(!documentUploadReady())throw new Error(documentUploadUnavailableMessage());
     const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
     if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
     setUploadState(upload.id,{status:"uploading",progress:0,error:""});
@@ -1808,6 +1820,11 @@
       renderDocumentUploadSurfaces();
       return;
     }
+    if(!documentUploadReady()){
+      setDocumentEditMessage(documentUploadUnavailableMessage(),"error");
+      renderDocumentUploadSurfaces();
+      return;
+    }
     state.documentUploadCustomerId=targetCustomerId;
     const uploads=fileList.map(file=>({
       id:`upload-${Date.now()}-${++uploadSequence}`,
@@ -1826,7 +1843,8 @@
         await uploadSingleDocument(upload);
       }catch(error){
         console.error("[ACT Admin V2] Dokument-Upload:",error&&error.message?error.message:"Fehler");
-        setDocumentEditMessage("Upload fehlgeschlagen. Bitte Datei pruefen oder den klassischen Admin verwenden.","error");
+        const message=error&&error.message?error.message:"Upload fehlgeschlagen.";
+        setDocumentEditMessage(message===documentUploadUnavailableMessage()?message:"Upload fehlgeschlagen. Bitte Datei pruefen oder den klassischen Admin verwenden.","error");
         setUploadState(upload.id,{status:"error",progress:0,error:error&&error.message?error.message:"Upload fehlgeschlagen."});
       }
     }
@@ -1836,6 +1854,11 @@
   function retryDocumentUpload(id){
     const upload=state.documentUploads.find(item=>item.id===id);
     if(!upload||!upload.file)return;
+    if(!documentUploadReady()){
+      setDocumentEditMessage(documentUploadUnavailableMessage(),"error");
+      setUploadState(upload.id,{status:"error",progress:0,error:documentUploadUnavailableMessage()});
+      return;
+    }
     upload.status="queued";
     upload.progress=0;
     upload.error="";

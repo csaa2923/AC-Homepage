@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=18/);
-    assert.match(html,/admin-v2\.js\?v=17/);
+    assert.match(html,/admin-v2\.css\?v=19/);
+    assert.match(html,/admin-v2\.js\?v=18/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -111,7 +111,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/Anforderungen \/ Wuensche/);
     assert.match(js,/role="tablist"/);
     assert.match(js,/aria-selected="\$\{key===tab\?"true":"false"\}"/);
-    assert.match(js,/tab==="programm"\?programTabMarkup\(customer\):placeholderTabMarkup\(\)/);
+    assert.match(js,/tab==="programm"\?programTabMarkup\(customer\):tab==="dokumente"\?documentsTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.doesNotMatch(js,/Familie Mueller|Familie Rossi|Herr Schneider|mockCustomers|Mock-Daten/i);
     assert.match(js,/data-customer-edit-action="edit">Bearbeiten/);
   });
@@ -119,7 +119,7 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("renders the trip tab read-only from the already loaded customer object",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(js,/tab==="reise"\?tripTabMarkup\(customer\):tab==="programm"\?programTabMarkup\(customer\):placeholderTabMarkup\(\)/);
+    assert.match(js,/tab==="reise"\?tripTabMarkup\(customer\):tab==="programm"\?programTabMarkup\(customer\):tab==="dokumente"\?documentsTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function buildTripViewModel\(customer\)/);
     assert.match(js,/function tripTabMarkup\(customer\)/);
     assert.match(js,/const travel=objectValue\(customer\.travel,customer\.trip,customer\.tripData,customer\.travelData,customer\.journey,customer\.reise,customer\.profile\?\.travel\)/);
@@ -293,6 +293,56 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-program-image/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
     assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
+  });
+
+  it("adds document metadata management without replacing uploads or redaction",()=>{
+    const html=readProjectFile("customer-portal/admin-v2.html");
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    const redact=readProjectFile("customer-portal/redact-allowlist.js");
+    assert.match(html,/id="documentsRoot"/);
+    assert.match(js,/documentEditMode:false/);
+    assert.match(js,/let documentSavePromise=null/);
+    assert.match(js,/const DOCUMENT_CATEGORIES=\["Flug","Hotel","Restaurant","Aktivitaet","Transfer","Mietwagen","Ticket","Voucher","Versicherung","Rechnung","Reisepass","Visum","Sonstiges"\]/);
+    assert.match(js,/const DOCUMENT_TYPES=\["PDF","Bild","QR-Code","Link","Text","Dokument"\]/);
+    assert.match(js,/const DOCUMENT_ASSIGNMENTS=\["Reise","Programmpunkt","Buchung"\]/);
+    assert.match(js,/function normalizeDocumentItem\(item,index=0\)/);
+    assert.match(js,/categoryCandidate=firstValue\(doc\.category,doc\.documentCategory,DOCUMENT_CATEGORIES\.includes\(doc\.type\)\?doc\.type:"","Sonstiges"\)/);
+    assert.match(js,/programItemId:firstValue\(doc\.programItemId,doc\.programId,doc\.activityId,doc\.itemId\)/);
+    assert.match(js,/bookingId:firstValue\(doc\.bookingId,doc\.booking,doc\.reservationId\)/);
+    assert.match(js,/expiryDate:dateInputValue\(firstValue\(doc\.expiryDate,doc\.expiresAt,doc\.validUntil,doc\.ablaufdatum\)\)/);
+    assert.match(js,/issuer:firstValue\(doc\.issuer,doc\.provider,doc\.vendor,doc\.aussteller\)/);
+    assert.match(js,/referenceNumber:firstValue\(doc\.referenceNumber,doc\.reference,doc\.confirmationNumber,doc\.ref\)/);
+    assert.match(js,/tags:normalizeTags\(doc\.tags\)/);
+    assert.match(js,/function documentStatus\(doc\)/);
+    assert.match(js,/return "Abgelaufen"/);
+    assert.match(js,/return "Laeuft bald ab"/);
+    assert.match(js,/function documentPreview\(doc\)/);
+    assert.match(js,/class="v2-document-thumb"/);
+    assert.match(js,/function documentMatchesProgramItem\(doc,item\)/);
+    assert.match(js,/class="v2-program-attachments"/);
+    assert.match(js,/function filteredDocumentRecords\(\)/);
+    assert.match(js,/function compareDocuments\(a,b,sort=state\.documentSort\)/);
+    assert.match(js,/data-document-edit-action="edit">Dokumente bearbeiten/);
+    assert.match(js,/documentSelect\(prefix,"category","Kategorie",doc\.category,DOCUMENT_CATEGORIES/);
+    assert.match(js,/documentSelect\(prefix,"documentType","Dokumenttyp",doc\.documentType,DOCUMENT_TYPES/);
+    assert.match(js,/documentSelect\(prefix,"visibility","Sichtbarkeit",doc\.visibility\|\|"Kundenportal",DOCUMENT_VISIBILITIES/);
+    assert.match(js,/documentSelect\(prefix,"assignmentType","Zuordnung",doc\.assignmentType\|\|"Reise",DOCUMENT_ASSIGNMENTS/);
+    assert.match(js,/documentInput\(prefix,"programItemId","Programmpunkt",doc\.programItemId/);
+    assert.match(js,/documentInput\(prefix,"bookingId","Buchung",doc\.bookingId/);
+    assert.match(js,/documentInput\(prefix,"tripId","Reise",doc\.tripId/);
+    assert.match(js,/documentInput\(prefix,"expiryDate","Ablaufdatum",doc\.expiryDate,\{type:"date"/);
+    assert.match(js,/documentTextarea\(prefix,"description","Beschreibung",doc\.description/);
+    assert.match(js,/documentTextarea\(prefix,"internalNotes","Interne Notizen \(nur Admin\)",doc\.internalNotes/);
+    assert.match(js,/if\(cleanValue\(item\.url\)&&!safeDocumentUrl\(item\.url\)\)/);
+    assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
+    assert.match(css,/\.v2-document-card/);
+    assert.match(css,/\.v2-document-actions \.v2-button\{min-height:44px/);
+    assert.match(redact,/const DOCUMENT_PUBLIC_FIELDS=new Set\(\[/);
+    const publicDocumentFields=redact.match(/const DOCUMENT_PUBLIC_FIELDS=new Set\(\[([\s\S]*?)\]\);/)[1];
+    assert.doesNotMatch(publicDocumentFields,/internalNotes/);
+    assert.doesNotMatch(js,/uploadCustomerDocument\(/);
+    assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
   });
 
   it("saves program edits through the existing draft facade without direct Firestore",()=>{

@@ -32,7 +32,18 @@
     programEditErrors:{},
     programEditSaving:false,
     programEditMessage:"",
-    programEditMessageKind:""
+    programEditMessageKind:"",
+    documentEditMode:false,
+    documentEditDraft:null,
+    documentEditOriginal:"",
+    documentEditErrors:{},
+    documentEditSaving:false,
+    documentEditMessage:"",
+    documentEditMessageKind:"",
+    documentQuery:"",
+    documentCategory:"",
+    documentAssignment:"",
+    documentSort:"uploaded"
   };
 
   const byId=id=>document.getElementById(id);
@@ -53,6 +64,7 @@
   let customerSavePromise=null;
   let tripSavePromise=null;
   let programSavePromise=null;
+  let documentSavePromise=null;
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -105,6 +117,10 @@
     const date=dateValue(value);
     if(!date)return "";
     return new Intl.DateTimeFormat("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"}).format(date);
+  }
+
+  function formatUploadDate(value){
+    return formatDate(value);
   }
 
   function formatPeriod(customer){
@@ -413,8 +429,12 @@
     return state.programEditMode&&programEditFingerprint(state.programEditDraft||{})!==state.programEditOriginal;
   }
 
+  function hasDirtyDocumentEdit(){
+    return state.documentEditMode&&documentEditFingerprint(state.documentEditDraft||{})!==state.documentEditOriginal;
+  }
+
   function hasDirtyEdits(){
-    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit();
+    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit()||hasDirtyDocumentEdit();
   }
 
   function setCustomerEditMessage(message,kind=""){
@@ -476,9 +496,22 @@
     }
   }
 
+  function resetDocumentEditState({keepMessage=false}={}){
+    state.documentEditMode=false;
+    state.documentEditDraft=null;
+    state.documentEditOriginal="";
+    state.documentEditErrors={};
+    state.documentEditSaving=false;
+    if(!keepMessage){
+      state.documentEditMessage="";
+      state.documentEditMessageKind="";
+    }
+  }
+
   function startCustomerEdit(customer){
     resetTripEditState();
     resetProgramEditState();
+    resetDocumentEditState();
     const draft=customerEditValues(customer);
     state.customerEditMode=true;
     state.customerEditDraft={...draft};
@@ -661,6 +694,7 @@
   function startTripEdit(customer){
     resetCustomerEditState();
     resetProgramEditState();
+    resetDocumentEditState();
     const draft=tripEditValues(customer);
     state.tripEditMode=true;
     state.tripEditDraft={...draft};
@@ -811,6 +845,10 @@
   const PROGRAM_CATEGORIES=["Unterkunft","Fruehstueck","Mittagessen","Abendessen","Restaurant","Aktivitaet","Transfer","Flug","Bahn","Bus","Taxi","Wanderung","Wellness","Shopping","Freizeit","Termin","Ticket","Sonstiges"];
   const PROGRAM_PRIORITIES=["","Highlight","Empfehlenswert","Optional","Schlechtwetteralternative"];
   const PROGRAM_CURRENCIES=["EUR","CHF","USD","GBP"];
+  const DOCUMENT_CATEGORIES=["Flug","Hotel","Restaurant","Aktivitaet","Transfer","Mietwagen","Ticket","Voucher","Versicherung","Rechnung","Reisepass","Visum","Sonstiges"];
+  const DOCUMENT_TYPES=["PDF","Bild","QR-Code","Link","Text","Dokument"];
+  const DOCUMENT_VISIBILITIES=["Kundenportal","Intern"];
+  const DOCUMENT_ASSIGNMENTS=["Reise","Programmpunkt","Buchung"];
 
   function dateIsoOffset(startValue,index){
     const start=dateValue(startValue);
@@ -1093,6 +1131,7 @@
   function startProgramEdit(customer){
     resetCustomerEditState();
     resetTripEditState();
+    resetDocumentEditState();
     const draft=programEditValues(customer);
     state.programEditMode=true;
     state.programEditDraft=clone(draft);
@@ -1288,6 +1327,506 @@
       }
     })();
     return programSavePromise;
+  }
+
+  function documentVisibleValue(item){
+    const value=item?.visible!==undefined?item.visible:item?.visibleForCustomer!==undefined?item.visibleForCustomer:item?.customerVisible;
+    if(value===undefined)return true;
+    if(typeof value==="boolean")return value;
+    return /^(true|ja|yes|1|kundenportal|sichtbar)$/i.test(cleanValue(value));
+  }
+
+  function safeDocumentUrl(value){
+    return safeWebUrl(value);
+  }
+
+  function documentId(item,index=0){
+    return cleanValue(item?.documentId||item?.id)||`doc-${index+1}`;
+  }
+
+  function documentTypeFromValue(item){
+    const explicit=firstValue(item.documentType,item.type,item.kind);
+    if(explicit)return explicit;
+    const mime=normalizeText(item.mimeType||item.contentType);
+    const url=normalizeText(item.url||item.downloadUrl||item.downloadURL||item.fileName||item.originalName);
+    if(mime.includes("pdf")||url.endsWith(".pdf"))return "PDF";
+    if(mime.includes("image")||/\.(jpg|jpeg|png|webp|gif)$/i.test(url))return "Bild";
+    if(url&&safeDocumentUrl(url))return "Link";
+    return "Dokument";
+  }
+
+  function normalizeTags(value){
+    if(Array.isArray(value))return value.map(cleanValue).filter(Boolean);
+    return cleanValue(value).split(/[,;\n]+/).map(item=>item.trim()).filter(Boolean);
+  }
+
+  function normalizeDocumentItem(item,index=0){
+    const doc=item&&typeof item==="object"?item:{};
+    const url=safeDocumentUrl(firstValue(doc.url,doc.downloadUrl,doc.downloadURL,doc.link,doc.href));
+    const categoryCandidate=firstValue(doc.category,doc.documentCategory,DOCUMENT_CATEGORIES.includes(doc.type)?doc.type:"","Sonstiges");
+    const documentType=documentTypeFromValue(doc);
+    const assignmentType=firstValue(doc.assignmentType,doc.assignment,doc.scope,doc.targetType,doc.programItemId||doc.bookingId?"Programmpunkt":"Reise");
+    return {
+      id:documentId(doc,index),
+      documentId:documentId(doc,index),
+      title:firstValue(doc.title,doc.name,doc.fileName,doc.originalName,`Dokument ${index+1}`),
+      fileName:firstValue(doc.fileName,doc.originalName,doc.name,doc.title),
+      category:DOCUMENT_CATEGORIES.includes(categoryCandidate)?categoryCandidate:"Sonstiges",
+      type:firstValue(doc.type,categoryCandidate),
+      documentType:DOCUMENT_TYPES.includes(documentType)?documentType:"Dokument",
+      url,
+      downloadUrl:safeDocumentUrl(firstValue(doc.downloadUrl,doc.downloadURL,doc.url)),
+      storagePath:cleanValue(doc.storagePath),
+      mimeType:firstValue(doc.mimeType,doc.contentType),
+      contentType:firstValue(doc.contentType,doc.mimeType),
+      size:firstValue(doc.size,doc.fileSize),
+      fileSize:firstValue(doc.fileSize,doc.size),
+      uploadedAt:firstValue(doc.uploadedAt,doc.uploadDate,doc.createdAt),
+      uploadDate:firstValue(doc.uploadDate,doc.uploadedAt,doc.createdAt),
+      visible:documentVisibleValue(doc),
+      visibility:documentVisibleValue(doc)?"Kundenportal":"Intern",
+      assignmentType:DOCUMENT_ASSIGNMENTS.includes(assignmentType)?assignmentType:"Reise",
+      tripId:firstValue(doc.tripId,doc.trip,doc.travelId,doc.reise),
+      programItemId:firstValue(doc.programItemId,doc.programId,doc.activityId,doc.itemId),
+      bookingId:firstValue(doc.bookingId,doc.booking,doc.reservationId),
+      assignedTo:normalizeTags(doc.assignedTo||doc.assignments),
+      expiryDate:dateInputValue(firstValue(doc.expiryDate,doc.expiresAt,doc.validUntil,doc.ablaufdatum)),
+      issuer:firstValue(doc.issuer,doc.provider,doc.vendor,doc.aussteller),
+      referenceNumber:firstValue(doc.referenceNumber,doc.reference,doc.confirmationNumber,doc.ref),
+      tags:normalizeTags(doc.tags),
+      description:firstValue(doc.description,doc.note,doc.notes),
+      note:firstValue(doc.note,doc.description),
+      internalNotes:firstValue(doc.internalNotes,doc.adminNotes,doc.privateNotes)
+    };
+  }
+
+  function normalizedDocuments(customer){
+    return arrayValue(customer?.documents).map(normalizeDocumentItem);
+  }
+
+  function documentEditValues(customer){
+    return {documents:normalizedDocuments(customer)};
+  }
+
+  function normalizedDocumentDraft(draft){
+    return {
+      documents:arrayValue(draft?.documents).map((item,index)=>({
+        id:documentId(item,index),
+        documentId:documentId(item,index),
+        title:cleanValue(item.title),
+        fileName:cleanValue(item.fileName),
+        category:DOCUMENT_CATEGORIES.includes(item.category)?item.category:"Sonstiges",
+        documentType:DOCUMENT_TYPES.includes(item.documentType)?item.documentType:"Dokument",
+        url:cleanValue(item.url),
+        downloadUrl:cleanValue(item.downloadUrl),
+        storagePath:cleanValue(item.storagePath),
+        mimeType:cleanValue(item.mimeType),
+        contentType:cleanValue(item.contentType),
+        size:cleanValue(item.size||item.fileSize),
+        fileSize:cleanValue(item.fileSize||item.size),
+        uploadedAt:cleanValue(item.uploadedAt),
+        visible:item.visibility==="Intern"?false:documentVisibleValue(item),
+        visibility:item.visibility==="Intern"?"Intern":"Kundenportal",
+        assignmentType:DOCUMENT_ASSIGNMENTS.includes(item.assignmentType)?item.assignmentType:"Reise",
+        tripId:cleanValue(item.tripId),
+        programItemId:cleanValue(item.programItemId),
+        bookingId:cleanValue(item.bookingId),
+        assignedTo:normalizeTags(item.assignedTo),
+        expiryDate:dateInputValue(item.expiryDate),
+        issuer:cleanValue(item.issuer),
+        referenceNumber:cleanValue(item.referenceNumber),
+        tags:normalizeTags(item.tags),
+        description:cleanValue(item.description),
+        note:cleanValue(item.note||item.description),
+        internalNotes:cleanValue(item.internalNotes),
+        order:index
+      }))
+    };
+  }
+
+  function documentEditFingerprint(values){
+    return JSON.stringify(normalizedDocumentDraft(values));
+  }
+
+  function setDocumentEditMessage(message,kind=""){
+    state.documentEditMessage=message||"";
+    state.documentEditMessageKind=kind;
+    const el=byId("documentEditStatus");
+    if(el){
+      el.textContent=state.documentEditMessage;
+      el.dataset.kind=kind;
+    }
+  }
+
+  function updateDocumentEditActions(){
+    const saving=state.documentEditSaving;
+    all("[data-document-edit-action]").forEach(button=>{
+      button.disabled=saving;
+      button.setAttribute("aria-busy",saving&&button.dataset.documentEditAction==="save"?"true":"false");
+    });
+  }
+
+  function validateDocumentEdit(draft){
+    const values=normalizedDocumentDraft(draft);
+    const errors={};
+    values.documents.forEach((item,index)=>{
+      if(!item.title)errors[`document-${index}-title`]="Bitte einen Dokumenttitel eingeben.";
+      if(cleanValue(item.url)&&!safeDocumentUrl(item.url))errors[`document-${index}-url`]="Bitte einen sicheren http- oder https-Link eingeben.";
+      if(cleanValue(item.downloadUrl)&&!safeDocumentUrl(item.downloadUrl))errors[`document-${index}-downloadUrl`]="Bitte einen sicheren Download-Link eingeben.";
+    });
+    return {valid:!Object.keys(errors).length,errors,values};
+  }
+
+  function documentSaveItems(values){
+    return values.documents.map(item=>compactObject({
+      id:item.id,
+      documentId:item.documentId,
+      title:item.title,
+      fileName:item.fileName,
+      category:item.category,
+      type:item.category,
+      documentType:item.documentType,
+      url:safeDocumentUrl(item.url),
+      downloadUrl:safeDocumentUrl(item.downloadUrl||item.url),
+      storagePath:item.storagePath,
+      mimeType:item.mimeType,
+      contentType:item.contentType,
+      size:item.size,
+      fileSize:item.fileSize,
+      uploadedAt:item.uploadedAt,
+      uploadDate:item.uploadedAt,
+      visible:item.visibility!=="Intern",
+      visibility:item.visibility,
+      assignmentType:item.assignmentType,
+      tripId:item.tripId,
+      programItemId:item.programItemId,
+      bookingId:item.bookingId,
+      assignedTo:item.assignedTo,
+      expiryDate:item.expiryDate,
+      issuer:item.issuer,
+      referenceNumber:item.referenceNumber,
+      tags:item.tags,
+      description:item.description,
+      note:item.note||item.description,
+      internalNotes:item.internalNotes
+    }));
+  }
+
+  function mergeDocumentEdit(customer,values){
+    const next=clone(customer);
+    next.documents=documentSaveItems(values);
+    next.updatedAt=new Date().toLocaleDateString("de-DE");
+    next._lastSavedAt=new Date().toISOString();
+    return compactObject(next);
+  }
+
+  function startDocumentEdit(customer){
+    resetCustomerEditState();
+    resetTripEditState();
+    resetProgramEditState();
+    const draft=documentEditValues(customer);
+    state.documentEditMode=true;
+    state.documentEditDraft=clone(draft);
+    state.documentEditOriginal=documentEditFingerprint(draft);
+    state.documentEditErrors={};
+    state.documentEditSaving=false;
+    setDocumentEditMessage("","");
+    renderCustomerDetail();
+  }
+
+  function cancelDocumentEdit(){
+    if(!confirmDiscardCustomerEdit())return;
+    resetDocumentEditState();
+    renderCustomerDetail();
+  }
+
+  function saveDocumentEdit(){
+    if(state.documentEditSaving||documentSavePromise)return documentSavePromise;
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return null;
+    const validation=validateDocumentEdit(state.documentEditDraft||{});
+    state.documentEditErrors=validation.errors;
+    if(!validation.valid){
+      setDocumentEditMessage("Bitte pruefen Sie die markierten Dokumente.","error");
+      renderCustomerDetail();
+      return null;
+    }
+    const fullCustomer=mergeDocumentEdit(customer,validation.values);
+    state.documentEditSaving=true;
+    setDocumentEditMessage("Dokumente werden gespeichert ...","saving");
+    updateDocumentEditActions();
+    documentSavePromise=(async()=>{
+      try{
+        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+        updateLocalCustomer(fullCustomer);
+        resetDocumentEditState({keepMessage:true});
+        setDocumentEditMessage("Dokumente erfolgreich gespeichert.","success");
+        render();
+        window.setTimeout(()=>{
+          if(!state.documentEditMode&&state.documentEditMessageKind==="success")setDocumentEditMessage("","");
+        },3200);
+        return fullCustomer;
+      }catch(error){
+        console.error("[ACT Admin V2] Dokumente speichern:",error&&error.message?error.message:"Fehler");
+        state.documentEditSaving=false;
+        setDocumentEditMessage("Die Dokumente konnten nicht gespeichert werden. Bitte erneut versuchen.","error");
+        updateDocumentEditActions();
+        return null;
+      }finally{
+        documentSavePromise=null;
+      }
+    })();
+    return documentSavePromise;
+  }
+
+  function documentStatus(doc){
+    if(!doc.expiryDate)return "";
+    const today=new Date();
+    today.setHours(0,0,0,0);
+    const expires=dateValue(doc.expiryDate);
+    if(!expires)return "";
+    const days=Math.ceil((expires.getTime()-today.getTime())/86400000);
+    if(days<0)return "Abgelaufen";
+    if(days<=30)return "Laeuft bald ab";
+    return "";
+  }
+
+  function documentStatusBadge(doc){
+    const status=documentStatus(doc);
+    return status?badge(status):"";
+  }
+
+  function documentIcon(doc){
+    const type=normalizeText(doc.documentType||doc.type);
+    if(type.includes("bild"))return "IMG";
+    if(type.includes("pdf"))return "PDF";
+    if(type.includes("qr"))return "QR";
+    if(type.includes("link"))return "URL";
+    return "DOC";
+  }
+
+  function documentPreview(doc){
+    const url=safeDocumentUrl(doc.url||doc.downloadUrl);
+    if(normalizeText(doc.documentType)==="bild"&&url){
+      return `<img class="v2-document-thumb" src="${escapeHtml(url)}" alt="${escapeHtml(doc.title||"Dokument")}" loading="lazy">`;
+    }
+    return `<span class="v2-document-icon">${escapeHtml(documentIcon(doc))}</span>`;
+  }
+
+  function documentOpenUrl(doc){
+    return safeDocumentUrl(doc.url||doc.downloadUrl);
+  }
+
+  function documentDownloadUrl(doc){
+    return safeDocumentUrl(doc.downloadUrl||doc.url);
+  }
+
+  function documentAttachmentLink(doc){
+    const url=documentOpenUrl(doc);
+    return url?`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`:`<span>${escapeHtml(doc.title||doc.fileName||"Dokument")}</span>`;
+  }
+
+  function documentMatchesProgramItem(doc,item){
+    const id=cleanValue(item.id||item.programItemId);
+    const title=normalizeText(item.title);
+    const docProgram=normalizeText(doc.programItemId);
+    const assigned=normalizeTags(doc.assignedTo).map(normalizeText);
+    return Boolean(docProgram&&(docProgram===normalizeText(id)||docProgram===title))||assigned.includes(normalizeText(id))||assigned.includes(title);
+  }
+
+  function documentMatchesQuery(doc,query){
+    const text=[doc.title,doc.fileName,doc.category,doc.documentType,doc.description,doc.issuer,doc.referenceNumber,...normalizeTags(doc.tags)].map(normalizeText).join(" ");
+    return !query||text.includes(normalizeText(query));
+  }
+
+  function compareDocuments(a,b,sort=state.documentSort){
+    if(sort==="category")return String(a.category||"").localeCompare(String(b.category||""),"de")||String(a.title||"").localeCompare(String(b.title||""),"de");
+    if(sort==="name")return String(a.title||a.fileName||"").localeCompare(String(b.title||b.fileName||""),"de");
+    if(sort==="expiry")return String(a.expiryDate||"9999-12-31").localeCompare(String(b.expiryDate||"9999-12-31"));
+    return String(b.uploadedAt||b.uploadDate||"").localeCompare(String(a.uploadedAt||a.uploadDate||""));
+  }
+
+  function filteredDocumentRecords(){
+    const records=state.customers.flatMap(customer=>normalizedDocuments(customer).map(doc=>({customer,doc})));
+    return records.filter(({doc})=>{
+      if(state.documentCategory&&doc.category!==state.documentCategory)return false;
+      if(state.documentAssignment&&doc.assignmentType!==state.documentAssignment)return false;
+      return documentMatchesQuery(doc,state.documentQuery);
+    }).sort((a,b)=>compareDocuments(a.doc,b.doc));
+  }
+
+  function documentSummary(customer){
+    const docs=normalizedDocuments(customer);
+    const pdf=docs.filter(doc=>normalizeText(doc.documentType)==="pdf").length;
+    const images=docs.filter(doc=>normalizeText(doc.documentType)==="bild").length;
+    const tickets=docs.filter(doc=>/ticket/i.test(doc.category||doc.documentType)).length;
+    const vouchers=docs.filter(doc=>/voucher/i.test(doc.category||doc.documentType)).length;
+    return {total:docs.length,pdf,images,tickets,vouchers};
+  }
+
+  function renderDocuments(){
+    const root=byId("documentsRoot");
+    if(!root)return;
+    const records=filteredDocumentRecords();
+    const categories=[["","Alle Kategorien"],...DOCUMENT_CATEGORIES.map(value=>[value,value])];
+    const assignments=[["","Alle Zuordnungen"],...DOCUMENT_ASSIGNMENTS.map(value=>[value,value])];
+    root.innerHTML=`
+      <section class="v2-document-page">
+        <div class="v2-section-toolbar">
+          <div>
+            <p class="v2-eyebrow">Dokumente</p>
+            <h2>Dokumente & Anhaenge</h2>
+          </div>
+          <a class="v2-button soft" href="admin.html#customers">Upload im klassischen Admin</a>
+        </div>
+        <div class="v2-document-controls">
+          <label class="v2-filter-search">Dokument suchen
+            <input id="documentSearchInput" type="search" placeholder="Dateiname, Tags, Kategorie" value="${escapeHtml(state.documentQuery)}">
+          </label>
+          <label>Kategorie
+            <select id="documentCategoryFilter">${categories.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===state.documentCategory?"selected":""}>${escapeHtml(label)}</option>`).join("")}</select>
+          </label>
+          <label>Zuordnung
+            <select id="documentAssignmentFilter">${assignments.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===state.documentAssignment?"selected":""}>${escapeHtml(label)}</option>`).join("")}</select>
+          </label>
+          <label>Sortierung
+            <select id="documentSortSelect">
+              <option value="uploaded" ${state.documentSort==="uploaded"?"selected":""}>Uploaddatum</option>
+              <option value="category" ${state.documentSort==="category"?"selected":""}>Kategorie</option>
+              <option value="name" ${state.documentSort==="name"?"selected":""}>Name</option>
+              <option value="expiry" ${state.documentSort==="expiry"?"selected":""}>Ablaufdatum</option>
+            </select>
+          </label>
+        </div>
+        <div class="v2-document-grid">
+          ${records.length?records.map(({customer,doc})=>documentCardMarkup(doc,{customer})).join(""):`<article class="v2-empty"><h3>Keine Dokumente gefunden</h3><p>Die aktuelle Suche liefert kein Ergebnis.</p></article>`}
+        </div>
+      </section>
+    `;
+  }
+
+  function documentCardMarkup(doc,{customer=null,edit=false,index=0}={}){
+    const openUrl=documentOpenUrl(doc);
+    const downloadUrl=documentDownloadUrl(doc);
+    return `
+      <article class="v2-document-card">
+        ${documentPreview(doc)}
+        <div class="v2-document-body">
+          <div class="v2-meta">${badge(doc.category||"Sonstiges")}${badge(doc.documentType||"Dokument")}${documentStatusBadge(doc)}${badge(doc.visibility||"Kundenportal")}</div>
+          <h3>${escapeHtml(doc.title||doc.fileName||"Dokument")}</h3>
+          <p>${escapeHtml([customer?.customerName,doc.fileName,doc.description].filter(Boolean).join(" · "))}</p>
+          <div class="v2-document-info">
+            ${doc.issuer?`<span>Aussteller: ${escapeHtml(doc.issuer)}</span>`:""}
+            ${doc.referenceNumber?`<span>Referenz: ${escapeHtml(doc.referenceNumber)}</span>`:""}
+            ${doc.expiryDate?`<span>Ablauf: ${escapeHtml(formatDate(doc.expiryDate))}</span>`:""}
+            ${doc.uploadedAt?`<span>Upload: ${escapeHtml(formatUploadDate(doc.uploadedAt))}</span>`:""}
+            ${doc.size||doc.fileSize?`<span>Groesse: ${escapeHtml(doc.size||doc.fileSize)}</span>`:""}
+            ${doc.assignmentType?`<span>Zuordnung: ${escapeHtml(doc.assignmentType)}</span>`:""}
+          </div>
+          ${normalizeTags(doc.tags).length?`<div class="v2-read-list">${normalizeTags(doc.tags).map(tag=>badge(tag)).join("")}</div>`:""}
+          <div class="v2-document-actions">
+            ${openUrl?`<a class="v2-button soft" href="${escapeHtml(openUrl)}" target="_blank" rel="noopener noreferrer">Oeffnen</a>`:""}
+            ${downloadUrl?`<a class="v2-button soft" href="${escapeHtml(downloadUrl)}" download>Download</a>`:""}
+            ${edit?`<span class="v2-muted">Metadaten werden unten bearbeitet.</span>`:""}
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
+  function documentsTabMarkup(customer){
+    if(state.documentEditMode)return documentEditFormMarkup(customer);
+    const docs=normalizedDocuments(customer);
+    const summary=documentSummary(customer);
+    return `
+      <section class="v2-documents-overview">
+        <div class="v2-tab-actions">
+          <button class="v2-button primary" type="button" data-document-edit-action="edit">Dokumente bearbeiten</button>
+          <a class="v2-button soft" href="admin.html#customers">Upload im klassischen Admin</a>
+          <span class="v2-edit-status ${state.documentEditMessageKind}" id="documentEditStatus" aria-live="polite">${escapeHtml(state.documentEditMessage)}</span>
+        </div>
+        <article class="v2-trip-hero v2-document-hero">
+          <p class="v2-eyebrow">Dokumente</p>
+          <h3>Dokumente & Anhaenge</h3>
+          <p>${summary.total} Dokumente · ${summary.pdf} PDF · ${summary.images} Bilder · ${summary.tickets} Tickets · ${summary.vouchers} Voucher</p>
+        </article>
+        <div class="v2-document-grid">
+          ${docs.length?docs.map(doc=>documentCardMarkup(doc)).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente vorhanden</h3><p>Uploads erfolgen weiterhin im klassischen Admin.</p></article>`}
+        </div>
+      </section>
+    `;
+  }
+
+  function documentEditFormMarkup(customer){
+    const draft=state.documentEditDraft||documentEditValues(customer);
+    const dirty=hasDirtyDocumentEdit();
+    const status=state.documentEditMessage||(dirty?"Ungespeicherte Aenderungen":"");
+    const statusKind=state.documentEditMessageKind||(dirty?"dirty":"");
+    return `
+      <form class="v2-edit-form v2-document-edit-form" id="documentEditForm" novalidate>
+        <div class="v2-edit-head">
+          <div>
+            <h3>Dokument-Metadaten bearbeiten</h3>
+            <p class="v2-muted">Uploads bleiben im klassischen Admin. Hier werden nur Metadaten im bestehenden Kundenentwurf gepflegt.</p>
+          </div>
+          <span class="v2-edit-status ${escapeHtml(statusKind)}" id="documentEditStatus" aria-live="polite">${escapeHtml(status)}</span>
+        </div>
+        <div class="v2-document-editor">
+          ${arrayValue(draft.documents).map((doc,index)=>documentEditItemMarkup(doc,index)).join("")||`<article class="v2-empty"><h3>Keine Dokumente vorhanden</h3><p>Bitte Dokumente zuerst im klassischen Admin hochladen.</p></article>`}
+        </div>
+        <div class="v2-edit-actions">
+          <button class="v2-button primary" type="submit" data-document-edit-action="save" ${state.documentEditSaving?"disabled aria-busy=\"true\"":""}>Speichern</button>
+          <button class="v2-button soft" type="button" data-document-edit-action="cancel" ${state.documentEditSaving?"disabled":""}>Abbrechen</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function documentEditItemMarkup(doc,index){
+    const prefix=`document-${index}`;
+    const errors=state.documentEditErrors||{};
+    return `
+      <article class="v2-document-edit-item">
+        ${documentCardMarkup(normalizeDocumentItem(doc,index),{edit:true,index})}
+        <div class="v2-edit-grid">
+          ${documentInput(prefix,"title","Titel",doc.title,{required:true,error:errors[`${prefix}-title`],index})}
+          ${documentInput(prefix,"fileName","Dateiname",doc.fileName,{index})}
+          ${documentSelect(prefix,"category","Kategorie",doc.category,DOCUMENT_CATEGORIES,{index})}
+          ${documentSelect(prefix,"documentType","Dokumenttyp",doc.documentType,DOCUMENT_TYPES,{index})}
+          ${documentSelect(prefix,"visibility","Sichtbarkeit",doc.visibility||"Kundenportal",DOCUMENT_VISIBILITIES,{index})}
+          ${documentSelect(prefix,"assignmentType","Zuordnung",doc.assignmentType||"Reise",DOCUMENT_ASSIGNMENTS,{index})}
+          ${documentInput(prefix,"programItemId","Programmpunkt",doc.programItemId,{index})}
+          ${documentInput(prefix,"bookingId","Buchung",doc.bookingId,{index})}
+          ${documentInput(prefix,"tripId","Reise",doc.tripId,{index})}
+          ${documentInput(prefix,"url","Oeffnen-Link",doc.url,{type:"url",error:errors[`${prefix}-url`],index})}
+          ${documentInput(prefix,"downloadUrl","Download-Link",doc.downloadUrl,{type:"url",error:errors[`${prefix}-downloadUrl`],index})}
+          ${documentInput(prefix,"expiryDate","Ablaufdatum",doc.expiryDate,{type:"date",index})}
+          ${documentInput(prefix,"issuer","Aussteller",doc.issuer,{index})}
+          ${documentInput(prefix,"referenceNumber","Referenznummer",doc.referenceNumber,{index})}
+          ${documentInput(prefix,"tags","Tags",normalizeTags(doc.tags).join(", "),{index})}
+          ${documentTextarea(prefix,"description","Beschreibung",doc.description,{index})}
+          ${documentTextarea(prefix,"internalNotes","Interne Notizen (nur Admin)",doc.internalNotes,{index})}
+        </div>
+      </article>
+    `;
+  }
+
+  function documentInput(prefix,name,label,value,{type="text",required=false,error="",index}={}){
+    const id=`${prefix}-${name}`;
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}${required?" *":""}</span><input id="${id}" name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value||"")}" data-document-index="${index}" ${required?"required":""} aria-invalid="${error?"true":"false"}" aria-describedby="${error?`${id}-error`:""}">${error?`<small class="v2-field-error" id="${id}-error">${escapeHtml(error)}</small>`:""}</label>`;
+  }
+
+  function documentTextarea(prefix,name,label,value,{index}={}){
+    const id=`${prefix}-${name}`;
+    return `<label class="v2-edit-field full" for="${id}"><span>${escapeHtml(label)}</span><textarea id="${id}" name="${escapeHtml(name)}" rows="3" data-document-index="${index}">${escapeHtml(value||"")}</textarea></label>`;
+  }
+
+  function documentSelect(prefix,name,label,value,options,{index}={}){
+    const id=`${prefix}-${name}`;
+    const normalized=normalizeText(value);
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-document-index="${index}">${options.map(option=>`<option value="${escapeHtml(option)}" ${normalizeText(option)===normalized?"selected":""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
   }
 
   function loginButton(){
@@ -1736,7 +2275,7 @@
         `).join("")}
       </div>
       <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):placeholderTabMarkup()}
+        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="dokumente"?documentsTabMarkup(customer):placeholderTabMarkup()}
       </section>
     `;
   }
@@ -1866,6 +2405,7 @@
       return `<article class="v2-empty"><h3>Reisedaten konnten nicht angezeigt werden</h3><p>Der Kundentab bleibt verfuegbar. Bitte versuchen Sie es erneut oder oeffnen Sie den klassischen Admin.</p><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a></article>`;
     }
     const heroMeta=[trip.nights,trip.region,trip.total?`${trip.total} Reisende`:""].filter(Boolean).join(" · ");
+    const docs=documentSummary(customer);
     const cards=[
       tripReadCard("Reisedaten",[
         tripField("Reisebezeichnung",trip.title),
@@ -1911,6 +2451,13 @@
         tripField("Mobilitaet",trip.mobility,{full:true}),
         tripField("Ernaehrung",trip.dietary,{full:true}),
         tripListField("Interne Reisehinweise",trip.internalNotes,{internal:true})
+      ]),
+      tripReadCard("Dokumente",[
+        tripField("Dokumente gesamt",docs.total),
+        tripField("PDF",docs.pdf),
+        tripField("Bilder",docs.images),
+        tripField("Tickets",docs.tickets),
+        tripField("Voucher",docs.vouchers)
       ])
     ].filter(Boolean);
     if(!cards.length){
@@ -2121,6 +2668,7 @@
     if(state.programEditMode)return programEditFormMarkup(customer);
     const draft=programEditValues(customer);
     const days=draft.days;
+    const docs=normalizedDocuments(customer);
     return `
       <section class="v2-program-overview">
         <div class="v2-tab-actions">
@@ -2133,13 +2681,13 @@
           <p>${escapeHtml(days.length)} Tag${days.length===1?"":"e"} · ${escapeHtml(days.reduce((sum,day)=>sum+day.items.length,0))} Programmpunkt${days.reduce((sum,day)=>sum+day.items.length,0)===1?"":"e"}</p>
         </article>
         <div class="v2-program-days">
-          ${days.map((day,index)=>programReadDay(day,index)).join("")}
+          ${days.map((day,index)=>programReadDay(day,index,docs)).join("")}
         </div>
       </section>
     `;
   }
 
-  function programReadDay(day,index){
+  function programReadDay(day,index,docs=[]){
     const items=sortProgramItems(day.items);
     return `
       <article class="v2-program-day">
@@ -2149,13 +2697,13 @@
           ${day.title&&!/^Tag \d+$/.test(day.title)?`<p>${escapeHtml(day.title)}</p>`:""}
         </header>
         <div class="v2-program-timeline">
-          ${items.length?items.map(programTimelineItem).join(""):`<p class="v2-muted">Noch keine Programmpunkte hinterlegt.</p>`}
+          ${items.length?items.map(item=>programTimelineItem(item,docs)).join(""):`<p class="v2-muted">Noch keine Programmpunkte hinterlegt.</p>`}
         </div>
       </article>
     `;
   }
 
-  function programTimelineItem(item){
+  function programTimelineItem(item,docs=[]){
     const time=programTimeLabel(item);
     const location=locationSummary(item);
     const mapsUrl=mapSearchUrl(location);
@@ -2169,6 +2717,7 @@
     const price=programPriceLabel(item);
     const legacy=(!item.endTime&&item.duration)?item.duration:"";
     const ticketInfo=[item.ticketNumber?`Ticket ${item.ticketNumber}`:"",item.voucherNumber?`Voucher ${item.voucherNumber}`:""].filter(Boolean).join(" · ");
+    const attachments=docs.filter(doc=>documentMatchesProgramItem(doc,item));
     return `
       <article class="v2-program-item ${time?"":"no-time"}">
         ${time?`<div class="v2-program-time">${escapeHtml(time)}</div>`:""}
@@ -2187,6 +2736,7 @@
           `:""}
           ${legacy||item.notes?`<p class="v2-muted">${escapeHtml([legacy,item.notes].filter(Boolean).join(" · "))}</p>`:""}
           ${mapsUrl||eventUrl?`<div class="v2-program-links">${mapsUrl?`<a class="v2-button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">In Maps oeffnen</a>`:""}${eventUrl?`<a class="v2-button soft" href="${escapeHtml(eventUrl)}" target="_blank" rel="noopener noreferrer">Veranstaltung oeffnen</a>`:""}</div>`:""}
+          ${attachments.length?`<div class="v2-program-attachments"><strong>Anhaenge</strong>${attachments.map(documentAttachmentLink).join("")}</div>`:""}
           ${item.weatherPlaceholder?`<p class="v2-muted">${escapeHtml(item.weatherPlaceholder)}</p>`:""}
           ${item.internalNotes?`<p class="v2-admin-note"><strong>Intern:</strong> ${escapeHtml(item.internalNotes)}</p>`:""}
           ${navigationUrl||showWebsite||phoneUrl||mailUrl?`
@@ -2351,6 +2901,7 @@
     renderMetrics();
     renderDashboardLists();
     renderCustomers();
+    renderDocuments();
     renderCustomerDetail();
   }
 
@@ -2363,6 +2914,7 @@
       resetCustomerEditState();
       resetTripEditState();
       resetProgramEditState();
+      resetDocumentEditState();
     }
     state.route=parsed.route;
     state.selectedCustomerId=parsed.customerId||"";
@@ -2419,6 +2971,7 @@
     resetCustomerEditState();
     resetTripEditState();
     resetProgramEditState();
+    resetDocumentEditState();
     window.location.href=classicEditorUrl(id);
   }
 
@@ -2501,6 +3054,25 @@
     if(field.name==="allDay")renderCustomerDetail();
   }
 
+  function handleDocumentEditInput(event){
+    const field=event.target.closest("#documentEditForm input,#documentEditForm textarea,#documentEditForm select");
+    if(!field||!state.documentEditDraft)return;
+    const index=Number(field.dataset.documentIndex);
+    const item=state.documentEditDraft.documents?.[index];
+    if(!item)return;
+    item[field.name]=field.name==="tags"||field.name==="assignedTo"?normalizeTags(field.value):field.value;
+    if(field.name==="visibility")item.visible=field.value!=="Intern";
+    const errorKey=`document-${index}-${field.name}`;
+    if(state.documentEditErrors[errorKey]){
+      delete state.documentEditErrors[errorKey];
+      const error=byId(`${errorKey}-error`);
+      if(error)error.remove();
+      field.setAttribute("aria-invalid","false");
+    }
+    const dirty=hasDirtyDocumentEdit();
+    setDocumentEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
+  }
+
   function bind(){
     byId("adminLoginForm").addEventListener("submit",event=>{event.preventDefault();signIn();});
     byId("logoutButton").addEventListener("click",async()=>{
@@ -2556,6 +3128,14 @@
         if(action==="duplicate-item")duplicateProgramItem(dayIndex,itemIndex);
         return;
       }
+      const documentAction=event.target.closest("[data-document-edit-action]");
+      if(documentAction){
+        const action=documentAction.dataset.documentEditAction;
+        const customer=customerById(state.selectedCustomerId);
+        if(action==="edit"&&customer)startDocumentEdit(customer);
+        if(action==="cancel")cancelDocumentEdit();
+        return;
+      }
       const classic=event.target.closest("[data-classic-editor]");
       if(classic){event.preventDefault();openClassicEditor(classic.dataset.classicEditor);return;}
       if(event.target.closest("a"))return;
@@ -2567,8 +3147,21 @@
       if(event.target.id==="retryInlineButton"&&confirmDiscardCustomerEdit())loadCustomers();
       if(event.target.id==="retryDetailButton"&&confirmDiscardCustomerEdit())loadCustomers();
     });
-    document.addEventListener("input",event=>{handleCustomerEditInput(event);handleTripEditInput(event);handleProgramEditInput(event);});
-    document.addEventListener("change",event=>{handleTripEditInput(event);handleProgramEditInput(event);});
+    document.addEventListener("input",event=>{
+      handleCustomerEditInput(event);
+      handleTripEditInput(event);
+      handleProgramEditInput(event);
+      handleDocumentEditInput(event);
+      if(event.target.id==="documentSearchInput"){state.documentQuery=event.target.value;renderDocuments();}
+    });
+    document.addEventListener("change",event=>{
+      handleTripEditInput(event);
+      handleProgramEditInput(event);
+      handleDocumentEditInput(event);
+      if(event.target.id==="documentCategoryFilter"){state.documentCategory=event.target.value;renderDocuments();}
+      if(event.target.id==="documentAssignmentFilter"){state.documentAssignment=event.target.value;renderDocuments();}
+      if(event.target.id==="documentSortSelect"){state.documentSort=event.target.value;renderDocuments();}
+    });
     document.addEventListener("submit",event=>{
       if(event.target.id==="customerEditForm"){
         event.preventDefault();
@@ -2581,6 +3174,10 @@
       if(event.target.id==="programEditForm"){
         event.preventDefault();
         saveProgramEdit();
+      }
+      if(event.target.id==="documentEditForm"){
+        event.preventDefault();
+        saveDocumentEdit();
       }
     });
     document.addEventListener("keydown",event=>{
@@ -2611,7 +3208,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

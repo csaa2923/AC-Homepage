@@ -43,7 +43,8 @@
     documentQuery:"",
     documentCategory:"",
     documentAssignment:"",
-    documentSort:"uploaded"
+    documentSort:"uploaded",
+    documentQuality:""
   };
 
   const byId=id=>document.getElementById(id);
@@ -849,6 +850,16 @@
   const DOCUMENT_TYPES=["PDF","Bild","QR-Code","Link","Text","Dokument"];
   const DOCUMENT_VISIBILITIES=["Kundenportal","Intern"];
   const DOCUMENT_ASSIGNMENTS=["Reise","Programmpunkt","Buchung"];
+  const DOCUMENT_QUALITY_FILTERS=["","Vollstaendig","Hinweise","Kritisch","Nicht zugeordnet","Doppelt","Abgelaufen","Laeuft bald ab"];
+  const DOCUMENT_REQUIRED_BY_PROGRAM_CATEGORY={
+    flug:["Ticket"],
+    unterkunft:["Voucher"],
+    hotel:["Voucher"],
+    restaurant:["Voucher","Sonstiges"],
+    mietwagen:["Mietwagen"],
+    aktivitaet:["Ticket"],
+    transfer:["Ticket"]
+  };
 
   function dateIsoOffset(startValue,index){
     const start=dateValue(startValue);
@@ -1636,6 +1647,145 @@
     return Boolean(docProgram&&(docProgram===normalizeText(id)||docProgram===title))||assigned.includes(normalizeText(id))||assigned.includes(title);
   }
 
+  function flattenProgramItems(customer){
+    return generatedProgramDays(customer).flatMap((day,dayIndex)=>arrayValue(day.items).map((item,itemIndex)=>({
+      ...item,
+      dayIndex,
+      itemIndex,
+      stableId:cleanValue(item.id||item.programItemId)||`${dayIndex+1}-${itemIndex+1}`,
+      dayTitle:day.title,
+      dayDate:day.date
+    })));
+  }
+
+  function documentCategoryKey(value){
+    const text=normalizeText(value);
+    if(/flug|boarding/.test(text))return "flug";
+    if(/hotel|unterkunft/.test(text))return "hotel";
+    if(/restaurant/.test(text))return "restaurant";
+    if(/mietwagen|auto/.test(text))return "mietwagen";
+    if(/transfer|taxi|bus|bahn/.test(text))return "transfer";
+    if(/aktivitaet|ticket|voucher/.test(text))return "aktivitaet";
+    if(/versicherung/.test(text))return "versicherung";
+    if(/rechnung/.test(text))return "rechnung";
+    return text;
+  }
+
+  function programCategoryKey(item){
+    return documentCategoryKey([item.category,item.title,item.location].map(cleanValue).filter(Boolean).join(" "));
+  }
+
+  function inferDocumentProgramMatch(doc,programItems){
+    if(cleanValue(doc.programItemId))return null;
+    const key=documentCategoryKey([doc.category,doc.documentType,doc.title,doc.fileName].join(" "));
+    if(["versicherung","rechnung"].includes(key))return {assignmentType:"Reise",reason:"Reisedokument"};
+    const matches=programItems.filter(item=>programCategoryKey(item)===key);
+    if(matches.length===1)return {assignmentType:"Programmpunkt",programItemId:matches[0].stableId,programTitle:matches[0].title,reason:"Kategorie eindeutig"};
+    return null;
+  }
+
+  function duplicateDocumentKeys(docs){
+    const counts=new Map();
+    docs.forEach(doc=>{
+      [
+        normalizeText(doc.fileName),
+        normalizeText(doc.referenceNumber),
+        normalizeText([doc.category,doc.expiryDate,doc.referenceNumber].filter(Boolean).join("|"))
+      ].filter(Boolean).forEach(key=>counts.set(key,(counts.get(key)||0)+1));
+    });
+    return counts;
+  }
+
+  function documentQuality(doc,{programItems=[],duplicateKeys=null}={}){
+    const inferred=inferDocumentProgramMatch(doc,programItems);
+    const explicit=Boolean(doc.programItemId||doc.bookingId||doc.tripId||normalizeTags(doc.assignedTo).length||doc.assignmentType==="Reise");
+    const status=documentStatus(doc);
+    const issues=[];
+    const duplicate=duplicateKeys&&[
+      normalizeText(doc.fileName),
+      normalizeText(doc.referenceNumber),
+      normalizeText([doc.category,doc.expiryDate,doc.referenceNumber].filter(Boolean).join("|"))
+    ].some(key=>key&&duplicateKeys.get(key)>1);
+    if(!doc.category||doc.category==="Sonstiges")issues.push("keine Kategorie");
+    if(!explicit&&!inferred)issues.push("keinem Programmpunkt zugeordnet");
+    if(doc.assignmentType==="Reise"&&!doc.tripId&&!inferred)issues.push("keine Reise");
+    if(doc.assignmentType==="Buchung"&&!doc.bookingId)issues.push("keine Buchung");
+    if(!doc.expiryDate)issues.push("Ablaufdatum fehlt");
+    if(!doc.description)issues.push("Beschreibung fehlt");
+    if(duplicate)issues.push("doppeltes Dokument");
+    if(status==="Abgelaufen")issues.push("abgelaufen");
+    const critical=issues.some(issue=>/abgelaufen|doppel|keinem/.test(issue));
+    return {
+      explicit,
+      inferred,
+      duplicate,
+      expiry:status,
+      complete:issues.length===0,
+      critical,
+      issues,
+      label:issues.length===0?"Vollstaendig":critical?"Kritisch":"Hinweise"
+    };
+  }
+
+  function documentAnalysis(customer){
+    const docs=normalizedDocuments(customer);
+    const programItems=flattenProgramItems(customer);
+    const duplicateKeys=duplicateDocumentKeys(docs);
+    const rows=docs.map(doc=>({doc,quality:documentQuality(doc,{programItems,duplicateKeys})}));
+    const missing=missingDocumentsForProgram(customer,rows);
+    const expiry={
+      expired:rows.filter(row=>row.quality.expiry==="Abgelaufen").length,
+      seven:rows.filter(row=>daysUntil(row.doc.expiryDate)>=0&&daysUntil(row.doc.expiryDate)<=7).length,
+      thirty:rows.filter(row=>daysUntil(row.doc.expiryDate)>=0&&daysUntil(row.doc.expiryDate)<=30).length
+    };
+    return {docs,programItems,rows,missing,expiry};
+  }
+
+  function daysUntil(value){
+    const date=dateValue(value);
+    if(!date)return null;
+    const today=new Date();
+    today.setHours(0,0,0,0);
+    date.setHours(0,0,0,0);
+    return Math.ceil((date.getTime()-today.getTime())/86400000);
+  }
+
+  function missingDocumentsForProgram(customer,rows){
+    const programItems=flattenProgramItems(customer);
+    return programItems.flatMap(item=>{
+      const required=DOCUMENT_REQUIRED_BY_PROGRAM_CATEGORY[programCategoryKey(item)]||[];
+      if(!required.length)return [];
+      const docs=rows.filter(row=>documentMatchesProgramItem(row.doc,item)||row.quality.inferred?.programItemId===item.stableId);
+      return required.filter(category=>!docs.some(row=>normalizeText(row.doc.category)===normalizeText(category)||normalizeText(row.doc.documentType)===normalizeText(category))).map(category=>({
+        programItemId:item.stableId,
+        title:item.title,
+        category,
+        message:`${category} fehlt fuer ${item.title||"Programmpunkt"}`
+      }));
+    });
+  }
+
+  function documentQualitySummary(customer){
+    const analysis=documentAnalysis(customer);
+    const linkedAuto=analysis.rows.filter(row=>row.quality.inferred).length;
+    const linkedManual=analysis.rows.filter(row=>row.quality.explicit).length;
+    const unassigned=analysis.rows.filter(row=>!row.quality.explicit&&!row.quality.inferred).length;
+    const expiring=analysis.rows.filter(row=>row.quality.expiry==="Laeuft bald ab").length;
+    const expired=analysis.rows.filter(row=>row.quality.expiry==="Abgelaufen").length;
+    const issues=analysis.rows.reduce((sum,row)=>sum+row.quality.issues.length,0)+analysis.missing.length;
+    const complete=analysis.rows.filter(row=>row.quality.complete).length;
+    const critical=analysis.rows.filter(row=>row.quality.critical).length;
+    return {total:analysis.rows.length,linkedAuto,linkedManual,unassigned,expired,expiring,issues,complete,critical,missing:analysis.missing.length};
+  }
+
+  function allDocumentQualitySummary(){
+    return state.customers.reduce((sum,customer)=>{
+      const next=documentQualitySummary(customer);
+      Object.keys(next).forEach(key=>{sum[key]=(sum[key]||0)+next[key];});
+      return sum;
+    },{total:0,complete:0,issues:0,critical:0});
+  }
+
   function documentMatchesQuery(doc,query){
     const text=[doc.title,doc.fileName,doc.category,doc.documentType,doc.description,doc.issuer,doc.referenceNumber,...normalizeTags(doc.tags)].map(normalizeText).join(" ");
     return !query||text.includes(normalizeText(query));
@@ -1649,21 +1799,31 @@
   }
 
   function filteredDocumentRecords(){
-    const records=state.customers.flatMap(customer=>normalizedDocuments(customer).map(doc=>({customer,doc})));
-    return records.filter(({doc})=>{
+    const records=state.customers.flatMap(customer=>documentAnalysis(customer).rows.map(row=>({customer,doc:row.doc,quality:row.quality})));
+    return records.filter(({doc,quality})=>{
       if(state.documentCategory&&doc.category!==state.documentCategory)return false;
       if(state.documentAssignment&&doc.assignmentType!==state.documentAssignment)return false;
+      if(state.documentQuality){
+        if(state.documentQuality==="Vollstaendig"&&!quality.complete)return false;
+        if(state.documentQuality==="Hinweise"&&quality.label!=="Hinweise")return false;
+        if(state.documentQuality==="Kritisch"&&!quality.critical)return false;
+        if(state.documentQuality==="Nicht zugeordnet"&&(quality.explicit||quality.inferred))return false;
+        if(state.documentQuality==="Doppelt"&&!quality.duplicate)return false;
+        if(state.documentQuality==="Abgelaufen"&&quality.expiry!=="Abgelaufen")return false;
+        if(state.documentQuality==="Laeuft bald ab"&&quality.expiry!=="Laeuft bald ab")return false;
+      }
       return documentMatchesQuery(doc,state.documentQuery);
     }).sort((a,b)=>compareDocuments(a.doc,b.doc));
   }
 
   function documentSummary(customer){
     const docs=normalizedDocuments(customer);
+    const quality=documentQualitySummary(customer);
     const pdf=docs.filter(doc=>normalizeText(doc.documentType)==="pdf").length;
     const images=docs.filter(doc=>normalizeText(doc.documentType)==="bild").length;
     const tickets=docs.filter(doc=>/ticket/i.test(doc.category||doc.documentType)).length;
     const vouchers=docs.filter(doc=>/voucher/i.test(doc.category||doc.documentType)).length;
-    return {total:docs.length,pdf,images,tickets,vouchers};
+    return {total:docs.length,pdf,images,tickets,vouchers,...quality};
   }
 
   function renderDocuments(){
@@ -1672,12 +1832,15 @@
     const records=filteredDocumentRecords();
     const categories=[["","Alle Kategorien"],...DOCUMENT_CATEGORIES.map(value=>[value,value])];
     const assignments=[["","Alle Zuordnungen"],...DOCUMENT_ASSIGNMENTS.map(value=>[value,value])];
+    const qualities=DOCUMENT_QUALITY_FILTERS.map(value=>[value,value||"Alle Status"]);
+    const summary=allDocumentQualitySummary();
     root.innerHTML=`
       <section class="v2-document-page">
         <div class="v2-section-toolbar">
           <div>
             <p class="v2-eyebrow">Dokumente</p>
             <h2>Dokumente & Anhaenge</h2>
+            <p>${summary.total} Gesamt · ${summary.complete} vollstaendig · ${summary.issues} Hinweise · ${summary.critical} kritisch</p>
           </div>
           <a class="v2-button soft" href="admin.html#customers">Upload im klassischen Admin</a>
         </div>
@@ -1691,6 +1854,9 @@
           <label>Zuordnung
             <select id="documentAssignmentFilter">${assignments.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===state.documentAssignment?"selected":""}>${escapeHtml(label)}</option>`).join("")}</select>
           </label>
+          <label>Status
+            <select id="documentQualityFilter">${qualities.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===state.documentQuality?"selected":""}>${escapeHtml(label)}</option>`).join("")}</select>
+          </label>
           <label>Sortierung
             <select id="documentSortSelect">
               <option value="uploaded" ${state.documentSort==="uploaded"?"selected":""}>Uploaddatum</option>
@@ -1701,22 +1867,26 @@
           </label>
         </div>
         <div class="v2-document-grid">
-          ${records.length?records.map(({customer,doc})=>documentCardMarkup(doc,{customer})).join(""):`<article class="v2-empty"><h3>Keine Dokumente gefunden</h3><p>Die aktuelle Suche liefert kein Ergebnis.</p></article>`}
+          ${records.length?records.map(({customer,doc,quality})=>documentCardMarkup(doc,{customer,quality})).join(""):`<article class="v2-empty"><h3>Keine Dokumente gefunden</h3><p>Die aktuelle Suche liefert kein Ergebnis.</p></article>`}
         </div>
       </section>
     `;
   }
 
-  function documentCardMarkup(doc,{customer=null,edit=false,index=0}={}){
+  function documentCardMarkup(doc,{customer=null,edit=false,index=0,quality=null}={}){
     const openUrl=documentOpenUrl(doc);
     const downloadUrl=documentDownloadUrl(doc);
+    const currentQuality=quality||documentQuality(doc,{programItems:customer?flattenProgramItems(customer):[]});
+    const inferred=currentQuality.inferred;
     return `
       <article class="v2-document-card">
         ${documentPreview(doc)}
         <div class="v2-document-body">
-          <div class="v2-meta">${badge(doc.category||"Sonstiges")}${badge(doc.documentType||"Dokument")}${documentStatusBadge(doc)}${badge(doc.visibility||"Kundenportal")}</div>
+          <div class="v2-meta">${badge(doc.category||"Sonstiges")}${badge(doc.documentType||"Dokument")}${documentStatusBadge(doc)}${badge(currentQuality.label)}${badge(doc.visibility||"Kundenportal")}</div>
           <h3>${escapeHtml(doc.title||doc.fileName||"Dokument")}</h3>
           <p>${escapeHtml([customer?.customerName,doc.fileName,doc.description].filter(Boolean).join(" · "))}</p>
+          ${inferred?`<p class="v2-document-suggestion">Automatisch erkannt: ${escapeHtml(inferred.assignmentType)}${inferred.programTitle?` · ${escapeHtml(inferred.programTitle)}`:""} · ${escapeHtml(inferred.reason)}</p>`:""}
+          ${currentQuality.issues.length?`<details class="v2-document-issues"><summary>${currentQuality.issues.length} Hinweis${currentQuality.issues.length===1?"":"e"}</summary><ul>${currentQuality.issues.map(issue=>`<li>${escapeHtml(issue)}</li>`).join("")}</ul></details>`:""}
           <div class="v2-document-info">
             ${doc.issuer?`<span>Aussteller: ${escapeHtml(doc.issuer)}</span>`:""}
             ${doc.referenceNumber?`<span>Referenz: ${escapeHtml(doc.referenceNumber)}</span>`:""}
@@ -1729,6 +1899,7 @@
           <div class="v2-document-actions">
             ${openUrl?`<a class="v2-button soft" href="${escapeHtml(openUrl)}" target="_blank" rel="noopener noreferrer">Oeffnen</a>`:""}
             ${downloadUrl?`<a class="v2-button soft" href="${escapeHtml(downloadUrl)}" download>Download</a>`:""}
+            ${!currentQuality.explicit&&!currentQuality.inferred&&customer?`<button class="v2-button soft" type="button" data-open-documents="${escapeHtml(customer.customerId)}">Zuordnen</button>`:""}
             ${edit?`<span class="v2-muted">Metadaten werden unten bearbeitet.</span>`:""}
           </div>
         </div>
@@ -1738,7 +1909,8 @@
 
   function documentsTabMarkup(customer){
     if(state.documentEditMode)return documentEditFormMarkup(customer);
-    const docs=normalizedDocuments(customer);
+    const analysis=documentAnalysis(customer);
+    const docs=analysis.docs;
     const summary=documentSummary(customer);
     return `
       <section class="v2-documents-overview">
@@ -1750,10 +1922,29 @@
         <article class="v2-trip-hero v2-document-hero">
           <p class="v2-eyebrow">Dokumente</p>
           <h3>Dokumente & Anhaenge</h3>
-          <p>${summary.total} Dokumente · ${summary.pdf} PDF · ${summary.images} Bilder · ${summary.tickets} Tickets · ${summary.vouchers} Voucher</p>
+          <p>${summary.total} Dokumente · ${summary.complete} vollstaendig · ${summary.issues} Hinweise · ${summary.critical} kritisch</p>
         </article>
+        <div class="v2-document-quality-grid">
+          ${summaryItem("Automatisch verknuepft",String(summary.linkedAuto))}
+          ${summaryItem("Manuell verknuepft",String(summary.linkedManual))}
+          ${summaryItem("Nicht zugeordnet",String(summary.unassigned))}
+          ${summaryItem("Abgelaufen",String(summary.expired))}
+          ${summaryItem("Laeuft bald ab",String(summary.expiring))}
+          ${summaryItem("Fehlende Dokumente",String(summary.missing))}
+        </div>
+        ${(analysis.missing.length||analysis.expiry.expired||analysis.expiry.seven||analysis.expiry.thirty)?`
+          <details class="v2-document-issues v2-document-quality-panel" open>
+            <summary>Dokumentenqualitaet</summary>
+            <div class="v2-document-info">
+              <span>Heute abgelaufen: ${escapeHtml(analysis.expiry.expired)}</span>
+              <span>In 7 Tagen: ${escapeHtml(analysis.expiry.seven)}</span>
+              <span>In 30 Tagen: ${escapeHtml(analysis.expiry.thirty)}</span>
+            </div>
+            ${analysis.missing.length?`<ul>${analysis.missing.map(item=>`<li>${escapeHtml(item.message)}</li>`).join("")}</ul>`:""}
+          </details>
+        `:""}
         <div class="v2-document-grid">
-          ${docs.length?docs.map(doc=>documentCardMarkup(doc)).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente vorhanden</h3><p>Uploads erfolgen weiterhin im klassischen Admin.</p></article>`}
+          ${docs.length?analysis.rows.map(row=>documentCardMarkup(row.doc,{customer,quality:row.quality})).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente vorhanden</h3><p>Uploads erfolgen weiterhin im klassischen Admin.</p></article>`}
         </div>
       </section>
     `;
@@ -2091,13 +2282,15 @@
 
   function renderMetrics(){
     const data=stats();
+    const docStats=allDocumentQualitySummary();
     const metrics=[
       {label:"Kunden gesamt",value:data.total,preset:"all",tone:"blue",icon:"users"},
       {label:"Aktive Reisen",value:data.active,preset:"active",tone:"green",icon:"map"},
       {label:"Entwuerfe",value:data.drafts,preset:"draft",tone:"amber",icon:"edit"},
       {label:"Veroeffentlicht",value:data.published,preset:"published",tone:"green",icon:"check"},
       {label:"Heute Anreisen",value:data.arrivals,preset:"arrivals",tone:"rose",icon:"arrival"},
-      {label:"Heute Abreisen",value:data.departures,preset:"departures",tone:"blue",icon:"departure"}
+      {label:"Heute Abreisen",value:data.departures,preset:"departures",tone:"blue",icon:"departure"},
+      {label:`Dokumente · ${docStats.complete} vollstaendig · ${docStats.issues} Hinweise · ${docStats.critical} kritisch`,value:docStats.total,preset:"documents",tone:"amber",icon:"documents"}
     ];
     byId("metricGrid").innerHTML=metrics.map(item=>`
       <button class="v2-card v2-metric ${item.tone}" type="button" data-filter-preset="${item.preset}">
@@ -2454,6 +2647,14 @@
       ]),
       tripReadCard("Dokumente",[
         tripField("Dokumente gesamt",docs.total),
+        tripField("Vollstaendig",docs.complete),
+        tripField("Hinweise",docs.issues),
+        tripField("Kritisch",docs.critical),
+        tripField("Automatisch verknuepft",docs.linkedAuto),
+        tripField("Manuell verknuepft",docs.linkedManual),
+        tripField("Nicht zugeordnet",docs.unassigned),
+        tripField("Abgelaufen",docs.expired),
+        tripField("Laeuft bald ab",docs.expiring),
         tripField("PDF",docs.pdf),
         tripField("Bilder",docs.images),
         tripField("Tickets",docs.tickets),
@@ -2949,6 +3150,10 @@
   }
 
   function applyPreset(preset){
+    if(preset==="documents"){
+      routeTo("documents");
+      return;
+    }
     state.status=preset==="all"?"":preset;
     state.publication="";
     state.region="";
@@ -3136,6 +3341,11 @@
         if(action==="cancel")cancelDocumentEdit();
         return;
       }
+      const openDocuments=event.target.closest("[data-open-documents]");
+      if(openDocuments){
+        routeTo(`customers/${encodeURIComponent(openDocuments.dataset.openDocuments)}/dokumente`);
+        return;
+      }
       const classic=event.target.closest("[data-classic-editor]");
       if(classic){event.preventDefault();openClassicEditor(classic.dataset.classicEditor);return;}
       if(event.target.closest("a"))return;
@@ -3160,6 +3370,7 @@
       handleDocumentEditInput(event);
       if(event.target.id==="documentCategoryFilter"){state.documentCategory=event.target.value;renderDocuments();}
       if(event.target.id==="documentAssignmentFilter"){state.documentAssignment=event.target.value;renderDocuments();}
+      if(event.target.id==="documentQualityFilter"){state.documentQuality=event.target.value;renderDocuments();}
       if(event.target.id==="documentSortSelect"){state.documentSort=event.target.value;renderDocuments();}
     });
     document.addEventListener("submit",event=>{

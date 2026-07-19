@@ -1288,9 +1288,6 @@
       showLogin("Abgemeldet.");
     });
     byId("refreshButton").addEventListener("click",()=>{if(confirmDiscardCustomerEdit())loadCustomers();});
-    byId("newCustomerButton").addEventListener("click",openNewCustomer);
-    byId("dashboardNewCustomerButton").addEventListener("click",openNewCustomer);
-    byId("dashboardQuickNewCustomerButton").addEventListener("click",openNewCustomer);
     byId("customerNewButton").addEventListener("click",openNewCustomer);
     byId("toggleFiltersButton").addEventListener("click",toggleAdvancedFilters);
     byId("resetFiltersButton").addEventListener("click",resetFilters);

@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=10">
+<link rel="stylesheet" href="admin-v2.css?v=11">
 </head>
 <body>
 <main>
@@ -60,7 +60,6 @@
           <span>Einstellungen</span>
         </button>
       </nav>
-      <button class="v2-create" type="button" id="newCustomerButton">Neuer Kunde</button>
       <a class="v2-classic-link" href="admin.html">Klassischer Admin</a>
     </aside>
 
@@ -94,7 +93,6 @@
             <p>Kompakte Tagesuebersicht fuer Reisen, Status und naechste Schritte.</p>
           </div>
           <div class="v2-dashboard-actions">
-            <button class="v2-button primary" type="button" id="dashboardNewCustomerButton">Neuer Kunde</button>
             <button class="v2-button soft" type="button" data-v2-route="customers">Kunden ansehen</button>
           </div>
         </div>
@@ -119,21 +117,6 @@
               </div>
             </div>
             <div class="v2-list" id="activityList"></div>
-          </section>
-          <section class="v2-panel v2-quick-panel">
-            <div class="v2-panel-head">
-              <div>
-                <p class="v2-eyebrow">Schnellzugriffe</p>
-                <h3>Direkt weiter</h3>
-              </div>
-            </div>
-            <div class="v2-quick-grid">
-              <button class="v2-quick-action" type="button" id="dashboardQuickNewCustomerButton">Neuer Kunde</button>
-              <button class="v2-quick-action" type="button" data-v2-route="customers">Kunden</button>
-              <button class="v2-quick-action" type="button" data-v2-route="calendar">Kalender</button>
-              <button class="v2-quick-action" type="button" data-v2-route="documents">Dokumente</button>
-              <button class="v2-quick-action" type="button" data-v2-route="settings">Einstellungen</button>
-            </div>
           </section>
         </div>
       </section>
@@ -220,6 +203,6 @@
 <script src="firebase-service.js?v=19"></script>
 <script src="firebase-auth.js?v=3"></script>
 <script src="firebase-database.js"></script>
-<script src="admin-v2.js?v=9"></script>
+<script src="admin-v2.js?v=10"></script>
 </body>
 </html>

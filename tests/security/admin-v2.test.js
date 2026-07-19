@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=16/);
-    assert.match(html,/admin-v2\.js\?v=15/);
+    assert.match(html,/admin-v2\.css\?v=17/);
+    assert.match(html,/admin-v2\.js\?v=16/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -221,12 +221,41 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/data-program-edit-action="delete-day"/);
     assert.match(js,/data-program-edit-action="move-up"/);
     assert.match(js,/data-program-edit-action="move-down"/);
-    assert.match(js,/programInput\(prefix,"time","Uhrzeit",item\.time,\{type:"time"/);
+    assert.match(js,/programInput\(prefix,"startTime","Uhrzeit von",item\.startTime\|\|item\.time,\{type:"time"/);
+    assert.match(js,/programInput\(prefix,"endTime","Uhrzeit bis",item\.endTime,\{type:"time",error:endTimeError/);
     assert.match(js,/programCheckbox\(prefix,"allDay","Ganztagig"/);
     assert.match(js,/Ganztagig/);
+    assert.match(js,/programInput\(prefix,"location","Standort \/ Adresse",item\.location/);
+    assert.match(js,/programInput\(prefix,"eventUrl","Veranstaltungslink",item\.eventUrl,\{type:"url"/);
+    assert.doesNotMatch(js,/programInput\(prefix,"duration","Dauer"/);
     assert.match(css,/\.v2-program-overview,\.v2-program-days,\.v2-program-editor,\.v2-program-edit-items\{display:grid;gap:16px\}/);
     assert.match(css,/\.v2-program-item\{display:grid;grid-template-columns:minmax\(76px,96px\) minmax\(0,1fr\)/);
     assert.match(css,/\.v2-icon-button\{width:44px;height:44px/);
+    assert.match(css,/\.v2-program-links/);
+  });
+
+  it("validates itinerary times, maps links and safe event URLs",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(js,/function safeWebUrl\(value\)/);
+    assert.match(js,/!\["http:","https:"\]\.includes\(url\.protocol\)/);
+    assert.match(js,/raw\)\?raw:`https:\/\/\$\{raw\}`/);
+    assert.match(js,/function mapSearchUrl\(location\)/);
+    assert.match(js,/google\.com\/maps\/search\/\?api=1&query=\$\{encodeURIComponent\(query\)\}/);
+    assert.match(js,/function programTimeLabel\(item\)/);
+    assert.match(js,/item\.time&&item\.endTime/);
+    assert.match(js,/item\.endTime&&!item\.startTime/);
+    assert.match(js,/Bitte zuerst eine Startzeit eingeben\./);
+    assert.match(js,/item\.startTime&&item\.endTime&&item\.endTime<item\.startTime/);
+    assert.match(js,/Die Endzeit darf nicht vor der Startzeit liegen\./);
+    assert.match(js,/cleanValue\(item\.eventUrl\)&&!safeWebUrl\(item\.eventUrl\)/);
+    assert.match(js,/Bitte gib eine gueltige Webadresse ein\./);
+    assert.match(js,/target="_blank" rel="noopener noreferrer">In Maps oeffnen/);
+    assert.match(js,/target="_blank" rel="noopener noreferrer">Veranstaltung oeffnen/);
+    assert.match(js,/item\.duration&&!item\.endTime/);
+    assert.match(js,/Legacy-Dauer/);
+    assert.match(css,/\.v2-program-item\.no-time\{grid-template-columns:1fr\}/);
+    assert.match(css,/\.v2-program-links \.v2-button\{min-height:44px/);
   });
 
   it("saves program edits through the existing draft facade without direct Firestore",()=>{

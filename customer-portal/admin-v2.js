@@ -861,17 +861,49 @@
     return `${String(hours).padStart(2,"0")}:${String(minutes).padStart(2,"0")}`;
   }
 
+  function safeWebUrl(value){
+    const raw=cleanValue(value);
+    if(!raw)return "";
+    if(/^[a-z][a-z0-9+.-]*:/i.test(raw)&&!/^https?:\/\//i.test(raw))return "";
+    const withProtocol=/^https?:\/\//i.test(raw)?raw:`https://${raw}`;
+    try{
+      const url=new URL(withProtocol);
+      if(!["http:","https:"].includes(url.protocol))return "";
+      return url.href;
+    }catch{
+      return "";
+    }
+  }
+
+  function mapSearchUrl(location){
+    const query=cleanValue(location);
+    if(!query)return "";
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  }
+
+  function programTimeLabel(item){
+    if(item.allDay)return "Ganztagig";
+    if(item.time&&item.endTime)return `${item.time}-${item.endTime}`;
+    if(item.time)return item.time;
+    return "";
+  }
+
   function programItemFromValue(value,index=0){
     const item=value&&typeof value==="object"?value:{};
     const allDay=Boolean(item.allDay||item.fullDay||normalizeText(firstValue(item.time,item.startTime,item.timeStart,item.beginn,item.start))==="ganztagig");
+    const startTime=normalizeProgramTime(firstValue(item.startTime,item.timeFrom,item.timeStart,item.beginn,item.start,item.time,item.hour));
+    const endTime=normalizeProgramTime(firstValue(item.endTime,item.timeTo,item.timeEnd,item.ende,item.end));
     return {
-      time:allDay?"":normalizeProgramTime(firstValue(item.time,item.startTime,item.timeStart,item.beginn,item.start,item.hour)),
+      time:allDay?"":startTime,
+      startTime:allDay?"":startTime,
+      endTime:allDay?"":endTime,
       allDay,
       title:firstValue(item.title,item.name,item.heading,item.label,item.activity,item.programTitle),
       description:firstValue(item.description,item.text,item.details,item.summary,item.info),
       category:firstValue(item.category,item.type,item.kind,item.icon,"Sonstiges"),
-      location:firstValue(item.location,item.place,item.ort,item.address,item.venue),
+      location:firstValue(item.location,item.place,item.ort,item.address,item.venue,item.site),
       duration:firstValue(item.duration,item.length,item.dauer),
+      eventUrl:safeWebUrl(firstValue(item.url,item.link,item.website,item.eventUrl,item.bookingUrl)),
       notes:firstValue(item.notes,item.note,item.hint,item.remark,item.internalNote),
       order:Number.isFinite(Number(item.order))?Number(item.order):index
     };
@@ -933,13 +965,16 @@
       date:dateInputValue(day.date),
       title:firstValue(day.title,`Tag ${index+1}`),
       items:arrayValue(day.items).map((item,itemIndex)=>({
-        time:item.allDay?"":normalizeProgramTime(item.time),
+        time:item.allDay?"":normalizeProgramTime(item.time||item.startTime),
+        startTime:item.allDay?"":normalizeProgramTime(item.startTime||item.time),
+        endTime:item.allDay?"":normalizeProgramTime(item.endTime),
         allDay:Boolean(item.allDay),
         title:cleanValue(item.title),
         description:cleanValue(item.description),
         category:firstValue(item.category,"Sonstiges"),
         location:cleanValue(item.location),
         duration:cleanValue(item.duration),
+        eventUrl:cleanValue(item.eventUrl),
         notes:cleanValue(item.notes),
         order:itemIndex
       }))
@@ -954,11 +989,14 @@
   function sortProgramItems(items){
     return [...arrayValue(items)].sort((a,b)=>{
       if(a.allDay!==b.allDay)return a.allDay?-1:1;
-      const at=normalizeProgramTime(a.time);
-      const bt=normalizeProgramTime(b.time);
+      const at=normalizeProgramTime(a.startTime||a.time);
+      const bt=normalizeProgramTime(b.startTime||b.time);
       if(at&&bt&&at!==bt)return at.localeCompare(bt);
       if(at&&!bt)return -1;
       if(!at&&bt)return 1;
+      const ae=normalizeProgramTime(a.endTime);
+      const be=normalizeProgramTime(b.endTime);
+      if(ae&&be&&ae!==be)return ae.localeCompare(be);
       return String(a.title||"").localeCompare(String(b.title||""),"de")||Number(a.order||0)-Number(b.order||0);
     });
   }
@@ -1003,7 +1041,7 @@
   function addProgramItem(dayIndex){
     const day=state.programEditDraft?.days?.[dayIndex];
     if(!day)return;
-    day.items.push({time:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",duration:"",notes:""});
+    day.items.push({time:"",startTime:"",endTime:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",eventUrl:"",notes:""});
     setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
     renderCustomerDetail();
   }
@@ -1053,6 +1091,9 @@
     values.days.forEach((day,dayIndex)=>{
       day.items.forEach((item,itemIndex)=>{
         if(!item.title)errors[`program-${dayIndex}-${itemIndex}-title`]="Bitte einen Titel eingeben.";
+        if(item.endTime&&!item.startTime)errors[`program-${dayIndex}-${itemIndex}-endTime`]="Bitte zuerst eine Startzeit eingeben.";
+        if(item.startTime&&item.endTime&&item.endTime<item.startTime)errors[`program-${dayIndex}-${itemIndex}-endTime`]="Die Endzeit darf nicht vor der Startzeit liegen.";
+        if(cleanValue(item.eventUrl)&&!safeWebUrl(item.eventUrl))errors[`program-${dayIndex}-${itemIndex}-eventUrl`]="Bitte gib eine gueltige Webadresse ein.";
       });
     });
     return {valid:!Object.keys(errors).length,errors,values};
@@ -1064,12 +1105,15 @@
       title:day.title||`Tag ${dayIndex+1}`,
       items:day.items.map((item,itemIndex)=>({
         time:item.allDay?"":item.time,
+        startTime:item.allDay?"":item.startTime,
+        endTime:item.allDay?"":item.endTime,
         allDay:item.allDay,
         title:item.title,
         description:item.description,
         category:item.category||"Sonstiges",
         location:item.location,
-        duration:item.duration,
+        ...(item.duration&&!item.endTime?{duration:item.duration}:{}),
+        eventUrl:safeWebUrl(item.eventUrl),
         notes:item.notes,
         order:itemIndex
       }))
@@ -2001,16 +2045,20 @@
   }
 
   function programTimelineItem(item){
-    const time=item.allDay?"Ganztagig":item.time?`${item.time} Uhr`:"Ohne Uhrzeit";
+    const time=programTimeLabel(item);
+    const mapsUrl=mapSearchUrl(item.location);
+    const eventUrl=safeWebUrl(item.eventUrl);
+    const legacy=(!item.endTime&&item.duration)?item.duration:"";
     return `
-      <article class="v2-program-item">
-        <div class="v2-program-time">${escapeHtml(time)}</div>
+      <article class="v2-program-item ${time?"":"no-time"}">
+        ${time?`<div class="v2-program-time">${escapeHtml(time)}</div>`:""}
         <div>
           <div class="v2-meta">${badge(item.category||"Sonstiges")}</div>
           <h4>${escapeHtml(displayValue(item.title,"Programmpunkt ohne Titel"))}</h4>
-          ${item.location?`<p>${escapeHtml(item.location)}</p>`:""}
+          ${item.location?`<p><strong>Standort:</strong> ${escapeHtml(item.location)}</p>`:""}
           ${item.description?`<p>${escapeHtml(item.description)}</p>`:""}
-          ${item.duration||item.notes?`<p class="v2-muted">${escapeHtml([item.duration,item.notes].filter(Boolean).join(" · "))}</p>`:""}
+          ${legacy||item.notes?`<p class="v2-muted">${escapeHtml([legacy,item.notes].filter(Boolean).join(" · "))}</p>`:""}
+          ${mapsUrl||eventUrl?`<div class="v2-program-links">${mapsUrl?`<a class="v2-button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">In Maps oeffnen</a>`:""}${eventUrl?`<a class="v2-button soft" href="${escapeHtml(eventUrl)}" target="_blank" rel="noopener noreferrer">Veranstaltung oeffnen</a>`:""}</div>`:""}
         </div>
       </article>
     `;
@@ -2071,6 +2119,8 @@
   function programEditItemMarkup(item,dayIndex,itemIndex){
     const prefix=`program-${dayIndex}-${itemIndex}`;
     const error=state.programEditErrors?.[`${prefix}-title`]||"";
+    const endTimeError=state.programEditErrors?.[`${prefix}-endTime`]||"";
+    const eventUrlError=state.programEditErrors?.[`${prefix}-eventUrl`]||"";
     return `
       <article class="v2-program-edit-item" data-program-item="${itemIndex}">
         <div class="v2-program-item-toolbar">
@@ -2082,12 +2132,14 @@
           </div>
         </div>
         <div class="v2-edit-grid">
-          ${programInput(prefix,"time","Uhrzeit",item.time,{type:"time",dayIndex,itemIndex,disabled:item.allDay})}
+          ${programInput(prefix,"startTime","Uhrzeit von",item.startTime||item.time,{type:"time",dayIndex,itemIndex,disabled:item.allDay})}
+          ${programInput(prefix,"endTime","Uhrzeit bis",item.endTime,{type:"time",error:endTimeError,dayIndex,itemIndex,disabled:item.allDay})}
           ${programCheckbox(prefix,"allDay","Ganztagig",item.allDay,{dayIndex,itemIndex})}
           ${programInput(prefix,"title","Titel",item.title,{required:true,error,dayIndex,itemIndex})}
           ${programSelect(prefix,"category","Kategorie",item.category,PROGRAM_CATEGORIES,{dayIndex,itemIndex})}
-          ${programInput(prefix,"location","Ort",item.location,{dayIndex,itemIndex})}
-          ${programInput(prefix,"duration","Dauer",item.duration,{dayIndex,itemIndex})}
+          ${programInput(prefix,"location","Standort / Adresse",item.location,{dayIndex,itemIndex})}
+          ${programInput(prefix,"eventUrl","Veranstaltungslink",item.eventUrl,{type:"url",error:eventUrlError,dayIndex,itemIndex})}
+          ${item.duration&&!item.endTime?`<div class="v2-edit-field full v2-legacy-note"><span>Legacy-Dauer</span><strong>${escapeHtml(item.duration)}</strong></div>`:""}
           ${programTextarea(prefix,"description","Beschreibung",item.description,{dayIndex,itemIndex})}
           ${programTextarea(prefix,"notes","Hinweise",item.notes,{dayIndex,itemIndex})}
         </div>
@@ -2252,7 +2304,12 @@
       const item=day.items?.[itemIndex];
       if(!item)return;
       item[field.name]=field.type==="checkbox"?field.checked:field.value;
-      if(field.name==="allDay"&&field.checked)item.time="";
+      if(field.name==="startTime")item.time=field.value;
+      if(field.name==="allDay"&&field.checked){
+        item.time="";
+        item.startTime="";
+        item.endTime="";
+      }
     }
     const errorKey=itemIndex===null?`program-${dayIndex}-${field.name}`:`program-${dayIndex}-${itemIndex}-${field.name}`;
     if(state.programEditErrors[errorKey]){
@@ -2375,7 +2432,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

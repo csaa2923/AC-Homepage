@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=17/);
-    assert.match(html,/admin-v2\.js\?v=16/);
+    assert.match(html,/admin-v2\.css\?v=18/);
+    assert.match(html,/admin-v2\.js\?v=17/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -256,6 +256,43 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/Legacy-Dauer/);
     assert.match(css,/\.v2-program-item\.no-time\{grid-template-columns:1fr\}/);
     assert.match(css,/\.v2-program-links \.v2-button\{min-height:44px/);
+  });
+
+  it("adds intelligent itinerary fields without changing the program storage facade",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(js,/const PROGRAM_PRIORITIES=\["","Highlight","Empfehlenswert","Optional","Schlechtwetteralternative"\]/);
+    assert.match(js,/function mapNavigationUrl\(location\)/);
+    assert.match(js,/google\.com\/maps\/dir\/\?api=1&destination=\$\{encodeURIComponent\(query\)\}/);
+    assert.match(js,/function emailLink\(value\)/);
+    assert.match(js,/return `mailto:\$\{encodeURIComponent\(email\)\}`/);
+    assert.match(js,/function phoneLink\(value\)/);
+    assert.match(js,/return `tel:\$\{compact\}`/);
+    assert.match(js,/function locationSummary\(item\)/);
+    assert.match(js,/function programPriorityBadge\(value\)/);
+    assert.match(js,/function programPriceLabel\(item\)/);
+    assert.match(js,/venueName:firstValue\(item\.venueName,item\.venue,item\.locationName,item\.placeName\)/);
+    assert.match(js,/contactName:firstValue\(item\.contactName,item\.contact,item\.contactPerson,item\.ansprechpartner\)/);
+    assert.match(js,/weatherPlaceholder:firstValue\(item\.weatherPlaceholder,item\.weather,item\.weatherHint\)/);
+    assert.match(js,/internalNotes:firstValue\(item\.internalNotes,item\.adminNotes,item\.privateNotes,item\.internalNote\)/);
+    assert.match(js,/programInput\(prefix,"contactPhone","Telefon",item\.contactPhone,\{type:"tel"/);
+    assert.match(js,/programInput\(prefix,"contactEmail","E-Mail",item\.contactEmail,\{type:"email",error:contactEmailError/);
+    assert.match(js,/programSelect\(prefix,"priority","Prioritaet",item\.priority,PROGRAM_PRIORITIES/);
+    assert.match(js,/programInput\(prefix,"price","Preis",item\.price/);
+    assert.match(js,/programInput\(prefix,"websiteUrl","Offizielle Website",item\.websiteUrl,\{type:"url",error:websiteUrlError/);
+    assert.match(js,/programInput\(prefix,"ticketNumber","Ticketnummer",item\.ticketNumber/);
+    assert.match(js,/programInput\(prefix,"voucherNumber","Vouchernummer",item\.voucherNumber/);
+    assert.match(js,/programTextarea\(prefix,"internalNotes","Interne Notizen \(nur Admin\)",item\.internalNotes/);
+    assert.match(js,/data-program-edit-action="duplicate-item"/);
+    assert.match(js,/function duplicateProgramItem\(dayIndex,itemIndex\)/);
+    assert.match(js,/function moveProgramItemToDay\(dayIndex,itemIndex,targetDayIndex\)/);
+    assert.match(js,/name="moveToDay" data-program-edit-action="move-to-day"/);
+    assert.match(css,/\.v2-program-priority/);
+    assert.match(css,/\.v2-program-facts/);
+    assert.match(css,/\.v2-admin-note/);
+    assert.match(css,/\.v2-program-image/);
+    assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
+    assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
   });
 
   it("saves program edits through the existing draft facade without direct Firestore",()=>{

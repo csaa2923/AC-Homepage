@@ -809,6 +809,8 @@
   const PROGRAM_SOURCE_KEYS=["program","programme","itineraryDays","dailyProgram","travelProgram","itinerary","activities","agenda","timeline"];
   const PROGRAM_ITEM_KEYS=["items","activities","program","programItems","entries","timeline","agenda"];
   const PROGRAM_CATEGORIES=["Unterkunft","Fruehstueck","Mittagessen","Abendessen","Restaurant","Aktivitaet","Transfer","Flug","Bahn","Bus","Taxi","Wanderung","Wellness","Shopping","Freizeit","Termin","Ticket","Sonstiges"];
+  const PROGRAM_PRIORITIES=["","Highlight","Empfehlenswert","Optional","Schlechtwetteralternative"];
+  const PROGRAM_CURRENCIES=["EUR","CHF","USD","GBP"];
 
   function dateIsoOffset(startValue,index){
     const start=dateValue(startValue);
@@ -881,6 +883,43 @@
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   }
 
+  function mapNavigationUrl(location){
+    const query=cleanValue(location);
+    if(!query)return "";
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}`;
+  }
+
+  function emailLink(value){
+    const email=cleanValue(value);
+    if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return "";
+    return `mailto:${encodeURIComponent(email)}`;
+  }
+
+  function phoneLink(value){
+    const phone=cleanValue(value);
+    if(!phone)return "";
+    const compact=phone.replace(/[^\d+]/g,"");
+    if(!compact||compact.length<4)return "";
+    return `tel:${compact}`;
+  }
+
+  function locationSummary(item){
+    return [item.venueName,item.locationAddress,item.locationCity,item.locationCountry].map(cleanValue).filter(Boolean).join(", ")||cleanValue(item.location);
+  }
+
+  function programPriorityBadge(value){
+    const priority=cleanValue(value);
+    if(!priority)return "";
+    return `<span class="v2-program-priority ${escapeHtml(normalizeText(priority).replace(/\s+/g,"-"))}">${escapeHtml(priority)}</span>`;
+  }
+
+  function programPriceLabel(item){
+    const price=cleanValue(item.price||item.cost);
+    if(!price)return "";
+    const currency=cleanValue(item.currency);
+    return currency&&!/eur|chf|usd|gbp|€|\$|£/i.test(price)?`${price} ${currency}`:price;
+  }
+
   function programTimeLabel(item){
     if(item.allDay)return "Ganztagig";
     if(item.time&&item.endTime)return `${item.time}-${item.endTime}`;
@@ -902,8 +941,24 @@
       description:firstValue(item.description,item.text,item.details,item.summary,item.info),
       category:firstValue(item.category,item.type,item.kind,item.icon,"Sonstiges"),
       location:firstValue(item.location,item.place,item.ort,item.address,item.venue,item.site),
+      venueName:firstValue(item.venueName,item.venue,item.locationName,item.placeName),
+      locationAddress:firstValue(item.locationAddress,item.address,item.street,item.strasse),
+      locationCity:firstValue(item.locationCity,item.city,item.ort),
+      locationCountry:firstValue(item.locationCountry,item.country,item.land),
       duration:firstValue(item.duration,item.length,item.dauer),
       eventUrl:safeWebUrl(firstValue(item.url,item.link,item.website,item.eventUrl,item.bookingUrl)),
+      websiteUrl:safeWebUrl(firstValue(item.websiteUrl,item.officialWebsite,item.homepage,item.web)),
+      contactName:firstValue(item.contactName,item.contact,item.contactPerson,item.ansprechpartner),
+      contactPhone:firstValue(item.contactPhone,item.phone,item.telefon,item.mobile),
+      contactEmail:firstValue(item.contactEmail,item.email,item.mail),
+      price:firstValue(item.price,item.cost,item.kosten),
+      currency:firstValue(item.currency,item.waehrung,item.currencyCode,"EUR"),
+      priority:firstValue(item.priority,item.importance,item.prioritaet),
+      imageUrl:safeWebUrl(firstValue(item.imageUrl,item.image,item.photoUrl,item.pictureUrl)),
+      ticketNumber:firstValue(item.ticketNumber,item.ticket,item.ticketNo,item.ticketId),
+      voucherNumber:firstValue(item.voucherNumber,item.voucher,item.voucherNo,item.voucherId),
+      weatherPlaceholder:firstValue(item.weatherPlaceholder,item.weather,item.weatherHint),
+      internalNotes:firstValue(item.internalNotes,item.adminNotes,item.privateNotes,item.internalNote),
       notes:firstValue(item.notes,item.note,item.hint,item.remark,item.internalNote),
       order:Number.isFinite(Number(item.order))?Number(item.order):index
     };
@@ -973,8 +1028,24 @@
         description:cleanValue(item.description),
         category:firstValue(item.category,"Sonstiges"),
         location:cleanValue(item.location),
+        venueName:cleanValue(item.venueName),
+        locationAddress:cleanValue(item.locationAddress),
+        locationCity:cleanValue(item.locationCity),
+        locationCountry:cleanValue(item.locationCountry),
         duration:cleanValue(item.duration),
         eventUrl:cleanValue(item.eventUrl),
+        websiteUrl:cleanValue(item.websiteUrl),
+        contactName:cleanValue(item.contactName),
+        contactPhone:cleanValue(item.contactPhone),
+        contactEmail:cleanValue(item.contactEmail),
+        price:cleanValue(item.price),
+        currency:firstValue(item.currency,"EUR"),
+        priority:cleanValue(item.priority),
+        imageUrl:cleanValue(item.imageUrl),
+        ticketNumber:cleanValue(item.ticketNumber),
+        voucherNumber:cleanValue(item.voucherNumber),
+        weatherPlaceholder:cleanValue(item.weatherPlaceholder),
+        internalNotes:cleanValue(item.internalNotes),
         notes:cleanValue(item.notes),
         order:itemIndex
       }))
@@ -1041,7 +1112,7 @@
   function addProgramItem(dayIndex){
     const day=state.programEditDraft?.days?.[dayIndex];
     if(!day)return;
-    day.items.push({time:"",startTime:"",endTime:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",eventUrl:"",notes:""});
+    day.items.push({time:"",startTime:"",endTime:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",venueName:"",locationAddress:"",locationCity:"",locationCountry:"",eventUrl:"",websiteUrl:"",contactName:"",contactPhone:"",contactEmail:"",price:"",currency:"EUR",priority:"",imageUrl:"",ticketNumber:"",voucherNumber:"",weatherPlaceholder:"",notes:"",internalNotes:""});
     setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
     renderCustomerDetail();
   }
@@ -1085,6 +1156,27 @@
     renderCustomerDetail();
   }
 
+  function duplicateProgramItem(dayIndex,itemIndex){
+    const items=state.programEditDraft?.days?.[dayIndex]?.items;
+    if(!Array.isArray(items)||!items[itemIndex])return;
+    const copy=clone(items[itemIndex]);
+    items.splice(itemIndex+1,0,copy);
+    setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+    renderCustomerDetail();
+  }
+
+  function moveProgramItemToDay(dayIndex,itemIndex,targetDayIndex){
+    const days=state.programEditDraft?.days;
+    if(!Array.isArray(days)||dayIndex===targetDayIndex)return;
+    const sourceItems=days[dayIndex]?.items;
+    const targetItems=days[targetDayIndex]?.items;
+    if(!Array.isArray(sourceItems)||!Array.isArray(targetItems)||!sourceItems[itemIndex])return;
+    const [item]=sourceItems.splice(itemIndex,1);
+    targetItems.push(item);
+    setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+    renderCustomerDetail();
+  }
+
   function validateProgramEdit(draft){
     const values=normalizedProgramDraft(draft);
     const errors={};
@@ -1094,6 +1186,9 @@
         if(item.endTime&&!item.startTime)errors[`program-${dayIndex}-${itemIndex}-endTime`]="Bitte zuerst eine Startzeit eingeben.";
         if(item.startTime&&item.endTime&&item.endTime<item.startTime)errors[`program-${dayIndex}-${itemIndex}-endTime`]="Die Endzeit darf nicht vor der Startzeit liegen.";
         if(cleanValue(item.eventUrl)&&!safeWebUrl(item.eventUrl))errors[`program-${dayIndex}-${itemIndex}-eventUrl`]="Bitte gib eine gueltige Webadresse ein.";
+        if(cleanValue(item.websiteUrl)&&!safeWebUrl(item.websiteUrl))errors[`program-${dayIndex}-${itemIndex}-websiteUrl`]="Bitte gib eine gueltige Webadresse ein.";
+        if(cleanValue(item.imageUrl)&&!safeWebUrl(item.imageUrl))errors[`program-${dayIndex}-${itemIndex}-imageUrl`]="Bitte gib eine gueltige Bildadresse ein.";
+        if(cleanValue(item.contactEmail)&&!emailLink(item.contactEmail))errors[`program-${dayIndex}-${itemIndex}-contactEmail`]="Bitte gib eine gueltige E-Mail-Adresse ein.";
       });
     });
     return {valid:!Object.keys(errors).length,errors,values};
@@ -1112,8 +1207,24 @@
         description:item.description,
         category:item.category||"Sonstiges",
         location:item.location,
+        venueName:item.venueName,
+        locationAddress:item.locationAddress,
+        locationCity:item.locationCity,
+        locationCountry:item.locationCountry,
         ...(item.duration&&!item.endTime?{duration:item.duration}:{}),
         eventUrl:safeWebUrl(item.eventUrl),
+        websiteUrl:safeWebUrl(item.websiteUrl),
+        contactName:item.contactName,
+        contactPhone:item.contactPhone,
+        contactEmail:item.contactEmail,
+        price:item.price,
+        currency:item.currency,
+        priority:item.priority,
+        imageUrl:safeWebUrl(item.imageUrl),
+        ticketNumber:item.ticketNumber,
+        voucherNumber:item.voucherNumber,
+        weatherPlaceholder:item.weatherPlaceholder,
+        internalNotes:item.internalNotes,
         notes:item.notes,
         order:itemIndex
       }))
@@ -2046,19 +2157,46 @@
 
   function programTimelineItem(item){
     const time=programTimeLabel(item);
-    const mapsUrl=mapSearchUrl(item.location);
+    const location=locationSummary(item);
+    const mapsUrl=mapSearchUrl(location);
+    const navigationUrl=mapNavigationUrl(location);
     const eventUrl=safeWebUrl(item.eventUrl);
+    const websiteUrl=safeWebUrl(item.websiteUrl);
+    const showWebsite=websiteUrl&&websiteUrl!==eventUrl;
+    const imageUrl=safeWebUrl(item.imageUrl);
+    const phoneUrl=phoneLink(item.contactPhone);
+    const mailUrl=emailLink(item.contactEmail);
+    const price=programPriceLabel(item);
     const legacy=(!item.endTime&&item.duration)?item.duration:"";
+    const ticketInfo=[item.ticketNumber?`Ticket ${item.ticketNumber}`:"",item.voucherNumber?`Voucher ${item.voucherNumber}`:""].filter(Boolean).join(" · ");
     return `
       <article class="v2-program-item ${time?"":"no-time"}">
         ${time?`<div class="v2-program-time">${escapeHtml(time)}</div>`:""}
         <div>
-          <div class="v2-meta">${badge(item.category||"Sonstiges")}</div>
+          <div class="v2-meta">${badge(item.category||"Sonstiges")}${programPriorityBadge(item.priority)}</div>
+          ${imageUrl?`<img class="v2-program-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title||"Programmbild")}" loading="lazy">`:""}
           <h4>${escapeHtml(displayValue(item.title,"Programmpunkt ohne Titel"))}</h4>
-          ${item.location?`<p><strong>Standort:</strong> ${escapeHtml(item.location)}</p>`:""}
+          ${location?`<p><strong>Standort:</strong> ${escapeHtml(location)}</p>`:""}
           ${item.description?`<p>${escapeHtml(item.description)}</p>`:""}
+          ${(item.contactName||item.contactPhone||item.contactEmail||price||ticketInfo)?`
+            <div class="v2-program-facts">
+              ${item.contactName?`<span>Ansprechpartner: ${escapeHtml(item.contactName)}</span>`:""}
+              ${price?`<span>Kosten: ${escapeHtml(price)}</span>`:""}
+              ${ticketInfo?`<span>${escapeHtml(ticketInfo)}</span>`:""}
+            </div>
+          `:""}
           ${legacy||item.notes?`<p class="v2-muted">${escapeHtml([legacy,item.notes].filter(Boolean).join(" · "))}</p>`:""}
           ${mapsUrl||eventUrl?`<div class="v2-program-links">${mapsUrl?`<a class="v2-button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">In Maps oeffnen</a>`:""}${eventUrl?`<a class="v2-button soft" href="${escapeHtml(eventUrl)}" target="_blank" rel="noopener noreferrer">Veranstaltung oeffnen</a>`:""}</div>`:""}
+          ${item.weatherPlaceholder?`<p class="v2-muted">${escapeHtml(item.weatherPlaceholder)}</p>`:""}
+          ${item.internalNotes?`<p class="v2-admin-note"><strong>Intern:</strong> ${escapeHtml(item.internalNotes)}</p>`:""}
+          ${navigationUrl||showWebsite||phoneUrl||mailUrl?`
+            <div class="v2-program-links">
+              ${navigationUrl?`<a class="v2-button soft" href="${escapeHtml(navigationUrl)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}
+              ${showWebsite?`<a class="v2-button soft" href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer">Website</a>`:""}
+              ${phoneUrl?`<a class="v2-button soft" href="${escapeHtml(phoneUrl)}">Anrufen</a>`:""}
+              ${mailUrl?`<a class="v2-button soft" href="${escapeHtml(mailUrl)}">E-Mail schreiben</a>`:""}
+            </div>
+          `:""}
         </div>
       </article>
     `;
@@ -2121,6 +2259,9 @@
     const error=state.programEditErrors?.[`${prefix}-title`]||"";
     const endTimeError=state.programEditErrors?.[`${prefix}-endTime`]||"";
     const eventUrlError=state.programEditErrors?.[`${prefix}-eventUrl`]||"";
+    const websiteUrlError=state.programEditErrors?.[`${prefix}-websiteUrl`]||"";
+    const imageUrlError=state.programEditErrors?.[`${prefix}-imageUrl`]||"";
+    const contactEmailError=state.programEditErrors?.[`${prefix}-contactEmail`]||"";
     return `
       <article class="v2-program-edit-item" data-program-item="${itemIndex}">
         <div class="v2-program-item-toolbar">
@@ -2128,6 +2269,7 @@
           <div>
             <button class="v2-icon-button" type="button" title="Nach oben" data-program-edit-action="move-up" data-day-index="${dayIndex}" data-item-index="${itemIndex}" ${itemIndex===0?"disabled":""}>↑</button>
             <button class="v2-icon-button" type="button" title="Nach unten" data-program-edit-action="move-down" data-day-index="${dayIndex}" data-item-index="${itemIndex}" ${itemIndex>=arrayValue(state.programEditDraft?.days?.[dayIndex]?.items).length-1?"disabled":""}>↓</button>
+            <button class="v2-icon-button" type="button" title="Duplizieren" data-program-edit-action="duplicate-item" data-day-index="${dayIndex}" data-item-index="${itemIndex}">+</button>
             <button class="v2-icon-button" type="button" title="Loeschen" data-program-edit-action="delete-item" data-day-index="${dayIndex}" data-item-index="${itemIndex}">×</button>
           </div>
         </div>
@@ -2137,11 +2279,28 @@
           ${programCheckbox(prefix,"allDay","Ganztagig",item.allDay,{dayIndex,itemIndex})}
           ${programInput(prefix,"title","Titel",item.title,{required:true,error,dayIndex,itemIndex})}
           ${programSelect(prefix,"category","Kategorie",item.category,PROGRAM_CATEGORIES,{dayIndex,itemIndex})}
+          ${programSelect(prefix,"priority","Prioritaet",item.priority,PROGRAM_PRIORITIES,{dayIndex,itemIndex})}
           ${programInput(prefix,"location","Standort / Adresse",item.location,{dayIndex,itemIndex})}
+          ${programInput(prefix,"venueName","Standortname",item.venueName,{dayIndex,itemIndex})}
+          ${programInput(prefix,"locationAddress","Adresse",item.locationAddress,{dayIndex,itemIndex})}
+          ${programInput(prefix,"locationCity","Ort",item.locationCity,{dayIndex,itemIndex})}
+          ${programInput(prefix,"locationCountry","Land",item.locationCountry,{dayIndex,itemIndex})}
           ${programInput(prefix,"eventUrl","Veranstaltungslink",item.eventUrl,{type:"url",error:eventUrlError,dayIndex,itemIndex})}
+          ${programInput(prefix,"websiteUrl","Offizielle Website",item.websiteUrl,{type:"url",error:websiteUrlError,dayIndex,itemIndex})}
+          ${programInput(prefix,"contactName","Ansprechpartner",item.contactName,{dayIndex,itemIndex})}
+          ${programInput(prefix,"contactPhone","Telefon",item.contactPhone,{type:"tel",dayIndex,itemIndex})}
+          ${programInput(prefix,"contactEmail","E-Mail",item.contactEmail,{type:"email",error:contactEmailError,dayIndex,itemIndex})}
+          ${programInput(prefix,"price","Preis",item.price,{dayIndex,itemIndex})}
+          ${programSelect(prefix,"currency","Waehrung",item.currency||"EUR",PROGRAM_CURRENCIES,{dayIndex,itemIndex})}
+          ${programInput(prefix,"imageUrl","Bild-URL",item.imageUrl,{type:"url",error:imageUrlError,dayIndex,itemIndex})}
+          ${programInput(prefix,"ticketNumber","Ticketnummer",item.ticketNumber,{dayIndex,itemIndex})}
+          ${programInput(prefix,"voucherNumber","Vouchernummer",item.voucherNumber,{dayIndex,itemIndex})}
+          ${programInput(prefix,"weatherPlaceholder","Wetter-Platzhalter",item.weatherPlaceholder,{dayIndex,itemIndex})}
+          ${programMoveSelect(prefix,dayIndex,itemIndex)}
           ${item.duration&&!item.endTime?`<div class="v2-edit-field full v2-legacy-note"><span>Legacy-Dauer</span><strong>${escapeHtml(item.duration)}</strong></div>`:""}
           ${programTextarea(prefix,"description","Beschreibung",item.description,{dayIndex,itemIndex})}
           ${programTextarea(prefix,"notes","Hinweise",item.notes,{dayIndex,itemIndex})}
+          ${programTextarea(prefix,"internalNotes","Interne Notizen (nur Admin)",item.internalNotes,{dayIndex,itemIndex})}
         </div>
       </article>
     `;
@@ -2161,6 +2320,21 @@
     const id=`${prefix}-${name}`;
     const normalized=normalizeText(value);
     return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-day-index="${dayIndex}" data-item-index="${itemIndex}">${options.map(option=>`<option value="${escapeHtml(option)}" ${normalizeText(option)===normalized?"selected":""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
+  }
+
+  function programMoveSelect(prefix,dayIndex,itemIndex){
+    const id=`${prefix}-moveToDay`;
+    const days=arrayValue(state.programEditDraft?.days);
+    if(days.length<=1)return "";
+    return `
+      <label class="v2-edit-field" for="${id}">
+        <span>In anderen Tag verschieben</span>
+        <select id="${id}" name="moveToDay" data-program-edit-action="move-to-day" data-day-index="${dayIndex}" data-item-index="${itemIndex}">
+          <option value="">Tag waehlen</option>
+          ${days.map((day,index)=>`<option value="${index}" ${index===dayIndex?"disabled":""}>Tag ${index+1}${day.date?` - ${formatLongDate(day.date)}`:""}</option>`).join("")}
+        </select>
+      </label>
+    `;
   }
 
   function programCheckbox(prefix,name,label,checked,{dayIndex,itemIndex}={}){
@@ -2296,6 +2470,10 @@
     if(!field||!state.programEditDraft)return;
     const dayIndex=Number(field.dataset.dayIndex);
     const itemIndex=field.dataset.itemIndex!==undefined?Number(field.dataset.itemIndex):null;
+    if(field.name==="moveToDay"&&itemIndex!==null&&cleanValue(field.value)&&!Number.isNaN(Number(field.value))){
+      moveProgramItemToDay(dayIndex,itemIndex,Number(field.value));
+      return;
+    }
     const day=state.programEditDraft.days?.[dayIndex];
     if(!day)return;
     if(itemIndex===null||Number.isNaN(itemIndex)){
@@ -2375,6 +2553,7 @@
         if(action==="delete-item")deleteProgramItem(dayIndex,itemIndex);
         if(action==="move-up")moveProgramItem(dayIndex,itemIndex,-1);
         if(action==="move-down")moveProgramItem(dayIndex,itemIndex,1);
+        if(action==="duplicate-item")duplicateProgramItem(dayIndex,itemIndex);
         return;
       }
       const classic=event.target.closest("[data-classic-editor]");

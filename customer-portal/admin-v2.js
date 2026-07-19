@@ -44,12 +44,27 @@
     documentCategory:"",
     documentAssignment:"",
     documentSort:"uploaded",
-    documentQuality:""
+    documentQuality:"",
+    documentUploadCustomerId:"",
+    documentUploads:[],
+    documentDropActive:false
   };
 
   const byId=id=>document.getElementById(id);
   const all=selector=>Array.from(document.querySelectorAll(selector));
   const AUTH_TIMEOUT_MS=15000;
+  const MAX_UPLOAD_BYTES=24*1024*1024;
+  const DOCUMENT_MIME_TYPES=new Set([
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ]);
+  const DOCUMENT_EXTENSIONS=new Set(["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx"]);
   const TECHNICAL_LOGIN_ERROR="Die Anmeldung konnte nicht abgeschlossen werden. Bitte erneut versuchen.";
   const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung für den Adminbereich.";
   const CUSTOMER_NOT_FOUND_ERROR="Der ausgewaehlte Kunde konnte nicht gefunden werden.";
@@ -66,6 +81,7 @@
   let tripSavePromise=null;
   let programSavePromise=null;
   let documentSavePromise=null;
+  let uploadSequence=0;
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -1366,6 +1382,116 @@
     return "Dokument";
   }
 
+  function uploadFileExtension(name){
+    const match=String(name||"").toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match?match[1]:"";
+  }
+
+  function validateDocumentUploadFile(file){
+    if(!file)throw new Error("Datei fehlt.");
+    if(!String(file.name||"").trim())throw new Error("Die Datei hat keinen gueltigen Namen.");
+    if(!Number.isFinite(file.size)||file.size<=0)throw new Error("Die Datei ist leer.");
+    if(file.size>MAX_UPLOAD_BYTES)throw new Error("Die Datei ist zu gross. Maximal erlaubt sind 24 MB.");
+    const mime=String(file.type||"").toLowerCase();
+    const extension=uploadFileExtension(file.name);
+    if(!DOCUMENT_MIME_TYPES.has(mime)||!DOCUMENT_EXTENSIONS.has(extension)){
+      throw new Error("Dateityp nicht vorgesehen. Bitte PDF, JPG, PNG, WEBP oder vorgesehene Office-Dateien verwenden.");
+    }
+  }
+
+  function documentTypeForUpload(file){
+    const mime=String(file?.type||"").toLowerCase();
+    const extension=uploadFileExtension(file?.name);
+    if(mime==="application/pdf"||extension==="pdf")return "PDF";
+    if(/^image\/(jpeg|png|webp)$/.test(mime)||["jpg","jpeg","png","webp"].includes(extension))return "Bild";
+    return "Dokument";
+  }
+
+  function formatFileSize(value){
+    const size=Number(value||0);
+    if(!Number.isFinite(size)||size<=0)return "";
+    if(size>=1024*1024)return `${(size/(1024*1024)).toFixed(size>=10*1024*1024?0:1)} MB`;
+    return `${Math.max(1,Math.round(size/1024))} KB`;
+  }
+
+  function uploadCustomerOptions(selectedId=""){
+    return state.customers
+      .map(customer=>{
+        const id=String(customer.customerId||"");
+        return `<option value="${escapeHtml(id)}" ${id===String(selectedId||"")?"selected":""}>${escapeHtml(customer.customerName||id||"Kunde")}</option>`;
+      })
+      .join("");
+  }
+
+  function selectedUploadCustomer(customer=null){
+    if(customer)return customer;
+    const selected=customerById(state.documentUploadCustomerId);
+    return selected||state.customers[0]||null;
+  }
+
+  function uploadStatusText(upload){
+    if(upload.status==="queued")return "vorbereitet";
+    if(upload.status==="uploading")return `laedt hoch ... ${upload.progress||0}%`;
+    if(upload.status==="saving")return "wird gespeichert";
+    if(upload.status==="done")return "abgeschlossen";
+    if(upload.status==="error")return upload.error||"fehlgeschlagen";
+    return "";
+  }
+
+  function uploadRowsMarkup(){
+    if(!state.documentUploads.length)return "";
+    return `
+      <div class="v2-upload-list" aria-live="polite">
+        ${state.documentUploads.map(upload=>`
+          <article class="v2-upload-row ${escapeHtml(upload.status)}">
+            <div>
+              <strong>${escapeHtml(upload.fileName)}</strong>
+              <span>${escapeHtml(formatFileSize(upload.size))}</span>
+              <p>${escapeHtml(uploadStatusText(upload))}</p>
+              <progress max="100" value="${escapeHtml(upload.progress||0)}"></progress>
+            </div>
+            ${upload.status==="error"?`<button class="v2-button soft" type="button" data-upload-retry="${escapeHtml(upload.id)}">Erneut versuchen</button>`:""}
+          </article>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function uploadPanelMarkup(customer=null){
+    const selected=selectedUploadCustomer(customer);
+    const targetId=selected?.customerId||"";
+    return `
+      <article class="v2-upload-panel ${state.documentDropActive?"drag-active":""}" data-upload-drop-zone>
+        <div class="v2-upload-head">
+          <div>
+            <p class="v2-eyebrow">Upload</p>
+            <h3>Dokumente direkt hochladen</h3>
+            <p>Dateien werden mit der bestehenden Firebase-Storage-Funktion hochgeladen und danach im Kundenentwurf gespeichert.</p>
+          </div>
+          <a class="v2-button soft" href="admin.html#customers">Upload im klassischen Admin</a>
+        </div>
+        ${customer?"":`
+          <label class="v2-edit-field">Kunde
+            <select id="documentUploadCustomerSelect">${uploadCustomerOptions(targetId)}</select>
+          </label>
+        `}
+        <div class="v2-upload-actions">
+          <label class="v2-button primary" for="${customer?"customerDocumentUploadInput":"globalDocumentUploadInput"}">Dokument hochladen</label>
+          <input class="v2-file-input" id="${customer?"customerDocumentUploadInput":"globalDocumentUploadInput"}" type="file" accept=".pdf,image/*,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" data-document-upload ${customer?`data-upload-customer="${escapeHtml(targetId)}"`:""}>
+          <label class="v2-button soft" for="${customer?"customerMultiDocumentUploadInput":"globalMultiDocumentUploadInput"}">Mehrere Dateien hochladen</label>
+          <input class="v2-file-input" id="${customer?"customerMultiDocumentUploadInput":"globalMultiDocumentUploadInput"}" type="file" accept=".pdf,image/*,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" data-document-upload ${customer?`data-upload-customer="${escapeHtml(targetId)}"`:""} multiple>
+          <label class="v2-button soft" for="${customer?"customerCameraUploadInput":"globalCameraUploadInput"}">Foto aufnehmen</label>
+          <input class="v2-file-input" id="${customer?"customerCameraUploadInput":"globalCameraUploadInput"}" type="file" accept="image/*" capture="environment" data-document-upload ${customer?`data-upload-customer="${escapeHtml(targetId)}"`:""}>
+        </div>
+        <div class="v2-upload-drop-text">
+          <strong>Dateien hier ablegen</strong>
+          <span>Mehrfachupload ist moeglich. Auf Smartphones bitte die Buttons verwenden.</span>
+        </div>
+        ${uploadRowsMarkup()}
+      </article>
+    `;
+  }
+
   function normalizeTags(value){
     if(Array.isArray(value))return value.map(cleanValue).filter(Boolean);
     return cleanValue(value).split(/[,;\n]+/).map(item=>item.trim()).filter(Boolean);
@@ -1551,6 +1677,16 @@
     renderCustomerDetail();
   }
 
+  function deleteDocumentEditItem(index){
+    if(!state.documentEditDraft?.documents?.[index])return;
+    const item=state.documentEditDraft.documents[index];
+    const label=item.title||item.fileName||`Dokument ${index+1}`;
+    if(!window.confirm(`Dieses Dokument aus dem Kundenentwurf entfernen?\n\n${label}`))return;
+    state.documentEditDraft.documents.splice(index,1);
+    setDocumentEditMessage("Dokument entfernt. Bitte speichern, um die Aenderung zu uebernehmen.","dirty");
+    renderCustomerDetail();
+  }
+
   function saveDocumentEdit(){
     if(state.documentEditSaving||documentSavePromise)return documentSavePromise;
     const customer=customerById(state.selectedCustomerId);
@@ -1590,6 +1726,126 @@
       }
     })();
     return documentSavePromise;
+  }
+
+  function setUploadState(id,patch){
+    const index=state.documentUploads.findIndex(upload=>upload.id===id);
+    if(index<0)return;
+    state.documentUploads[index]={...state.documentUploads[index],...patch};
+    renderDocumentUploadSurfaces();
+  }
+
+  function renderDocumentUploadSurfaces(){
+    if(state.route==="documents")renderDocuments();
+    if(state.route==="customerDetail"&&state.selectedTab==="dokumente")renderCustomerDetail();
+  }
+
+  function documentFromUploadedFile(uploaded,file){
+    const type=documentTypeForUpload(file);
+    return normalizeDocumentItem({
+      ...uploaded,
+      title:uploaded.title||file.name,
+      fileName:uploaded.fileName||file.name,
+      originalName:uploaded.originalName||file.name,
+      category:DOCUMENT_CATEGORIES.includes(uploaded.type)?uploaded.type:"Sonstiges",
+      type:DOCUMENT_CATEGORIES.includes(uploaded.type)?uploaded.type:"Sonstiges",
+      documentType:DOCUMENT_TYPES.includes(type)?type:"Dokument",
+      visibility:"Kundenportal",
+      visible:true,
+      uploadedAt:uploaded.uploadedAt||new Date().toISOString(),
+      uploadDate:uploaded.uploadedAt||new Date().toISOString(),
+      mimeType:uploaded.mimeType||file.type||"",
+      contentType:uploaded.contentType||file.type||"",
+      size:uploaded.size||file.size,
+      fileSize:uploaded.fileSize||file.size
+    });
+  }
+
+  async function persistUploadedDocument(customer,documentItem){
+    const fullCustomer=clone(customer);
+    fullCustomer.documents=[...normalizedDocuments(customer),documentItem];
+    fullCustomer.updatedAt=new Date().toLocaleDateString("de-DE");
+    fullCustomer._lastSavedAt=new Date().toISOString();
+    await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+    updateLocalCustomer(fullCustomer);
+    return fullCustomer;
+  }
+
+  async function uploadSingleDocument(upload){
+    const customer=customerById(upload.customerId);
+    if(!customer)throw new Error("Die Datei konnte keinem gueltigen Kunden zugeordnet werden.");
+    validateDocumentUploadFile(upload.file);
+    if(!window.ACTFirebaseStorage?.uploadCustomerDocument)throw new Error("Firebase Storage ist nicht geladen. Bitte den klassischen Admin verwenden.");
+    const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+    if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+    setUploadState(upload.id,{status:"uploading",progress:0,error:""});
+    const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(
+      upload.customerId,
+      upload.file,
+      {title:upload.file.name,type:documentTypeForUpload(upload.file)},
+      percent=>setUploadState(upload.id,{status:"uploading",progress:percent})
+    );
+    setUploadState(upload.id,{status:"saving",progress:100});
+    const documentItem=documentFromUploadedFile(uploaded,upload.file);
+    const latestCustomer=customerById(upload.customerId)||customer;
+    const fullCustomer=await persistUploadedDocument(latestCustomer,documentItem);
+    setDocumentEditMessage("Dokument hochgeladen und im Kundenentwurf gespeichert.","success");
+    setUploadState(upload.id,{status:"done",progress:100,documentId:documentItem.documentId});
+    return fullCustomer;
+  }
+
+  async function startDocumentUploads(files,customerId){
+    const fileList=Array.from(files||[]).filter(Boolean);
+    if(!fileList.length)return;
+    const targetCustomerId=customerId||state.documentUploadCustomerId||state.selectedCustomerId||state.customers[0]?.customerId||"";
+    if(!targetCustomerId){
+      setDocumentEditMessage("Bitte zuerst einen Kunden fuer den Upload waehlen.","error");
+      renderDocumentUploadSurfaces();
+      return;
+    }
+    if(state.documentEditMode&&hasDirtyDocumentEdit()){
+      setDocumentEditMessage("Bitte ungespeicherte Metadaten zuerst speichern oder abbrechen.","error");
+      renderDocumentUploadSurfaces();
+      return;
+    }
+    state.documentUploadCustomerId=targetCustomerId;
+    const uploads=fileList.map(file=>({
+      id:`upload-${Date.now()}-${++uploadSequence}`,
+      file,
+      fileName:file.name,
+      size:file.size,
+      customerId:targetCustomerId,
+      status:"queued",
+      progress:0,
+      error:""
+    }));
+    state.documentUploads=[...uploads,...state.documentUploads].slice(0,12);
+    renderDocumentUploadSurfaces();
+    for(const upload of uploads){
+      try{
+        await uploadSingleDocument(upload);
+      }catch(error){
+        console.error("[ACT Admin V2] Dokument-Upload:",error&&error.message?error.message:"Fehler");
+        setDocumentEditMessage("Upload fehlgeschlagen. Bitte Datei pruefen oder den klassischen Admin verwenden.","error");
+        setUploadState(upload.id,{status:"error",progress:0,error:error&&error.message?error.message:"Upload fehlgeschlagen."});
+      }
+    }
+    render();
+  }
+
+  function retryDocumentUpload(id){
+    const upload=state.documentUploads.find(item=>item.id===id);
+    if(!upload||!upload.file)return;
+    upload.status="queued";
+    upload.progress=0;
+    upload.error="";
+    renderDocumentUploadSurfaces();
+    uploadSingleDocument(upload)
+      .then(()=>render())
+      .catch(error=>{
+        console.error("[ACT Admin V2] Dokument-Upload wiederholen:",error&&error.message?error.message:"Fehler");
+        setUploadState(upload.id,{status:"error",progress:0,error:error&&error.message?error.message:"Upload fehlgeschlagen."});
+      });
   }
 
   function documentStatus(doc){
@@ -1842,8 +2098,8 @@
             <h2>Dokumente & Anhaenge</h2>
             <p>${summary.total} Gesamt · ${summary.complete} vollstaendig · ${summary.issues} Hinweise · ${summary.critical} kritisch</p>
           </div>
-          <a class="v2-button soft" href="admin.html#customers">Upload im klassischen Admin</a>
         </div>
+        ${uploadPanelMarkup()}
         <div class="v2-document-controls">
           <label class="v2-filter-search">Dokument suchen
             <input id="documentSearchInput" type="search" placeholder="Dateiname, Tags, Kategorie" value="${escapeHtml(state.documentQuery)}">
@@ -1919,6 +2175,7 @@
           <a class="v2-button soft" href="admin.html#customers">Upload im klassischen Admin</a>
           <span class="v2-edit-status ${state.documentEditMessageKind}" id="documentEditStatus" aria-live="polite">${escapeHtml(state.documentEditMessage)}</span>
         </div>
+        ${uploadPanelMarkup(customer)}
         <article class="v2-trip-hero v2-document-hero">
           <p class="v2-eyebrow">Dokumente</p>
           <h3>Dokumente & Anhaenge</h3>
@@ -1944,7 +2201,7 @@
           </details>
         `:""}
         <div class="v2-document-grid">
-          ${docs.length?analysis.rows.map(row=>documentCardMarkup(row.doc,{customer,quality:row.quality})).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente vorhanden</h3><p>Uploads erfolgen weiterhin im klassischen Admin.</p></article>`}
+          ${docs.length?analysis.rows.map(row=>documentCardMarkup(row.doc,{customer,quality:row.quality})).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente vorhanden</h3><p>Bitte oben ein Dokument hochladen oder den klassischen Admin als Fallback nutzen.</p></article>`}
         </div>
       </section>
     `;
@@ -1981,6 +2238,10 @@
     return `
       <article class="v2-document-edit-item">
         ${documentCardMarkup(normalizeDocumentItem(doc,index),{edit:true,index})}
+        <div class="v2-document-actions">
+          <button class="v2-button soft" type="button" data-document-edit-action="delete" data-document-index="${index}">Dokument entfernen</button>
+          <button class="v2-button soft" type="button" disabled title="Die bestehende Upload-Logik bietet noch keine sichere Datei-Ersetzung.">Datei ersetzen</button>
+        </div>
         <div class="v2-edit-grid">
           ${documentInput(prefix,"title","Titel",doc.title,{required:true,error:errors[`${prefix}-title`],index})}
           ${documentInput(prefix,"fileName","Dateiname",doc.fileName,{index})}
@@ -3339,6 +3600,12 @@
         const customer=customerById(state.selectedCustomerId);
         if(action==="edit"&&customer)startDocumentEdit(customer);
         if(action==="cancel")cancelDocumentEdit();
+        if(action==="delete")deleteDocumentEditItem(Number(documentAction.dataset.documentIndex));
+        return;
+      }
+      const uploadRetry=event.target.closest("[data-upload-retry]");
+      if(uploadRetry){
+        retryDocumentUpload(uploadRetry.dataset.uploadRetry);
         return;
       }
       const openDocuments=event.target.closest("[data-open-documents]");
@@ -3372,6 +3639,33 @@
       if(event.target.id==="documentAssignmentFilter"){state.documentAssignment=event.target.value;renderDocuments();}
       if(event.target.id==="documentQualityFilter"){state.documentQuality=event.target.value;renderDocuments();}
       if(event.target.id==="documentSortSelect"){state.documentSort=event.target.value;renderDocuments();}
+      if(event.target.id==="documentUploadCustomerSelect"){state.documentUploadCustomerId=event.target.value;renderDocuments();}
+      if(event.target.matches("[data-document-upload]")){
+        startDocumentUploads(event.target.files,event.target.dataset.uploadCustomer||state.documentUploadCustomerId);
+        event.target.value="";
+      }
+    });
+    document.addEventListener("dragover",event=>{
+      const dropZone=event.target.closest("[data-upload-drop-zone]");
+      if(!dropZone)return;
+      event.preventDefault();
+      if(!state.documentDropActive){
+        state.documentDropActive=true;
+        renderDocumentUploadSurfaces();
+      }
+    });
+    document.addEventListener("dragleave",event=>{
+      if(!event.target.closest("[data-upload-drop-zone]"))return;
+      state.documentDropActive=false;
+      renderDocumentUploadSurfaces();
+    });
+    document.addEventListener("drop",event=>{
+      const dropZone=event.target.closest("[data-upload-drop-zone]");
+      if(!dropZone)return;
+      event.preventDefault();
+      state.documentDropActive=false;
+      const input=dropZone.querySelector("[data-document-upload]");
+      startDocumentUploads(event.dataTransfer?.files,input?.dataset.uploadCustomer||state.documentUploadCustomerId);
     });
     document.addEventListener("submit",event=>{
       if(event.target.id==="customerEditForm"){

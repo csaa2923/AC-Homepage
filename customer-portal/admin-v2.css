@@ -222,6 +222,22 @@ p{color:var(--muted);line-height:1.55}
 .v2-field-error{color:#8b3d31}
 .v2-field-hint{color:var(--muted)}
 .v2-document-page,.v2-documents-overview,.v2-document-editor{display:grid;gap:16px}
+.v2-upload-panel{display:grid;gap:14px;padding:18px;border:1px dashed var(--line);border-radius:22px;background:linear-gradient(135deg,#fff,#f3f8f2);box-shadow:var(--shadow)}
+.v2-upload-panel.drag-active{border-color:var(--green-2);background:#eef7f2}
+.v2-upload-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.v2-upload-head h3{margin-bottom:6px}
+.v2-upload-actions{display:flex;gap:10px;flex-wrap:wrap}
+.v2-upload-actions .v2-button{min-height:48px}
+.v2-file-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.v2-upload-drop-text{display:grid;gap:3px;padding:16px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.72);color:var(--muted)}
+.v2-upload-drop-text strong{color:var(--ink)}
+.v2-upload-list{display:grid;gap:10px}
+.v2-upload-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:16px;background:#fff}
+.v2-upload-row strong,.v2-upload-row span,.v2-upload-row p{display:block;overflow-wrap:anywhere}
+.v2-upload-row p{margin:4px 0 8px;font-weight:800}
+.v2-upload-row.done p{color:#1f6b3f}
+.v2-upload-row.error p{color:#8b3d31}
+.v2-upload-row progress{width:100%;height:10px;accent-color:var(--green)}
 .v2-document-controls{display:grid;grid-template-columns:2fr repeat(4,minmax(150px,1fr));gap:12px;align-items:end}
 .v2-document-controls label{display:grid;gap:7px;color:var(--muted);font-weight:850}
 .v2-document-controls input,.v2-document-controls select{min-height:48px;border:1px solid var(--line);border-radius:16px;padding:12px 14px;background:#fbfcfa;color:var(--ink);font-size:16px}
@@ -288,6 +304,10 @@ p{color:var(--muted);line-height:1.55}
   .v2-program-item{grid-template-columns:1fr;gap:10px}
   .v2-program-time{justify-content:flex-start}
   .v2-program-add-day .v2-button{width:100%}
+  .v2-upload-head,.v2-upload-row{grid-template-columns:1fr}
+  .v2-upload-actions{display:grid;grid-template-columns:1fr}
+  .v2-upload-actions .v2-button{width:100%}
+  .v2-upload-drop-text{display:none}
   .v2-document-controls,.v2-document-card{grid-template-columns:1fr}
   .v2-document-thumb,.v2-document-icon{width:64px;height:64px}
   .v2-document-actions .v2-button{flex:1 1 150px}

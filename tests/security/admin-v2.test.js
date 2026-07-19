@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=9/);
-    assert.match(html,/admin-v2\.js\?v=8/);
+    assert.match(html,/admin-v2\.css\?v=10/);
+    assert.match(html,/admin-v2\.js\?v=9/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -112,6 +112,45 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/data-customer-edit-action="edit">Bearbeiten/);
   });
 
+  it("renders the trip tab read-only from the already loaded customer object",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(js,/tab==="reise"\?tripTabMarkup\(customer\):placeholderTabMarkup\(\)/);
+    assert.match(js,/function buildTripViewModel\(customer\)/);
+    assert.match(js,/function tripTabMarkup\(customer\)/);
+    assert.match(js,/const travel=objectValue\(customer\.travel,customer\.trip,customer\.tripData,customer\.travelData,customer\.journey,customer\.reise,customer\.profile\?\.travel\)/);
+    assert.match(js,/const start=firstValue\(customer\.startDatePlain,customer\.dateFrom,customer\.arrival,customer\.arrivalDate/);
+    assert.match(js,/const adults=numericValue\(customer\.adults,customer\.guests\?\.adults,travel\.adults,travel\.guests\?\.adults,profile\.travel\?\.adults\)/);
+    assert.match(js,/tripReadCard\("Reisedaten"/);
+    assert.match(js,/tripReadCard\("Reisende"/);
+    assert.match(js,/tripReadCard\("An- und Abreise"/);
+    assert.match(js,/tripReadCard\("Region und Aufenthalt"/);
+    assert.match(js,/tripReadCard\("Wuensche und Hinweise"/);
+    assert.match(js,/Fuer diesen Kunden sind noch keine Reisedaten hinterlegt\./);
+    assert.match(js,/Im klassischen Admin bearbeiten/);
+    assert.doesNotMatch(js,/data-trip-edit-action|tripEditMode|saveTrip|saveTravel/);
+    assert.match(css,/\.v2-trip-hero/);
+    assert.match(css,/\.v2-trip-grid/);
+    assert.match(css,/\.v2-internal-field span::after\{content:" intern"/);
+  });
+
+  it("normalizes dates, statuses and partial legacy trip data without mutating storage",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/function dateValue\(value\)\{/);
+    assert.match(js,/typeof value\.toDate==="function"/);
+    assert.match(js,/Number\.isFinite\(value\.seconds\)/);
+    assert.match(js,/raw\.match\(\/\^\(\\d\{1,2\}\)\\\.\(\\d\{1,2\}\)\\\.\(\\d\{4\}\)\$\/\)/);
+    assert.match(js,/function formatTripPeriod\(startValue,endValue,fallback=""\)/);
+    assert.match(js,/function nightCount\(startValue,endValue\)/);
+    assert.match(js,/function statusLabel\(value\)/);
+    assert.match(js,/draft","entwurf/);
+    assert.match(js,/published","veroeffentlicht"/);
+    assert.match(js,/cancelled","canceled","storniert"/);
+    assert.match(js,/cleanValue\(value\)/);
+    assert.match(js,/undefined|null/);
+    assert.doesNotMatch(js,/next\.travel=|next\.trip=|customer\.travel=/);
+  });
+
   it("handles invalid customer ids and keeps the classic edit fallback",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     assert.match(js,/const CUSTOMER_NOT_FOUND_ERROR="Der ausgewaehlte Kunde konnte nicht gefunden werden\."/);
@@ -179,6 +218,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     assert.match(html,/width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content/);
     assert.match(css,/html\{width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%\}/);
+    assert.match(css,/--mobile-safe-top:env\(safe-area-inset-top,0px\)/);
+    assert.match(css,/\.v2-main\{min-width:0;padding:calc\(26px \+ var\(--mobile-safe-top\)\)/);
     assert.match(css,/--mobile-nav-height:0px/);
     assert.match(css,/--mobile-safe-bottom:env\(safe-area-inset-bottom,0px\)/);
     assert.match(css,/:root\{--mobile-nav-height:136px;--mobile-nav-gap:20px\}/);
@@ -196,11 +237,26 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("provides search, filter, sorting, empty and retry states",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
+    const css=readProjectFile("customer-portal/admin-v2.css");
     assert.match(js,/function filteredCustomers\(\)/);
     assert.match(js,/function compareCustomers\(a,b\)/);
     assert.match(js,/function resetFilters\(\)/);
     assert.match(html,/id="customerEmpty"/);
     assert.match(js,/retryInlineButton/);
+    assert.match(html,/id="customerSearchInput"/);
+    assert.match(html,/id="toggleFiltersButton" aria-expanded="false" aria-controls="advancedFilters"/);
+    assert.match(html,/id="advancedFilters" hidden/);
+    assert.match(html,/id="activeFilterSummary"/);
+    assert.match(js,/filtersExpanded:false/);
+    assert.match(js,/function activeAdvancedFilters\(\)/);
+    assert.match(js,/function renderFilterDisclosure\(\)/);
+    assert.match(js,/toggle\.textContent=state\.filtersExpanded\?"Filter ausblenden":active\.length\?`Filter · \$\{active\.length\} aktiv`:"Filter anzeigen"/);
+    assert.match(js,/reset\.disabled=!active\.length/);
+    assert.match(js,/function toggleAdvancedFilters\(\)/);
+    assert.match(css,/\.v2-filterbar\{grid-template-columns:1fr/);
+    assert.match(css,/\.v2-filter-advanced\[hidden\]\{display:none!important\}/);
+    assert.match(css,/\.v2-filter-advanced\{display:grid;grid-template-columns:repeat\(4,minmax\(128px,1fr\)\) auto/);
+    assert.match(css,/\.v2-hero,\.v2-filterbar,\.v2-filter-advanced/);
   });
 
   it("classic admin accepts v2 handoff parameters without replacing existing logic",()=>{

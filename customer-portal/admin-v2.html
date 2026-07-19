@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=9">
+<link rel="stylesheet" href="admin-v2.css?v=10">
 </head>
 <body>
 <main>
@@ -148,27 +148,33 @@
         </div>
 
         <div class="v2-filterbar">
-          <label>Kunde suchen
+          <label class="v2-filter-search">Kunde suchen
             <input id="customerSearchInput" type="search" placeholder="Name, Region, Status, Zeitraum">
           </label>
-          <label>Status
-            <select id="statusFilter"></select>
-          </label>
-          <label>Veröffentlichung
-            <select id="publicationFilter"></select>
-          </label>
-          <label>Region
-            <select id="regionFilter"></select>
-          </label>
-          <label>Sortieren
-            <select id="sortSelect">
-              <option value="arrival">Naechste Anreise</option>
-              <option value="updated">Letzte Aenderung</option>
-              <option value="name">Kundenname</option>
-              <option value="publication">Veroeffentlichungsstatus</option>
-            </select>
-          </label>
-          <button class="v2-button small" type="button" id="resetFiltersButton">Zuruecksetzen</button>
+          <div class="v2-filter-compact">
+            <button class="v2-button soft" type="button" id="toggleFiltersButton" aria-expanded="false" aria-controls="advancedFilters">Filter anzeigen</button>
+            <span class="v2-filter-summary" id="activeFilterSummary">Keine erweiterten Filter aktiv</span>
+          </div>
+          <div class="v2-filter-advanced" id="advancedFilters" hidden>
+            <label>Status
+              <select id="statusFilter"></select>
+            </label>
+            <label>Veröffentlichung
+              <select id="publicationFilter"></select>
+            </label>
+            <label>Region
+              <select id="regionFilter"></select>
+            </label>
+            <label>Sortieren
+              <select id="sortSelect">
+                <option value="arrival">Naechste Anreise</option>
+                <option value="updated">Letzte Aenderung</option>
+                <option value="name">Kundenname</option>
+                <option value="publication">Veroeffentlichungsstatus</option>
+              </select>
+            </label>
+            <button class="v2-button small" type="button" id="resetFiltersButton" disabled>Alle Filter zuruecksetzen</button>
+          </div>
         </div>
 
         <div class="v2-empty" id="customerEmpty" hidden>
@@ -214,6 +220,6 @@
 <script src="firebase-service.js?v=19"></script>
 <script src="firebase-auth.js?v=3"></script>
 <script src="firebase-database.js"></script>
-<script src="admin-v2.js?v=8"></script>
+<script src="admin-v2.js?v=9"></script>
 </body>
 </html>

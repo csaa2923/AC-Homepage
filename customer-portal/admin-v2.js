@@ -9,6 +9,7 @@
     publication:"",
     region:"",
     sort:"arrival",
+    filtersExpanded:false,
     selectedCustomerId:"",
     selectedTab:"kunde",
     customerEditMode:false,
@@ -47,8 +48,25 @@
 
   function dateValue(value){
     if(!value)return null;
-    const text=String(value).slice(0,10);
-    const date=/^\d{4}-\d{2}-\d{2}$/.test(text)?new Date(`${text}T12:00:00`):new Date(value);
+    if(value instanceof Date)return Number.isNaN(value.getTime())?null:value;
+    if(value&&typeof value==="object"){
+      if(typeof value.toDate==="function"){
+        const date=value.toDate();
+        return date instanceof Date&&!Number.isNaN(date.getTime())?date:null;
+      }
+      if(Number.isFinite(value.seconds))return new Date(value.seconds*1000);
+      if(Number.isFinite(value._seconds))return new Date(value._seconds*1000);
+    }
+    const raw=String(value).trim();
+    if(!raw)return null;
+    const text=raw.slice(0,10);
+    if(/^\d{4}-\d{2}-\d{2}$/.test(text)){
+      const date=new Date(`${text}T12:00:00`);
+      return Number.isNaN(date.getTime())?null:date;
+    }
+    const german=raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if(german)return new Date(`${german[3]}-${german[2].padStart(2,"0")}-${german[1].padStart(2,"0")}T12:00:00`);
+    const date=new Date(raw);
     return Number.isNaN(date.getTime())?null:date;
   }
 
@@ -157,6 +175,85 @@
   function displayValue(value,fallback="Nicht hinterlegt"){
     const text=Array.isArray(value)?value.filter(Boolean).join(", "):String(value??"").trim();
     return text||fallback;
+  }
+
+  function cleanValue(value){
+    if(value===null||value===undefined)return "";
+    if(Array.isArray(value))return value.map(cleanValue).filter(Boolean).join(", ");
+    if(value&&typeof value==="object")return "";
+    const text=String(value).trim();
+    return /^(undefined|null)$/i.test(text)?"":text;
+  }
+
+  function firstValue(...values){
+    for(const value of values){
+      const cleaned=cleanValue(value);
+      if(cleaned)return cleaned;
+    }
+    return "";
+  }
+
+  function objectValue(...values){
+    return values.find(value=>value&&typeof value==="object"&&!Array.isArray(value))||{};
+  }
+
+  function arrayValue(...values){
+    return values.find(value=>Array.isArray(value)&&value.length)||[];
+  }
+
+  function numericValue(...values){
+    for(const value of values){
+      const text=cleanValue(value);
+      if(text===""||Number.isNaN(Number(text)))continue;
+      return Number(text);
+    }
+    return null;
+  }
+
+  function formatLongDate(value){
+    const date=dateValue(value);
+    if(!date)return "";
+    return new Intl.DateTimeFormat("de-DE",{day:"numeric",month:"long",year:"numeric"}).format(date);
+  }
+
+  function formatTripPeriod(startValue,endValue,fallback=""){
+    const start=dateValue(startValue);
+    const end=dateValue(endValue);
+    if(start&&end){
+      const sameMonth=start.getMonth()===end.getMonth()&&start.getFullYear()===end.getFullYear();
+      const sameYear=start.getFullYear()===end.getFullYear();
+      if(sameMonth)return `${start.getDate()}. bis ${formatLongDate(end)}`;
+      if(sameYear)return `${new Intl.DateTimeFormat("de-DE",{day:"numeric",month:"long"}).format(start)} bis ${formatLongDate(end)}`;
+      return `${formatLongDate(start)} bis ${formatLongDate(end)}`;
+    }
+    if(start)return formatLongDate(start);
+    if(end)return formatLongDate(end);
+    return cleanValue(fallback);
+  }
+
+  function nightCount(startValue,endValue){
+    const start=dateValue(startValue);
+    const end=dateValue(endValue);
+    if(!start||!end)return "";
+    const nights=Math.round((end.getTime()-start.getTime())/86400000);
+    return nights>0?`${nights} Nacht${nights===1?"":"e"}`:"";
+  }
+
+  function formatTimeValue(value){
+    const text=cleanValue(value);
+    const match=text.match(/^(\d{1,2})(?:[:.](\d{1,2}))?/);
+    if(!match)return "";
+    const hours=Number(match[1]);
+    const minutes=Number(match[2]||0);
+    if(hours<0||hours>23||minutes<0||minutes>59)return "";
+    return `${String(hours).padStart(2,"0")}:${String(minutes).padStart(2,"0")} Uhr`;
+  }
+
+  function compactList(...values){
+    return values.flatMap(value=>{
+      if(Array.isArray(value))return value;
+      return String(value||"").split(/[,;\n]+/);
+    }).map(item=>cleanValue(item)).filter(Boolean);
   }
 
   function clone(value){
@@ -706,8 +803,33 @@
     byId(id).innerHTML=options.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===current?"selected":""}>${escapeHtml(label)}</option>`).join("");
   }
 
+  function activeAdvancedFilters(){
+    return [
+      state.status?`Status: ${state.status}`:"",
+      state.publication?`Veroeffentlichung: ${state.publication}`:"",
+      state.region?`Region: ${state.region}`:"",
+      state.sort&&state.sort!=="arrival"?`Sortierung: ${state.sort}`:""
+    ].filter(Boolean);
+  }
+
+  function renderFilterDisclosure(){
+    const advanced=byId("advancedFilters");
+    const toggle=byId("toggleFiltersButton");
+    const summary=byId("activeFilterSummary");
+    const reset=byId("resetFiltersButton");
+    const active=activeAdvancedFilters();
+    if(advanced)advanced.hidden=!state.filtersExpanded;
+    if(toggle){
+      toggle.setAttribute("aria-expanded",state.filtersExpanded?"true":"false");
+      toggle.textContent=state.filtersExpanded?"Filter ausblenden":active.length?`Filter · ${active.length} aktiv`:"Filter anzeigen";
+    }
+    if(summary)summary.textContent=active.length?active.join(" · "):"Keine erweiterten Filter aktiv";
+    if(reset)reset.disabled=!active.length;
+  }
+
   function renderCustomers(){
     renderFilterOptions();
+    renderFilterDisclosure();
     const list=filteredCustomers();
     byId("customerEmpty").hidden=list.length>0||state.loading||Boolean(state.error);
     if(state.error){
@@ -800,7 +922,7 @@
         `).join("")}
       </div>
       <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-        ${tab==="kunde"?customerTabMarkup(customer):placeholderTabMarkup()}
+        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):placeholderTabMarkup()}
       </section>
     `;
   }
@@ -816,6 +938,162 @@
   function listFieldItem(label,values){
     const list=Array.isArray(values)?values.filter(Boolean):String(values||"").split(",").map(item=>item.trim()).filter(Boolean);
     return `<div class="v2-read-field full"><span>${escapeHtml(label)}</span><div class="v2-read-list">${list.length?list.map(item=>badge(item)).join(""):`<strong>${escapeHtml("Nicht hinterlegt")}</strong>`}</div></div>`;
+  }
+
+  function statusLabel(value){
+    const text=cleanValue(value);
+    const normalized=normalizeText(text);
+    if(["draft","entwurf"].includes(normalized))return "Entwurf";
+    if(["active","aktiv","reise laeuft","reise lauft","reise läuft"].includes(normalized))return "Aktiv";
+    if(["published","veroeffentlicht","veroffentlicht","veröffentlicht"].includes(normalized))return "Veroeffentlicht";
+    if(["archived","abgeschlossen"].includes(normalized))return "Abgeschlossen";
+    if(["cancelled","canceled","storniert"].includes(normalized))return "Storniert";
+    return text;
+  }
+
+  function buildTripViewModel(customer){
+    try{
+      const travel=objectValue(customer.travel,customer.trip,customer.tripData,customer.travelData,customer.journey,customer.reise,customer.profile?.travel);
+      const stay=objectValue(customer.stay,customer.accommodation,customer.accommodationData);
+      const hotel=objectValue(arrayValue(customer.accommodations)[0],customer.hotel,stay.hotel,travel.hotel);
+      const profile=objectValue(customer.profile,customer.crm);
+      const preferences=objectValue(profile.preferences,customer.preferences,travel.preferences);
+      const coordinates=[firstValue(customer.latitude,customer.coordinates?.lat,customer.coordinates?.latitude,travel.latitude),firstValue(customer.longitude,customer.coordinates?.lng,customer.coordinates?.longitude,travel.longitude)].filter(Boolean).join(", ");
+      const start=firstValue(customer.startDatePlain,customer.dateFrom,customer.arrival,customer.arrivalDate,travel.startDate,travel.arrival,travel.dateFrom,customer.startDate);
+      const end=firstValue(customer.endDatePlain,customer.dateTo,customer.departure,customer.departureDate,travel.endDate,travel.departure,travel.dateTo,customer.endDate);
+      const adults=numericValue(customer.adults,customer.guests?.adults,travel.adults,travel.guests?.adults,profile.travel?.adults);
+      const children=numericValue(customer.children,customer.guests?.children,travel.children,travel.guests?.children,profile.travel?.children);
+      const total=numericValue(customer.guestsTotal,customer.guestCount,travel.totalGuests,travel.guestsTotal) ?? ([adults,children].some(value=>value!==null)?(adults||0)+(children||0):null);
+      const childAges=compactList(customer.childAges,customer.childrenAges,customer.guests?.childAges,travel.childAges,travel.childrenAges,profile.travel?.childrenAges);
+      const wishes=compactList(customer.requirements,customer.wishes,travel.wishes,preferences.wishes,profile.wishes,profile.wishesText,customer.wishesText);
+      const internalNotes=compactList(customer.tripNotes,customer.travelNotes,customer.internalTravelNotes,travel.notes,profile.notes);
+      return {
+        title:firstValue(customer.tripName,customer.tripTitle,travel.title,travel.name,customer.travelTitle),
+        status:statusLabel(firstValue(customer.status,travel.status,customer.tripStatus)),
+        start,
+        end,
+        period:formatTripPeriod(start,end,customer.travelPeriod),
+        nights:nightCount(start,end),
+        region:firstValue(customer.region,travel.region,stay.region,hotel.region),
+        destination:firstValue(customer.destination,customer.destinationName,travel.destination,travel.location,customer.location),
+        accommodation:firstValue(hotel.name,stay.name,customer.accommodationName,customer.hotelName),
+        occasion:firstValue(customer.occasion,customer.tripOccasion,travel.occasion,preferences.occasion),
+        adults:adults===null?"":String(adults),
+        children:children===null?"":String(children),
+        total:total===null?"":String(total),
+        childAges,
+        companions:customer.companions,
+        arrivalType:firstValue(customer.arrivalType,customer.arrivalMode,travel.arrivalType,travel.transport,customer.transport),
+        departureType:firstValue(customer.departureType,customer.departureMode,travel.departureType),
+        flight:firstValue(customer.flightNumber,customer.flight,travel.flightNumber,travel.flight),
+        train:firstValue(customer.trainNumber,customer.train,travel.trainNumber,travel.train),
+        arrivalTime:formatTimeValue(firstValue(customer.arrivalTime,travel.arrivalTime,customer.checkInTime)),
+        departureTime:formatTimeValue(firstValue(customer.departureTime,travel.departureTime,customer.checkOutTime)),
+        pickup:firstValue(customer.pickupLocation,customer.pickup,travel.pickupLocation,travel.pickup),
+        transfer:firstValue(customer.transferInfo,customer.transfer,travel.transferInfo,travel.transfer),
+        car:firstValue(customer.carInfo,customer.rentalCar,customer.car,travel.carInfo,travel.rentalCar),
+        address:firstValue(hotel.address,stay.address,customer.accommodationAddress),
+        checkIn:formatTripPeriod(firstValue(hotel.checkIn,stay.checkIn,customer.checkIn),null),
+        checkOut:formatTripPeriod(firstValue(hotel.checkOut,stay.checkOut,customer.checkOut),null),
+        room:firstValue(hotel.room,hotel.roomInfo,stay.room,customer.roomInfo),
+        weather:firstValue(customer.weatherLocationName,customer.weatherRegion,travel.weatherRegion,travel.weatherLocationName),
+        coordinates,
+        wishes,
+        mobility:firstValue(customer.mobility,customer.mobilityRequirements,travel.mobility,preferences.mobility),
+        dietary:firstValue(customer.dietary,customer.dietaryRequirements,customer.foodPreferences,travel.dietary,preferences.food),
+        internalNotes
+      };
+    }catch(error){
+      console.error("[ACT Admin V2] Reise-Normalisierung:",error);
+      return {error:true};
+    }
+  }
+
+  function tripField(label,value,{full=false,internal=false}={}){
+    const text=displayValue(value,"");
+    if(!text)return "";
+    return `<div class="v2-read-field ${full?"full":""} ${internal?"v2-internal-field":""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(text)}</strong></div>`;
+  }
+
+  function tripListField(label,values,{internal=false}={}){
+    const list=compactList(values);
+    if(!list.length)return "";
+    return `<div class="v2-read-field full ${internal?"v2-internal-field":""}"><span>${escapeHtml(label)}</span><div class="v2-read-list">${list.map(item=>badge(item)).join("")}</div></div>`;
+  }
+
+  function tripReadCard(title,items){
+    const content=items.filter(Boolean).join("");
+    if(!content)return "";
+    return `<article class="v2-read-card v2-trip-card"><h3>${escapeHtml(title)}</h3><div class="v2-read-fields">${content}</div></article>`;
+  }
+
+  function tripTabMarkup(customer){
+    const trip=buildTripViewModel(customer);
+    if(trip.error){
+      return `<article class="v2-empty"><h3>Reisedaten konnten nicht angezeigt werden</h3><p>Der Kundentab bleibt verfuegbar. Bitte versuchen Sie es erneut oder oeffnen Sie den klassischen Admin.</p><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a></article>`;
+    }
+    const heroMeta=[trip.nights,trip.region,trip.total?`${trip.total} Reisende`:""].filter(Boolean).join(" · ");
+    const cards=[
+      tripReadCard("Reisedaten",[
+        tripField("Reisebezeichnung",trip.title),
+        trip.status?`<div class="v2-read-field"><span>Status</span>${badge(trip.status)}</div>`:"",
+        tripField("Anreise",formatLongDate(trip.start)),
+        tripField("Abreise",formatLongDate(trip.end)),
+        tripField("Naechte",trip.nights),
+        tripField("Region / Zielort",firstValue(trip.region,trip.destination)),
+        tripField("Unterkunft",trip.accommodation),
+        tripField("Reiseanlass",trip.occasion,{full:true})
+      ]),
+      tripReadCard("Reisende",[
+        tripField("Erwachsene",trip.adults),
+        tripField("Kinder",trip.children),
+        tripListField("Alter der Kinder",trip.childAges),
+        tripField("Gesamtzahl",trip.total),
+        tripField("Personenkonstellation",trip.companions,{full:true})
+      ]),
+      tripReadCard("An- und Abreise",[
+        tripField("Anreise",trip.arrivalType),
+        tripField("Abreise",trip.departureType),
+        tripField("Flugnummer",trip.flight),
+        tripField("Zugnummer",trip.train),
+        tripField("Ankunftszeit",trip.arrivalTime),
+        tripField("Abfahrtszeit",trip.departureTime),
+        tripField("Abholort",trip.pickup),
+        tripField("Transfer",trip.transfer,{full:true}),
+        tripField("Fahrzeug / Mietwagen",trip.car,{full:true})
+      ]),
+      tripReadCard("Region und Aufenthalt",[
+        tripField("Region",trip.region),
+        tripField("Ort",trip.destination),
+        tripField("Unterkunft",trip.accommodation),
+        tripField("Adresse",trip.address,{full:true}),
+        tripField("Check-in",trip.checkIn),
+        tripField("Check-out",trip.checkOut),
+        tripField("Zimmer / Unterkunft",trip.room,{full:true}),
+        tripField("Wetterregion",trip.weather),
+        tripField("Koordinaten",trip.coordinates)
+      ]),
+      tripReadCard("Wuensche und Hinweise",[
+        tripListField("Reisewuensche",trip.wishes),
+        tripField("Mobilitaet",trip.mobility,{full:true}),
+        tripField("Ernaehrung",trip.dietary,{full:true}),
+        tripListField("Interne Reisehinweise",trip.internalNotes,{internal:true})
+      ])
+    ].filter(Boolean);
+    if(!cards.length){
+      return `<article class="v2-empty v2-trip-empty"><span class="v2-trip-empty-icon" aria-hidden="true"></span><h3>Fuer diesen Kunden sind noch keine Reisedaten hinterlegt.</h3><p>Die Bearbeitung der Reisedaten wird in einem spaeteren Auftrag ergaenzt.</p><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a></article>`;
+    }
+    return `
+      <section class="v2-trip-overview">
+        <article class="v2-trip-hero">
+          <p class="v2-eyebrow">Reise</p>
+          <h3>${escapeHtml(displayValue(trip.title,"Reise ohne Bezeichnung"))}</h3>
+          <p>${escapeHtml(displayValue(trip.period,"Kein Reisezeitraum"))}</p>
+          ${heroMeta?`<div class="v2-trip-meta">${escapeHtml(heroMeta)}</div>`:""}
+        </article>
+        <div class="v2-read-grid v2-trip-grid">${cards.join("")}</div>
+      </section>
+    `;
   }
 
   function customerTabMarkup(customer){
@@ -954,6 +1232,11 @@
     renderCustomers();
   }
 
+  function toggleAdvancedFilters(){
+    state.filtersExpanded=!state.filtersExpanded;
+    renderFilterDisclosure();
+  }
+
   function applyPreset(preset){
     state.status=preset==="all"?"":preset;
     state.publication="";
@@ -1009,6 +1292,7 @@
     byId("dashboardNewCustomerButton").addEventListener("click",openNewCustomer);
     byId("dashboardQuickNewCustomerButton").addEventListener("click",openNewCustomer);
     byId("customerNewButton").addEventListener("click",openNewCustomer);
+    byId("toggleFiltersButton").addEventListener("click",toggleAdvancedFilters);
     byId("resetFiltersButton").addEventListener("click",resetFilters);
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);
     document.addEventListener("click",event=>{

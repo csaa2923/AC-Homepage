@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=11/);
-    assert.match(html,/admin-v2\.js\?v=10/);
+    assert.match(html,/admin-v2\.css\?v=12/);
+    assert.match(html,/admin-v2\.js\?v=11/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -68,7 +68,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/login\.hidden=!loginVisible/);
     assert.match(js,/shell\.hidden=loginVisible/);
     assert.match(js,/function showShell\(authState\)\{\s*setLoginLoading\(false\);\s*clearPassword\(\);\s*setScreenVisibility\(false\);/);
-    assert.match(js,/window\.scrollTo\(\{top:0,behavior:"auto"\}\)/);
+    assert.match(js,/function resetHorizontalScroll\(\)/);
+    assert.match(js,/document\.documentElement\.scrollLeft=0/);
+    assert.match(js,/window\.scrollTo\(\{top:0,left:0,behavior:"auto"\}\)/);
   });
 
   it("bounds Firebase auth and claim operations used by admin login",()=>{
@@ -220,11 +222,14 @@ describe("admin v2 dashboard and customer overview",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     assert.match(html,/width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content/);
     assert.match(css,/html\{width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%\}/);
-    assert.match(css,/body\{width:100%;max-width:100%;margin:0;overflow-x:hidden/);
-    assert.match(css,/main\{min-width:0;max-width:100%\}/);
+    assert.match(css,/body\{width:100%;max-width:100%;margin:0;overflow-x:hidden;overscroll-behavior-x:none/);
+    assert.match(css,/main\{width:100%;min-width:0;max-width:100%;overflow-x:hidden\}/);
     assert.match(css,/--mobile-safe-top:env\(safe-area-inset-top,0px\)/);
     assert.match(css,/\.v2-shell\{width:100%;max-width:100%;min-height:100dvh;display:grid;grid-template-columns:280px minmax\(0,1fr\)\}/);
     assert.match(css,/\.v2-main\{min-width:0;max-width:100%;padding:calc\(26px \+ var\(--mobile-safe-top\)\)/);
+    assert.match(css,/\.v2-topbar>\*,\.v2-section-toolbar>\*\{min-width:0;max-width:100%\}/);
+    assert.match(css,/\.v2-search\{min-height:48px;min-width:0;max-width:100%/);
+    assert.match(css,/\.v2-profile\{min-width:0;max-width:100%;min-height:54px;display:grid;grid-template-columns:minmax\(0,1fr\) auto;.*overflow:hidden/);
     assert.match(css,/--mobile-nav-height:0px/);
     assert.match(css,/--mobile-safe-bottom:env\(safe-area-inset-bottom,0px\)/);
     assert.match(css,/:root\{--mobile-nav-height:136px;--mobile-nav-gap:20px\}/);

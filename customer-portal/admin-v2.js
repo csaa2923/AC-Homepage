@@ -519,6 +519,12 @@
     }
   }
 
+  function resetHorizontalScroll(){
+    document.documentElement.scrollLeft=0;
+    document.body.scrollLeft=0;
+    if(window.scrollX)window.scrollTo({left:0,top:window.scrollY,behavior:"auto"});
+  }
+
   function withTimeout(promise,timeoutMs,label){
     let timeoutId=0;
     const timeout=new Promise((_,reject)=>{
@@ -569,7 +575,8 @@
     clearPassword();
     setScreenVisibility(false);
     byId("userLabel").textContent=authState?.email||"Admin";
-    window.scrollTo({top:0,behavior:"auto"});
+    window.scrollTo({top:0,left:0,behavior:"auto"});
+    resetHorizontalScroll();
   }
 
   async function signIn(){
@@ -1220,6 +1227,7 @@
     if(replace)history.replaceState({route:parsed.route},"",nextHash);
     else if(location.hash!==nextHash)history.pushState({route:parsed.route},"",nextHash);
     render();
+    resetHorizontalScroll();
     return true;
   }
 

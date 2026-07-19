@@ -264,6 +264,46 @@
     }).map(item=>cleanValue(item)).filter(Boolean);
   }
 
+  function wholeNumberValue(value){
+    const text=cleanValue(value);
+    if(!/^\d+$/.test(text))return null;
+    return Number(text);
+  }
+
+  function ageListFromValue(value){
+    if(value===null||value===undefined)return [];
+    const raw=Array.isArray(value)?value:String(value).split(/[,;\n]+/);
+    return raw.map(item=>cleanValue(item)).filter(Boolean);
+  }
+
+  function normalizeChildAgesFromSources(childrenCount,...sources){
+    const count=wholeNumberValue(childrenCount);
+    for(const source of sources){
+      const ages=ageListFromValue(source);
+      if(!ages.length)continue;
+      if(count===0)return [];
+      return count===null?ages:ages.slice(0,count);
+    }
+    return [];
+  }
+
+  function childAgeLabels(ages){
+    return ageListFromValue(ages).map((age,index)=>`Kind ${index+1} · ${age} Jahre`);
+  }
+
+  function travelerSummary(adultsValue,childrenValue,agesValue=[]){
+    const adults=wholeNumberValue(adultsValue)||0;
+    const children=wholeNumberValue(childrenValue)||0;
+    const parts=[];
+    if(adults>0)parts.push(`${adults} Erwachsene${adults===1?"r":""}`);
+    if(children>0){
+      const ages=ageListFromValue(agesValue).slice(0,children);
+      const suffix=ages.length?` (${ages.join(", ")} Jahre)`:"";
+      parts.push(`${children} Kind${children===1?"":"er"}${suffix}`);
+    }
+    return parts.length?parts.join(" • "):"Keine Reisenden";
+  }
+
   function clone(value){
     return JSON.parse(JSON.stringify(value||{}));
   }
@@ -529,7 +569,25 @@
       endDate:dateInputValue(firstValue(customer.endDatePlain,customer.dateTo,customer.departure,customer.departureDate,travel.endDate,travel.departure,travel.dateTo,customer.endDate)),
       adults:String(numericValue(customer.adults,customer.guests?.adults,travel.adults,travel.guests?.adults,customer.profile?.travel?.adults)??""),
       children:String(numericValue(customer.children,customer.guests?.children,travel.children,travel.guests?.children,customer.profile?.travel?.children)??""),
-      childAges:compactList(customer.childAges,customer.childrenAges,customer.guests?.childAges,travel.childAges,travel.childrenAges,customer.profile?.travel?.childrenAges).join(", "),
+      childAges:normalizeChildAgesFromSources(
+        numericValue(customer.children,customer.guests?.children,travel.children,travel.guests?.children,customer.profile?.travel?.children),
+        customer.childAges,
+        customer.childrenAges,
+        customer.guests?.childAges,
+        customer.guests?.childrenAges,
+        travel.childAges,
+        travel.childrenAges,
+        travel.kidsAges,
+        travel.agesOfChildren,
+        travel.childrenAge,
+        travel.childAge,
+        customer.kidsAges,
+        customer.agesOfChildren,
+        customer.childrenAge,
+        customer.childAge,
+        customer.profile?.travel?.childAges,
+        customer.profile?.travel?.childrenAges
+      ),
       accommodationName:firstValue(hotel.name,stay.name,customer.accommodationName,customer.hotelName),
       accommodationAddress:firstValue(hotel.address,stay.address,customer.accommodationAddress),
       accommodationCity:firstValue(hotel.city,hotel.town,stay.city,customer.accommodationCity,customer.destination,customer.destinationName),
@@ -542,8 +600,13 @@
 
   function normalizedTripDraft(draft){
     const values={...(draft||{})};
-    Object.keys(values).forEach(key=>{values[key]=String(values[key]??"").trim();});
-    values.childAges=String(values.childAges||"").split(/[,;\n]+/).map(item=>item.trim()).filter(Boolean);
+    Object.keys(values).forEach(key=>{
+      if(key==="childAges")return;
+      values[key]=String(values[key]??"").trim();
+    });
+    const childCount=wholeNumberValue(values.children)||0;
+    const ages=Array.isArray(values.childAges)?values.childAges:ageListFromValue(values.childAges);
+    values.childAges=ages.slice(0,childCount).map(item=>cleanValue(item));
     values.notes=String(values.notes||"").split(/\n+/).map(item=>item.trim()).filter(Boolean);
     return values;
   }
@@ -600,6 +663,21 @@
     ["adults","children"].forEach(key=>{
       if(values[key]&&!/^\d+$/.test(values[key]))errors[key]="Bitte eine ganze Zahl eingeben.";
     });
+    const childCount=/^\d+$/.test(values.children)?Number(values.children):0;
+    values.childAges=values.childAges.slice(0,childCount);
+    for(let index=0;index<childCount;index+=1){
+      const age=cleanValue(values.childAges[index]);
+      if(!age){
+        errors[`childAge-${index}`]=`Bitte gib das Alter fuer Kind ${index+1} ein.`;
+        continue;
+      }
+      if(!/^\d+$/.test(age)){
+        errors[`childAge-${index}`]="Bitte eine ganze Zahl zwischen 0 und 17 eingeben.";
+        continue;
+      }
+      const number=Number(age);
+      if(number<0||number>17)errors[`childAge-${index}`]="Bitte ein Alter zwischen 0 und 17 eingeben.";
+    }
     return {valid:!Object.keys(errors).length,errors,values};
   }
 
@@ -1190,7 +1268,25 @@
       const adults=numericValue(customer.adults,customer.guests?.adults,travel.adults,travel.guests?.adults,profile.travel?.adults);
       const children=numericValue(customer.children,customer.guests?.children,travel.children,travel.guests?.children,profile.travel?.children);
       const total=numericValue(customer.guestsTotal,customer.guestCount,travel.totalGuests,travel.guestsTotal) ?? ([adults,children].some(value=>value!==null)?(adults||0)+(children||0):null);
-      const childAges=compactList(customer.childAges,customer.childrenAges,customer.guests?.childAges,travel.childAges,travel.childrenAges,profile.travel?.childrenAges);
+      const childAges=normalizeChildAgesFromSources(
+        children,
+        customer.childAges,
+        customer.childrenAges,
+        customer.guests?.childAges,
+        customer.guests?.childrenAges,
+        travel.childAges,
+        travel.childrenAges,
+        travel.kidsAges,
+        travel.agesOfChildren,
+        travel.childrenAge,
+        travel.childAge,
+        customer.kidsAges,
+        customer.agesOfChildren,
+        customer.childrenAge,
+        customer.childAge,
+        profile.travel?.childAges,
+        profile.travel?.childrenAges
+      );
       const wishes=compactList(customer.requirements,customer.wishes,travel.wishes,preferences.wishes,profile.wishes,profile.wishesText,customer.wishesText);
       const internalNotes=compactList(customer.tripNotes,customer.travelNotes,customer.internalTravelNotes,travel.notes,profile.notes);
       return {
@@ -1208,7 +1304,7 @@
         children:children===null?"":String(children),
         total:total===null?"":String(total),
         childAges,
-        companions:customer.companions,
+        companions:travelerSummary(adults,children,childAges),
         arrivalType:firstValue(customer.arrivalType,customer.arrivalMode,travel.arrivalType,travel.transport,customer.transport),
         departureType:firstValue(customer.departureType,customer.departureMode,travel.departureType),
         flight:firstValue(customer.flightNumber,customer.flight,travel.flightNumber,travel.flight),
@@ -1274,7 +1370,7 @@
       tripReadCard("Reisende",[
         tripField("Erwachsene",trip.adults),
         tripField("Kinder",trip.children),
-        tripListField("Alter der Kinder",trip.childAges),
+        Number(trip.children)>0?tripListField("Alter der Kinder",childAgeLabels(trip.childAges)):"",
         tripField("Gesamtzahl",trip.total),
         tripField("Personenkonstellation",trip.companions,{full:true})
       ]),
@@ -1349,7 +1445,8 @@
           ${tripInputField("endDate","Bis",draft.endDate,{type:"date",error:errors.endDate})}
           ${tripInputField("adults","Erwachsene",draft.adults,{type:"number",min:"0",inputmode:"numeric",error:errors.adults})}
           ${tripInputField("children","Kinder",draft.children,{type:"number",min:"0",inputmode:"numeric",error:errors.children})}
-          ${tripInputField("childAges","Alter der Kinder",draft.childAges,{hint:"Optional, kommagetrennt."})}
+          ${tripTravelerPreview(draft)}
+          ${tripChildAgeFields(draft,errors)}
           ${tripInputField("accommodationName","Unterkunft",draft.accommodationName)}
           ${tripInputField("accommodationAddress","Adresse",draft.accommodationAddress,{full:true})}
           ${tripInputField("accommodationCity","Ort",draft.accommodationCity)}
@@ -1364,6 +1461,20 @@
         </div>
       </form>
     `;
+  }
+
+  function tripTravelerPreview(draft){
+    return `<div class="v2-edit-field full v2-traveler-preview"><span>Personenkonstellation</span><strong id="tripTravelerPreview">${escapeHtml(travelerSummary(draft.adults,draft.children,draft.childAges))}</strong></div>`;
+  }
+
+  function tripChildAgeFields(draft,errors={}){
+    const childCount=wholeNumberValue(draft.children)||0;
+    if(childCount<=0)return "";
+    const ages=Array.isArray(draft.childAges)?draft.childAges:ageListFromValue(draft.childAges);
+    return Array.from({length:childCount},(_,index)=>{
+      const name=`childAge-${index}`;
+      return tripInputField(name,`Alter Kind ${index+1}`,ages[index]||"",{type:"number",min:"0",inputmode:"numeric",error:errors[name]});
+    }).join("");
   }
 
   function tripInputField(name,label,value,{type="text",required=false,error="",hint="",full=false,min="",inputmode=""}={}){
@@ -1591,7 +1702,19 @@
   function handleTripEditInput(event){
     const field=event.target.closest("#tripEditForm input,#tripEditForm textarea,#tripEditForm select");
     if(!field||!state.tripEditDraft)return;
-    state.tripEditDraft[field.name]=field.value;
+    if(field.name.startsWith("childAge-")){
+      const index=Number(field.name.split("-")[1]);
+      const ages=Array.isArray(state.tripEditDraft.childAges)?[...state.tripEditDraft.childAges]:ageListFromValue(state.tripEditDraft.childAges);
+      ages[index]=field.value;
+      state.tripEditDraft.childAges=ages;
+    }else{
+      state.tripEditDraft[field.name]=field.value;
+      if(field.name==="children"){
+        const childCount=wholeNumberValue(field.value)||0;
+        const ages=Array.isArray(state.tripEditDraft.childAges)?[...state.tripEditDraft.childAges]:ageListFromValue(state.tripEditDraft.childAges);
+        state.tripEditDraft.childAges=Array.from({length:childCount},(_,index)=>ages[index]||"");
+      }
+    }
     if(state.tripEditErrors[field.name]){
       delete state.tripEditErrors[field.name];
       const error=byId(`tripEdit-${field.name}-error`);
@@ -1600,6 +1723,9 @@
     }
     const dirty=hasDirtyTripEdit();
     setTripEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
+    const preview=byId("tripTravelerPreview");
+    if(preview)preview.textContent=travelerSummary(state.tripEditDraft.adults,state.tripEditDraft.children,state.tripEditDraft.childAges);
+    if(field.name==="children")renderCustomerDetail();
   }
 
   function bind(){
@@ -1691,7 +1817,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=14/);
-    assert.match(html,/admin-v2\.js\?v=13/);
+    assert.match(html,/admin-v2\.css\?v=15/);
+    assert.match(html,/admin-v2\.js\?v=14/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -125,6 +125,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const travel=objectValue\(customer\.travel,customer\.trip,customer\.tripData,customer\.travelData,customer\.journey,customer\.reise,customer\.profile\?\.travel\)/);
     assert.match(js,/const start=firstValue\(customer\.startDatePlain,customer\.dateFrom,customer\.arrival,customer\.arrivalDate/);
     assert.match(js,/const adults=numericValue\(customer\.adults,customer\.guests\?\.adults,travel\.adults,travel\.guests\?\.adults,profile\.travel\?\.adults\)/);
+    assert.match(js,/normalizeChildAgesFromSources\(\s*children,/);
+    assert.match(js,/travelerSummary\(adults,children,childAges\)/);
     assert.match(js,/tripReadCard\("Reisedaten"/);
     assert.match(js,/tripReadCard\("Reisende"/);
     assert.match(js,/tripReadCard\("An- und Abreise"/);
@@ -147,6 +149,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function cancelTripEdit\(\)/);
     assert.match(js,/function hasDirtyTripEdit\(\)/);
     assert.match(js,/function hasDirtyEdits\(\)/);
+    assert.match(js,/function tripChildAgeFields\(draft,errors=\{\}\)/);
+    assert.match(js,/Alter Kind \$\{index\+1\}/);
+    assert.match(js,/id="tripTravelerPreview"/);
     assert.match(js,/id="tripEditForm"/);
     assert.match(js,/data-trip-edit-action="save"/);
     assert.match(js,/data-trip-edit-action="cancel"/);
@@ -154,8 +159,27 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/tripInputField\("endDate","Bis",draft\.endDate,\{type:"date"/);
     assert.match(js,/errors\.tripName="Bitte einen Reisenamen eingeben\."/);
     assert.match(js,/Das Bis-Datum darf nicht vor dem Von-Datum liegen\./);
+    assert.match(js,/Bitte gib das Alter fuer Kind \$\{index\+1\} ein\./);
+    assert.match(js,/Bitte eine ganze Zahl zwischen 0 und 17 eingeben\./);
+    assert.match(js,/Bitte ein Alter zwischen 0 und 17 eingeben\./);
     assert.match(js,/Ungespeicherte Aenderungen verwerfen\?/);
     assert.match(js,/if\(!hasDirtyEdits\(\)\)return/);
+  });
+
+  it("normalizes child ages and computes traveler summary without duplicates",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/function normalizeChildAgesFromSources\(childrenCount,\.\.\.sources\)/);
+    assert.match(js,/for\(const source of sources\)\{/);
+    assert.match(js,/return count===null\?ages:ages\.slice\(0,count\)/);
+    assert.match(js,/customer\.childAges,\s*customer\.childrenAges,\s*customer\.guests\?\.childAges/);
+    assert.match(js,/travel\.childAges,\s*travel\.childrenAges,\s*travel\.kidsAges,\s*travel\.agesOfChildren/);
+    assert.match(js,/customer\.kidsAges,\s*customer\.agesOfChildren,\s*customer\.childrenAge,\s*customer\.childAge/);
+    assert.match(js,/function childAgeLabels\(ages\)/);
+    assert.match(js,/Kind \$\{index\+1\} · \$\{age\} Jahre/);
+    assert.match(js,/function travelerSummary\(adultsValue,childrenValue,agesValue=\[\]\)/);
+    assert.match(js,/parts\.push\(`\$\{adults\} Erwachsene\$\{adults===1\?"r":""\}`\)/);
+    assert.match(js,/parts\.push\(`\$\{children\} Kind\$\{children===1\?"":"er"\}\$\{suffix\}`\)/);
+    assert.match(js,/return parts\.length\?parts\.join\(" • "\):"Keine Reisenden"/);
   });
 
   it("saves trip edits through the existing draft facade without replacing other flows",()=>{
@@ -170,6 +194,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/next\.endDatePlain=values\.endDate/);
     assert.match(js,/next\.accommodationName=values\.accommodationName/);
     assert.match(js,/target\.arrivalType=values\.arrivalType/);
+    assert.match(js,/values\.childAges=values\.childAges\.slice\(0,childCount\)/);
+    assert.match(js,/next\.childAges=values\.childAges/);
+    assert.match(js,/next\.childrenAges=values\.childAges/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
     assert.doesNotMatch(js,/\.publishCustomer\(|uploadCustomerDocument\(|createPortalShare\(|revokePortalShare\(/);
   });

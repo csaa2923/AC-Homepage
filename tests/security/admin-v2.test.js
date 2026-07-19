@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=12/);
-    assert.match(html,/admin-v2\.js\?v=11/);
+    assert.match(html,/admin-v2\.css\?v=13/);
+    assert.match(html,/admin-v2\.js\?v=12/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -220,9 +220,9 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("protects mobile content from bottom navigation and safe-area overlap",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content/);
-    assert.match(css,/html\{width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%\}/);
-    assert.match(css,/body\{width:100%;max-width:100%;margin:0;overflow-x:hidden;overscroll-behavior-x:none/);
+    assert.match(html,/width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content/);
+    assert.match(css,/html\{width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:pan-y\}/);
+    assert.match(css,/body\{width:100%;max-width:100%;margin:0;overflow-x:hidden;overscroll-behavior-x:none;touch-action:pan-y/);
     assert.match(css,/main\{width:100%;min-width:0;max-width:100%;overflow-x:hidden\}/);
     assert.match(css,/--mobile-safe-top:env\(safe-area-inset-top,0px\)/);
     assert.match(css,/\.v2-shell\{width:100%;max-width:100%;min-height:100dvh;display:grid;grid-template-columns:280px minmax\(0,1fr\)\}/);

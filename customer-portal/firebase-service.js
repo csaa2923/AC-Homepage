@@ -462,6 +462,18 @@
     };
   }
 
+  async function resolveDocumentDownloadUrl(storagePath){
+    const ready=await ensureDb();
+    const {storageModule}=ready.modules;
+    const path=String(storagePath||"").trim();
+    if(!path)throw new Error("Storage-Pfad fehlt.");
+    if(!ready.auth.currentUser){
+      throw new Error("Firebase Download-URL abgebrochen: Kein angemeldeter Benutzer vorhanden.");
+    }
+    const fileRef=storageModule.ref(ready.storage,path);
+    return storageModule.getDownloadURL(fileRef);
+  }
+
   function safeSegment(value){
     return String(value||"datei").normalize("NFKD").replace(/[^\w.-]+/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"").slice(0,90)||"datei";
   }
@@ -1024,6 +1036,7 @@
     deleteCustomer,
     migrateLocalCustomers,
     prepareStorageReference,
+    resolveDocumentDownloadUrl,
     uploadCustomerDocument,
     loadTemplatesForAdmin,
     saveTemplate,

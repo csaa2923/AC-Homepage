@@ -1632,57 +1632,94 @@
     });
   }
 
-  function validateDocumentEdit(draft){
+  function validateDocumentEdit(draft,previousDocuments=[]){
     const values=normalizedDocumentDraft(draft);
+    const previousDocs=arrayValue(previousDocuments);
     const errors={};
     values.documents.forEach((item,index)=>{
       if(!item.title)errors[`document-${index}-title`]="Bitte einen Dokumenttitel eingeben.";
       if(cleanValue(item.url)&&!safeDocumentUrl(item.url))errors[`document-${index}-url`]="Bitte einen sicheren http- oder https-Link eingeben.";
       if(cleanValue(item.downloadUrl)&&!safeDocumentUrl(item.downloadUrl))errors[`document-${index}-downloadUrl`]="Bitte einen sicheren Download-Link eingeben.";
+      const preserved=preserveDocumentFileFields(item,previousDocumentById(previousDocs,item,index));
+      const visible=item.visibility!=="Intern"&&item.visible!==false;
+      if(visible&&!preserved.url)errors[`document-${index}-url`]="Sichtbar im Kundenportal erfordert einen gueltigen Oeffnen-Link.";
     });
     return {valid:!Object.keys(errors).length,errors,values};
   }
 
-  function documentSaveItems(values){
-    return values.documents.map(item=>compactObject({
-      id:item.id,
-      documentId:item.documentId,
-      title:item.title,
-      fileName:item.fileName,
-      category:item.category,
-      type:item.category,
-      documentType:item.documentType,
-      url:safeDocumentUrl(item.url),
-      downloadUrl:safeDocumentUrl(item.downloadUrl||item.url),
-      storagePath:item.storagePath,
-      mimeType:item.mimeType,
-      contentType:item.contentType,
-      size:item.size,
-      fileSize:item.fileSize,
-      uploadedAt:item.uploadedAt,
-      uploadDate:item.uploadedAt,
-      visible:item.visibility!=="Intern",
-      visibility:item.visibility,
-      assignmentType:item.assignmentType,
-      tripId:item.tripId,
-      programItemId:item.programItemId,
-      bookingId:item.bookingId,
-      assignedTo:item.assignedTo,
-      expiryDate:item.expiryDate,
-      issueDate:item.issueDate,
-      issuer:item.issuer,
-      referenceNumber:item.referenceNumber,
-      tags:item.tags,
-      description:item.description,
-      note:item.note||item.description,
-      internalNotes:item.internalNotes,
-      status:item.status
-    }));
+  function previousDocumentById(previousDocs,item,index){
+    const id=cleanValue(item?.documentId||item?.id);
+    if(id){
+      const matched=previousDocs.find(doc=>cleanValue(doc.documentId||doc.id)===id);
+      if(matched)return matched;
+    }
+    return previousDocs[index]||null;
+  }
+
+  function preserveDocumentFileFields(item,previous){
+    const prev=previous||{};
+    const url=safeDocumentUrl(item.url)||safeDocumentUrl(prev.url)||safeDocumentUrl(prev.downloadUrl)||safeDocumentUrl(prev.downloadURL);
+    const downloadUrl=safeDocumentUrl(item.downloadUrl)||safeDocumentUrl(prev.downloadUrl)||url;
+    return {
+      url,
+      downloadUrl,
+      storagePath:cleanValue(item.storagePath)||cleanValue(prev.storagePath),
+      fileName:cleanValue(item.fileName)||cleanValue(prev.fileName)||cleanValue(prev.originalName),
+      originalName:cleanValue(item.originalName)||cleanValue(prev.originalName)||cleanValue(item.fileName)||cleanValue(prev.fileName),
+      mimeType:cleanValue(item.mimeType)||cleanValue(prev.mimeType)||cleanValue(prev.contentType),
+      contentType:cleanValue(item.contentType)||cleanValue(prev.contentType)||cleanValue(prev.mimeType),
+      size:cleanValue(item.size||item.fileSize)||cleanValue(prev.size||prev.fileSize),
+      fileSize:cleanValue(item.fileSize||item.size)||cleanValue(prev.fileSize||prev.size),
+      uploadedAt:cleanValue(item.uploadedAt)||cleanValue(prev.uploadedAt)||cleanValue(prev.uploadDate),
+      uploadDate:cleanValue(item.uploadedAt||item.uploadDate)||cleanValue(prev.uploadDate||prev.uploadedAt)
+    };
+  }
+
+  function documentSaveItems(values,previousDocuments=[]){
+    const previousDocs=arrayValue(previousDocuments);
+    return values.documents.map((item,index)=>{
+      const preserved=preserveDocumentFileFields(item,previousDocumentById(previousDocs,item,index));
+      return compactObject({
+        id:item.id,
+        documentId:item.documentId,
+        title:item.title,
+        fileName:preserved.fileName,
+        originalName:preserved.originalName,
+        category:item.category,
+        type:item.category,
+        documentType:item.documentType,
+        url:preserved.url,
+        downloadUrl:preserved.downloadUrl,
+        storagePath:preserved.storagePath,
+        mimeType:preserved.mimeType,
+        contentType:preserved.contentType,
+        size:preserved.size,
+        fileSize:preserved.fileSize,
+        uploadedAt:preserved.uploadedAt,
+        uploadDate:preserved.uploadDate,
+        visible:item.visibility!=="Intern",
+        visibility:item.visibility,
+        assignmentType:item.assignmentType,
+        tripId:item.tripId,
+        programItemId:item.programItemId,
+        bookingId:item.bookingId,
+        assignedTo:item.assignedTo,
+        expiryDate:item.expiryDate,
+        issueDate:item.issueDate,
+        issuer:item.issuer,
+        referenceNumber:item.referenceNumber,
+        tags:item.tags,
+        description:item.description,
+        note:item.note||item.description,
+        internalNotes:item.internalNotes,
+        status:item.status
+      });
+    });
   }
 
   function mergeDocumentEdit(customer,values){
     const next=clone(customer);
-    next.documents=documentSaveItems(values);
+    next.documents=documentSaveItems(values,customer.documents);
     next.updatedAt=new Date().toLocaleDateString("de-DE");
     next._lastSavedAt=new Date().toISOString();
     return compactObject(next);
@@ -1760,23 +1797,54 @@
     renderCustomerDetail();
   }
 
+  async function restoreMissingDocumentUrls(draft,previousDocuments=[]){
+    const docs=arrayValue(draft?.documents);
+    const previousDocs=arrayValue(previousDocuments);
+    const storage=window.ACTFirebaseStorage;
+    if(!storage?.resolveDocumentDownloadUrl||!docs.length)return draft;
+    await Promise.all(docs.map(async(item,index)=>{
+      const preserved=preserveDocumentFileFields(item,previousDocumentById(previousDocs,item,index));
+      if(preserved.url||!preserved.storagePath){
+        if(preserved.url&&!cleanValue(item.url))item.url=preserved.url;
+        if(preserved.downloadUrl&&!cleanValue(item.downloadUrl))item.downloadUrl=preserved.downloadUrl;
+        return;
+      }
+      try{
+        const url=await storage.resolveDocumentDownloadUrl(preserved.storagePath);
+        const safe=safeDocumentUrl(url);
+        if(!safe)return;
+        item.url=safe;
+        item.downloadUrl=safe;
+        if(!cleanValue(item.storagePath))item.storagePath=preserved.storagePath;
+        if(!cleanValue(item.fileName)&&preserved.fileName)item.fileName=preserved.fileName;
+        if(!cleanValue(item.uploadedAt)&&preserved.uploadedAt)item.uploadedAt=preserved.uploadedAt;
+      }catch(error){
+        console.warn("[ACT Admin V2] Download-URL konnte nicht wiederhergestellt werden:",error&&error.message?error.message:"Fehler");
+      }
+    }));
+    return draft;
+  }
+
   function saveDocumentEdit(){
     if(state.documentEditSaving||documentSavePromise)return documentSavePromise;
     const customer=customerById(state.selectedCustomerId);
     if(!customer)return null;
-    const validation=validateDocumentEdit(state.documentEditDraft||{});
-    state.documentEditErrors=validation.errors;
-    if(!validation.valid){
-      setDocumentEditMessage("Bitte pruefen Sie die markierten Dokumente.","error");
-      renderCustomerDetail();
-      return null;
-    }
-    const fullCustomer=mergeDocumentEdit(customer,validation.values);
     state.documentEditSaving=true;
     setDocumentEditMessage("Dokumente werden gespeichert ...","saving");
     updateDocumentEditActions();
     documentSavePromise=(async()=>{
       try{
+        await restoreMissingDocumentUrls(state.documentEditDraft||{},customer.documents);
+        const validation=validateDocumentEdit(state.documentEditDraft||{},customer.documents);
+        state.documentEditErrors=validation.errors;
+        if(!validation.valid){
+          state.documentEditSaving=false;
+          setDocumentEditMessage("Bitte pruefen Sie die markierten Dokumente.","error");
+          updateDocumentEditActions();
+          renderCustomerDetail();
+          return null;
+        }
+        const fullCustomer=mergeDocumentEdit(customer,validation.values);
         const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
         if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
         await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
@@ -2348,7 +2416,9 @@
     const analysis=documentAnalysis(customer);
     const status=publicationStatus(customer);
     const internalDocs=docs.filter(doc=>doc.visibility==="Intern"||doc.visible===false).length;
+    const visibleWithoutUrl=docs.filter(doc=>doc.visibility!=="Intern"&&doc.visible!==false&&!safeDocumentUrl(doc.url||doc.downloadUrl));
     if(internalDocs)warnings.push(`${internalDocs} interne Dokumente werden nicht im Kundenportal angezeigt.`);
+    if(visibleWithoutUrl.length)warnings.push(`${visibleWithoutUrl.length} sichtbare Dokumente haben keinen Oeffnen-Link und sind im Kundenportal nicht oeffnenbar.`);
     if(status.key==="pending")warnings.push("Es gibt Aenderungen seit der letzten Veroeffentlichung.");
     if(isPublished(customer)&&!resolvePortalLink(customer).canOpen)warnings.push("Es ist kein kopierbarer sicherer Share-Link in dieser Sitzung verfuegbar.");
     if(analysis.missing.length)warnings.push(`${analysis.missing.length} erwartete Dokumente fehlen bei Programmpunkten.`);
@@ -2452,9 +2522,20 @@
         const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
         if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
         const workflow=publishWorkflow();
-        const comparison=draftComparison(customer);
-        const nextVersion=workflow?.bumpVersion?workflow.bumpVersion(customer.version||"1.0"):customer.version||"1.0";
-        const publishCandidate=clone(customer);
+        const publishSource=clone(customer);
+        if(Array.isArray(publishSource.documents)&&publishSource.documents.length){
+          const normalized={documents:normalizedDocuments(publishSource)};
+          await restoreMissingDocumentUrls(normalized,customer.documents);
+          publishSource.documents=documentSaveItems(normalized,customer.documents);
+          updateLocalCustomer(publishSource);
+        }
+        const validation=workflow?.validateForPublish?workflow.validateForPublish(publishSource):{ok:true,errors:[]};
+        if(!validation.ok){
+          throw new Error(validation.errors?.[0]||"Veroeffentlichung nicht moeglich: Pflichtfelder fehlen.");
+        }
+        const comparison=draftComparison(publishSource);
+        const nextVersion=workflow?.bumpVersion?workflow.bumpVersion(publishSource.version||"1.0"):publishSource.version||"1.0";
+        const publishCandidate=clone(publishSource);
         publishCandidate.version=nextVersion;
         publishCandidate.publicationState="Veröffentlicht";
         publishCandidate.publishStatus="published";
@@ -2471,7 +2552,7 @@
       }catch(error){
         console.error("[ACT Admin V2] Veroeffentlichung:",error&&error.message?error.message:"Fehler");
         state.publicationSaving=false;
-        setPublicationMessage("Die Veroeffentlichung konnte nicht abgeschlossen werden. Bitte erneut versuchen.","error");
+        setPublicationMessage(error&&error.message?error.message:"Die Veroeffentlichung konnte nicht abgeschlossen werden. Bitte erneut versuchen.","error");
         updatePublicationActions();
         return null;
       }finally{
@@ -2799,8 +2880,8 @@
           ${documentInput(prefix,"programItemId","Programmpunkt",doc.programItemId,{index})}
           ${documentInput(prefix,"bookingId","Buchung",doc.bookingId,{index})}
           ${documentInput(prefix,"tripId","Reise",doc.tripId,{index})}
-          ${documentInput(prefix,"url","Oeffnen-Link",doc.url,{type:"url",error:errors[`${prefix}-url`],index})}
-          ${documentInput(prefix,"downloadUrl","Download-Link",doc.downloadUrl,{type:"url",error:errors[`${prefix}-downloadUrl`],index})}
+          ${documentInput(prefix,"url","Oeffnen-Link",doc.url,{type:"text",error:errors[`${prefix}-url`],index})}
+          ${documentInput(prefix,"downloadUrl","Download-Link",doc.downloadUrl,{type:"text",error:errors[`${prefix}-downloadUrl`],index})}
           ${documentInput(prefix,"issueDate","Ausstellungsdatum",doc.issueDate,{type:"date",index})}
           ${documentInput(prefix,"expiryDate","Ablaufdatum",doc.expiryDate,{type:"date",index})}
           ${documentInput(prefix,"issuer","Aussteller",doc.issuer,{index})}

@@ -213,18 +213,20 @@
     next.visible=visible===undefined?true:visible===true||visible==="true"||visible==="Ja"||visible==="ja"||visible===1||visible==="1";
     delete next.visibleForCustomer;
     delete next.customerVisible;
-    next.title=String(next.title||next.fileName||next.originalName||"").trim();
-    next.type=String(next.type||"Sonstiges").trim();
-    next.url=String(next.url||next.downloadUrl||next.downloadURL||"").trim();
-    next.note=String(next.note||"").trim();
-    next.fileName=String(next.fileName||next.originalName||"").trim();
+    next.title=String(next.title||next.name||next.fileName||next.filename||next.originalName||"").trim();
+    next.category=String(next.category||next.type||"").trim();
+    next.type=String(next.type||next.category||"Sonstiges").trim();
+    next.url=String(next.url||next.downloadUrl||next.downloadURL||next.fileUrl||next.link||next.href||"").trim();
+    next.note=String(next.note||next.description||"").trim();
+    next.fileName=String(next.fileName||next.filename||next.originalName||next.title||"").trim();
     next.originalName=String(next.originalName||next.fileName||"").trim();
     next.mimeType=String(next.mimeType||next.contentType||"").trim();
     next.contentType=String(next.contentType||next.mimeType||"").trim();
     const size=Number(next.fileSize||next.size||0);
     next.fileSize=Number.isFinite(size)&&size>0?size:0;
     next.size=next.fileSize;
-    next.uploadedAt=next.uploadedAt||next.uploadDate||"";
+    next.uploadedAt=next.uploadedAt||next.uploadDate||next.createdAt||"";
+    next.expiryDate=String(next.expiryDate||"").trim();
     return next;
   }
 

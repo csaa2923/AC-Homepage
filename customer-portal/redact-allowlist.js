@@ -33,9 +33,10 @@
   ]);
 
   const DOCUMENT_PUBLIC_FIELDS=new Set([
-    "documentId","id","title","type","url","downloadUrl","downloadURL",
-    "mimeType","contentType","visible","note","fileName","originalName",
-    "uploadedAt","uploadDate","fileSize","size"
+    "documentId","id","title","type","category","url","downloadUrl","downloadURL",
+    "fileUrl","link","href","mimeType","contentType","visible","note","description",
+    "fileName","filename","originalName","uploadedAt","uploadDate","createdAt",
+    "expiryDate","fileSize","size"
   ]);
 
   const CONTACT_FIELDS=new Set([
@@ -51,6 +52,7 @@
     "dropdownCustomValues","internalNotes","supplier","supplierName","supplierCost",
     "margin","purchasePrice","salesPrice","cost","uid","createdBy","updatedBy",
     "storagePath","filePath","dataUrl","downloadUrl","downloadURL","url","path",
+    "fileUrl","link","href",
     "orgId","tokenHash","rawToken","pinHash","accessCount","lastAccessAt"
   ]);
 
@@ -80,8 +82,13 @@
   }
 
   function publicDocumentUrl(item){
-    const url=stringValue(item.url||item.downloadUrl||item.downloadURL);
-    return /^https?:\/\//i.test(url)?url:"";
+    const source=item||{};
+    const candidates=[source.url,source.downloadUrl,source.downloadURL,source.fileUrl,source.link,source.href];
+    for(const candidate of candidates){
+      const url=stringValue(candidate);
+      if(/^https?:\/\//i.test(url))return url;
+    }
+    return "";
   }
 
   function documentSize(item){
@@ -93,21 +100,27 @@
     const source=item||{};
     const base=pickFields(source,DOCUMENT_PUBLIC_FIELDS);
     const fileSize=documentSize(source);
+    const title=stringValue(base.title)||stringValue(source.name)||"Dokument";
+    const fileName=stringValue(base.fileName||base.filename||base.originalName||source.fileName||source.filename||source.originalName)||title;
+    const note=stringValue(base.note||base.description||source.note||source.description);
+    const type=stringValue(base.type||base.category||source.type||source.category)||"Sonstiges";
     return {
       documentId:base.documentId||base.id||`doc-${index+1}`,
       id:base.id||base.documentId||`doc-${index+1}`,
-      title:base.title||"Dokument",
-      type:base.type||"Sonstiges",
+      title,
+      type,
+      category:stringValue(base.category||source.category||type),
       url:publicDocumentUrl(source),
       mimeType:base.mimeType||base.contentType||"",
       contentType:base.contentType||base.mimeType||"",
-      fileName:base.fileName||base.originalName||"",
-      originalName:base.originalName||base.fileName||"",
-      uploadedAt:base.uploadedAt||base.uploadDate||"",
+      fileName,
+      originalName:stringValue(base.originalName||base.fileName||base.filename)||fileName,
+      uploadedAt:stringValue(base.uploadedAt||base.uploadDate||base.createdAt||source.uploadedAt||source.uploadDate||source.createdAt),
+      expiryDate:stringValue(base.expiryDate||source.expiryDate),
       fileSize,
       size:fileSize,
       visible:documentVisible(source),
-      note:base.note||""
+      note
     };
   }
 
@@ -169,8 +182,11 @@
   window.ACTRedactAllowlist={
     ALLOWED_ROOT_FIELDS,
     BLOCKED_VALUE_KEYS,
+    DOCUMENT_PUBLIC_FIELDS,
     redactPublicSnapshot,
     redactDocument,
-    documentVisible
+    documentVisible,
+    publicDocumentUrl,
+    pickFields
   };
 })();

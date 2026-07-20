@@ -95,6 +95,27 @@ describe("redaction allowlist",()=>{
     assert.equal(redacted.email,undefined);
   });
 
+  it("maps legacy document URL and metadata fields into canonical portal fields",()=>{
+    const redacted=redactPublicSnapshot({
+      customerId:"legacy",
+      documents:[{
+        id:"l1",
+        title:"Pass",
+        visible:true,
+        downloadUrl:"https://storage.example/pass.pdf",
+        filename:"pass-scan.pdf",
+        description:"Gueltig bis Reiseende",
+        createdAt:"2026-06-15T12:00:00.000Z"
+      }]
+    },{customerId:"legacy"});
+    assert.equal(redacted.documents.length,1);
+    assert.equal(redacted.documents[0].url,"https://storage.example/pass.pdf");
+    assert.equal(redacted.documents[0].fileName,"pass-scan.pdf");
+    assert.equal(redacted.documents[0].note,"Gueltig bis Reiseende");
+    assert.equal(redacted.documents[0].uploadedAt,"2026-06-15T12:00:00.000Z");
+    assert.equal(redacted.documents[0].downloadUrl,undefined);
+  });
+
   it("does not include blocked keys from BLOCKED_VALUE_KEYS set",()=>{
     const redacted=redactPublicSnapshot(SENSITIVE_FIXTURE,{customerId:"kunde-test"});
     const paths=collectKeys(redacted);

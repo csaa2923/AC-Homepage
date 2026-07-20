@@ -1666,20 +1666,21 @@
 
   function preserveDocumentFileFields(item,previous){
     const prev=previous||{};
-    const url=safeDocumentUrl(item.url)||safeDocumentUrl(prev.url)||safeDocumentUrl(prev.downloadUrl)||safeDocumentUrl(prev.downloadURL);
+    const url=safeDocumentUrl(item.url)||safeDocumentUrl(item.downloadUrl)||safeDocumentUrl(item.downloadURL)||safeDocumentUrl(item.fileUrl)||safeDocumentUrl(item.link)||safeDocumentUrl(item.href)
+      ||safeDocumentUrl(prev.url)||safeDocumentUrl(prev.downloadUrl)||safeDocumentUrl(prev.downloadURL)||safeDocumentUrl(prev.fileUrl)||safeDocumentUrl(prev.link)||safeDocumentUrl(prev.href);
     const downloadUrl=safeDocumentUrl(item.downloadUrl)||safeDocumentUrl(prev.downloadUrl)||url;
     return {
       url,
       downloadUrl,
       storagePath:cleanValue(item.storagePath)||cleanValue(prev.storagePath),
-      fileName:cleanValue(item.fileName)||cleanValue(prev.fileName)||cleanValue(prev.originalName),
+      fileName:cleanValue(item.fileName)||cleanValue(item.filename)||cleanValue(prev.fileName)||cleanValue(prev.filename)||cleanValue(prev.originalName),
       originalName:cleanValue(item.originalName)||cleanValue(prev.originalName)||cleanValue(item.fileName)||cleanValue(prev.fileName),
       mimeType:cleanValue(item.mimeType)||cleanValue(prev.mimeType)||cleanValue(prev.contentType),
       contentType:cleanValue(item.contentType)||cleanValue(prev.contentType)||cleanValue(prev.mimeType),
       size:cleanValue(item.size||item.fileSize)||cleanValue(prev.size||prev.fileSize),
       fileSize:cleanValue(item.fileSize||item.size)||cleanValue(prev.fileSize||prev.size),
-      uploadedAt:cleanValue(item.uploadedAt)||cleanValue(prev.uploadedAt)||cleanValue(prev.uploadDate),
-      uploadDate:cleanValue(item.uploadedAt||item.uploadDate)||cleanValue(prev.uploadDate||prev.uploadedAt)
+      uploadedAt:cleanValue(item.uploadedAt)||cleanValue(item.createdAt)||cleanValue(prev.uploadedAt)||cleanValue(prev.uploadDate)||cleanValue(prev.createdAt),
+      uploadDate:cleanValue(item.uploadedAt||item.uploadDate||item.createdAt)||cleanValue(prev.uploadDate||prev.uploadedAt||prev.createdAt)
     };
   }
 

@@ -173,6 +173,9 @@ async function portalShare(req,res){
   if(req.method!=="GET"){
     return neutralError(405,res,"Method not allowed");
   }
+  if(stringValue(req.query.documentId||req.query.doc)){
+    return portalDocument(req,res);
+  }
   const shareId=sanitizeShareId(req.query.shareId||req.query.share);
   const rawToken=sanitizeToken(req.query.token,MAX_TOKEN_LENGTH);
   if(!shareId||!rawToken){

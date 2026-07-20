@@ -56,12 +56,16 @@
   function portalDocumentFunctionUrl(){
     const cfg=config();
     if(cfg.portalDocumentUrl)return cfg.portalDocumentUrl;
+    // Prefer the existing portalShare endpoint with ?documentId= (no new Function deploy name required).
+    const shareUrl=portalShareFunctionUrl();
+    if(shareUrl)return shareUrl;
     if(cfg.useFunctionsEmulator&&cfg.functionsEmulatorHost){
       return `${cfg.functionsEmulatorHost}/portalDocument`;
     }
-    const shareUrl=portalShareFunctionUrl();
-    if(!shareUrl)return "";
-    return shareUrl.replace(/\/portalShare\/?$/,"/portalDocument");
+    const projectId=window.ACTFirebaseConfig?.config?.projectId;
+    const region=cfg.functionsRegion||"europe-west1";
+    if(!projectId)return "";
+    return `https://${region}-${projectId}.cloudfunctions.net/portalDocument`;
   }
 
   function readAdminPreviewGrant(customerId){

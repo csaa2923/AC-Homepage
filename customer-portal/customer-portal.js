@@ -1019,6 +1019,12 @@
       window.open(existing,"_blank","noopener,noreferrer");
       return;
     }
+    const resetButton=()=>{
+      if(!button||!button.isConnected)return;
+      button.disabled=false;
+      button.removeAttribute("aria-busy");
+      button.textContent="Dokument oeffnen";
+    };
     if(button){
       button.disabled=true;
       button.setAttribute("aria-busy","true");
@@ -1031,12 +1037,8 @@
       renderDocuments();
       window.open(url,"_blank","noopener,noreferrer");
     }catch(error){
+      resetButton();
       window.alert(error&&error.message?error.message:"Dieses Dokument ist derzeit nicht verfuegbar.");
-      if(button){
-        button.disabled=false;
-        button.removeAttribute("aria-busy");
-        button.textContent="Dokument oeffnen";
-      }
     }
   }
 

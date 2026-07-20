@@ -62,7 +62,9 @@
     wizardMessage:"",
     wizardMessageKind:"",
     wizardSaving:false,
-    wizardSavedCustomerId:""
+    wizardSavedCustomerId:"",
+    detailFlashMessage:"",
+    detailFlashKind:""
   };
 
   const byId=id=>document.getElementById(id);
@@ -3435,12 +3437,14 @@
       return;
     }
     const tab=detailTabs.some(([key])=>key===state.selectedTab)?state.selectedTab:"kunde";
+    const flash=state.detailFlashMessage?`<p class="v2-edit-status ${escapeHtml(state.detailFlashKind||"success")}" role="status">${escapeHtml(state.detailFlashMessage)}</p>`:"";
     root.innerHTML=`
       <header class="v2-detail-head">
         <div class="v2-detail-actions">
           <button class="v2-button soft" type="button" data-v2-route="customers">Zur Kundenuebersicht</button>
           <a class="v2-button primary" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Im klassischen Admin bearbeiten</a>
         </div>
+        ${flash}
         <div class="v2-detail-title">
           <p class="v2-eyebrow">Kundendetail</p>
           <h2>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</h2>
@@ -4170,9 +4174,129 @@
     {id:"finish",label:"Abschluss"}
   ];
   const WIZARD_LANGUAGES=["Deutsch","Englisch","Italienisch","Franzoesisch","Sonstiges"];
+  const WIZARD_PHONE_COUNTRIES=[
+    {code:"+43",label:"Oesterreich (+43)"},
+    {code:"+49",label:"Deutschland (+49)"},
+    {code:"+39",label:"Italien (+39)"},
+    {code:"+41",label:"Schweiz (+41)"},
+    {code:"+33",label:"Frankreich (+33)"},
+    {code:"+44",label:"Grossbritannien (+44)"},
+    {code:"+1",label:"USA / Kanada (+1)"}
+  ];
+  const WIZARD_EMAIL_ERROR="Bitte geben Sie eine gültige E-Mail-Adresse ein.";
+  const WIZARD_SUCCESS_MESSAGE="Der Kunde wurde erfolgreich angelegt.";
 
   function generateCustomerId(){
     return `kunde-${Math.random().toString(36).slice(2,8)}`;
+  }
+
+  function parseInternalCustomerNumber(value){
+    const digits=String(value||"").replace(/\D+/g,"");
+    if(!digits)return null;
+    const number=Number(digits);
+    return Number.isFinite(number)?number:null;
+  }
+
+  function formatInternalCustomerNumber(number){
+    return String(Math.max(1,Number(number)||1)).padStart(4,"0");
+  }
+
+  function collectedInternalCustomerNumbers(){
+    const numbers=new Set();
+    Object.values(state.customers||{}).forEach(customer=>{
+      [
+        customer?.crm?.internalNumber,
+        customer?.internalNumber,
+        customer?.customerNumber,
+        customer?.kundennummer
+      ].forEach(value=>{
+        const number=parseInternalCustomerNumber(value);
+        if(number!==null)numbers.add(number);
+      });
+    });
+    return numbers;
+  }
+
+  function nextInternalCustomerNumber(){
+    const used=collectedInternalCustomerNumbers();
+    let max=0;
+    used.forEach(number=>{if(number>max)max=number;});
+    try{
+      const stored=parseInternalCustomerNumber(localStorage.getItem("act_internal_customer_seq"));
+      if(stored!==null&&stored>max)max=stored;
+    }catch(_error){/* ignore */}
+    let next=max+1;
+    while(used.has(next))next+=1;
+    try{localStorage.setItem("act_internal_customer_seq",String(next));}catch(_error){/* ignore */}
+    return formatInternalCustomerNumber(next);
+  }
+
+  function ensureUniqueInternalCustomerNumber(preferred,customerId=""){
+    const preferredNumber=parseInternalCustomerNumber(preferred);
+    const used=collectedInternalCustomerNumbers();
+    const ownerId=cleanValue(customerId);
+    if(preferredNumber!==null){
+      const collision=Object.values(state.customers||{}).some(customer=>{
+        if(cleanValue(customer?.customerId)===ownerId)return false;
+        const numbers=[
+          parseInternalCustomerNumber(customer?.crm?.internalNumber),
+          parseInternalCustomerNumber(customer?.internalNumber),
+          parseInternalCustomerNumber(customer?.customerNumber),
+          parseInternalCustomerNumber(customer?.kundennummer)
+        ].filter(value=>value!==null);
+        return numbers.includes(preferredNumber);
+      });
+      if(!collision){
+        try{localStorage.setItem("act_internal_customer_seq",String(preferredNumber));}catch(_error){/* ignore */}
+        return formatInternalCustomerNumber(preferredNumber);
+      }
+    }
+    return nextInternalCustomerNumber();
+  }
+
+  function composeWizardPhone(draft){
+    const country=cleanValue(draft.phoneCountry)||"+43";
+    const local=cleanValue(draft.phoneLocal).replace(/[^\d\s/-]/g,"").trim();
+    if(!local)return "";
+    const normalizedLocal=local.replace(/^0+/,"");
+    return `${country}${normalizedLocal?` ${normalizedLocal}`:""}`.trim();
+  }
+
+  function isValidWizardEmail(value){
+    const email=cleanValue(value);
+    return Boolean(email)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function defaultWizardProgramFields(){
+    return {
+      programSkip:false,
+      programDate:"",
+      programStartTime:"",
+      programEndTime:"",
+      programAllDay:false,
+      programTitle:"",
+      programCategory:"Aktivitaet",
+      programPriority:"",
+      programLocation:"",
+      programVenueName:"",
+      programLocationAddress:"",
+      programLocationCity:"",
+      programLocationCountry:"",
+      programEventUrl:"",
+      programWebsiteUrl:"",
+      programContactName:"",
+      programContactPhone:"",
+      programContactEmail:"",
+      programPrice:"",
+      programCurrency:"EUR",
+      programImageUrl:"",
+      programTicketNumber:"",
+      programVoucherNumber:"",
+      programWeatherPlaceholder:"",
+      programDescription:"",
+      programNotes:"",
+      programInternalNotes:""
+    };
   }
 
   function defaultWizardDraft(){
@@ -4181,20 +4305,19 @@
       firstName:"",
       lastName:"",
       email:"",
-      phone:"",
+      phoneCountry:"+43",
+      phoneLocal:"",
       language:"Deutsch",
-      internalNumber:"",
+      internalNumber:nextInternalCustomerNumber(),
       tripTitle:"",
       region:"",
       startDate:"",
       endDate:"",
-      travelers:"2",
+      adults:"2",
+      children:"0",
+      childAges:[],
       notes:"",
-      programSkip:false,
-      programTitle:"",
-      programTime:"",
-      programLocation:"",
-      programDescription:""
+      ...defaultWizardProgramFields()
     };
   }
 
@@ -4263,28 +4386,57 @@
     const tripTitle=cleanValue(draft.tripTitle)||"Neue Reise";
     const start=dateInputValue(draft.startDate);
     const end=dateInputValue(draft.endDate);
-    const phone=cleanValue(draft.phone);
+    const phone=composeWizardPhone(draft)||cleanValue(draft.phone);
     const email=cleanValue(draft.email);
+    const adults=wholeNumberValue(draft.adults)||0;
+    const children=wholeNumberValue(draft.children)||0;
+    const childAges=Array.from({length:children},(_,index)=>cleanValue(arrayValue(draft.childAges)[index]));
+    const companions=travelerSummary(adults,children,childAges);
+    const programDate=dateInputValue(draft.programDate)||start||"";
     const program=[];
     if(!draft.programSkip&&cleanValue(draft.programTitle)){
       program.push({
         id:`prog-${Date.now().toString(36)}`,
         day:1,
-        date:start||"",
-        dateValue:start||"",
+        date:programDate,
+        dateValue:programDate,
         title:cleanValue(draft.programTitle),
-        time:cleanValue(draft.programTime),
-        startTime:cleanValue(draft.programTime),
+        time:draft.programAllDay?"":cleanValue(draft.programStartTime),
+        startTime:draft.programAllDay?"":cleanValue(draft.programStartTime),
+        endTime:draft.programAllDay?"":cleanValue(draft.programEndTime),
+        allDay:Boolean(draft.programAllDay),
         location:cleanValue(draft.programLocation),
+        venueName:cleanValue(draft.programVenueName),
+        locationAddress:cleanValue(draft.programLocationAddress),
+        locationCity:cleanValue(draft.programLocationCity),
+        locationCountry:cleanValue(draft.programLocationCountry),
         description:cleanValue(draft.programDescription),
-        category:"Aktivitaet",
-        type:"Aktivitaet",
+        notes:cleanValue(draft.programNotes),
+        internalNotes:cleanValue(draft.programInternalNotes),
+        category:cleanValue(draft.programCategory)||"Aktivitaet",
+        type:cleanValue(draft.programCategory)||"Aktivitaet",
+        priority:cleanValue(draft.programPriority),
+        eventUrl:safeWebUrl(draft.programEventUrl),
+        websiteUrl:safeWebUrl(draft.programWebsiteUrl),
+        contactName:cleanValue(draft.programContactName),
+        contactPhone:cleanValue(draft.programContactPhone),
+        contactEmail:cleanValue(draft.programContactEmail),
+        price:cleanValue(draft.programPrice),
+        currency:cleanValue(draft.programCurrency)||"EUR",
+        imageUrl:safeWebUrl(draft.programImageUrl),
+        ticketNumber:cleanValue(draft.programTicketNumber),
+        voucherNumber:cleanValue(draft.programVoucherNumber),
+        weatherPlaceholder:cleanValue(draft.programWeatherPlaceholder),
         visible:true
       });
     }
     base.customerId=draft.customerId;
     base.customerName=name;
-    base.companions=cleanValue(draft.travelers)?`${cleanValue(draft.travelers)} Reisende`:"";
+    base.companions=companions;
+    base.adults=String(adults||"");
+    base.children=String(children||"");
+    base.childAges=childAges;
+    base.childrenAges=childAges;
     base.tripName=tripTitle;
     base.tripTitle=tripTitle;
     base.region=cleanValue(draft.region);
@@ -4306,16 +4458,25 @@
     };
     if(cleanValue(draft.notes))base.requirements=[cleanValue(draft.notes)];
     if(program.length){
-      base.program=program;
+      base.program=[{
+        date:programDate,
+        title:"Tag 1",
+        items:program.map((item,index)=>({...item,order:index}))
+      }];
       base.programItems=program;
     }else if(!existing){
       base.program=[];
       base.programItems=[];
     }
+    const realDocs=wizardRealDocuments(existing||{});
+    base.documents=realDocs;
+    const internalNumber=ensureUniqueInternalCustomerNumber(draft.internalNumber,draft.customerId);
+    draft.internalNumber=internalNumber;
     base.crm={
       ...(base.crm&&typeof base.crm==="object"?base.crm:{}),
-      internalNumber:cleanValue(draft.internalNumber)
+      internalNumber
     };
+    base.internalNumber=internalNumber;
     base.status="Entwurf";
     base.publicationState="Entwurf";
     base.publishStatus="draft";
@@ -4325,19 +4486,46 @@
     return compactObject(base);
   }
 
+  function isWizardPlaceholderDocument(doc){
+    const hasFile=Boolean(cleanValue(doc?.url||doc?.downloadUrl||doc?.storagePath||doc?.fileName||doc?.originalName));
+    if(hasFile)return false;
+    const title=normalizeText(doc?.title||"");
+    return !title||title==="dokument"||/^dokument\s*\d+$/.test(title)||title==="neues dokument"||title==="platzhalter";
+  }
+
+  function wizardRealDocuments(customer){
+    return normalizedDocuments(customer||{}).filter(doc=>!isWizardPlaceholderDocument(doc));
+  }
+
   function validateWizardStep(step,draft){
     const errors={};
     if(step===0){
       if(!cleanValue(draft.firstName)&&!cleanValue(draft.lastName))errors.firstName="Bitte Vor- oder Nachname eingeben.";
-      if(cleanValue(draft.email)&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanValue(draft.email)))errors.email="Bitte eine gueltige E-Mail-Adresse eingeben.";
-      if(!cleanValue(draft.phone)&&!cleanValue(draft.email))errors.phone="Telefon oder E-Mail ist erforderlich.";
+      if(!cleanValue(draft.email))errors.email=WIZARD_EMAIL_ERROR;
+      else if(!isValidWizardEmail(draft.email))errors.email=WIZARD_EMAIL_ERROR;
+      if(!cleanValue(draft.phoneLocal)&&!cleanValue(draft.phone))errors.phoneLocal="Bitte eine Telefonnummer eingeben.";
     }
     if(step===1){
       if(!cleanValue(draft.tripTitle))errors.tripTitle="Bitte einen Reisetitel eingeben.";
       if(draft.startDate&&draft.endDate&&draft.endDate<draft.startDate)errors.endDate="Ende liegt vor dem Start.";
+      const children=wholeNumberValue(draft.children)||0;
+      Array.from({length:children}).forEach((_,index)=>{
+        if(!cleanValue(arrayValue(draft.childAges)[index]))errors[`childAge${index}`]=`Bitte das Alter fuer Kind ${index+1} eingeben.`;
+      });
     }
-    if(step===2&&!draft.programSkip&&cleanValue(draft.programTitle)===""&&(cleanValue(draft.programTime)||cleanValue(draft.programLocation)||cleanValue(draft.programDescription))){
-      errors.programTitle="Bitte einen Programmpunkt-Titel eingeben oder den Schritt ueberspringen.";
+    if(step===2&&!draft.programSkip){
+      if(cleanValue(draft.programTitle)===""&&(cleanValue(draft.programStartTime)||cleanValue(draft.programLocation)||cleanValue(draft.programDescription)||cleanValue(draft.programDate))){
+        errors.programTitle="Bitte einen Programmpunkt-Titel eingeben oder den Schritt ueberspringen.";
+      }
+      if(cleanValue(draft.programTitle)){
+        if(!dateInputValue(draft.programDate)&&!dateInputValue(draft.startDate))errors.programDate="Bitte ein Datum fuer den Programmpunkt waehlen.";
+        if(cleanValue(draft.programEndTime)&&!cleanValue(draft.programStartTime)&&!draft.programAllDay)errors.programEndTime="Bitte zuerst eine Startzeit eingeben.";
+        if(cleanValue(draft.programStartTime)&&cleanValue(draft.programEndTime)&&draft.programEndTime<draft.programStartTime)errors.programEndTime="Die Endzeit darf nicht vor der Startzeit liegen.";
+        if(cleanValue(draft.programEventUrl)&&!safeWebUrl(draft.programEventUrl))errors.programEventUrl="Bitte eine gueltige Webadresse eingeben.";
+        if(cleanValue(draft.programWebsiteUrl)&&!safeWebUrl(draft.programWebsiteUrl))errors.programWebsiteUrl="Bitte eine gueltige Webadresse eingeben.";
+        if(cleanValue(draft.programImageUrl)&&!safeWebUrl(draft.programImageUrl))errors.programImageUrl="Bitte eine gueltige Bildadresse eingeben.";
+        if(cleanValue(draft.programContactEmail)&&!emailLink(draft.programContactEmail))errors.programContactEmail="Bitte eine gueltige E-Mail-Adresse eingeben.";
+      }
     }
     return {valid:!Object.keys(errors).length,errors};
   }
@@ -4397,14 +4585,22 @@
     return true;
   }
 
-  function wizardField(name,label,value,{type="text",required=false,error=""}={}){
+  function wizardField(name,label,value,{type="text",required=false,error="",readonly=false,min="",inputmode=""}={}){
     const id=`wizard-${name}`;
-    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}${required?" *":""}</span><input id="${id}" name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value||"")}" data-wizard-field="${escapeHtml(name)}" aria-invalid="${error?"true":"false"}">${error?`<small class="v2-field-error">${escapeHtml(error)}</small>`:""}</label>`;
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}${required?" *":""}</span><input id="${id}" name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value||"")}" data-wizard-field="${escapeHtml(name)}" ${readonly?"readonly":""} ${min!==""?`min="${escapeHtml(min)}"`:""} ${inputmode?`inputmode="${escapeHtml(inputmode)}"`:""} aria-invalid="${error?"true":"false"}">${error?`<small class="v2-field-error" id="${id}-error">${escapeHtml(error)}</small>`:""}</label>`;
   }
 
   function wizardSelect(name,label,value,options,{error=""}={}){
     const id=`wizard-${name}`;
-    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-wizard-field="${escapeHtml(name)}">${options.map(option=>`<option value="${escapeHtml(option)}" ${normalizeText(option)===normalizeText(value)?"selected":""}>${escapeHtml(option)}</option>`).join("")}</select>${error?`<small class="v2-field-error">${escapeHtml(error)}</small>`:""}</label>`;
+    const optionList=options.map(option=>{
+      if(option&&typeof option==="object"){
+        const optionValue=option.value??option.code??"";
+        const optionLabel=option.label??optionValue;
+        return `<option value="${escapeHtml(optionValue)}" ${cleanValue(optionValue)===cleanValue(value)?"selected":""}>${escapeHtml(optionLabel)}</option>`;
+      }
+      return `<option value="${escapeHtml(option)}" ${normalizeText(option)===normalizeText(value)?"selected":""}>${escapeHtml(option)}</option>`;
+    }).join("");
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-wizard-field="${escapeHtml(name)}">${optionList}</select>${error?`<small class="v2-field-error">${escapeHtml(error)}</small>`:""}</label>`;
   }
 
   function wizardTextarea(name,label,value,{error=""}={}){
@@ -4412,41 +4608,95 @@
     return `<label class="v2-edit-field full" for="${id}"><span>${escapeHtml(label)}</span><textarea id="${id}" name="${escapeHtml(name)}" rows="3" data-wizard-field="${escapeHtml(name)}">${escapeHtml(value||"")}</textarea>${error?`<small class="v2-field-error">${escapeHtml(error)}</small>`:""}</label>`;
   }
 
+  function wizardCheckbox(name,label,checked){
+    const id=`wizard-${name}`;
+    return `<label class="v2-edit-check" for="${id}"><input id="${id}" name="${escapeHtml(name)}" type="checkbox" data-wizard-field="${escapeHtml(name)}" ${checked?"checked":""}><span>${escapeHtml(label)}</span></label>`;
+  }
+
+  function wizardPhoneFields(draft,errors){
+    return `${wizardSelect("phoneCountry","Vorwahl",draft.phoneCountry||"+43",WIZARD_PHONE_COUNTRIES)}${wizardField("phoneLocal","Telefonnummer",draft.phoneLocal,{type:"tel",required:true,error:errors.phoneLocal||errors.phone})}`;
+  }
+
+  function wizardChildAgeFields(draft,errors={}){
+    const childCount=wholeNumberValue(draft.children)||0;
+    if(childCount<=0)return "";
+    const ages=Array.isArray(draft.childAges)?draft.childAges:ageListFromValue(draft.childAges);
+    return Array.from({length:childCount},(_,index)=>{
+      const name=`childAge-${index}`;
+      return wizardField(name,`Alter Kind ${index+1}`,ages[index]||"",{type:"number",min:"0",inputmode:"numeric",error:errors[`childAge${index}`]||errors[name]});
+    }).join("");
+  }
+
+  function wizardProgramFieldsMarkup(draft,errors={}){
+    const allDay=Boolean(draft.programAllDay);
+    return `<div class="v2-edit-grid v2-wizard-program-fields">
+      ${wizardField("programDate","Datum",draft.programDate||draft.startDate,{type:"date",error:errors.programDate})}
+      ${wizardField("programStartTime","Beginn",draft.programStartTime,{type:"time",error:errors.programStartTime,readonly:allDay})}
+      ${wizardField("programEndTime","Ende",draft.programEndTime,{type:"time",error:errors.programEndTime,readonly:allDay})}
+      ${wizardCheckbox("programAllDay","Ganztagig",allDay)}
+      ${wizardField("programTitle","Titel des Programmpunkts",draft.programTitle,{required:true,error:errors.programTitle})}
+      ${wizardSelect("programCategory","Kategorie / Art",draft.programCategory||"Aktivitaet",PROGRAM_CATEGORIES)}
+      ${wizardSelect("programPriority","Prioritaet",draft.programPriority||"",PROGRAM_PRIORITIES)}
+      ${wizardField("programLocation","Standort / Adresse",draft.programLocation)}
+      ${wizardField("programVenueName","Standortname",draft.programVenueName)}
+      ${wizardField("programLocationAddress","Adresse",draft.programLocationAddress)}
+      ${wizardField("programLocationCity","Ort",draft.programLocationCity)}
+      ${wizardField("programLocationCountry","Land",draft.programLocationCountry)}
+      ${wizardField("programEventUrl","Veranstaltungslink",draft.programEventUrl,{type:"url",error:errors.programEventUrl})}
+      ${wizardField("programWebsiteUrl","Offizielle Website",draft.programWebsiteUrl,{type:"url",error:errors.programWebsiteUrl})}
+      ${wizardField("programContactName","Ansprechpartner",draft.programContactName)}
+      ${wizardField("programContactPhone","Telefon",draft.programContactPhone,{type:"tel"})}
+      ${wizardField("programContactEmail","E-Mail",draft.programContactEmail,{type:"email",error:errors.programContactEmail})}
+      ${wizardField("programPrice","Preis",draft.programPrice)}
+      ${wizardSelect("programCurrency","Waehrung",draft.programCurrency||"EUR",PROGRAM_CURRENCIES)}
+      ${wizardField("programImageUrl","Bild-URL",draft.programImageUrl,{type:"url",error:errors.programImageUrl})}
+      ${wizardField("programTicketNumber","Ticketnummer",draft.programTicketNumber)}
+      ${wizardField("programVoucherNumber","Vouchernummer",draft.programVoucherNumber)}
+      ${wizardField("programWeatherPlaceholder","Wetter-Platzhalter",draft.programWeatherPlaceholder)}
+      ${wizardTextarea("programDescription","Beschreibung",draft.programDescription)}
+      ${wizardTextarea("programNotes","Hinweise",draft.programNotes)}
+      ${wizardTextarea("programInternalNotes","Interne Notizen (nur Admin)",draft.programInternalNotes)}
+    </div>`;
+  }
+
   function wizardMissingItems(draft){
     const missing=[];
     if(!cleanValue(draft.firstName)&&!cleanValue(draft.lastName))missing.push("Kundenname");
-    if(!cleanValue(draft.phone)&&!cleanValue(draft.email))missing.push("Telefon oder E-Mail");
+    if(!composeWizardPhone(draft)&&!cleanValue(draft.phone)&&!cleanValue(draft.email))missing.push("Telefon oder E-Mail");
     if(!cleanValue(draft.tripTitle))missing.push("Reisetitel");
     return missing;
   }
 
   function wizardStepMarkup(step,draft,errors){
     if(step===0){
-      return `<section class="v2-wizard-panel"><h3>1. Kundendaten</h3><p>Erfassen Sie die Kontaktdaten des neuen Kunden.</p><div class="v2-edit-grid">${wizardField("firstName","Vorname",draft.firstName,{required:true,error:errors.firstName})}${wizardField("lastName","Nachname",draft.lastName,{error:errors.lastName})}${wizardField("email","E-Mail",draft.email,{type:"email",error:errors.email})}${wizardField("phone","Telefon",draft.phone,{error:errors.phone})}${wizardSelect("language","Sprache",draft.language,WIZARD_LANGUAGES)}${wizardField("internalNumber","Interne Kundennummer",draft.internalNumber)}</div></section>`;
+      return `<section class="v2-wizard-panel"><h3>1. Kundendaten</h3><p>Erfassen Sie die Kontaktdaten des neuen Kunden. Die interne Kundennummer wird automatisch vergeben.</p><div class="v2-edit-grid">${wizardField("firstName","Vorname",draft.firstName,{required:true,error:errors.firstName})}${wizardField("lastName","Nachname",draft.lastName,{error:errors.lastName})}${wizardField("email","E-Mail-Adresse",draft.email,{type:"email",required:true,error:errors.email})}${wizardPhoneFields(draft,errors)}${wizardSelect("language","Sprache",draft.language,WIZARD_LANGUAGES)}<div class="v2-edit-field"><span>Interne Kundennummer</span><strong id="wizard-internalNumber-display">${escapeHtml(draft.internalNumber||"wird nach dem Speichern angezeigt")}</strong><small class="v2-muted">Automatisch fortlaufend, nicht manuell aenderbar.</small></div></div></section>`;
     }
     if(step===1){
-      return `<section class="v2-wizard-panel"><h3>2. Reise</h3><p>Grunddaten der Reise fuer den Kundenentwurf.</p><div class="v2-edit-grid">${wizardField("tripTitle","Reisetitel",draft.tripTitle,{required:true,error:errors.tripTitle})}${wizardField("region","Region",draft.region)}${wizardField("startDate","Startdatum",draft.startDate,{type:"date",error:errors.startDate})}${wizardField("endDate","Enddatum",draft.endDate,{type:"date",error:errors.endDate})}${wizardField("travelers","Anzahl Reisende",draft.travelers,{type:"number"})}${wizardTextarea("notes","Notizen",draft.notes)}</div></section>`;
+      return `<section class="v2-wizard-panel"><h3>2. Reise</h3><p>Grunddaten der Reise fuer den Kundenentwurf.</p><div class="v2-edit-grid">${wizardField("tripTitle","Reisetitel",draft.tripTitle,{required:true,error:errors.tripTitle})}${wizardField("region","Region",draft.region)}${wizardField("startDate","Startdatum",draft.startDate,{type:"date",error:errors.startDate})}${wizardField("endDate","Enddatum",draft.endDate,{type:"date",error:errors.endDate})}${wizardField("adults","Anzahl Erwachsene",draft.adults,{type:"number",min:"0",inputmode:"numeric"})}${wizardField("children","Anzahl Kinder",draft.children,{type:"number",min:"0",inputmode:"numeric"})}<div class="v2-edit-field full v2-traveler-preview"><span>Personenkonstellation</span><strong id="wizardTravelerPreview">${escapeHtml(travelerSummary(draft.adults,draft.children,draft.childAges))}</strong></div>${wizardChildAgeFields(draft,errors)}${wizardTextarea("notes","Notizen",draft.notes)}</div></section>`;
     }
     if(step===2){
-      return `<section class="v2-wizard-panel"><h3>3. Programm</h3><p>Optional: ersten Reisetag und Programmpunkt anlegen. Dieser Schritt darf uebersprungen werden.</p><label class="v2-edit-field"><span><input type="checkbox" data-wizard-field="programSkip" ${draft.programSkip?"checked":""}> Schritt ueberspringen</span></label>${draft.programSkip?`<p class="v2-muted">Programm wird spaeter in der Kundenakte ergaenzt.</p>`:`<div class="v2-edit-grid">${wizardField("programTitle","Erster Programmpunkt",draft.programTitle,{error:errors.programTitle})}${wizardField("programTime","Uhrzeit",draft.programTime)}${wizardField("programLocation","Ort",draft.programLocation)}${wizardTextarea("programDescription","Beschreibung",draft.programDescription)}</div>`}</section>`;
+      return `<section class="v2-wizard-panel"><h3>3. Programm</h3><p>Optional: ersten Programmpunkt mit denselben Feldern wie in der regulaeren Programmpunkt-Erfassung anlegen. Dieser Schritt darf uebersprungen werden.</p>${wizardCheckbox("programSkip","Schritt ueberspringen",draft.programSkip)}${draft.programSkip?`<p class="v2-muted">Programm wird spaeter in der Kundenakte ergaenzt.</p>`:wizardProgramFieldsMarkup(draft,errors)}</section>`;
     }
     if(step===3){
       const customer=customerById(draft.customerId)||customerById(state.wizardSavedCustomerId);
-      const docs=normalizedDocuments(customer||{});
-      return `<section class="v2-wizard-panel"><h3>4. Dokumente</h3><p>Optional Dokumente hochladen. Typ, Kategorie, Sichtbarkeit und Beschreibung koennen danach in der Kundenakte verfeinert werden.</p>${customer?uploadPanelMarkup(customer):`<p class="v2-muted">Bitte zuerst speichern bzw. weiter, damit der Kundenentwurf fuer Uploads bereitsteht.</p>`}<div class="v2-document-quality-grid">${docs.slice(0,6).map(doc=>`<article class="v2-panel"><strong>${escapeHtml(doc.title||doc.fileName||"Dokument")}</strong><p class="v2-muted">${escapeHtml([doc.category,doc.documentType,doc.visibility].filter(Boolean).join(" · "))}</p></article>`).join("")||`<p class="v2-muted">Noch keine Dokumente.</p>`}</div></section>`;
+      const docs=wizardRealDocuments(customer||{});
+      return `<section class="v2-wizard-panel"><h3>4. Dokumente</h3><p>Optional Dokumente hochladen. Der Bereich startet leer – es werden nur tatsaechlich hochgeladene Dokumente angezeigt.</p>${customer?uploadPanelMarkup(customer):`<p class="v2-muted">Bitte zuerst speichern bzw. weiter, damit der Kundenentwurf fuer Uploads bereitsteht.</p>`}<div class="v2-document-quality-grid">${docs.slice(0,6).map(doc=>`<article class="v2-panel"><strong>${escapeHtml(doc.title||doc.fileName||"Dokument")}</strong><p class="v2-muted">${escapeHtml([doc.category,doc.documentType,doc.visibility].filter(Boolean).join(" · "))}</p></article>`).join("")||`<p class="v2-muted">Noch keine Dokumente.</p>`}</div></section>`;
     }
     if(step===4){
       const customer=customerById(draft.customerId)||customerById(state.wizardSavedCustomerId);
-      const docs=normalizedDocuments(customer||{});
+      const docs=wizardRealDocuments(customer||{});
       const visible=docs.filter(doc=>doc.visibility!=="Intern"&&doc.visible!==false).length;
       const internal=docs.length-visible;
       const missing=wizardMissingItems(draft);
-      const programCount=(customer?.program||customer?.programItems||[]).length||(!draft.programSkip&&cleanValue(draft.programTitle)?1:0);
-      return `<section class="v2-wizard-panel"><h3>5. Pruefung</h3><div class="v2-wizard-summary"><article><h4>Kundendaten</h4><ul><li>${escapeHtml(wizardCustomerName(draft))}</li><li>${escapeHtml(draft.email||"-")}</li><li>${escapeHtml(draft.phone||"-")}</li><li>${escapeHtml(draft.language||"-")}</li><li>Nr.: ${escapeHtml(draft.internalNumber||"-")}</li></ul></article><article><h4>Reisedaten</h4><ul><li>${escapeHtml(draft.tripTitle||"-")}</li><li>${escapeHtml(draft.region||"-")}</li><li>${escapeHtml(draft.startDate||"-")} bis ${escapeHtml(draft.endDate||"-")}</li><li>${escapeHtml(draft.travelers||"-")} Reisende</li></ul></article><article><h4>Programmpunkte</h4><ul><li>${programCount} Punkt(e)</li>${draft.programSkip?"<li>Uebersprungen</li>":""}</ul></article><article><h4>Dokumente</h4><ul><li>${docs.length} Gesamt</li><li>${visible} sichtbar / ${internal} intern</li></ul></article><article><h4>Fehlende Angaben</h4><ul>${missing.length?missing.map(item=>`<li>${escapeHtml(item)}</li>`).join(""):"<li>Keine kritischen Angaben offen</li>"}</ul></article></div></section>`;
+      const programCount=(customer?.programItems||[]).length||(Array.isArray(customer?.program)?customer.program.reduce((sum,day)=>sum+arrayValue(day.items).length,0):0)||(!draft.programSkip&&cleanValue(draft.programTitle)?1:0);
+      const phoneDisplay=composeWizardPhone(draft)||cleanValue(draft.phone)||"-";
+      const travelers=travelerSummary(draft.adults,draft.children,draft.childAges);
+      return `<section class="v2-wizard-panel"><h3>5. Pruefung</h3><div class="v2-wizard-summary"><article><h4>Kundendaten</h4><ul><li>${escapeHtml(wizardCustomerName(draft))}</li><li>${escapeHtml(draft.email||"-")}</li><li>${escapeHtml(phoneDisplay)}</li><li>${escapeHtml(draft.language||"-")}</li><li>Nr.: ${escapeHtml(draft.internalNumber||"-")}</li></ul></article><article><h4>Reisedaten</h4><ul><li>${escapeHtml(draft.tripTitle||"-")}</li><li>${escapeHtml(draft.region||"-")}</li><li>${escapeHtml(draft.startDate||"-")} bis ${escapeHtml(draft.endDate||"-")}</li><li>${escapeHtml(travelers||"-")}</li></ul></article><article><h4>Programmpunkte</h4><ul><li>${programCount} Punkt(e)</li>${draft.programSkip?"<li>Uebersprungen</li>":""}</ul></article><article><h4>Dokumente</h4><ul><li>${docs.length} Gesamt</li><li>${visible} sichtbar / ${internal} intern</li></ul></article><article><h4>Fehlende Angaben</h4><ul>${missing.length?missing.map(item=>`<li>${escapeHtml(item)}</li>`).join(""):"<li>Keine kritischen Angaben offen</li>"}</ul></article></div></section>`;
     }
     const customer=customerById(state.wizardSavedCustomerId||draft.customerId);
+    const phoneDisplay=composeWizardPhone(draft)||cleanValue(draft.phone)||"-";
     const link=customer?resolvePortalLink(customer):null;
-    return `<section class="v2-wizard-panel"><h3>6. Abschluss</h3><p>Entwurf speichern, veroeffentlichen und einmal einen stabilen Kundenlink erzeugen. Spaetere Veroeffentlichungen aktualisieren denselben Link automatisch.</p><div class="v2-wizard-finish"><p><strong>${escapeHtml(wizardCustomerName(draft))}</strong> · ${escapeHtml(draft.tripTitle||"Neue Reise")}</p><div class="v2-document-actions"><button class="v2-button primary" type="button" data-wizard-action="save-draft" ${state.wizardSaving?"disabled":""}>Entwurf speichern</button><button class="v2-button soft" type="button" data-wizard-action="open-customer" ${customer?"":"disabled"}>Kunde oeffnen</button><button class="v2-button soft" type="button" data-wizard-action="publish" ${customer?"":"disabled"}>Veroeffentlichen</button><button class="v2-button soft" type="button" data-wizard-action="create-share" ${customer&&isPublished(customer)?"":"disabled"}>${(customer&&resolvePortalLink(customer).hasActiveShare)?"Kundenlink aktualisieren":"Stabilen Kundenlink erzeugen"}</button></div>${link?.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}<p class="v2-muted">Bewusster Fallback: <a class="v2-text-link" href="admin.html" target="_blank" rel="noopener noreferrer">Klassischen Admin in neuem Tab oeffnen</a> (startet keinen neuen Kunden).</p></div></section>`;
+    return `<section class="v2-wizard-panel"><h3>6. Abschluss</h3><p>Speichern Sie den Entwurf oder schliessen Sie die Anlage mit „Fertig“ ab.</p><div class="v2-wizard-finish"><p><strong>${escapeHtml(wizardCustomerName(draft))}</strong> · ${escapeHtml(draft.tripTitle||"Neue Reise")}</p><p class="v2-muted">Interne Kundennummer: <strong>${escapeHtml(draft.internalNumber||"-")}</strong> · ${escapeHtml(phoneDisplay)}</p><div class="v2-document-actions"><button class="v2-button primary" type="button" data-wizard-action="save" ${state.wizardSaving?"disabled":""}>Speichern</button><button class="v2-button soft" type="button" data-wizard-action="finish" ${state.wizardSaving?"disabled":""}>Fertig</button><button class="v2-button soft" type="button" data-wizard-action="save-draft" ${state.wizardSaving?"disabled":""}>Entwurf speichern</button><button class="v2-button soft" type="button" data-wizard-action="open-customer" ${customer?"":"disabled"}>Kunde oeffnen</button><button class="v2-button soft" type="button" data-wizard-action="publish" ${customer?"":"disabled"}>Veroeffentlichen</button><button class="v2-button soft" type="button" data-wizard-action="create-share" ${customer&&isPublished(customer)?"":"disabled"}>${(customer&&resolvePortalLink(customer).hasActiveShare)?"Kundenlink aktualisieren":"Stabilen Kundenlink erzeugen"}</button></div>${link?.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}<p class="v2-muted">Bewusster Fallback: <a class="v2-text-link" href="admin.html" target="_blank" rel="noopener noreferrer">Klassischen Admin in neuem Tab oeffnen</a> (startet keinen neuen Kunden).</p></div></section>`;
   }
 
   function renderNewCustomerWizard(){
@@ -4470,6 +4720,9 @@
     const next=byId("wizardNextButton");
     const skip=byId("wizardSkipButton");
     const later=byId("wizardLaterButton");
+    const save=byId("wizardSaveButton");
+    const finish=byId("wizardFinishButton");
+    const isLast=step>=WIZARD_STEPS.length-1;
     if(back)back.disabled=step===0||state.wizardSaving;
     if(later)later.disabled=state.wizardSaving;
     if(skip){
@@ -4477,14 +4730,23 @@
       skip.disabled=state.wizardSaving;
     }
     if(next){
-      next.hidden=step>=WIZARD_STEPS.length-1;
+      next.hidden=isLast;
       next.disabled=state.wizardSaving;
       next.textContent=step===3?"Weiter zur Pruefung":"Weiter";
     }
+    if(save){
+      save.hidden=!isLast;
+      save.disabled=state.wizardSaving;
+    }
+    if(finish){
+      finish.hidden=!isLast;
+      finish.disabled=state.wizardSaving;
+    }
   }
 
-  async function saveWizardDraftCustomer({openAfter=false,silent=false}={}){
+  async function saveWizardDraftCustomer({openAfter=false,silent=false,successMessage=""}={}){
     if(state.wizardSaving||!state.wizardDraft)return null;
+    syncWizardFieldsFromDom();
     const draft=state.wizardDraft;
     const stepCheck=validateWizardStep(0,draft);
     if(!stepCheck.valid){
@@ -4502,6 +4764,14 @@
       renderNewCustomerWizard();
       return null;
     }
+    const programCheck=validateWizardStep(2,draft);
+    if(!programCheck.valid&&state.wizardStep>=2){
+      state.wizardStep=2;
+      state.wizardErrors=programCheck.errors;
+      setWizardMessage("Bitte den Programmpunkt pruefen.","error");
+      renderNewCustomerWizard();
+      return null;
+    }
     state.wizardSaving=true;
     if(!silent)setWizardMessage("Entwurf wird gespeichert ...","saving");
     renderNewCustomerWizard();
@@ -4510,13 +4780,15 @@
       if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
       const existing=customerById(draft.customerId)||customerById(state.wizardSavedCustomerId);
       const fullCustomer=buildCustomerFromWizard(draft,existing);
-      if(existing?.documents)fullCustomer.documents=existing.documents;
+      const previousDocs=wizardRealDocuments(existing||{});
+      fullCustomer.documents=previousDocs;
       await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
       updateLocalCustomer(fullCustomer);
       state.wizardSavedCustomerId=fullCustomer.customerId;
       state.wizardDraft.customerId=fullCustomer.customerId;
+      state.wizardDraft.internalNumber=fullCustomer.internalNumber||fullCustomer.crm?.internalNumber||draft.internalNumber;
       state.wizardSaving=false;
-      if(!silent)setWizardMessage("Entwurf gespeichert.","success");
+      if(!silent)setWizardMessage(successMessage||"Entwurf gespeichert.","success");
       if(openAfter){
         closeNewCustomerWizard({force:true});
         openCustomerDetail(fullCustomer.customerId);
@@ -4531,6 +4803,16 @@
       renderNewCustomerWizard();
       return null;
     }
+  }
+
+  async function wizardFinishCustomer(){
+    const saved=await saveWizardDraftCustomer({silent:true});
+    if(!saved)return null;
+    state.detailFlashMessage=WIZARD_SUCCESS_MESSAGE;
+    state.detailFlashKind="success";
+    closeNewCustomerWizard({force:true});
+    openCustomerDetail(saved.customerId);
+    return saved;
   }
 
   async function wizardGoNext(){
@@ -4569,22 +4851,29 @@
 
   function wizardSkipProgram(){
     if(state.wizardStep!==2)return;
-    state.wizardDraft.programSkip=true;
-    state.wizardDraft.programTitle="";
-    state.wizardDraft.programTime="";
-    state.wizardDraft.programLocation="";
-    state.wizardDraft.programDescription="";
+    Object.assign(state.wizardDraft,defaultWizardProgramFields(),{programSkip:true});
     wizardGoNext();
   }
 
   function syncWizardFieldsFromDom(){
     if(!state.wizardDraft)return;
+    const ages=[];
     all("[data-wizard-field]").forEach(field=>{
       const name=field.dataset.wizardField;
       if(!name)return;
+      if(name.startsWith("childAge-")){
+        const index=Number(name.split("-")[1]);
+        if(!Number.isNaN(index))ages[index]=field.value;
+        return;
+      }
       if(field.type==="checkbox")state.wizardDraft[name]=field.checked;
       else state.wizardDraft[name]=field.value;
     });
+    if(ages.length||wholeNumberValue(state.wizardDraft.children)>0){
+      const childCount=wholeNumberValue(state.wizardDraft.children)||0;
+      state.wizardDraft.childAges=Array.from({length:childCount},(_,index)=>cleanValue(ages[index]??arrayValue(state.wizardDraft.childAges)[index]));
+    }
+    state.wizardDraft.phone=composeWizardPhone(state.wizardDraft);
   }
 
   function handleWizardInput(event){
@@ -4598,7 +4887,22 @@
       if(error)error.remove();
       field.setAttribute("aria-invalid","false");
     }
-    if(field.type==="checkbox"&&name==="programSkip")renderNewCustomerWizard();
+    if(name&&name.startsWith("childAge-")){
+      const key=`childAge${name.split("-")[1]}`;
+      if(state.wizardErrors[key])delete state.wizardErrors[key];
+    }
+    if(name==="children"){
+      const childCount=wholeNumberValue(field.value)||0;
+      const ages=Array.isArray(state.wizardDraft.childAges)?[...state.wizardDraft.childAges]:ageListFromValue(state.wizardDraft.childAges);
+      state.wizardDraft.childAges=Array.from({length:childCount},(_,index)=>ages[index]||"");
+      renderNewCustomerWizard();
+      return;
+    }
+    if(name==="adults"||name?.startsWith("childAge-")){
+      const preview=byId("wizardTravelerPreview");
+      if(preview)preview.textContent=travelerSummary(state.wizardDraft.adults,state.wizardDraft.children,state.wizardDraft.childAges);
+    }
+    if(field.type==="checkbox"&&(name==="programSkip"||name==="programAllDay"))renderNewCustomerWizard();
   }
 
   async function wizardPublish(){
@@ -4651,14 +4955,18 @@
       saveWizardDraftCustomer({openAfter:true});
       return;
     }
-    if(action==="save-draft"){
-      saveWizardDraftCustomer();
+    if(action==="save"||action==="save-draft"){
+      saveWizardDraftCustomer({successMessage:action==="save"?"Daten gespeichert.":""});
+      return;
+    }
+    if(action==="finish"){
+      wizardFinishCustomer();
       return;
     }
     if(action==="open-customer"){
       const id=state.wizardSavedCustomerId||state.wizardDraft?.customerId;
       if(!id){
-        saveWizardDraftCustomer({openAfter:true});
+        saveWizardDraftCustomer({openAfter:true,successMessage:WIZARD_SUCCESS_MESSAGE});
         return;
       }
       closeNewCustomerWizard({force:true});
@@ -4991,7 +5299,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

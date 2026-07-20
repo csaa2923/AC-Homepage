@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=22/);
-    assert.match(html,/admin-v2\.js\?v=21/);
+    assert.match(html,/admin-v2\.css\?v=23/);
+    assert.match(html,/admin-v2\.js\?v=22/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -111,7 +111,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/Anforderungen \/ Wuensche/);
     assert.match(js,/role="tablist"/);
     assert.match(js,/aria-selected="\$\{key===tab\?"true":"false"\}"/);
-    assert.match(js,/tab==="programm"\?programTabMarkup\(customer\):tab==="dokumente"\?documentsTabMarkup\(customer\):placeholderTabMarkup\(\)/);
+    assert.match(js,/tab==="programm"\?programTabMarkup\(customer\):tab==="dokumente"\?documentsTabMarkup\(customer\):tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.doesNotMatch(js,/Familie Mueller|Familie Rossi|Herr Schneider|mockCustomers|Mock-Daten/i);
     assert.match(js,/data-customer-edit-action="edit">Bearbeiten/);
   });
@@ -119,7 +119,7 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("renders the trip tab read-only from the already loaded customer object",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(js,/tab==="reise"\?tripTabMarkup\(customer\):tab==="programm"\?programTabMarkup\(customer\):tab==="dokumente"\?documentsTabMarkup\(customer\):placeholderTabMarkup\(\)/);
+    assert.match(js,/tab==="reise"\?tripTabMarkup\(customer\):tab==="programm"\?programTabMarkup\(customer\):tab==="dokumente"\?documentsTabMarkup\(customer\):tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function buildTripViewModel\(customer\)/);
     assert.match(js,/function tripTabMarkup\(customer\)/);
     assert.match(js,/const travel=objectValue\(customer\.travel,customer\.trip,customer\.tripData,customer\.travelData,customer\.journey,customer\.reise,customer\.profile\?\.travel\)/);
@@ -198,7 +198,6 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/next\.childAges=values\.childAges/);
     assert.match(js,/next\.childrenAges=values\.childAges/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
-    assert.doesNotMatch(js,/\.publishCustomer\(|createPortalShare\(|revokePortalShare\(/);
   });
 
   it("activates the program tab with editable itinerary days and items",()=>{
@@ -304,7 +303,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/documentEditMode:false/);
     assert.match(js,/let documentSavePromise=null/);
     assert.match(js,/const DOCUMENT_CATEGORIES=\["Flug","Hotel","Restaurant","Aktivitaet","Transfer","Mietwagen","Ticket","Voucher","Versicherung","Rechnung","Reisepass","Visum","Sonstiges"\]/);
-    assert.match(js,/const DOCUMENT_TYPES=\["PDF","Bild","QR-Code","Link","Text","Dokument"\]/);
+    assert.match(js,/const DOCUMENT_TYPES=\["PDF","Bild","Ticket","Voucher","Boarding Pass","Rechnung","Vertrag","Versicherung","Hotel","Flug","Transfer","Restaurant","QR-Code","Link","Sonstiges","Text","Dokument"\]/);
     assert.match(js,/const DOCUMENT_ASSIGNMENTS=\["Reise","Programmpunkt","Buchung"\]/);
     assert.match(js,/function normalizeDocumentItem\(item,index=0\)/);
     assert.match(js,/categoryCandidate=firstValue\(doc\.category,doc\.documentCategory,DOCUMENT_CATEGORIES\.includes\(doc\.type\)\?doc\.type:"","Sonstiges"\)/);
@@ -326,7 +325,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/data-document-edit-action="edit">Dokumente bearbeiten/);
     assert.match(js,/documentSelect\(prefix,"category","Kategorie",doc\.category,DOCUMENT_CATEGORIES/);
     assert.match(js,/documentSelect\(prefix,"documentType","Dokumenttyp",doc\.documentType,DOCUMENT_TYPES/);
-    assert.match(js,/documentSelect\(prefix,"visibility","Sichtbarkeit",doc\.visibility\|\|"Kundenportal",DOCUMENT_VISIBILITIES/);
+    assert.match(js,/documentVisibilityToggle\(prefix,doc\.visibility\|\|"Kundenportal",index\)/);
+    assert.match(js,/Kundenportal AN/);
+    assert.match(js,/Kundenportal AUS/);
     assert.match(js,/documentSelect\(prefix,"assignmentType","Zuordnung",doc\.assignmentType\|\|"Reise",DOCUMENT_ASSIGNMENTS/);
     assert.match(js,/documentInput\(prefix,"programItemId","Programmpunkt",doc\.programItemId/);
     assert.match(js,/documentInput\(prefix,"bookingId","Buchung",doc\.bookingId/);
@@ -353,8 +354,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=22/);
-    assert.match(html,/firebase-database\.js"><\/script>\s*<script src="firebase-storage\.js\?v=3"><\/script>\s*<script src="admin-v2\.js\?v=21"><\/script>/);
+    assert.match(html,/admin-v2\.css\?v=23/);
+    assert.match(html,/portal-share-library\.js\?v=2/);
+    assert.match(html,/publish-workflow\.js\?v=4/);
+    assert.match(html,/firebase-database\.js"><\/script>\s*<script src="firebase-storage\.js\?v=3"><\/script>\s*<script src="admin-v2\.js\?v=22"><\/script>/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/const DOCUMENT_MIME_TYPES=new Set\(\[/);
     assert.match(js,/const DOCUMENT_EXTENSIONS=new Set\(\["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx"\]\)/);
@@ -387,7 +390,6 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-file-input/);
     assert.doesNotMatch(js,/uploadBytesResumable\(|getDownloadURL\(|ref\(ready\.storage/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
-    assert.doesNotMatch(js,/\.publishCustomer\(|createPortalShare\(|revokePortalShare\(/);
   });
 
   it("analyzes document links, quality, duplicates, missing documents and expiry locally",()=>{
@@ -427,8 +429,44 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-document-suggestion/);
     assert.match(css,/\.v2-document-issues/);
     assert.match(css,/\.v2-document-quality-grid/);
-    assert.match(css,/\.v2-document-controls\{display:grid;grid-template-columns:2fr repeat\(4,minmax\(150px,1fr\)\)/);
+    assert.match(css,/\.v2-document-controls\{display:grid;grid-template-columns:2fr repeat\(6,minmax\(140px,1fr\)\)/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
+  });
+
+  it("integrates publication and secure portal links through existing facades only",()=>{
+    const html=readProjectFile("customer-portal/admin-v2.html");
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(html,/redact-allowlist\.js\?v=2/);
+    assert.match(html,/redact-public-snapshot\.js\?v=2/);
+    assert.match(html,/portal-share-library\.js\?v=2/);
+    assert.match(html,/publish-workflow\.js\?v=4/);
+    assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
+    assert.match(js,/function publicationTabMarkup\(customer\)/);
+    assert.match(js,/function publishCustomerV2\(\)/);
+    assert.match(js,/db\.publishCustomer\(clone\(publishCandidate\),meta\)/);
+    assert.match(js,/function createPortalShareV2\(\)/);
+    assert.match(js,/db\.createPortalShare\(clone\(customer\)\)/);
+    assert.match(js,/function revokePortalShareV2\(\)/);
+    assert.match(js,/db\.revokePortalShare\(share\.shareId\)/);
+    assert.match(js,/function buildShareLink\(shareId,rawToken\)/);
+    assert.match(js,/function secureShareUrl\(url\)/);
+    assert.match(js,/parsed\.searchParams\.get\("share"\)/);
+    assert.match(js,/parsed\.searchParams\.get\("token"\)/);
+    assert.match(js,/parsed\.searchParams\.get\("customer"\)/);
+    assert.match(js,/sessionStorage\.getItem\(SHARE_TOKEN_KEY\)/);
+    assert.match(js,/Portal-Vorschau oeffnen/);
+    assert.match(js,/Kundenportal oeffnen/);
+    assert.match(js,/Sicheren Link kopieren/);
+    assert.match(js,/Sicheren Link erzeugen/);
+    assert.match(js,/Share-Link widerrufen/);
+    assert.match(js,/publicationWarnings\(customer\)/);
+    assert.match(js,/Aenderungen seit letzter Veroeffentlichung/);
+    assert.match(css,/\.v2-publication-overview/);
+    assert.match(css,/\.v2-share-link/);
+    assert.match(css,/\.v2-warning-list/);
+    assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
+    assert.doesNotMatch(js,/uploadBytesResumable\(|getDownloadURL\(|ref\(ready\.storage/);
   });
 
   it("saves program edits through the existing draft facade without direct Firestore",()=>{
@@ -445,7 +483,6 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/state\.programEditMode&&programEditFingerprint/);
     assert.match(js,/hasDirtyCustomerEdit\(\)\|\|hasDirtyTripEdit\(\)\|\|hasDirtyProgramEdit\(\)/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
-    assert.doesNotMatch(js,/\.publishCustomer\(|createPortalShare\(|revokePortalShare\(/);
   });
 
   it("normalizes dates, statuses and partial legacy trip data without mutating storage",()=>{
@@ -475,7 +512,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/Zur Kundenuebersicht/);
   });
 
-  it("uses the existing draft save facade without direct Firestore, publish or share flows",()=>{
+  it("uses the existing draft save facade without direct Firestore in edit flows",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     assert.match(js,/admin\.html\?newCustomer=1#master-data/);
     assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
@@ -483,9 +520,6 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const next=clone\(customer\)/);
     assert.match(js,/updateLocalCustomer\(fullCustomer\)/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
-    assert.doesNotMatch(js,/\.publishCustomer\(/);
-    assert.doesNotMatch(js,/createPortalShare\(/);
-    assert.doesNotMatch(js,/revokePortalShare\(/);
   });
 
   it("supports controlled customer edit mode, cancel, dirty warning and validation",()=>{

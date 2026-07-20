@@ -45,9 +45,14 @@
     documentAssignment:"",
     documentSort:"uploaded",
     documentQuality:"",
+    documentVisibility:"",
+    documentTypeFilter:"",
     documentUploadCustomerId:"",
     documentUploads:[],
-    documentDropActive:false
+    documentDropActive:false,
+    publicationSaving:false,
+    publicationMessage:"",
+    publicationMessageKind:""
   };
 
   const byId=id=>document.getElementById(id);
@@ -68,6 +73,8 @@
   const TECHNICAL_LOGIN_ERROR="Die Anmeldung konnte nicht abgeschlossen werden. Bitte erneut versuchen.";
   const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung für den Adminbereich.";
   const CUSTOMER_NOT_FOUND_ERROR="Der ausgewaehlte Kunde konnte nicht gefunden werden.";
+  const PUBLISH_EDITOR="Alpine Concierge Tirol";
+  const SHARE_TOKEN_KEY="act_portal_share_session";
   const detailTabs=[
     ["kunde","Kunde"],
     ["reise","Reise"],
@@ -81,6 +88,7 @@
   let tripSavePromise=null;
   let programSavePromise=null;
   let documentSavePromise=null;
+  let publicationPromise=null;
   let uploadSequence=0;
 
   function escapeHtml(value){
@@ -211,9 +219,10 @@
 
   function badgeClass(value){
     const text=String(value||"");
-    if(/veröffentlicht|published|aktiv/i.test(text))return "green";
+    if(/veröffentlicht|published|aktiv|kundenportal|sichtbar|vollstaendig/i.test(text)||normalizeText(text).includes("vollstandig"))return "green";
     if(/entwurf|draft|anfrage|offen|prüfung/i.test(text))return "amber";
-    if(/abgeschlossen|intern/i.test(text))return "blue";
+    if(/intern|widerrufen|nicht sichtbar/i.test(text))return "gray";
+    if(/abgeschlossen/i.test(text))return "blue";
     return "rose";
   }
 
@@ -863,7 +872,7 @@
   const PROGRAM_PRIORITIES=["","Highlight","Empfehlenswert","Optional","Schlechtwetteralternative"];
   const PROGRAM_CURRENCIES=["EUR","CHF","USD","GBP"];
   const DOCUMENT_CATEGORIES=["Flug","Hotel","Restaurant","Aktivitaet","Transfer","Mietwagen","Ticket","Voucher","Versicherung","Rechnung","Reisepass","Visum","Sonstiges"];
-  const DOCUMENT_TYPES=["PDF","Bild","QR-Code","Link","Text","Dokument"];
+  const DOCUMENT_TYPES=["PDF","Bild","Ticket","Voucher","Boarding Pass","Rechnung","Vertrag","Versicherung","Hotel","Flug","Transfer","Restaurant","QR-Code","Link","Sonstiges","Text","Dokument"];
   const DOCUMENT_VISIBILITIES=["Kundenportal","Intern"];
   const DOCUMENT_ASSIGNMENTS=["Reise","Programmpunkt","Buchung"];
   const DOCUMENT_QUALITY_FILTERS=["","Vollstaendig","Hinweise","Kritisch","Nicht zugeordnet","Doppelt","Abgelaufen","Laeuft bald ab"];
@@ -1915,7 +1924,8 @@
 
   function documentAttachmentLink(doc){
     const url=documentOpenUrl(doc);
-    return url?`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`:`<span>${escapeHtml(doc.title||doc.fileName||"Dokument")}</span>`;
+    const label=`<strong>${escapeHtml(doc.title||doc.fileName||"Dokument")}</strong><span>${escapeHtml([doc.documentType,doc.visibility].filter(Boolean).join(" · "))}</span>`;
+    return url?`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`:`<span>${label}</span>`;
   }
 
   function documentMatchesProgramItem(doc,item){
@@ -2082,6 +2092,12 @@
     return records.filter(({doc,quality})=>{
       if(state.documentCategory&&doc.category!==state.documentCategory)return false;
       if(state.documentAssignment&&doc.assignmentType!==state.documentAssignment)return false;
+      if(state.documentVisibility==="visible"&&(doc.visibility==="Intern"||doc.visible===false))return false;
+      if(state.documentVisibility==="internal"&&doc.visibility!=="Intern"&&doc.visible!==false)return false;
+      if(state.documentTypeFilter==="pdf"&&normalizeText(doc.documentType)!=="pdf")return false;
+      if(state.documentTypeFilter==="image"&&normalizeText(doc.documentType)!=="bild")return false;
+      if(state.documentTypeFilter==="ticket"&&!/ticket|boarding/i.test(`${doc.category} ${doc.documentType}`))return false;
+      if(state.documentTypeFilter==="voucher"&&!/voucher/i.test(`${doc.category} ${doc.documentType}`))return false;
       if(state.documentQuality){
         if(state.documentQuality==="Vollstaendig"&&!quality.complete)return false;
         if(state.documentQuality==="Hinweise"&&quality.label!=="Hinweise")return false;
@@ -2105,6 +2121,365 @@
     return {total:docs.length,pdf,images,tickets,vouchers,...quality};
   }
 
+  function publishWorkflow(){
+    return window.ACTPublishWorkflow||null;
+  }
+
+  function formatPublishDateTime(value){
+    const workflow=publishWorkflow();
+    if(workflow?.formatPublishDateTime)return workflow.formatPublishDateTime(value);
+    const date=dateValue(value);
+    if(!date)return value?String(value):"Nicht veroeffentlicht";
+    return new Intl.DateTimeFormat("de-DE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(date);
+  }
+
+  function draftComparison(customer){
+    const workflow=publishWorkflow();
+    if(workflow?.compareDraftVsPublished)return workflow.compareDraftVsPublished(customer,customer?.publishedSnapshot||null);
+    return {changes:[],count:isPublished(customer)&&customer?.publishedSnapshot?0:1};
+  }
+
+  function publicationStatus(customer){
+    const workflow=publishWorkflow();
+    if(workflow?.getPublishStatus)return workflow.getPublishStatus(customer,customer?.publishedSnapshot||null,customer?.publishMeta||{});
+    const comparison=draftComparison(customer);
+    if(!customer?.publishedSnapshot)return {key:"draft",label:"Entwurf",changeCount:comparison.count,message:"Noch keine Live-Version veroeffentlicht."};
+    if(comparison.count)return {key:"pending",label:"Aenderungen seit letzter Veroeffentlichung",changeCount:comparison.count,message:`${comparison.count} Bereiche geaendert.`};
+    return {key:"live",label:"Veroeffentlicht",changeCount:0,message:"Live-Version aktuell."};
+  }
+
+  function portalShareLibrary(){
+    return window.ACTPortalShareLibrary||null;
+  }
+
+  function loadShareTokens(){
+    try{return JSON.parse(sessionStorage.getItem(SHARE_TOKEN_KEY)||"{}");}catch(error){
+      return {};
+    }
+  }
+
+  function saveShareToken(customerId,data){
+    const id=String(customerId||"");
+    if(!id)return;
+    const all=loadShareTokens();
+    if(data)all[id]=data;
+    else delete all[id];
+    sessionStorage.setItem(SHARE_TOKEN_KEY,JSON.stringify(all));
+  }
+
+  function activeShareToken(customerId){
+    return loadShareTokens()[String(customerId||"")]||null;
+  }
+
+  function secureShareUrl(url){
+    const raw=cleanValue(url);
+    if(!raw)return "";
+    try{
+      const parsed=new URL(raw,window.location.href);
+      if(!["http:","https:"].includes(parsed.protocol))return "";
+      if(!parsed.searchParams.get("share")||!parsed.searchParams.get("token"))return "";
+      if(parsed.searchParams.get("customer"))return "";
+      return parsed.href;
+    }catch(error){
+      return "";
+    }
+  }
+
+  function buildShareLink(shareId,rawToken){
+    const lib=portalShareLibrary();
+    return secureShareUrl(lib?.buildShareUrl?.(shareId,rawToken)||"");
+  }
+
+  function customerShareMeta(customer){
+    return customer?.publishMeta?.activePortalShare||null;
+  }
+
+  function portalPreviewUrl(customer){
+    const id=customer?.customerId||"";
+    const href=window.location.href.split("#")[0].split("?")[0];
+    const base=href.replace(/admin-v2\.html$/i,"index.html").replace(/admin\.html$/i,"index.html");
+    const params=new URLSearchParams();
+    params.set("customer",id);
+    params.set("admin","1");
+    return `${base}?${params.toString()}`;
+  }
+
+  function issuePortalPreviewGrant(customer){
+    const lib=portalShareLibrary();
+    if(lib?.issueAdminPreviewGrant)lib.issueAdminPreviewGrant(customer?.customerId||"");
+  }
+
+  function resolvePortalLink(customer){
+    if(!isPublished(customer)){
+      return {status:"draft",url:"",display:"",hint:"Bitte zuerst veroeffentlichen und danach einen sicheren Link erzeugen.",canOpen:false,canCopy:false};
+    }
+    const sessionShare=activeShareToken(customer.customerId);
+    if(sessionShare?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen.",canOpen:false,canCopy:false};
+    const sessionUrl=secureShareUrl(sessionShare?.shareUrl);
+    if(sessionUrl)return {status:"active",url:sessionUrl,display:sessionUrl,hint:`Aktiver sicherer Link${sessionShare.publishedVersionId?` fuer Version ${sessionShare.publishedVersionId}`:""}.`,canOpen:true,canCopy:true};
+    const meta=customerShareMeta(customer);
+    if(meta?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen.",canOpen:false,canCopy:false};
+    if(meta?.shareId)return {status:"session-lost",url:"",display:"",hint:"Ein sicherer Share-Link existiert, der Token ist in dieser Sitzung aber nicht mehr verfuegbar. Bitte neuen Link erzeugen.",canOpen:false,canCopy:false};
+    return {status:"none",url:"",display:"",hint:"Noch kein sicherer Kundenportal-Link erzeugt.",canOpen:false,canCopy:false};
+  }
+
+  function setPublicationMessage(message,kind=""){
+    state.publicationMessage=message||"";
+    state.publicationMessageKind=kind;
+    const el=byId("publicationStatusMessage");
+    if(el){
+      el.textContent=state.publicationMessage;
+      el.dataset.kind=kind;
+    }
+  }
+
+  function updatePublicationActions(){
+    all("[data-publication-action]").forEach(button=>{
+      button.disabled=state.publicationSaving;
+      button.setAttribute("aria-busy",state.publicationSaving?"true":"false");
+    });
+  }
+
+  function publicationWarnings(customer){
+    const warnings=[];
+    const docs=normalizedDocuments(customer);
+    const analysis=documentAnalysis(customer);
+    const status=publicationStatus(customer);
+    const internalDocs=docs.filter(doc=>doc.visibility==="Intern"||doc.visible===false).length;
+    if(internalDocs)warnings.push(`${internalDocs} interne Dokumente werden nicht im Kundenportal angezeigt.`);
+    if(status.key==="pending")warnings.push("Es gibt Aenderungen seit der letzten Veroeffentlichung.");
+    if(isPublished(customer)&&!resolvePortalLink(customer).canOpen)warnings.push("Es ist kein kopierbarer sicherer Share-Link in dieser Sitzung verfuegbar.");
+    if(analysis.missing.length)warnings.push(`${analysis.missing.length} erwartete Dokumente fehlen bei Programmpunkten.`);
+    if(analysis.expiry.expired)warnings.push(`${analysis.expiry.expired} Dokumente sind abgelaufen.`);
+    if(analysis.expiry.thirty)warnings.push(`${analysis.expiry.thirty} Dokumente laufen innerhalb von 30 Tagen ab.`);
+    return warnings;
+  }
+
+  function portalButton(label,action,{primary=false,disabled=false}={}){
+    return `<button class="v2-button ${primary?"primary":"soft"}" type="button" data-publication-action="${escapeHtml(action)}" ${disabled||state.publicationSaving?"disabled":""}>${escapeHtml(label)}</button>`;
+  }
+
+  function publicationTabMarkup(customer){
+    const status=publicationStatus(customer);
+    const link=resolvePortalLink(customer);
+    const warnings=publicationWarnings(customer);
+    const lastPublished=customer.publishMeta?.lastPublishedAt||customer.publishMeta?.publishedAt;
+    const publisher=customer.publishMeta?.lastPublisher||customer.publishMeta?.publisher||"Nicht hinterlegt";
+    return `
+      <section class="v2-publication-overview">
+        <div class="v2-tab-actions">
+          ${portalButton("Jetzt veroeffentlichen","publish",{primary:true})}
+          <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Im klassischen Admin oeffnen</a>
+          <span class="v2-edit-status ${escapeHtml(state.publicationMessageKind)}" id="publicationStatusMessage" aria-live="polite">${escapeHtml(state.publicationMessage)}</span>
+        </div>
+        <article class="v2-publication-hero">
+          <div>
+            <p class="v2-eyebrow">Veroeffentlichung</p>
+            <h3>${escapeHtml(status.label||publicationState(customer))}</h3>
+            <p>${escapeHtml(status.message||"Status wird aus der bestehenden Publish-Logik berechnet.")}</p>
+            <div class="v2-meta">${badge(publicationState(customer))}${status.changeCount?badge("Aenderungen seit letzter Veroeffentlichung"):badge("Live-Version aktuell")}</div>
+          </div>
+          <div class="v2-publication-facts">
+            ${summaryItem("Letzte Veroeffentlichung",formatPublishDateTime(lastPublished))}
+            ${summaryItem("Veroeffentlicht von",displayValue(publisher))}
+            ${summaryItem("Version",displayValue(customer.publishMeta?.version||customer.version,"1.0"))}
+          </div>
+        </article>
+        <article class="v2-panel">
+          <div class="v2-panel-head">
+            <div>
+              <p class="v2-eyebrow">Kundenportal</p>
+              <h3>Sicherer Zugang</h3>
+            </div>
+            ${badge(link.status==="active"?"Sicherer Link aktiv":link.status==="revoked"?"Widerrufen":"Link fehlt")}
+          </div>
+          <p>${escapeHtml(link.hint)}</p>
+          ${link.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}
+          <div class="v2-document-actions">
+            ${portalButton("Portal-Vorschau oeffnen","preview")}
+            ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
+            ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
+            ${portalButton("Sicheren Link erzeugen","create-share",{primary:!link.canOpen,disabled:!isPublished(customer)})}
+            ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
+          </div>
+        </article>
+        <article class="v2-panel">
+          <div class="v2-panel-head">
+            <div>
+              <p class="v2-eyebrow">Pruefung vor Publish</p>
+              <h3>Hinweise</h3>
+            </div>
+            ${badge(warnings.length?"Hinweise":"Vollstaendig")}
+          </div>
+          ${warnings.length?`<ul class="v2-warning-list">${warnings.map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>`:`<p>Keine kritischen Hinweise fuer die Veroeffentlichungsansicht.</p>`}
+        </article>
+      </section>
+    `;
+  }
+
+  async function publishCustomerV2(){
+    if(state.publicationSaving||publicationPromise)return publicationPromise;
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return null;
+    state.publicationSaving=true;
+    setPublicationMessage("Veroeffentlichung wird vorbereitet ...","saving");
+    updatePublicationActions();
+    publicationPromise=(async()=>{
+      try{
+        const db=window.ACTFirebaseDatabase;
+        if(!db?.publishCustomer)throw new Error("Publish-Funktion ist nicht verfuegbar.");
+        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        const workflow=publishWorkflow();
+        const comparison=draftComparison(customer);
+        const nextVersion=workflow?.bumpVersion?workflow.bumpVersion(customer.version||"1.0"):customer.version||"1.0";
+        const publishCandidate=clone(customer);
+        publishCandidate.version=nextVersion;
+        publishCandidate.publicationState="Veröffentlicht";
+        publishCandidate.publishStatus="published";
+        publishCandidate.updatedAt=new Date().toLocaleDateString("de-DE");
+        const meta={version:nextVersion,comment:"Admin V2",publisher:PUBLISH_EDITOR,publishedAt:new Date().toISOString(),changes:comparison.changes||[]};
+        const result=await withTimeout(db.publishCustomer(clone(publishCandidate),meta),AUTH_TIMEOUT_MS,"publishCustomer");
+        publishCandidate.publishedSnapshot=result?.publishedData||publishCandidate.publishedSnapshot||null;
+        publishCandidate.publishMeta={...(publishCandidate.publishMeta||{}),...(result?.publishMeta||{}),publishError:""};
+        updateLocalCustomer(compactObject(publishCandidate));
+        state.publicationSaving=false;
+        setPublicationMessage("Veroeffentlichung erfolgreich abgeschlossen.","success");
+        render();
+        return publishCandidate;
+      }catch(error){
+        console.error("[ACT Admin V2] Veroeffentlichung:",error&&error.message?error.message:"Fehler");
+        state.publicationSaving=false;
+        setPublicationMessage("Die Veroeffentlichung konnte nicht abgeschlossen werden. Bitte erneut versuchen.","error");
+        updatePublicationActions();
+        return null;
+      }finally{
+        publicationPromise=null;
+      }
+    })();
+    return publicationPromise;
+  }
+
+  async function createPortalShareV2(){
+    if(state.publicationSaving||publicationPromise)return publicationPromise;
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return null;
+    state.publicationSaving=true;
+    setPublicationMessage("Sicherer Link wird erzeugt ...","saving");
+    updatePublicationActions();
+    publicationPromise=(async()=>{
+      try{
+        const db=window.ACTFirebaseDatabase;
+        if(!db?.createPortalShare)throw new Error("Share-Funktion ist nicht verfuegbar.");
+        if(!isPublished(customer)||!customer.publishedSnapshot)throw new Error("Bitte zuerst veroeffentlichen.");
+        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        const result=await withTimeout(db.createPortalShare(clone(customer)),AUTH_TIMEOUT_MS,"createPortalShare");
+        const shareUrl=buildShareLink(result.shareId,result.rawToken);
+        if(!shareUrl)throw new Error("Der sichere Link konnte nicht aufgebaut werden.");
+        saveShareToken(customer.customerId,{shareId:result.shareId,shareUrl,createdAt:result.createdAt||new Date().toISOString(),publishedVersionId:result.publishedVersionId||customer.version||"1.0",status:"active"});
+        const next=clone(customer);
+        next.publishMeta={...(next.publishMeta||{}),activePortalShare:{shareId:result.shareId,createdAt:result.createdAt||new Date().toISOString(),publishedVersionId:result.publishedVersionId||customer.version||"1.0",status:"active"}};
+        updateLocalCustomer(next);
+        state.publicationSaving=false;
+        setPublicationMessage("Sicherer Link wurde erzeugt und kann jetzt kopiert werden.","success");
+        render();
+        return shareUrl;
+      }catch(error){
+        console.error("[ACT Admin V2] Share-Link erzeugen:",error&&error.message?error.message:"Fehler");
+        state.publicationSaving=false;
+        setPublicationMessage(error&&error.message?error.message:"Share-Link konnte nicht erzeugt werden.","error");
+        updatePublicationActions();
+        return null;
+      }finally{
+        publicationPromise=null;
+      }
+    })();
+    return publicationPromise;
+  }
+
+  async function revokePortalShareV2(){
+    if(state.publicationSaving||publicationPromise)return publicationPromise;
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return null;
+    const share=activeShareToken(customer.customerId)||customerShareMeta(customer);
+    if(!share?.shareId){
+      setPublicationMessage("Kein aktiver Share-Link vorhanden.","error");
+      return null;
+    }
+    if(!window.confirm("Diesen sicheren Portal-Link wirklich widerrufen? Bereits versendete Links funktionieren danach nicht mehr."))return null;
+    state.publicationSaving=true;
+    setPublicationMessage("Share-Link wird widerrufen ...","saving");
+    updatePublicationActions();
+    publicationPromise=(async()=>{
+      try{
+        const db=window.ACTFirebaseDatabase;
+        if(!db?.revokePortalShare)throw new Error("Share-Widerruf ist nicht verfuegbar.");
+        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        await withTimeout(db.revokePortalShare(share.shareId),AUTH_TIMEOUT_MS,"revokePortalShare");
+        saveShareToken(customer.customerId,{shareId:share.shareId,status:"revoked",shareUrl:null,revokedAt:new Date().toISOString()});
+        const next=clone(customer);
+        next.publishMeta={...(next.publishMeta||{}),activePortalShare:{...(next.publishMeta?.activePortalShare||{}),shareId:share.shareId,status:"revoked",revokedAt:new Date().toISOString()}};
+        updateLocalCustomer(next);
+        state.publicationSaving=false;
+        setPublicationMessage("Share-Link wurde widerrufen.","success");
+        render();
+        return true;
+      }catch(error){
+        console.error("[ACT Admin V2] Share-Link widerrufen:",error&&error.message?error.message:"Fehler");
+        state.publicationSaving=false;
+        setPublicationMessage("Share-Link konnte nicht widerrufen werden. Bitte erneut versuchen.","error");
+        updatePublicationActions();
+        return null;
+      }finally{
+        publicationPromise=null;
+      }
+    })();
+    return publicationPromise;
+  }
+
+  function openPortalPreviewV2(){
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return;
+    issuePortalPreviewGrant(customer);
+    window.open(portalPreviewUrl(customer),"_blank","noopener");
+  }
+
+  function openPortalLinkV2(){
+    const customer=customerById(state.selectedCustomerId);
+    const link=customer?resolvePortalLink(customer):null;
+    if(link?.canOpen&&link.url){
+      window.open(link.url,"_blank","noopener");
+      return;
+    }
+    setPublicationMessage(link?.hint||"Bitte zuerst einen sicheren Link erzeugen.","error");
+  }
+
+  async function copyPortalLinkV2(){
+    const customer=customerById(state.selectedCustomerId);
+    const link=customer?resolvePortalLink(customer):null;
+    if(!link?.canCopy||!link.url){
+      setPublicationMessage(link?.hint||"Bitte zuerst einen sicheren Link erzeugen.","error");
+      return false;
+    }
+    try{
+      await navigator.clipboard.writeText(link.url);
+    }catch(error){
+      const input=document.createElement("textarea");
+      input.value=link.url;
+      input.setAttribute("readonly","");
+      input.style.position="fixed";
+      input.style.left="-9999px";
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+    }
+    setPublicationMessage("Sicherer Link wurde kopiert.","success");
+    return true;
+  }
+
   function renderDocuments(){
     const root=byId("documentsRoot");
     if(!root)return;
@@ -2112,6 +2487,8 @@
     const categories=[["","Alle Kategorien"],...DOCUMENT_CATEGORIES.map(value=>[value,value])];
     const assignments=[["","Alle Zuordnungen"],...DOCUMENT_ASSIGNMENTS.map(value=>[value,value])];
     const qualities=DOCUMENT_QUALITY_FILTERS.map(value=>[value,value||"Alle Status"]);
+    const visibilities=[["","Alle"],["visible","Nur sichtbar"],["internal","Nur intern"]];
+    const typeFilters=[["","Alle Typen"],["pdf","Nur PDF"],["image","Nur Bilder"],["ticket","Nur Tickets"],["voucher","Nur Voucher"]];
     const summary=allDocumentQualitySummary();
     root.innerHTML=`
       <section class="v2-document-page">
@@ -2132,6 +2509,12 @@
           </label>
           <label>Zuordnung
             <select id="documentAssignmentFilter">${assignments.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===state.documentAssignment?"selected":""}>${escapeHtml(label)}</option>`).join("")}</select>
+          </label>
+          <label>Sichtbarkeit
+            <select id="documentVisibilityFilter">${visibilities.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===state.documentVisibility?"selected":""}>${escapeHtml(label)}</option>`).join("")}</select>
+          </label>
+          <label>Typ
+            <select id="documentTypeFilter">${typeFilters.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===state.documentTypeFilter?"selected":""}>${escapeHtml(label)}</option>`).join("")}</select>
           </label>
           <label>Status
             <select id="documentQualityFilter">${qualities.map(([value,label])=>`<option value="${escapeHtml(value)}" ${value===state.documentQuality?"selected":""}>${escapeHtml(label)}</option>`).join("")}</select>
@@ -2270,7 +2653,7 @@
           ${documentInput(prefix,"fileName","Dateiname",doc.fileName,{index})}
           ${documentSelect(prefix,"category","Kategorie",doc.category,DOCUMENT_CATEGORIES,{index})}
           ${documentSelect(prefix,"documentType","Dokumenttyp",doc.documentType,DOCUMENT_TYPES,{index})}
-          ${documentSelect(prefix,"visibility","Sichtbarkeit",doc.visibility||"Kundenportal",DOCUMENT_VISIBILITIES,{index})}
+          ${documentVisibilityToggle(prefix,doc.visibility||"Kundenportal",index)}
           ${documentSelect(prefix,"assignmentType","Zuordnung",doc.assignmentType||"Reise",DOCUMENT_ASSIGNMENTS,{index})}
           ${documentInput(prefix,"programItemId","Programmpunkt",doc.programItemId,{index})}
           ${documentInput(prefix,"bookingId","Buchung",doc.bookingId,{index})}
@@ -2302,6 +2685,19 @@
     const id=`${prefix}-${name}`;
     const normalized=normalizeText(value);
     return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-document-index="${index}">${options.map(option=>`<option value="${escapeHtml(option)}" ${normalizeText(option)===normalized?"selected":""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
+  }
+
+  function documentVisibilityToggle(prefix,value,index){
+    const id=`${prefix}-visible`;
+    const visible=value!=="Intern";
+    return `
+      <label class="v2-edit-field v2-visibility-toggle" for="${id}">
+        <span>Sichtbarkeit</span>
+        <input id="${id}" name="visible" type="checkbox" data-document-index="${index}" ${visible?"checked":""}>
+        <strong>${visible?"Kundenportal AN":"Kundenportal AUS"}</strong>
+        <small class="v2-field-hint">${visible?"Dokument ist im Kundenportal sichtbar.":"Dokument bleibt intern."}</small>
+      </label>
+    `;
   }
 
   function loginButton(){
@@ -2752,7 +3148,7 @@
         `).join("")}
       </div>
       <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="dokumente"?documentsTabMarkup(customer):placeholderTabMarkup()}
+        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="dokumente"?documentsTabMarkup(customer):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
       </section>
     `;
   }
@@ -3549,7 +3945,8 @@
     const index=Number(field.dataset.documentIndex);
     const item=state.documentEditDraft.documents?.[index];
     if(!item)return;
-    item[field.name]=field.name==="tags"||field.name==="assignedTo"?normalizeTags(field.value):field.value;
+    item[field.name]=field.name==="tags"||field.name==="assignedTo"?normalizeTags(field.value):field.type==="checkbox"?field.checked:field.value;
+    if(field.name==="visible")item.visibility=field.checked?"Kundenportal":"Intern";
     if(field.name==="visibility")item.visible=field.value!=="Intern";
     const errorKey=`document-${index}-${field.name}`;
     if(state.documentEditErrors[errorKey]){
@@ -3626,6 +4023,17 @@
         if(action==="delete")deleteDocumentEditItem(Number(documentAction.dataset.documentIndex));
         return;
       }
+      const publicationAction=event.target.closest("[data-publication-action]");
+      if(publicationAction){
+        const action=publicationAction.dataset.publicationAction;
+        if(action==="publish")publishCustomerV2();
+        if(action==="preview")openPortalPreviewV2();
+        if(action==="open")openPortalLinkV2();
+        if(action==="copy")copyPortalLinkV2();
+        if(action==="create-share")createPortalShareV2();
+        if(action==="revoke-share")revokePortalShareV2();
+        return;
+      }
       const uploadRetry=event.target.closest("[data-upload-retry]");
       if(uploadRetry){
         retryDocumentUpload(uploadRetry.dataset.uploadRetry);
@@ -3660,6 +4068,8 @@
       handleDocumentEditInput(event);
       if(event.target.id==="documentCategoryFilter"){state.documentCategory=event.target.value;renderDocuments();}
       if(event.target.id==="documentAssignmentFilter"){state.documentAssignment=event.target.value;renderDocuments();}
+      if(event.target.id==="documentVisibilityFilter"){state.documentVisibility=event.target.value;renderDocuments();}
+      if(event.target.id==="documentTypeFilter"){state.documentTypeFilter=event.target.value;renderDocuments();}
       if(event.target.id==="documentQualityFilter"){state.documentQuality=event.target.value;renderDocuments();}
       if(event.target.id==="documentSortSelect"){state.documentSort=event.target.value;renderDocuments();}
       if(event.target.id==="documentUploadCustomerSelect"){state.documentUploadCustomerId=event.target.value;renderDocuments();}

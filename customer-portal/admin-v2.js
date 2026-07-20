@@ -4293,6 +4293,11 @@
     resetTripEditState();
     resetProgramEditState();
     resetDocumentEditState();
+    if(!byId("newCustomerWizard")){
+      setWizardMessage("Wizard-Overlay fehlt. Bitte Admin V2 neu laden.","error");
+      console.error("[ACT Admin V2] newCustomerWizard fehlt im DOM – kein Redirect zum klassischen Admin.");
+      return;
+    }
     state.wizardOpen=true;
     state.wizardStep=0;
     state.wizardDraft=defaultWizardDraft();
@@ -4361,7 +4366,7 @@
     }
     const customer=customerById(state.wizardSavedCustomerId||draft.customerId);
     const link=customer?resolvePortalLink(customer):null;
-    return `<section class="v2-wizard-panel"><h3>6. Abschluss</h3><p>Der Entwurf kann gespeichert, geoeffnet, veroeffentlicht und mit einem sicheren Share-Link versehen werden.</p><div class="v2-wizard-finish"><p><strong>${escapeHtml(wizardCustomerName(draft))}</strong> · ${escapeHtml(draft.tripTitle||"Neue Reise")}</p><div class="v2-document-actions"><button class="v2-button primary" type="button" data-wizard-action="save-draft" ${state.wizardSaving?"disabled":""}>Entwurf speichern</button><button class="v2-button soft" type="button" data-wizard-action="open-customer" ${customer?"":"disabled"}>Kunde oeffnen</button><button class="v2-button soft" type="button" data-wizard-action="publish" ${customer?"":"disabled"}>Veroeffentlichen</button><button class="v2-button soft" type="button" data-wizard-action="create-share" ${customer&&isPublished(customer)?"":"disabled"}>Sicheren Share-Link erzeugen</button></div>${link?.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}<a class="v2-button soft" href="admin.html?newCustomer=1#master-data">Im klassischen Admin oeffnen</a></div></section>`;
+    return `<section class="v2-wizard-panel"><h3>6. Abschluss</h3><p>Der Entwurf kann gespeichert, geoeffnet, veroeffentlicht und mit einem sicheren Share-Link versehen werden.</p><div class="v2-wizard-finish"><p><strong>${escapeHtml(wizardCustomerName(draft))}</strong> · ${escapeHtml(draft.tripTitle||"Neue Reise")}</p><div class="v2-document-actions"><button class="v2-button primary" type="button" data-wizard-action="save-draft" ${state.wizardSaving?"disabled":""}>Entwurf speichern</button><button class="v2-button soft" type="button" data-wizard-action="open-customer" ${customer?"":"disabled"}>Kunde oeffnen</button><button class="v2-button soft" type="button" data-wizard-action="publish" ${customer?"":"disabled"}>Veroeffentlichen</button><button class="v2-button soft" type="button" data-wizard-action="create-share" ${customer&&isPublished(customer)?"":"disabled"}>Sicheren Share-Link erzeugen</button></div>${link?.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}<p class="v2-muted">Bewusster Fallback: <a class="v2-text-link" href="admin.html" target="_blank" rel="noopener noreferrer">Klassischen Admin in neuem Tab oeffnen</a> (startet keinen neuen Kunden).</p></div></section>`;
   }
 
   function renderNewCustomerWizard(){

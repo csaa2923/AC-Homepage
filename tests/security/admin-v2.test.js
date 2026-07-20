@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=25/);
-    assert.match(html,/admin-v2\.js\?v=25/);
+    assert.match(html,/admin-v2\.css\?v=26/);
+    assert.match(html,/admin-v2\.js\?v=26/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -362,11 +362,11 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=25/);
+    assert.match(html,/admin-v2\.css\?v=26/);
     assert.match(html,/portal-share-library\.js\?v=2/);
     assert.match(html,/publish-workflow\.js\?v=4/);
     assert.match(html,/firebase-storage\.js\?v=4/);
-    assert.match(html,/admin-v2\.js\?v=25"><\/script>/);
+    assert.match(html,/admin-v2\.js\?v=26"><\/script>/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/resolveDocumentDownloadUrl/);
@@ -556,9 +556,10 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
+    assert.match(html,/admin-v2\.css\?v=26/);
+    assert.match(html,/admin-v2\.js\?v=26/);
+    assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
-    assert.match(html,/admin-v2\.css\?v=25/);
-    assert.match(html,/admin-v2\.js\?v=25/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
     assert.match(html,/data-wizard-action="back" id="wizardBackButton">Zurueck/);
     assert.match(html,/data-wizard-action="next" id="wizardNextButton">Weiter/);
@@ -594,8 +595,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function syncWizardFieldsFromDom\(\)/);
     assert.doesNotMatch(js,/window\.location\.href="admin\.html\?newCustomer=1#master-data"/);
     assert.doesNotMatch(js,/function openNewCustomer\(\)\{[^}]*location\.href/);
-    assert.match(js,/Im klassischen Admin oeffnen/);
-    assert.match(js,/href="admin\.html\?newCustomer=1#master-data"/);
+    assert.doesNotMatch(js,/href="admin\.html\?newCustomer=1#master-data"/);
+    assert.match(js,/Klassischen Admin in neuem Tab oeffnen/);
+    assert.match(js,/href="admin\.html"/);
   });
 
   it("supports controlled customer edit mode, cancel, dirty warning and validation",()=>{

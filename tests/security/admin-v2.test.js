@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=24/);
-    assert.match(html,/admin-v2\.js\?v=23/);
+    assert.match(html,/admin-v2\.css\?v=25/);
+    assert.match(html,/admin-v2\.js\?v=25/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -362,11 +362,11 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=24/);
+    assert.match(html,/admin-v2\.css\?v=25/);
     assert.match(html,/portal-share-library\.js\?v=2/);
     assert.match(html,/publish-workflow\.js\?v=4/);
     assert.match(html,/firebase-storage\.js\?v=4/);
-    assert.match(html,/admin-v2\.js\?v=24"><\/script>/);
+    assert.match(html,/admin-v2\.js\?v=25"><\/script>/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/resolveDocumentDownloadUrl/);
@@ -546,12 +546,56 @@ describe("admin v2 dashboard and customer overview",()=>{
 
   it("uses the existing draft save facade without direct Firestore in edit flows",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
-    assert.match(js,/admin\.html\?newCustomer=1#master-data/);
     assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
     assert.match(js,/function mergeCustomerEdit\(customer,values\)/);
     assert.match(js,/const next=clone\(customer\)/);
     assert.match(js,/updateLocalCustomer\(fullCustomer\)/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
+  });
+
+  it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const html=readProjectFile("customer-portal/admin-v2.html");
+    assert.match(html,/id="newCustomerWizard"/);
+    assert.match(html,/admin-v2\.css\?v=25/);
+    assert.match(html,/admin-v2\.js\?v=25/);
+    assert.match(html,/data-wizard-action="cancel">Abbrechen/);
+    assert.match(html,/data-wizard-action="back" id="wizardBackButton">Zurueck/);
+    assert.match(html,/data-wizard-action="next" id="wizardNextButton">Weiter/);
+    assert.match(js,/function openNewCustomer\(\)/);
+    assert.match(js,/state\.wizardOpen=true/);
+    assert.match(js,/renderNewCustomerWizard\(\)/);
+    assert.match(js,/byId\("newCustomerWizard"\)/);
+    assert.match(js,/const WIZARD_STEPS=\[/);
+    assert.match(js,/function handleWizardAction\(action\)/);
+    assert.match(js,/function saveWizardDraftCustomer\(/);
+    assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
+    assert.match(js,/function wizardPublish\(\)/);
+    assert.match(js,/publishCustomerV2\(\)/);
+    assert.match(js,/function wizardCreateShare\(\)/);
+    assert.match(js,/createPortalShareV2\(\)/);
+    assert.match(js,/data-wizard-action="save-draft"/);
+    assert.match(js,/data-wizard-action="publish"/);
+    assert.match(js,/data-wizard-action="create-share"/);
+    assert.match(js,/<h3>1\. Kundendaten<\/h3>/);
+    assert.match(js,/<h3>2\. Reise<\/h3>/);
+    assert.match(js,/<h3>3\. Programm<\/h3>/);
+    assert.match(js,/<h3>4\. Dokumente<\/h3>/);
+    assert.match(js,/<h3>5\. Pruefung<\/h3>/);
+    assert.match(js,/<h3>6\. Abschluss<\/h3>/);
+    assert.match(js,/<li>Uebersprungen<\/li>/);
+    assert.match(js,/function wizardMissingItems\(draft\)/);
+    assert.match(js,/missing\.push\("Kundenname"\)/);
+    assert.match(js,/missing\.push\("Telefon oder E-Mail"\)/);
+    assert.match(js,/missing\.push\("Reisetitel"\)/);
+    assert.match(js,/event\.target\.closest\("\[data-wizard-action\]"\)/);
+    assert.match(js,/handleWizardAction\(wizardAction\.dataset\.wizardAction\)/);
+    assert.match(js,/function handleWizardInput\(event\)/);
+    assert.match(js,/function syncWizardFieldsFromDom\(\)/);
+    assert.doesNotMatch(js,/window\.location\.href="admin\.html\?newCustomer=1#master-data"/);
+    assert.doesNotMatch(js,/function openNewCustomer\(\)\{[^}]*location\.href/);
+    assert.match(js,/Im klassischen Admin oeffnen/);
+    assert.match(js,/href="admin\.html\?newCustomer=1#master-data"/);
   });
 
   it("supports controlled customer edit mode, cancel, dirty warning and validation",()=>{

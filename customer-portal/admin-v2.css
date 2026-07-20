@@ -364,3 +364,29 @@ p{color:var(--muted);line-height:1.55}
   .v2-view,.v2-filter-advanced,.v2-skeleton{animation:none}
   .v2-tab,.v2-nav-item,.v2-button,.v2-customer-card,.v2-metric{transition:none}
 }
+
+.v2-wizard-overlay{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:calc(16px + var(--mobile-safe-top)) 16px calc(16px + var(--mobile-safe-bottom));background:rgba(23,35,31,.48);backdrop-filter:blur(8px)}
+.v2-wizard-dialog{width:min(920px,100%);max-height:min(92dvh,960px);display:grid;grid-template-rows:auto auto 1fr auto auto;gap:14px;overflow:hidden;padding:22px;border:1px solid var(--line);border-radius:24px;background:var(--surface);box-shadow:var(--shadow)}
+.v2-wizard-header,.v2-wizard-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.v2-wizard-header h2{margin:0}
+.v2-wizard-steps{display:flex;gap:8px;flex-wrap:wrap;margin:0;padding:0;list-style:none}
+.v2-wizard-steps li{min-height:36px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:13px;font-weight:750;background:var(--surface-soft)}
+.v2-wizard-steps li span{width:22px;height:22px;display:inline-grid;place-items:center;border-radius:999px;background:#fff;color:var(--green);font-size:12px}
+.v2-wizard-steps li.active{border-color:var(--green-2);background:var(--mint);color:var(--green)}
+.v2-wizard-steps li.done{border-color:rgba(31,107,84,.35);color:var(--green)}
+.v2-wizard-body{min-height:0;overflow:auto;padding-right:4px}
+.v2-wizard-panel{display:grid;gap:14px}
+.v2-wizard-panel h3{margin-bottom:0}
+.v2-wizard-footer{border-top:1px solid var(--line);padding-top:12px}
+.v2-wizard-footer .v2-button{min-height:48px}
+.v2-wizard-summary{display:grid;gap:12px}
+.v2-wizard-summary article{padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--surface-soft)}
+.v2-wizard-summary h4{margin:0 0 8px}
+.v2-wizard-summary ul{margin:0;padding-left:18px;color:var(--muted)}
+.v2-wizard-finish{display:grid;gap:12px}
+.v2-wizard-finish .v2-document-actions{display:flex;flex-wrap:wrap;gap:10px}
+@media (max-width:820px){
+  .v2-wizard-dialog{padding:16px;border-radius:20px;max-height:100dvh}
+  .v2-wizard-footer .v2-button{width:100%}
+  .v2-wizard-steps li{font-size:12px}
+}

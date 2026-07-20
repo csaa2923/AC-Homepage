@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=24">
+<link rel="stylesheet" href="admin-v2.css?v=25">
 </head>
 <body>
 <main>
@@ -195,6 +195,27 @@
   </section>
 </main>
 
+<div class="v2-wizard-overlay" id="newCustomerWizard" hidden>
+  <div class="v2-wizard-dialog" role="dialog" aria-modal="true" aria-labelledby="wizardTitle">
+    <header class="v2-wizard-header">
+      <div>
+        <p class="v2-eyebrow">Admin V2</p>
+        <h2 id="wizardTitle">Neuen Kunden anlegen</h2>
+      </div>
+      <button class="v2-button soft" type="button" data-wizard-action="cancel">Abbrechen</button>
+    </header>
+    <ol class="v2-wizard-steps" id="wizardStepList" aria-label="Wizard-Fortschritt"></ol>
+    <div class="v2-wizard-body" id="wizardBody"></div>
+    <p class="v2-edit-status" id="wizardStatus" aria-live="polite"></p>
+    <footer class="v2-wizard-footer">
+      <button class="v2-button soft" type="button" data-wizard-action="back" id="wizardBackButton">Zurueck</button>
+      <button class="v2-button soft" type="button" data-wizard-action="later" id="wizardLaterButton">Spaeter fortsetzen</button>
+      <button class="v2-button soft" type="button" data-wizard-action="skip" id="wizardSkipButton" hidden>Ueberspringen</button>
+      <button class="v2-button primary" type="button" data-wizard-action="next" id="wizardNextButton">Weiter</button>
+    </footer>
+  </div>
+</div>
+
 <script src="firebase-config.js"></script>
 <script src="redact-allowlist.js?v=2"></script>
 <script src="redact-public-snapshot.js?v=2"></script>
@@ -204,6 +225,6 @@
 <script src="firebase-auth.js?v=3"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=4"></script>
-<script src="admin-v2.js?v=24"></script>
+<script src="admin-v2.js?v=25"></script>
 </body>
 </html>

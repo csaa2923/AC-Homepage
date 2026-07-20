@@ -54,7 +54,15 @@
     documentDropActive:false,
     publicationSaving:false,
     publicationMessage:"",
-    publicationMessageKind:""
+    publicationMessageKind:"",
+    wizardOpen:false,
+    wizardStep:0,
+    wizardDraft:null,
+    wizardErrors:{},
+    wizardMessage:"",
+    wizardMessageKind:"",
+    wizardSaving:false,
+    wizardSavedCustomerId:""
   };
 
   const byId=id=>document.getElementById(id);
@@ -462,7 +470,7 @@
   }
 
   function hasDirtyEdits(){
-    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit()||hasDirtyDocumentEdit();
+    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit()||hasDirtyDocumentEdit()||state.wizardOpen;
   }
 
   function setCustomerEditMessage(message,kind=""){
@@ -1879,6 +1887,7 @@
   function renderDocumentUploadSurfaces(){
     if(state.route==="documents")renderDocuments();
     if(state.route==="customerDetail"&&state.selectedTab==="dokumente")renderCustomerDetail();
+    if(state.wizardOpen&&state.wizardStep===3)renderNewCustomerWizard();
   }
 
   function documentFromUploadedFile(uploaded,file){
@@ -4009,6 +4018,7 @@
     renderCustomers();
     renderDocuments();
     renderCustomerDetail();
+    renderNewCustomerWizard();
   }
 
   function routeTo(route,{replace=false}={}){
@@ -4071,9 +4081,512 @@
     routeTo(`customers/${encodeURIComponent(id)}/kunde`);
   }
 
+  const WIZARD_STEPS=[
+    {id:"customer",label:"Kundendaten"},
+    {id:"trip",label:"Reise"},
+    {id:"program",label:"Programm"},
+    {id:"documents",label:"Dokumente"},
+    {id:"review",label:"Pruefung"},
+    {id:"finish",label:"Abschluss"}
+  ];
+  const WIZARD_LANGUAGES=["Deutsch","Englisch","Italienisch","Franzoesisch","Sonstiges"];
+
+  function generateCustomerId(){
+    return `kunde-${Math.random().toString(36).slice(2,8)}`;
+  }
+
+  function defaultWizardDraft(){
+    return {
+      customerId:generateCustomerId(),
+      firstName:"",
+      lastName:"",
+      email:"",
+      phone:"",
+      language:"Deutsch",
+      internalNumber:"",
+      tripTitle:"",
+      region:"",
+      startDate:"",
+      endDate:"",
+      travelers:"2",
+      notes:"",
+      programSkip:false,
+      programTitle:"",
+      programTime:"",
+      programLocation:"",
+      programDescription:""
+    };
+  }
+
+  function createEmptyCustomer(id){
+    const today=new Date().toLocaleDateString("de-DE");
+    const customerId=id||generateCustomerId();
+    return {
+      customerId,
+      customerName:"Neuer Kunde",
+      companions:"",
+      tripName:"Neue Reise",
+      tripTitle:"Neue Reise",
+      startDatePlain:"",
+      endDatePlain:"",
+      travelPeriod:"",
+      startDate:"",
+      endDate:"",
+      region:"",
+      latitude:"",
+      longitude:"",
+      weatherLocationName:"",
+      language:"Deutsch",
+      status:"Entwurf",
+      publicationState:"Entwurf",
+      publishStatus:"draft",
+      version:"1.0",
+      updatedAt:today,
+      concierge:"Alpine Concierge Tirol",
+      conciergeName:"Alpine Concierge Tirol",
+      phone:"",
+      email:"",
+      whatsapp:"",
+      requirements:[],
+      dropdownCustomValues:{},
+      program:[],
+      programItems:[],
+      accommodations:[],
+      restaurants:[],
+      activities:[],
+      documents:[],
+      bookings:[],
+      contact:{
+        company:"Alpine Concierge Tirol",
+        phone:"",
+        whatsapp:"",
+        email:"",
+        emergency:"Persoenlicher Notfallkontakt: +43 677 61410679",
+        localEmergency:"Euro-Notruf 112, Rettung 144, Polizei 133, Feuerwehr 122"
+      },
+      weather:{summary:"",days:[]},
+      history:[],
+      publishMeta:{},
+      publishHistory:[],
+      publishedSnapshot:null,
+      crm:{internalNumber:""}
+    };
+  }
+
+  function wizardCustomerName(draft){
+    return `${cleanValue(draft.firstName)} ${cleanValue(draft.lastName)}`.trim()||"Neuer Kunde";
+  }
+
+  function buildCustomerFromWizard(draft,existing=null){
+    const base=existing?clone(existing):createEmptyCustomer(draft.customerId);
+    const name=wizardCustomerName(draft);
+    const tripTitle=cleanValue(draft.tripTitle)||"Neue Reise";
+    const start=dateInputValue(draft.startDate);
+    const end=dateInputValue(draft.endDate);
+    const phone=cleanValue(draft.phone);
+    const email=cleanValue(draft.email);
+    const program=[];
+    if(!draft.programSkip&&cleanValue(draft.programTitle)){
+      program.push({
+        id:`prog-${Date.now().toString(36)}`,
+        day:1,
+        date:start||"",
+        dateValue:start||"",
+        title:cleanValue(draft.programTitle),
+        time:cleanValue(draft.programTime),
+        startTime:cleanValue(draft.programTime),
+        location:cleanValue(draft.programLocation),
+        description:cleanValue(draft.programDescription),
+        category:"Aktivitaet",
+        type:"Aktivitaet",
+        visible:true
+      });
+    }
+    base.customerId=draft.customerId;
+    base.customerName=name;
+    base.companions=cleanValue(draft.travelers)?`${cleanValue(draft.travelers)} Reisende`:"";
+    base.tripName=tripTitle;
+    base.tripTitle=tripTitle;
+    base.region=cleanValue(draft.region);
+    base.weatherLocationName=cleanValue(draft.region);
+    base.startDatePlain=start;
+    base.endDatePlain=end;
+    base.startDate=start;
+    base.endDate=end;
+    base.travelPeriod=start&&end?`${start} – ${end}`:start||end||"";
+    base.language=cleanValue(draft.language)||"Deutsch";
+    base.phone=phone;
+    base.email=email;
+    base.whatsapp=phone;
+    base.contact={
+      ...(base.contact&&typeof base.contact==="object"?base.contact:{}),
+      phone,
+      email,
+      whatsapp:phone
+    };
+    if(cleanValue(draft.notes))base.requirements=[cleanValue(draft.notes)];
+    if(program.length){
+      base.program=program;
+      base.programItems=program;
+    }else if(!existing){
+      base.program=[];
+      base.programItems=[];
+    }
+    base.crm={
+      ...(base.crm&&typeof base.crm==="object"?base.crm:{}),
+      internalNumber:cleanValue(draft.internalNumber)
+    };
+    base.status="Entwurf";
+    base.publicationState="Entwurf";
+    base.publishStatus="draft";
+    base.updatedAt=new Date().toLocaleDateString("de-DE");
+    base._lastSavedAt=new Date().toISOString();
+    base._createdVia="admin-v2-wizard";
+    return compactObject(base);
+  }
+
+  function validateWizardStep(step,draft){
+    const errors={};
+    if(step===0){
+      if(!cleanValue(draft.firstName)&&!cleanValue(draft.lastName))errors.firstName="Bitte Vor- oder Nachname eingeben.";
+      if(cleanValue(draft.email)&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanValue(draft.email)))errors.email="Bitte eine gueltige E-Mail-Adresse eingeben.";
+      if(!cleanValue(draft.phone)&&!cleanValue(draft.email))errors.phone="Telefon oder E-Mail ist erforderlich.";
+    }
+    if(step===1){
+      if(!cleanValue(draft.tripTitle))errors.tripTitle="Bitte einen Reisetitel eingeben.";
+      if(draft.startDate&&draft.endDate&&draft.endDate<draft.startDate)errors.endDate="Ende liegt vor dem Start.";
+    }
+    if(step===2&&!draft.programSkip&&cleanValue(draft.programTitle)===""&&(cleanValue(draft.programTime)||cleanValue(draft.programLocation)||cleanValue(draft.programDescription))){
+      errors.programTitle="Bitte einen Programmpunkt-Titel eingeben oder den Schritt ueberspringen.";
+    }
+    return {valid:!Object.keys(errors).length,errors};
+  }
+
+  function setWizardMessage(message,kind=""){
+    state.wizardMessage=message||"";
+    state.wizardMessageKind=kind;
+    const el=byId("wizardStatus");
+    if(el){
+      el.textContent=state.wizardMessage;
+      el.dataset.kind=kind;
+    }
+  }
+
+  function resetWizardState(){
+    state.wizardOpen=false;
+    state.wizardStep=0;
+    state.wizardDraft=null;
+    state.wizardErrors={};
+    state.wizardMessage="";
+    state.wizardMessageKind="";
+    state.wizardSaving=false;
+    state.wizardSavedCustomerId="";
+  }
+
   function openNewCustomer(){
+    if(state.wizardOpen){
+      renderNewCustomerWizard();
+      return;
+    }
     if(!confirmDiscardCustomerEdit())return;
-    window.location.href="admin.html?newCustomer=1#master-data";
+    resetCustomerEditState();
+    resetTripEditState();
+    resetProgramEditState();
+    resetDocumentEditState();
+    state.wizardOpen=true;
+    state.wizardStep=0;
+    state.wizardDraft=defaultWizardDraft();
+    state.wizardErrors={};
+    state.wizardSavedCustomerId="";
+    setWizardMessage("","");
+    renderNewCustomerWizard();
+  }
+
+  function closeNewCustomerWizard({force=false}={}){
+    if(!force&&state.wizardOpen&&state.wizardDraft){
+      if(!window.confirm("Wizard abbrechen? Es wird nichts veroeffentlicht und kein Share-Link erzeugt."))return false;
+    }
+    resetWizardState();
+    const overlay=byId("newCustomerWizard");
+    if(overlay)overlay.hidden=true;
+    return true;
+  }
+
+  function wizardField(name,label,value,{type="text",required=false,error=""}={}){
+    const id=`wizard-${name}`;
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}${required?" *":""}</span><input id="${id}" name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value||"")}" data-wizard-field="${escapeHtml(name)}" aria-invalid="${error?"true":"false"}">${error?`<small class="v2-field-error">${escapeHtml(error)}</small>`:""}</label>`;
+  }
+
+  function wizardSelect(name,label,value,options,{error=""}={}){
+    const id=`wizard-${name}`;
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-wizard-field="${escapeHtml(name)}">${options.map(option=>`<option value="${escapeHtml(option)}" ${normalizeText(option)===normalizeText(value)?"selected":""}>${escapeHtml(option)}</option>`).join("")}</select>${error?`<small class="v2-field-error">${escapeHtml(error)}</small>`:""}</label>`;
+  }
+
+  function wizardTextarea(name,label,value,{error=""}={}){
+    const id=`wizard-${name}`;
+    return `<label class="v2-edit-field full" for="${id}"><span>${escapeHtml(label)}</span><textarea id="${id}" name="${escapeHtml(name)}" rows="3" data-wizard-field="${escapeHtml(name)}">${escapeHtml(value||"")}</textarea>${error?`<small class="v2-field-error">${escapeHtml(error)}</small>`:""}</label>`;
+  }
+
+  function wizardMissingItems(draft){
+    const missing=[];
+    if(!cleanValue(draft.firstName)&&!cleanValue(draft.lastName))missing.push("Kundenname");
+    if(!cleanValue(draft.phone)&&!cleanValue(draft.email))missing.push("Telefon oder E-Mail");
+    if(!cleanValue(draft.tripTitle))missing.push("Reisetitel");
+    return missing;
+  }
+
+  function wizardStepMarkup(step,draft,errors){
+    if(step===0){
+      return `<section class="v2-wizard-panel"><h3>1. Kundendaten</h3><p>Erfassen Sie die Kontaktdaten des neuen Kunden.</p><div class="v2-edit-grid">${wizardField("firstName","Vorname",draft.firstName,{required:true,error:errors.firstName})}${wizardField("lastName","Nachname",draft.lastName,{error:errors.lastName})}${wizardField("email","E-Mail",draft.email,{type:"email",error:errors.email})}${wizardField("phone","Telefon",draft.phone,{error:errors.phone})}${wizardSelect("language","Sprache",draft.language,WIZARD_LANGUAGES)}${wizardField("internalNumber","Interne Kundennummer",draft.internalNumber)}</div></section>`;
+    }
+    if(step===1){
+      return `<section class="v2-wizard-panel"><h3>2. Reise</h3><p>Grunddaten der Reise fuer den Kundenentwurf.</p><div class="v2-edit-grid">${wizardField("tripTitle","Reisetitel",draft.tripTitle,{required:true,error:errors.tripTitle})}${wizardField("region","Region",draft.region)}${wizardField("startDate","Startdatum",draft.startDate,{type:"date",error:errors.startDate})}${wizardField("endDate","Enddatum",draft.endDate,{type:"date",error:errors.endDate})}${wizardField("travelers","Anzahl Reisende",draft.travelers,{type:"number"})}${wizardTextarea("notes","Notizen",draft.notes)}</div></section>`;
+    }
+    if(step===2){
+      return `<section class="v2-wizard-panel"><h3>3. Programm</h3><p>Optional: ersten Reisetag und Programmpunkt anlegen. Dieser Schritt darf uebersprungen werden.</p><label class="v2-edit-field"><span><input type="checkbox" data-wizard-field="programSkip" ${draft.programSkip?"checked":""}> Schritt ueberspringen</span></label>${draft.programSkip?`<p class="v2-muted">Programm wird spaeter in der Kundenakte ergaenzt.</p>`:`<div class="v2-edit-grid">${wizardField("programTitle","Erster Programmpunkt",draft.programTitle,{error:errors.programTitle})}${wizardField("programTime","Uhrzeit",draft.programTime)}${wizardField("programLocation","Ort",draft.programLocation)}${wizardTextarea("programDescription","Beschreibung",draft.programDescription)}</div>`}</section>`;
+    }
+    if(step===3){
+      const customer=customerById(draft.customerId)||customerById(state.wizardSavedCustomerId);
+      const docs=normalizedDocuments(customer||{});
+      return `<section class="v2-wizard-panel"><h3>4. Dokumente</h3><p>Optional Dokumente hochladen. Typ, Kategorie, Sichtbarkeit und Beschreibung koennen danach in der Kundenakte verfeinert werden.</p>${customer?uploadPanelMarkup(customer):`<p class="v2-muted">Bitte zuerst speichern bzw. weiter, damit der Kundenentwurf fuer Uploads bereitsteht.</p>`}<div class="v2-document-quality-grid">${docs.slice(0,6).map(doc=>`<article class="v2-panel"><strong>${escapeHtml(doc.title||doc.fileName||"Dokument")}</strong><p class="v2-muted">${escapeHtml([doc.category,doc.documentType,doc.visibility].filter(Boolean).join(" · "))}</p></article>`).join("")||`<p class="v2-muted">Noch keine Dokumente.</p>`}</div></section>`;
+    }
+    if(step===4){
+      const customer=customerById(draft.customerId)||customerById(state.wizardSavedCustomerId);
+      const docs=normalizedDocuments(customer||{});
+      const visible=docs.filter(doc=>doc.visibility!=="Intern"&&doc.visible!==false).length;
+      const internal=docs.length-visible;
+      const missing=wizardMissingItems(draft);
+      const programCount=(customer?.program||customer?.programItems||[]).length||(!draft.programSkip&&cleanValue(draft.programTitle)?1:0);
+      return `<section class="v2-wizard-panel"><h3>5. Pruefung</h3><div class="v2-wizard-summary"><article><h4>Kundendaten</h4><ul><li>${escapeHtml(wizardCustomerName(draft))}</li><li>${escapeHtml(draft.email||"-")}</li><li>${escapeHtml(draft.phone||"-")}</li><li>${escapeHtml(draft.language||"-")}</li><li>Nr.: ${escapeHtml(draft.internalNumber||"-")}</li></ul></article><article><h4>Reisedaten</h4><ul><li>${escapeHtml(draft.tripTitle||"-")}</li><li>${escapeHtml(draft.region||"-")}</li><li>${escapeHtml(draft.startDate||"-")} bis ${escapeHtml(draft.endDate||"-")}</li><li>${escapeHtml(draft.travelers||"-")} Reisende</li></ul></article><article><h4>Programmpunkte</h4><ul><li>${programCount} Punkt(e)</li>${draft.programSkip?"<li>Uebersprungen</li>":""}</ul></article><article><h4>Dokumente</h4><ul><li>${docs.length} Gesamt</li><li>${visible} sichtbar / ${internal} intern</li></ul></article><article><h4>Fehlende Angaben</h4><ul>${missing.length?missing.map(item=>`<li>${escapeHtml(item)}</li>`).join(""):"<li>Keine kritischen Angaben offen</li>"}</ul></article></div></section>`;
+    }
+    const customer=customerById(state.wizardSavedCustomerId||draft.customerId);
+    const link=customer?resolvePortalLink(customer):null;
+    return `<section class="v2-wizard-panel"><h3>6. Abschluss</h3><p>Der Entwurf kann gespeichert, geoeffnet, veroeffentlicht und mit einem sicheren Share-Link versehen werden.</p><div class="v2-wizard-finish"><p><strong>${escapeHtml(wizardCustomerName(draft))}</strong> · ${escapeHtml(draft.tripTitle||"Neue Reise")}</p><div class="v2-document-actions"><button class="v2-button primary" type="button" data-wizard-action="save-draft" ${state.wizardSaving?"disabled":""}>Entwurf speichern</button><button class="v2-button soft" type="button" data-wizard-action="open-customer" ${customer?"":"disabled"}>Kunde oeffnen</button><button class="v2-button soft" type="button" data-wizard-action="publish" ${customer?"":"disabled"}>Veroeffentlichen</button><button class="v2-button soft" type="button" data-wizard-action="create-share" ${customer&&isPublished(customer)?"":"disabled"}>Sicheren Share-Link erzeugen</button></div>${link?.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}<a class="v2-button soft" href="admin.html?newCustomer=1#master-data">Im klassischen Admin oeffnen</a></div></section>`;
+  }
+
+  function renderNewCustomerWizard(){
+    const overlay=byId("newCustomerWizard");
+    if(!overlay)return;
+    if(!state.wizardOpen||!state.wizardDraft){
+      overlay.hidden=true;
+      return;
+    }
+    overlay.hidden=false;
+    const draft=state.wizardDraft;
+    const step=state.wizardStep;
+    const list=byId("wizardStepList");
+    if(list){
+      list.innerHTML=WIZARD_STEPS.map((item,index)=>`<li class="${index===step?"active":index<step?"done":""}"><span>${index+1}</span>${escapeHtml(item.label)}</li>`).join("");
+    }
+    const body=byId("wizardBody");
+    if(body)body.innerHTML=wizardStepMarkup(step,draft,state.wizardErrors||{});
+    setWizardMessage(state.wizardMessage,state.wizardMessageKind);
+    const back=byId("wizardBackButton");
+    const next=byId("wizardNextButton");
+    const skip=byId("wizardSkipButton");
+    const later=byId("wizardLaterButton");
+    if(back)back.disabled=step===0||state.wizardSaving;
+    if(later)later.disabled=state.wizardSaving;
+    if(skip){
+      skip.hidden=step!==2;
+      skip.disabled=state.wizardSaving;
+    }
+    if(next){
+      next.hidden=step>=WIZARD_STEPS.length-1;
+      next.disabled=state.wizardSaving;
+      next.textContent=step===3?"Weiter zur Pruefung":"Weiter";
+    }
+  }
+
+  async function saveWizardDraftCustomer({openAfter=false,silent=false}={}){
+    if(state.wizardSaving||!state.wizardDraft)return null;
+    const draft=state.wizardDraft;
+    const stepCheck=validateWizardStep(0,draft);
+    if(!stepCheck.valid){
+      state.wizardStep=0;
+      state.wizardErrors=stepCheck.errors;
+      setWizardMessage("Bitte zuerst die Kundendaten vervollstaendigen.","error");
+      renderNewCustomerWizard();
+      return null;
+    }
+    const tripCheck=validateWizardStep(1,draft);
+    if(!tripCheck.valid&&state.wizardStep>=1){
+      state.wizardStep=1;
+      state.wizardErrors=tripCheck.errors;
+      setWizardMessage("Bitte die Reisedaten pruefen.","error");
+      renderNewCustomerWizard();
+      return null;
+    }
+    state.wizardSaving=true;
+    if(!silent)setWizardMessage("Entwurf wird gespeichert ...","saving");
+    renderNewCustomerWizard();
+    try{
+      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      const existing=customerById(draft.customerId)||customerById(state.wizardSavedCustomerId);
+      const fullCustomer=buildCustomerFromWizard(draft,existing);
+      if(existing?.documents)fullCustomer.documents=existing.documents;
+      await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+      updateLocalCustomer(fullCustomer);
+      state.wizardSavedCustomerId=fullCustomer.customerId;
+      state.wizardDraft.customerId=fullCustomer.customerId;
+      state.wizardSaving=false;
+      if(!silent)setWizardMessage("Entwurf gespeichert.","success");
+      if(openAfter){
+        closeNewCustomerWizard({force:true});
+        openCustomerDetail(fullCustomer.customerId);
+      }else{
+        renderNewCustomerWizard();
+      }
+      return fullCustomer;
+    }catch(error){
+      console.error("[ACT Admin V2] Wizard speichern:",error&&error.message?error.message:"Fehler");
+      state.wizardSaving=false;
+      setWizardMessage(error&&error.message?error.message:"Entwurf konnte nicht gespeichert werden.","error");
+      renderNewCustomerWizard();
+      return null;
+    }
+  }
+
+  async function wizardGoNext(){
+    const draft=state.wizardDraft;
+    if(!draft)return;
+    syncWizardFieldsFromDom();
+    const validation=validateWizardStep(state.wizardStep,draft);
+    state.wizardErrors=validation.errors;
+    if(!validation.valid){
+      setWizardMessage("Bitte die markierten Felder pruefen.","error");
+      renderNewCustomerWizard();
+      return;
+    }
+    if(state.wizardStep===2)draft.programSkip=Boolean(draft.programSkip);
+    if(state.wizardStep===0||state.wizardStep===1||state.wizardStep===2){
+      const saved=await saveWizardDraftCustomer({silent:true});
+      if(!saved&&state.wizardStep<3)return;
+    }
+    if(state.wizardStep===3){
+      const saved=await saveWizardDraftCustomer({silent:true});
+      if(!saved)return;
+    }
+    if(state.wizardStep<WIZARD_STEPS.length-1)state.wizardStep+=1;
+    setWizardMessage("","");
+    renderNewCustomerWizard();
+  }
+
+  function wizardGoBack(){
+    if(state.wizardStep<=0)return;
+    syncWizardFieldsFromDom();
+    state.wizardStep-=1;
+    state.wizardErrors={};
+    setWizardMessage("","");
+    renderNewCustomerWizard();
+  }
+
+  function wizardSkipProgram(){
+    if(state.wizardStep!==2)return;
+    state.wizardDraft.programSkip=true;
+    state.wizardDraft.programTitle="";
+    state.wizardDraft.programTime="";
+    state.wizardDraft.programLocation="";
+    state.wizardDraft.programDescription="";
+    wizardGoNext();
+  }
+
+  function syncWizardFieldsFromDom(){
+    if(!state.wizardDraft)return;
+    all("[data-wizard-field]").forEach(field=>{
+      const name=field.dataset.wizardField;
+      if(!name)return;
+      if(field.type==="checkbox")state.wizardDraft[name]=field.checked;
+      else state.wizardDraft[name]=field.value;
+    });
+  }
+
+  function handleWizardInput(event){
+    const field=event.target.closest("[data-wizard-field]");
+    if(!field||!state.wizardDraft)return;
+    syncWizardFieldsFromDom();
+    const name=field.dataset.wizardField;
+    if(name&&state.wizardErrors[name]){
+      delete state.wizardErrors[name];
+      const error=byId(`wizard-${name}-error`);
+      if(error)error.remove();
+      field.setAttribute("aria-invalid","false");
+    }
+    if(field.type==="checkbox"&&name==="programSkip")renderNewCustomerWizard();
+  }
+
+  async function wizardPublish(){
+    const saved=await saveWizardDraftCustomer({silent:true});
+    if(!saved)return;
+    state.selectedCustomerId=saved.customerId;
+    const result=await publishCustomerV2();
+    if(result){
+      setWizardMessage("Kunde wurde veroeffentlicht.","success");
+      renderNewCustomerWizard();
+    }
+  }
+
+  async function wizardCreateShare(){
+    const customer=customerById(state.wizardSavedCustomerId||state.wizardDraft?.customerId);
+    if(!customer){
+      setWizardMessage("Bitte zuerst den Entwurf speichern.","error");
+      return;
+    }
+    if(!isPublished(customer)){
+      setWizardMessage("Bitte zuerst veroeffentlichen.","error");
+      return;
+    }
+    state.selectedCustomerId=customer.customerId;
+    const url=await createPortalShareV2();
+    if(url){
+      setWizardMessage("Sicherer Share-Link wurde erzeugt.","success");
+      renderNewCustomerWizard();
+    }
+  }
+
+  function handleWizardAction(action){
+    if(action==="cancel"){
+      closeNewCustomerWizard();
+      return;
+    }
+    if(action==="back"){
+      wizardGoBack();
+      return;
+    }
+    if(action==="next"){
+      wizardGoNext();
+      return;
+    }
+    if(action==="skip"){
+      wizardSkipProgram();
+      return;
+    }
+    if(action==="later"){
+      saveWizardDraftCustomer({openAfter:true});
+      return;
+    }
+    if(action==="save-draft"){
+      saveWizardDraftCustomer();
+      return;
+    }
+    if(action==="open-customer"){
+      const id=state.wizardSavedCustomerId||state.wizardDraft?.customerId;
+      if(!id){
+        saveWizardDraftCustomer({openAfter:true});
+        return;
+      }
+      closeNewCustomerWizard({force:true});
+      openCustomerDetail(id);
+      return;
+    }
+    if(action==="publish"){
+      wizardPublish();
+      return;
+    }
+    if(action==="create-share"){
+      wizardCreateShare();
+    }
   }
 
   function openClassicEditor(id){
@@ -4202,6 +4715,11 @@
     byId("resetFiltersButton").addEventListener("click",resetFilters);
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);
     document.addEventListener("click",event=>{
+      const wizardAction=event.target.closest("[data-wizard-action]");
+      if(wizardAction){
+        handleWizardAction(wizardAction.dataset.wizardAction);
+        return;
+      }
       const route=event.target.closest("[data-v2-route]");
       if(route){routeTo(route.dataset.v2Route);return;}
       const preset=event.target.closest("[data-filter-preset]");
@@ -4295,6 +4813,7 @@
       if(event.target.id==="retryDetailButton"&&confirmDiscardCustomerEdit())loadCustomers();
     });
     document.addEventListener("input",event=>{
+      handleWizardInput(event);
       handleCustomerEditInput(event);
       handleTripEditInput(event);
       handleProgramEditInput(event);
@@ -4302,6 +4821,7 @@
       if(event.target.id==="documentSearchInput"){state.documentQuery=event.target.value;renderDocuments();}
     });
     document.addEventListener("change",event=>{
+      handleWizardInput(event);
       handleTripEditInput(event);
       handleProgramEditInput(event);
       handleDocumentEditInput(event);

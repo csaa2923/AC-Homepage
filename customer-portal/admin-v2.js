@@ -2391,16 +2391,16 @@
 
   function resolvePortalLink(customer){
     if(!isPublished(customer)){
-      return {status:"draft",url:"",display:"",hint:"Bitte zuerst veroeffentlichen und danach einen sicheren Link erzeugen.",canOpen:false,canCopy:false};
+      return {status:"draft",url:"",display:"",hint:"Bitte zuerst veroeffentlichen. Danach einmal einen stabilen Kundenlink erzeugen.",canOpen:false,canCopy:false,hasActiveShare:false};
     }
     const sessionShare=activeShareToken(customer.customerId);
-    if(sessionShare?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen.",canOpen:false,canCopy:false};
+    if(sessionShare?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen. Erzeuge bei Bedarf einen neuen Link.",canOpen:false,canCopy:false,hasActiveShare:false};
     const sessionUrl=secureShareUrl(sessionShare?.shareUrl);
-    if(sessionUrl)return {status:"active",url:sessionUrl,display:sessionUrl,hint:`Aktiver sicherer Link${sessionShare.publishedVersionId?` fuer Version ${sessionShare.publishedVersionId}`:""}.`,canOpen:true,canCopy:true};
+    if(sessionUrl)return {status:"active",url:sessionUrl,display:sessionUrl,hint:`Stabiler Kundenlink aktiv${sessionShare.publishedVersionId?` (Version ${sessionShare.publishedVersionId})`:""}. Nach dem Veroeffentlichen wird dieser Link automatisch aktualisiert — kein neuer Link noetig.`,canOpen:true,canCopy:true,hasActiveShare:true};
     const meta=customerShareMeta(customer);
-    if(meta?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen.",canOpen:false,canCopy:false};
-    if(meta?.shareId)return {status:"session-lost",url:"",display:"",hint:"Ein sicherer Share-Link existiert, der Token ist in dieser Sitzung aber nicht mehr verfuegbar. Bitte neuen Link erzeugen.",canOpen:false,canCopy:false};
-    return {status:"none",url:"",display:"",hint:"Noch kein sicherer Kunden-Link erzeugt.",canOpen:false,canCopy:false};
+    if(meta?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen. Erzeuge bei Bedarf einen neuen Link.",canOpen:false,canCopy:false,hasActiveShare:false};
+    if(meta?.shareId)return {status:"session-lost",url:"",display:"",hint:"Ein stabiler Kundenlink ist aktiv. Der Kunde kann denselben Link weiter nutzen. Der Token ist in dieser Admin-Sitzung nicht mehr sichtbar — nur bei Verlust einen neuen Link erzeugen.",canOpen:false,canCopy:false,hasActiveShare:true};
+    return {status:"missing",url:"",display:"",hint:"Noch kein sicherer Kundenlink. Einmal erzeugen und dem Kunden senden; spaetere Veroeffentlichungen aktualisieren denselben Link.",canOpen:false,canCopy:false,hasActiveShare:false};
   }
 
   function setPublicationMessage(message,kind=""){
@@ -2430,7 +2430,8 @@
     if(internalDocs)warnings.push(`${internalDocs} interne Dokumente werden nicht im Kundenportal angezeigt.`);
     if(visibleWithoutUrl.length)warnings.push(`${visibleWithoutUrl.length} sichtbare Dokumente haben keinen Oeffnen-Link und sind im Kundenportal nicht oeffnenbar.`);
     if(status.key==="pending")warnings.push("Es gibt Aenderungen seit der letzten Veroeffentlichung.");
-    if(isPublished(customer)&&!resolvePortalLink(customer).canOpen)warnings.push("Es ist kein kopierbarer sicherer Share-Link in dieser Sitzung verfuegbar.");
+    if(isPublished(customer)&&!resolvePortalLink(customer).hasActiveShare)warnings.push("Noch kein stabiler Kundenlink erzeugt. Einmal erzeugen und dem Kunden senden.");
+    if(isPublished(customer)&&resolvePortalLink(customer).status==="session-lost")warnings.push("Kundenlink ist aktiv, aber in dieser Sitzung nicht kopierbar. Nur bei Verlust neu erzeugen.");
     if(analysis.missing.length)warnings.push(`${analysis.missing.length} erwartete Dokumente fehlen bei Programmpunkten.`);
     if(analysis.expiry.expired)warnings.push(`${analysis.expiry.expired} Dokumente sind abgelaufen.`);
     if(analysis.expiry.thirty)warnings.push(`${analysis.expiry.thirty} Dokumente laufen innerhalb von 30 Tagen ab.`);
@@ -2483,7 +2484,9 @@
             ${portalButton("Portal-Vorschau oeffnen","preview",{disabled:!canPreview})}
             ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
             ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
-            ${portalButton("Sicheren Link erzeugen","create-share",{primary:!link.canOpen,disabled:!isPublished(customer)})}
+            ${link.hasActiveShare
+              ?portalButton("Neuen Link erzeugen (ersetzt alten)","create-share-new",{disabled:!isPublished(customer)})
+              :portalButton("Stabilen Kundenlink erzeugen","create-share",{primary:true,disabled:!isPublished(customer)})}
             ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
           </div>
         </article>
@@ -2558,9 +2561,45 @@
         const result=await withTimeout(db.publishCustomer(clone(publishCandidate),meta),AUTH_TIMEOUT_MS,"publishCustomer");
         publishCandidate.publishedSnapshot=result?.publishedData||publishCandidate.publishedSnapshot||null;
         publishCandidate.publishMeta={...(publishCandidate.publishMeta||{}),...(result?.publishMeta||{}),publishError:""};
+        let refreshNote="";
+        try{
+          if(db.refreshPortalShares){
+            const refresh=await withTimeout(db.refreshPortalShares(publishCandidate.customerId),AUTH_TIMEOUT_MS,"refreshPortalShares");
+            const count=Number(refresh?.refreshedCount||0);
+            if(count>0){
+              refreshNote=` ${count} Kundenlink${count===1?"":"s"} aktualisiert — der Kunde behält denselben Link.`;
+              const active=customerShareMeta(publishCandidate)||activeShareToken(publishCandidate.customerId);
+              if(active?.shareId){
+                publishCandidate.publishMeta={
+                  ...(publishCandidate.publishMeta||{}),
+                  activePortalShare:{
+                    ...(publishCandidate.publishMeta?.activePortalShare||{}),
+                    shareId:active.shareId,
+                    status:"active",
+                    publishedVersionId:refresh.publishedVersionId||publishCandidate.version||"1.0",
+                    lastRefreshedAt:new Date().toISOString()
+                  }
+                };
+                const session=activeShareToken(publishCandidate.customerId);
+                if(session?.shareUrl){
+                  saveShareToken(publishCandidate.customerId,{
+                    ...session,
+                    publishedVersionId:refresh.publishedVersionId||publishCandidate.version||"1.0",
+                    status:"active"
+                  });
+                }
+              }
+            }else if(!(customerShareMeta(publishCandidate)?.shareId||activeShareToken(publishCandidate.customerId)?.shareId)){
+              refreshNote=" Noch kein Kundenlink vorhanden — einmal erzeugen und dem Kunden senden.";
+            }
+          }
+        }catch(refreshError){
+          console.warn("[ACT Admin V2] Share-Refresh:",refreshError&&refreshError.message?refreshError.message:"Fehler");
+          refreshNote=" Hinweis: Kundenlinks konnten nicht automatisch aktualisiert werden.";
+        }
         updateLocalCustomer(compactObject(publishCandidate));
         state.publicationSaving=false;
-        setPublicationMessage("Veroeffentlichung erfolgreich abgeschlossen.","success");
+        setPublicationMessage(`Veroeffentlichung erfolgreich abgeschlossen.${refreshNote}`,"success");
         render();
         return publishCandidate;
       }catch(error){
@@ -2576,12 +2615,16 @@
     return publicationPromise;
   }
 
-  async function createPortalShareV2(){
+  async function createPortalShareV2({forceNew=false}={}){
     if(state.publicationSaving||publicationPromise)return publicationPromise;
     const customer=customerById(state.selectedCustomerId);
     if(!customer)return null;
+    if(forceNew){
+      const confirmed=window.confirm("Neuen Link erzeugen?\n\nDer bisherige Kundenlink wird ungültig. Der Kunde braucht dann den neuen Link.");
+      if(!confirmed)return null;
+    }
     state.publicationSaving=true;
-    setPublicationMessage("Sicherer Link wird erzeugt ...","saving");
+    setPublicationMessage(forceNew?"Neuer Kundenlink wird erzeugt ...":"Kundenlink wird erzeugt ...","saving");
     updatePublicationActions();
     publicationPromise=(async()=>{
       try{
@@ -2590,7 +2633,37 @@
         if(!isPublished(customer)||!customer.publishedSnapshot)throw new Error("Bitte zuerst veroeffentlichen.");
         const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
         if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
-        const result=await withTimeout(db.createPortalShare(clone(customer)),AUTH_TIMEOUT_MS,"createPortalShare");
+        const result=await withTimeout(db.createPortalShare(clone(customer),{forceNew}),AUTH_TIMEOUT_MS,"createPortalShare");
+        if(result?.reused){
+          const session=activeShareToken(customer.customerId);
+          const next=clone(customer);
+          next.publishMeta={
+            ...(next.publishMeta||{}),
+            activePortalShare:{
+              ...(next.publishMeta?.activePortalShare||{}),
+              shareId:result.shareId,
+              createdAt:result.createdAt||next.publishMeta?.activePortalShare?.createdAt||new Date().toISOString(),
+              publishedVersionId:result.publishedVersionId||customer.version||"1.0",
+              status:"active",
+              lastRefreshedAt:new Date().toISOString()
+            }
+          };
+          if(session?.shareUrl){
+            saveShareToken(customer.customerId,{
+              ...session,
+              shareId:result.shareId,
+              publishedVersionId:result.publishedVersionId||customer.version||"1.0",
+              status:"active"
+            });
+          }
+          updateLocalCustomer(next);
+          state.publicationSaving=false;
+          setPublicationMessage(session?.shareUrl
+            ?"Bestehender Kundenlink wurde aktualisiert — derselbe Link bleibt gueltig."
+            :"Bestehender Kundenlink wurde aktualisiert. Token ist in dieser Sitzung nicht sichtbar; der Kunde kann den bisherigen Link weiter nutzen.","success");
+          render();
+          return session?.shareUrl||null;
+        }
         const shareUrl=buildShareLink(result.shareId,result.rawToken);
         if(!shareUrl)throw new Error("Der sichere Link konnte nicht aufgebaut werden.");
         saveShareToken(customer.customerId,{shareId:result.shareId,shareUrl,createdAt:result.createdAt||new Date().toISOString(),publishedVersionId:result.publishedVersionId||customer.version||"1.0",status:"active"});
@@ -2598,7 +2671,9 @@
         next.publishMeta={...(next.publishMeta||{}),activePortalShare:{shareId:result.shareId,createdAt:result.createdAt||new Date().toISOString(),publishedVersionId:result.publishedVersionId||customer.version||"1.0",status:"active"}};
         updateLocalCustomer(next);
         state.publicationSaving=false;
-        setPublicationMessage("Sicherer Link wurde erzeugt und kann jetzt kopiert werden.","success");
+        setPublicationMessage(forceNew
+          ?"Neuer Kundenlink wurde erzeugt. Bitte dem Kunden den neuen Link senden."
+          :"Stabiler Kundenlink wurde erzeugt. Nach spaeteren Veroeffentlichungen bleibt derselbe Link gueltig.","success");
         render();
         return shareUrl;
       }catch(error){
@@ -4371,7 +4446,7 @@
     }
     const customer=customerById(state.wizardSavedCustomerId||draft.customerId);
     const link=customer?resolvePortalLink(customer):null;
-    return `<section class="v2-wizard-panel"><h3>6. Abschluss</h3><p>Der Entwurf kann gespeichert, geoeffnet, veroeffentlicht und mit einem sicheren Share-Link versehen werden.</p><div class="v2-wizard-finish"><p><strong>${escapeHtml(wizardCustomerName(draft))}</strong> · ${escapeHtml(draft.tripTitle||"Neue Reise")}</p><div class="v2-document-actions"><button class="v2-button primary" type="button" data-wizard-action="save-draft" ${state.wizardSaving?"disabled":""}>Entwurf speichern</button><button class="v2-button soft" type="button" data-wizard-action="open-customer" ${customer?"":"disabled"}>Kunde oeffnen</button><button class="v2-button soft" type="button" data-wizard-action="publish" ${customer?"":"disabled"}>Veroeffentlichen</button><button class="v2-button soft" type="button" data-wizard-action="create-share" ${customer&&isPublished(customer)?"":"disabled"}>Sicheren Share-Link erzeugen</button></div>${link?.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}<p class="v2-muted">Bewusster Fallback: <a class="v2-text-link" href="admin.html" target="_blank" rel="noopener noreferrer">Klassischen Admin in neuem Tab oeffnen</a> (startet keinen neuen Kunden).</p></div></section>`;
+    return `<section class="v2-wizard-panel"><h3>6. Abschluss</h3><p>Entwurf speichern, veroeffentlichen und einmal einen stabilen Kundenlink erzeugen. Spaetere Veroeffentlichungen aktualisieren denselben Link automatisch.</p><div class="v2-wizard-finish"><p><strong>${escapeHtml(wizardCustomerName(draft))}</strong> · ${escapeHtml(draft.tripTitle||"Neue Reise")}</p><div class="v2-document-actions"><button class="v2-button primary" type="button" data-wizard-action="save-draft" ${state.wizardSaving?"disabled":""}>Entwurf speichern</button><button class="v2-button soft" type="button" data-wizard-action="open-customer" ${customer?"":"disabled"}>Kunde oeffnen</button><button class="v2-button soft" type="button" data-wizard-action="publish" ${customer?"":"disabled"}>Veroeffentlichen</button><button class="v2-button soft" type="button" data-wizard-action="create-share" ${customer&&isPublished(customer)?"":"disabled"}>${(customer&&resolvePortalLink(customer).hasActiveShare)?"Kundenlink aktualisieren":"Stabilen Kundenlink erzeugen"}</button></div>${link?.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}<p class="v2-muted">Bewusster Fallback: <a class="v2-text-link" href="admin.html" target="_blank" rel="noopener noreferrer">Klassischen Admin in neuem Tab oeffnen</a> (startet keinen neuen Kunden).</p></div></section>`;
   }
 
   function renderNewCustomerWizard(){
@@ -4793,6 +4868,7 @@
         if(action==="open")openPortalLinkV2();
         if(action==="copy")copyPortalLinkV2();
         if(action==="create-share")createPortalShareV2();
+        if(action==="create-share-new")createPortalShareV2({forceNew:true});
         if(action==="revoke-share")revokePortalShareV2();
         return;
       }

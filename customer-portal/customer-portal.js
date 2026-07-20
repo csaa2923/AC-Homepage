@@ -1361,7 +1361,7 @@
     const target=document.getElementById("publicationStatus");
     if(!target)return;
     const visibleCount=(customer.documents||[]).filter(isPortalDocument).length;
-    const sourceLabel=dataSource==="share"?"Share-Link (öffentlicher Snapshot)":dataSource==="firebase"?"Firestore publishedData":dataSource==="local"?"localStorage (veröffentlicht)":dataSource==="local-draft"?"Admin-Entwurf (localStorage)":"Demo";
+    const sourceLabel=dataSource==="share"?"Share-Link (aktuelle Live-Version)":dataSource==="firebase"?"Firestore publishedData":dataSource==="local"?"localStorage (veröffentlicht)":dataSource==="local-draft"?"Admin-Entwurf (localStorage)":"Demo";
     target.textContent=`${target.textContent} · Datenquelle: ${sourceLabel} · ${visibleCount} sichtbare Dokumente`;
   }
 

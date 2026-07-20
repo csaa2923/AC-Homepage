@@ -65,6 +65,13 @@ const {
 }=require("./lib/documentAccess");
 
 const {
+  buildPortalSnapshotPayload,
+  isActiveShare,
+  shareDocId,
+  snapshotDocId
+}=require("./lib/portalShareSync");
+
+const {
   isOriginAllowed,
   isAdminAuth,
   validateShareAccess,
@@ -183,11 +190,11 @@ async function portalShare(req,res){
   }
   const rateKey=`${resolveClientIp(req)}:${shareId}`;
   if(!checkRateLimit(rateKey)){
-    return neutralError(429,res,"Zu viele Anfragen. Bitte versuchen Sie es spÃ¤ter erneut.",{retryAfter:60});
+    return neutralError(429,res,"Zu viele Anfragen. Bitte versuchen Sie es später erneut.",{retryAfter:60});
   }
   try{
     const secret=getSecret();
-    if(!secret)return neutralError(503,res,"Portal-Zugang ist vorÃ¼bergehend nicht verfÃ¼gbar.");
+    if(!secret)return neutralError(503,res,"Portal-Zugang ist vorübergehend nicht verfügbar.");
     const bundle=await loadShareBundle(shareId);
     const validation=validateShareAccessLocal(bundle?.share,rawToken,secret);
     if(!validation.ok||!bundle?.snapshot?.data){
@@ -215,8 +222,70 @@ async function portalShare(req,res){
     });
   }catch(error){
     console.error("[portalShare] request failed:",error&&error.code?error.code:"",error&&error.message?error.message:"");
-    return neutralError(500,res,"Dieser Portal-Link ist vorÃ¼bergehend nicht verfÃ¼gbar.");
+    return neutralError(500,res,"Dieser Portal-Link ist vorübergehend nicht verfügbar.");
   }
+}
+
+async function listSharesForCustomer(db,customerId){
+  const snap=await db.collection("portalShares").where("customerId","==",customerId).get();
+  return snap.docs.map(docSnap=>({id:docSnap.id,...docSnap.data()}));
+}
+
+async function writeRefreshedShareSnapshot(db,share,payload,actorUid){
+  const shareId=shareDocId(share);
+  const publicSnapshotId=snapshotDocId(share)||shareId;
+  if(!shareId)return null;
+  const now=new Date().toISOString();
+  await db.collection("publicPortalSnapshots").doc(publicSnapshotId).set({
+    publicSnapshotId,
+    shareId,
+    customerId:share.customerId,
+    tripId:share.tripId||share.customerId,
+    publishedVersionId:payload.publishedVersionId,
+    version:payload.version,
+    createdAt:share.createdAt||now,
+    createdBy:share.createdBy||actorUid||"",
+    updatedAt:now,
+    updatedBy:actorUid||"",
+    data:payload.redacted,
+    redactionVersion:2,
+    contentHash:payload.contentHash
+  },{merge:true});
+  await db.collection("portalShares").doc(shareId).set({
+    publishedVersionId:payload.publishedVersionId,
+    publicSnapshotId,
+    lastRefreshedAt:now,
+    lastRefreshedBy:actorUid||""
+  },{merge:true});
+  return {shareId,publicSnapshotId};
+}
+
+async function refreshActivePortalSharesForCustomer(db,customerId,customer,actorUid){
+  const payload=buildPortalSnapshotPayload(customer,customerId);
+  const shares=(await listSharesForCustomer(db,customerId)).filter(isActiveShare);
+  const refreshed=[];
+  for(const share of shares){
+    const result=await writeRefreshedShareSnapshot(db,share,payload,actorUid);
+    if(result)refreshed.push(result);
+  }
+  return {
+    refreshedCount:refreshed.length,
+    shareIds:refreshed.map(item=>item.shareId),
+    publishedVersionId:payload.publishedVersionId
+  };
+}
+
+async function revokeShareRecords(db,shares,actorUid){
+  const now=new Date().toISOString();
+  await Promise.all(shares.map(share=>{
+    const shareId=shareDocId(share);
+    if(!shareId)return Promise.resolve();
+    return db.collection("portalShares").doc(shareId).set({
+      status:"revoked",
+      revokedAt:now,
+      revokedBy:actorUid||""
+    },{merge:true});
+  }));
 }
 
 async function createPortalShare(request){
@@ -225,8 +294,9 @@ async function createPortalShare(request){
   }
   const customerId=String(request.data?.customerId||"").trim();
   if(!customerId||!/^[a-zA-Z0-9_-]+$/.test(customerId)){
-    throw new HttpsError("invalid-argument","customerId fehlt oder ist ungÃ¼ltig.");
+    throw new HttpsError("invalid-argument","customerId fehlt oder ist ung?ltig.");
   }
+  const forceNew=Boolean(request.data?.forceNew);
   const secret=getSecret();
   if(!secret){
     throw new HttpsError("failed-precondition","PORTAL_SHARE_HMAC_SECRET ist nicht konfiguriert.");
@@ -239,21 +309,38 @@ async function createPortalShare(request){
   const customer=customerSnap.data();
   const published=customer.publishedData||null;
   if(!published){
-    throw new HttpsError("failed-precondition","Es gibt noch keine verÃ¶ffentlichte Live-Version.");
+    throw new HttpsError("failed-precondition","Es gibt noch keine ver?ffentlichte Live-Version.");
   }
+
+  const activeShares=(await listSharesForCustomer(db,customerId)).filter(isActiveShare);
+  if(!forceNew&&activeShares.length){
+    const refresh=await refreshActivePortalSharesForCustomer(db,customerId,customer,request.auth.uid);
+    const primary=activeShares[0];
+    return {
+      shareId:shareDocId(primary),
+      rawToken:null,
+      reused:true,
+      refreshedCount:refresh.refreshedCount,
+      publishedVersionId:refresh.publishedVersionId,
+      createdAt:primary.createdAt||null
+    };
+  }
+
+  if(forceNew&&activeShares.length){
+    await revokeShareRecords(db,activeShares,request.auth.uid);
+  }
+
   const shareId=generateShareId();
   const rawToken=generateRawToken();
   const tokenHash=hashToken(rawToken,secret);
-  const publishedVersionId=customer.publishMeta?.version||published.version||"1.0";
-  const enriched=enrichPublishedDocumentsFromDraft(published,customer.draftData||null);
-  const redacted=redactPublicSnapshot(enriched,{customerId});
+  const payload=buildPortalSnapshotPayload(customer,customerId);
   const now=new Date().toISOString();
   const shareRecord={
     shareId,
     tokenHash,
     customerId,
     tripId:customerId,
-    publishedVersionId,
+    publishedVersionId:payload.publishedVersionId,
     publicSnapshotId:shareId,
     status:"active",
     createdAt:now,
@@ -271,31 +358,70 @@ async function createPortalShare(request){
     pinHash:null,
     pinRequired:false,
     lastAccessAt:null,
-    accessCount:0
+    accessCount:0,
+    lastRefreshedAt:now,
+    lastRefreshedBy:request.auth.uid
   };
   const snapshotRecord={
     publicSnapshotId:shareId,
     shareId,
     customerId,
     tripId:customerId,
-    publishedVersionId,
-    version:published.version||customer.publishMeta?.version||"1.0",
+    publishedVersionId:payload.publishedVersionId,
+    version:payload.version,
     createdAt:now,
     createdBy:request.auth.uid,
-    data:redacted,
+    updatedAt:now,
+    updatedBy:request.auth.uid,
+    data:payload.redacted,
     redactionVersion:2,
-    contentHash:contentHash(redacted)
+    contentHash:payload.contentHash
   };
   await db.collection("portalShares").doc(shareId).set(shareRecord,{merge:false});
   await db.collection("publicPortalSnapshots").doc(shareId).set(snapshotRecord,{merge:false});
   return {
     shareId,
     rawToken,
-    publishedVersionId,
+    reused:false,
+    refreshedCount:0,
+    publishedVersionId:payload.publishedVersionId,
     createdAt:now
   };
 }
 
+async function refreshPortalShares(request){
+  if(!isAdminAuth(request.auth)){
+    throw new HttpsError("permission-denied","Keine Admin-Berechtigung.");
+  }
+  const customerId=String(request.data?.customerId||"").trim();
+  if(!customerId||!/^[a-zA-Z0-9_-]+$/.test(customerId)){
+    throw new HttpsError("invalid-argument","customerId fehlt oder ist ung?ltig.");
+  }
+  const db=getDb();
+  const customerSnap=await db.collection("customers").doc(customerId).get();
+  if(!customerSnap.exists){
+    throw new HttpsError("not-found","Kunde nicht gefunden.");
+  }
+  const customer=customerSnap.data();
+  if(!customer.publishedData){
+    throw new HttpsError("failed-precondition","Es gibt noch keine ver?ffentlichte Live-Version.");
+  }
+  try{
+    const result=await refreshActivePortalSharesForCustomer(db,customerId,customer,request.auth.uid);
+    return {
+      ok:true,
+      customerId,
+      refreshedCount:result.refreshedCount,
+      shareIds:result.shareIds,
+      publishedVersionId:result.publishedVersionId
+    };
+  }catch(error){
+    if(error&&error.code==="failed-precondition"){
+      throw new HttpsError("failed-precondition",error.message);
+    }
+    throw error;
+  }
+}
 async function portalDocument(req,res){
   applyCors(req,res);
   if(req.method==="OPTIONS"){
@@ -313,11 +439,11 @@ async function portalDocument(req,res){
   }
   const rateKey=`doc:${resolveClientIp(req)}:${shareId}`;
   if(!checkRateLimit(rateKey)){
-    return neutralError(429,res,"Zu viele Anfragen. Bitte versuchen Sie es spÃ¤ter erneut.",{retryAfter:60});
+    return neutralError(429,res,"Zu viele Anfragen. Bitte versuchen Sie es später erneut.",{retryAfter:60});
   }
   try{
     const secret=getSecret();
-    if(!secret)return neutralError(503,res,"Portal-Zugang ist vorÃ¼bergehend nicht verfÃ¼gbar.");
+    if(!secret)return neutralError(503,res,"Portal-Zugang ist vorübergehend nicht verfügbar.");
     const bundle=await loadShareBundle(shareId);
     const validation=validateShareAccessLocal(bundle?.share,rawToken,secret);
     if(!validation.ok||!bundle?.snapshot?.data){
@@ -352,7 +478,7 @@ async function portalDocument(req,res){
       }
     }
     if(!url){
-      return neutralError(404,res,"Dieses Dokument ist derzeit nicht verfÃ¼gbar.");
+      return neutralError(404,res,"Dieses Dokument ist derzeit nicht verfügbar.");
     }
     applySecurityHeaders(res);
     res.status(200).json({
@@ -365,7 +491,7 @@ async function portalDocument(req,res){
     });
   }catch(error){
     console.error("[portalDocument] request failed:",error&&error.code?error.code:"",error&&error.message?error.message:"");
-    return neutralError(500,res,"Dieses Dokument ist derzeit nicht verfÃ¼gbar.");
+    return neutralError(500,res,"Dieses Dokument ist derzeit nicht verfügbar.");
   }
 }
 
@@ -392,5 +518,6 @@ module.exports={
   portalShare,
   portalDocument,
   createPortalShare,
+  refreshPortalShares,
   revokePortalShare
 };

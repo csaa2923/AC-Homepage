@@ -1236,6 +1236,34 @@
       }else{
         throw new Error("Firebase nicht verfügbar.");
       }
+      if(result?.reused){
+        const existing=activeShareToken(customer.customerId);
+        customer.publishMeta={
+          ...(customer.publishMeta||{}),
+          activePortalShare:{
+            ...(customer.publishMeta?.activePortalShare||{}),
+            shareId:result.shareId,
+            createdAt:result.createdAt||customer.publishMeta?.activePortalShare?.createdAt||new Date().toISOString(),
+            publishedVersionId:result.publishedVersionId||customer.version||"1.0",
+            status:"active"
+          }
+        };
+        if(existing?.shareUrl){
+          saveShareToken(customer.customerId,{
+            ...existing,
+            shareId:result.shareId,
+            publishedVersionId:result.publishedVersionId||customer.version||"1.0",
+            status:"active"
+          });
+          byId("portalShareLink").value=existing.shareUrl;
+        }
+        commitCustomer(customer);
+        saveCustomers();
+        if(statusEl)statusEl.textContent=existing?.shareUrl
+          ?"Bestehender Kundenlink wurde aktualisiert — derselbe Link bleibt gültig."
+          :"Bestehender Kundenlink wurde aktualisiert. Der Kunde kann den bisherigen Link weiter nutzen.";
+        return;
+      }
       const shareUrl=buildShareLink(result.shareId,result.rawToken);
       saveShareToken(customer.customerId,{
         shareId:result.shareId,
@@ -3554,10 +3582,21 @@
         contentHash:publishContentHash(publishCandidate),
         publishError:""
       };
+      let refreshNote="";
+      try{
+        if(db.refreshPortalShares){
+          const refresh=await db.refreshPortalShares(id);
+          const count=Number(refresh?.refreshedCount||0);
+          if(count>0)refreshNote=` ${count} Portal-Link(s) aktualisiert.`;
+        }
+      }catch(refreshError){
+        console.warn("[PublishCustomer] Share-Refresh fehlgeschlagen.",refreshError);
+        refreshNote=" Share-Links ggf. manuell pruefen.";
+      }
       customer=commitCustomer(publishCandidate,id);
       saveCustomers();
       saveState.dirty=false;
-      setFirebaseStatus(`Version ${nextVersion} wurde veröffentlicht.`);
+      setFirebaseStatus(`Version ${nextVersion} wurde veröffentlicht.${refreshNote}`);
       closePublishDialog();
       renderAll();
       openNotifyDialog(customer,meta);

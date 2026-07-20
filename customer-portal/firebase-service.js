@@ -950,7 +950,7 @@
     return firestoreModule.collection(ready.db,"portalShares");
   }
 
-  async function createPortalShareViaCallable(customerId){
+  async function createPortalShareViaCallable(customerId,options={}){
     const ready=await ensureDb();
     const functionsModule=await importFunctionsModule();
     const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
@@ -961,18 +961,35 @@
       functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
     }
     const callable=functionsModule.httpsCallable(functions,"createPortalShare");
-    const result=await callable({customerId});
+    const result=await callable({customerId,forceNew:Boolean(options.forceNew)});
     return result.data||{};
   }
 
-  async function createPortalShare(customer){
+  async function createPortalShare(customer,options={}){
     const customerId=customerIdOf(customer);
     if(!customerId)throw new Error("Kunden-ID fehlt.");
     const published=customer.publishedSnapshot||null;
     if(!published&&(customer.publishStatus!=="published"&&customer.publicationState!=="Veröffentlicht")){
       throw new Error("Es gibt noch keine veröffentlichte Live-Version.");
     }
-    return createPortalShareViaCallable(customerId);
+    return createPortalShareViaCallable(customerId,options);
+  }
+
+  async function refreshPortalShares(customerId){
+    const id=String(customerId||"").trim();
+    if(!id)throw new Error("Kunden-ID fehlt.");
+    const ready=await ensureDb();
+    const functionsModule=await importFunctionsModule();
+    const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
+    const shareCfg=portalShareConfig();
+    if(shareCfg.useFunctionsEmulator&&functionsModule.connectFunctionsEmulator){
+      const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
+      const [fnHost,fnPort]=host.split(":");
+      functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
+    }
+    const callable=functionsModule.httpsCallable(functions,"refreshPortalShares");
+    const result=await callable({customerId:id});
+    return result.data||{};
   }
 
   async function listPortalSharesForCustomer(customerId){
@@ -1092,6 +1109,7 @@
     loadAllBookingsForAdmin,
     deleteBookingRecord,
     createPortalShare,
+    refreshPortalShares,
     listPortalSharesForCustomer,
     revokePortalShare,
     fetchPortalShareData,

@@ -24,6 +24,11 @@ exports.createPortalShare=onCall({
   secrets:functionSecrets()
 },(request)=>loadImpl().createPortalShare(request));
 
+exports.refreshPortalShares=onCall({
+  region:"europe-west1",
+  secrets:functionSecrets()
+},(request)=>loadImpl().refreshPortalShares(request));
+
 exports.revokePortalShare=onCall({
   region:"europe-west1"
 },(request)=>loadImpl().revokePortalShare(request));

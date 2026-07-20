@@ -43,6 +43,11 @@
     delete snapshot.publishMeta;
     delete snapshot.publishHistory;
     delete snapshot.crm;
+    const flatten=window.ACTPublishWorkflow?.flattenProgramItems;
+    if(typeof flatten==="function"){
+      snapshot.program=flatten(snapshot.program||snapshot.programItems||[],{customer:snapshot});
+      snapshot.programItems=snapshot.program;
+    }
     if(window.ACTBookingLibrary){
       const applied=window.ACTBookingLibrary.applyBookingsToProgram(snapshot);
       snapshot.program=applied.program;

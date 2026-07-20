@@ -364,7 +364,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     assert.match(html,/admin-v2\.css\?v=26/);
     assert.match(html,/portal-share-library\.js\?v=2/);
-    assert.match(html,/publish-workflow\.js\?v=4/);
+    assert.match(html,/publish-workflow\.js\?v=5/);
     assert.match(html,/firebase-storage\.js\?v=4/);
     assert.match(html,/admin-v2\.js\?v=26"><\/script>/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
@@ -470,7 +470,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/redact-allowlist\.js\?v=2/);
     assert.match(html,/redact-public-snapshot\.js\?v=2/);
     assert.match(html,/portal-share-library\.js\?v=2/);
-    assert.match(html,/publish-workflow\.js\?v=4/);
+    assert.match(html,/publish-workflow\.js\?v=5/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function publishCustomerV2\(\)/);

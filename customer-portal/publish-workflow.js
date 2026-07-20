@@ -12,8 +12,57 @@
     return parts.join(".");
   }
 
-  function programSignature(items){
-    return (items||[]).map(item=>({
+  function programDayBucket(entry){
+    return Boolean(entry&&typeof entry==="object"&&!Array.isArray(entry)&&Array.isArray(entry.items));
+  }
+
+  function dateRangePlain(start,end){
+    const from=String(start||"").trim();
+    const to=String(end||from).trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(from))return [];
+    const dates=[];
+    const cursor=new Date(`${from}T12:00:00`);
+    const last=new Date(`${(/^\d{4}-\d{2}-\d{2}$/.test(to)?to:from)}T12:00:00`);
+    if(Number.isNaN(cursor.getTime())||Number.isNaN(last.getTime())||last<cursor)return [];
+    while(cursor<=last&&dates.length<62){
+      dates.push(`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,"0")}-${String(cursor.getDate()).padStart(2,"0")}`);
+      cursor.setDate(cursor.getDate()+1);
+    }
+    return dates;
+  }
+
+  function flattenProgramItems(program,options={}){
+    const list=Array.isArray(program)?program:[];
+    const tripDates=Array.isArray(options.tripDates)
+      ?options.tripDates
+      :dateRangePlain(options.startDatePlain||options.customer?.startDatePlain,options.endDatePlain||options.customer?.endDatePlain);
+    const flat=[];
+    list.forEach((entry,index)=>{
+      if(programDayBucket(entry)){
+        const dayDate=String(entry.date||entry.dateValue||entry.dayDate||tripDates[index]||"").trim();
+        const dayTitle=String(entry.title||`Tag ${index+1}`).trim();
+        (entry.items||[]).forEach((item,itemIndex)=>{
+          const next={...(item||{})};
+          const dateValue=String(next.dateValue||next.date||next.dayDate||dayDate||"").trim();
+          next.dateValue=dateValue;
+          if(dateValue&&!String(next.date||"").trim())next.date=dateValue;
+          if(!String(next.id||"").trim())next.id=`day-${index+1}-item-${itemIndex+1}`;
+          if(!String(next.title||"").trim())next.title=`${dayTitle} · Punkt ${itemIndex+1}`;
+          flat.push(next);
+        });
+        return;
+      }
+      const next={...(entry||{})};
+      const dateValue=String(next.dateValue||next.date||next.dayDate||"").trim();
+      next.dateValue=dateValue;
+      if(dateValue&&!String(next.date||"").trim())next.date=dateValue;
+      flat.push(next);
+    });
+    return flat;
+  }
+
+  function programSignature(items,options){
+    return flattenProgramItems(items,options).map(item=>({
       id:item.id||"",
       title:item.title||"",
       dateValue:item.dateValue||"",
@@ -97,8 +146,8 @@
       add("Wetter-Ort","changed");
     }
 
-    const draftProgram=programSignature(draft.program||draft.programItems);
-    const pubProgram=programSignature(pub.program||pub.programItems);
+    const draftProgram=programSignature(draft.program||draft.programItems,{customer:draft});
+    const pubProgram=programSignature(pub.program||pub.programItems,{customer:pub});
     const pubIds=new Set(pubProgram.map(item=>item.id).filter(Boolean));
     const draftIds=new Set(draftProgram.map(item=>item.id).filter(Boolean));
     const newCount=draftProgram.filter(item=>item.id&&!pubIds.has(item.id)).length;
@@ -140,7 +189,7 @@
         latitude:source.latitude||"",
         longitude:source.longitude||""
       },
-      program:programSignature(source.program||source.programItems),
+      program:programSignature(source.program||source.programItems,{customer:source}),
       accommodations:accommodationSignature(source.accommodations),
       documents:documentSignature(source.documents)
     };
@@ -158,7 +207,8 @@
     if(!String(c.phone||"").trim()&&!String(c.whatsapp||"").trim())errors.push("Telefon oder WhatsApp fehlt.");
     if(c.startDatePlain&&c.endDatePlain&&c.endDatePlain<c.startDatePlain)errors.push("Reisezeitraum ist ungültig (Ende vor Start).");
 
-    (c.program||[]).forEach((item,index)=>{
+    const programItems=flattenProgramItems(c.program||c.programItems||[],{customer:c});
+    programItems.forEach((item,index)=>{
       const label=item.title||`Programmpunkt ${index+1}`;
       if(!String(item.title||"").trim())errors.push(`${label}: Titel fehlt.`);
       if(!String(item.dateValue||"").trim())errors.push(`${label}: Termindatum fehlt (wann findet der Programmpunkt statt?).`);
@@ -280,6 +330,8 @@
     publishComparePayload,
     publishContentHash,
     validateForPublish,
+    flattenProgramItems,
+    programDayBucket,
     getPublishStatus,
     formatPublishDateTime,
     buildHistoryEntry,

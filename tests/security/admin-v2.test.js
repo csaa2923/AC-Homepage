@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=23/);
-    assert.match(html,/admin-v2\.js\?v=22/);
+    assert.match(html,/admin-v2\.css\?v=24/);
+    assert.match(html,/admin-v2\.js\?v=23/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -302,11 +302,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="documentsRoot"/);
     assert.match(js,/documentEditMode:false/);
     assert.match(js,/let documentSavePromise=null/);
-    assert.match(js,/const DOCUMENT_CATEGORIES=\["Flug","Hotel","Restaurant","Aktivitaet","Transfer","Mietwagen","Ticket","Voucher","Versicherung","Rechnung","Reisepass","Visum","Sonstiges"\]/);
-    assert.match(js,/const DOCUMENT_TYPES=\["PDF","Bild","Ticket","Voucher","Boarding Pass","Rechnung","Vertrag","Versicherung","Hotel","Flug","Transfer","Restaurant","QR-Code","Link","Sonstiges","Text","Dokument"\]/);
-    assert.match(js,/const DOCUMENT_ASSIGNMENTS=\["Reise","Programmpunkt","Buchung"\]/);
+    assert.match(js,/const DOCUMENT_CATEGORIES=\["Reiseunterlagen","Transport","Unterkunft","Aktivitaet","Restaurant","Versicherung","Identitaetsdokument","Rechnung","Vertrag","Flug","Hotel","Transfer","Mietwagen","Ticket","Voucher","Reisepass","Visum","Sonstiges"\]/);
+    assert.match(js,/const DOCUMENT_TYPES=\["PDF","Bild","Ticket","Voucher","Buchungsbestaetigung","Boarding Pass","Fahrkarte","Hotel","Flug","Transfer","Restaurant","Rechnung","Vertrag","Versicherung","Reisepass","Visum","QR-Code","Link","Sonstiges","Text","Dokument"\]/);
+    assert.match(js,/const DOCUMENT_ASSIGNMENTS=\["Reise","Reisetag","Programmpunkt","Buchung","Allgemeines Kundendokument","Nicht zugeordnet"\]/);
     assert.match(js,/function normalizeDocumentItem\(item,index=0\)/);
     assert.match(js,/categoryCandidate=firstValue\(doc\.category,doc\.documentCategory,DOCUMENT_CATEGORIES\.includes\(doc\.type\)\?doc\.type:"","Sonstiges"\)/);
+    assert.match(js,/category:categoryCandidate\|\|"Sonstiges"/);
     assert.match(js,/programItemId:firstValue\(doc\.programItemId,doc\.programId,doc\.activityId,doc\.itemId\)/);
     assert.match(js,/bookingId:firstValue\(doc\.bookingId,doc\.booking,doc\.reservationId\)/);
     assert.match(js,/expiryDate:dateInputValue\(firstValue\(doc\.expiryDate,doc\.expiresAt,doc\.validUntil,doc\.ablaufdatum\)\)/);
@@ -326,13 +327,15 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/documentSelect\(prefix,"category","Kategorie",doc\.category,DOCUMENT_CATEGORIES/);
     assert.match(js,/documentSelect\(prefix,"documentType","Dokumenttyp",doc\.documentType,DOCUMENT_TYPES/);
     assert.match(js,/documentVisibilityToggle\(prefix,doc\.visibility\|\|"Kundenportal",index\)/);
-    assert.match(js,/Kundenportal AN/);
-    assert.match(js,/Kundenportal AUS/);
+    assert.match(js,/AN · Fuer Kunden sichtbar/);
+    assert.match(js,/AUS · Nur intern/);
     assert.match(js,/documentSelect\(prefix,"assignmentType","Zuordnung",doc\.assignmentType\|\|"Reise",DOCUMENT_ASSIGNMENTS/);
     assert.match(js,/documentInput\(prefix,"programItemId","Programmpunkt",doc\.programItemId/);
     assert.match(js,/documentInput\(prefix,"bookingId","Buchung",doc\.bookingId/);
     assert.match(js,/documentInput\(prefix,"tripId","Reise",doc\.tripId/);
+    assert.match(js,/documentInput\(prefix,"issueDate","Ausstellungsdatum",doc\.issueDate,\{type:"date"/);
     assert.match(js,/documentInput\(prefix,"expiryDate","Ablaufdatum",doc\.expiryDate,\{type:"date"/);
+    assert.match(js,/documentSelect\(prefix,"status","Status",doc\.status\|\|"Aktiv",\["Aktiv","Archiviert"\]/);
     assert.match(js,/documentTextarea\(prefix,"description","Beschreibung",doc\.description/);
     assert.match(js,/documentTextarea\(prefix,"internalNotes","Interne Notizen \(nur Admin\)",doc\.internalNotes/);
     assert.match(js,/function deleteDocumentEditItem\(index\)/);
@@ -354,10 +357,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=23/);
+    assert.match(html,/admin-v2\.css\?v=24/);
     assert.match(html,/portal-share-library\.js\?v=2/);
     assert.match(html,/publish-workflow\.js\?v=4/);
-    assert.match(html,/firebase-database\.js"><\/script>\s*<script src="firebase-storage\.js\?v=3"><\/script>\s*<script src="admin-v2\.js\?v=22"><\/script>/);
+    assert.match(html,/firebase-database\.js"><\/script>\s*<script src="firebase-storage\.js\?v=3"><\/script>\s*<script src="admin-v2\.js\?v=23"><\/script>/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/const DOCUMENT_MIME_TYPES=new Set\(\[/);
     assert.match(js,/const DOCUMENT_EXTENSIONS=new Set\(\["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx"\]\)/);
@@ -421,7 +424,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/if\(state\.documentQuality==="Abgelaufen"/);
     assert.match(js,/documentQualityFilter/);
     assert.match(js,/data-open-documents/);
-    assert.match(js,/Automatisch erkannt:/);
+    assert.match(js,/Vorschlag:/);
+    assert.match(js,/data-document-edit-action="apply-suggestion"/);
     assert.match(js,/Dokumentenqualitaet/);
     assert.match(js,/Heute abgelaufen:/);
     assert.match(js,/In 7 Tagen:/);
@@ -431,6 +435,36 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-document-quality-grid/);
     assert.match(css,/\.v2-document-controls\{display:grid;grid-template-columns:2fr repeat\(6,minmax\(140px,1fr\)\)/);
     assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
+  });
+
+  it("makes document analysis actionable without bypassing secure portal or draft facades",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(js,/documentFocusIndex:null/);
+    assert.match(js,/function documentIssueField\(issue\)/);
+    assert.match(js,/function documentIssueListMarkup\(doc,quality,\{customer=null,index=0,edit=false\}=\{\}\)/);
+    assert.match(js,/data-document-edit-action="edit-issue"/);
+    assert.match(js,/data-document-field="\$\{escapeHtml\(field\)\}"/);
+    assert.match(js,/function openDocumentEditor\(customerId,index=null,field=""\)/);
+    assert.match(js,/target\.closest\("\.v2-document-edit-item"\)\?\.scrollIntoView/);
+    assert.match(js,/data-document-edit-action="edit-one"/);
+    assert.match(js,/Details bearbeiten/);
+    assert.match(js,/function applyDocumentSuggestion\(index\)/);
+    assert.match(js,/Vorschlag uebernommen\. Bitte speichern/);
+    assert.match(js,/function documentCompleteness\(doc,quality=documentQuality\(doc\)\)/);
+    assert.match(js,/class="v2-quality-meter"/);
+    assert.match(js,/documentMetricButton\("Kundenportal sichtbar"/);
+    assert.match(js,/documentMetricButton\("Nur intern"/);
+    assert.match(js,/Noch kein sicherer Kunden-Link erzeugt/);
+    assert.match(js,/const canPreview=Boolean\(link\.canOpen&&link\.url\)/);
+    assert.match(js,/if\(!link\.canOpen\|\|!link\.url\)/);
+    assert.doesNotMatch(js,/params\.set\("customer"/);
+    assert.match(js,/ACTPortalShareLibrary\.buildShareUrl|lib\?\.buildShareUrl/);
+    assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
+    assert.doesNotMatch(js,/setDoc\(|updateDoc\(|deleteDoc\(|firestoreModule/);
+    assert.doesNotMatch(js,/uploadBytesResumable\(|getDownloadURL\(|ref\(ready\.storage/);
+    assert.match(css,/\.v2-quality-meter/);
+    assert.match(css,/\.v2-link-button/);
   });
 
   it("integrates publication and secure portal links through existing facades only",()=>{

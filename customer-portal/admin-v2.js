@@ -40,6 +40,8 @@
     documentEditSaving:false,
     documentEditMessage:"",
     documentEditMessageKind:"",
+    documentFocusIndex:null,
+    documentFocusField:"",
     documentQuery:"",
     documentCategory:"",
     documentAssignment:"",
@@ -528,6 +530,8 @@
     state.documentEditOriginal="";
     state.documentEditErrors={};
     state.documentEditSaving=false;
+    state.documentFocusIndex=null;
+    state.documentFocusField="";
     if(!keepMessage){
       state.documentEditMessage="";
       state.documentEditMessageKind="";
@@ -871,10 +875,10 @@
   const PROGRAM_CATEGORIES=["Unterkunft","Fruehstueck","Mittagessen","Abendessen","Restaurant","Aktivitaet","Transfer","Flug","Bahn","Bus","Taxi","Wanderung","Wellness","Shopping","Freizeit","Termin","Ticket","Sonstiges"];
   const PROGRAM_PRIORITIES=["","Highlight","Empfehlenswert","Optional","Schlechtwetteralternative"];
   const PROGRAM_CURRENCIES=["EUR","CHF","USD","GBP"];
-  const DOCUMENT_CATEGORIES=["Flug","Hotel","Restaurant","Aktivitaet","Transfer","Mietwagen","Ticket","Voucher","Versicherung","Rechnung","Reisepass","Visum","Sonstiges"];
-  const DOCUMENT_TYPES=["PDF","Bild","Ticket","Voucher","Boarding Pass","Rechnung","Vertrag","Versicherung","Hotel","Flug","Transfer","Restaurant","QR-Code","Link","Sonstiges","Text","Dokument"];
+  const DOCUMENT_CATEGORIES=["Reiseunterlagen","Transport","Unterkunft","Aktivitaet","Restaurant","Versicherung","Identitaetsdokument","Rechnung","Vertrag","Flug","Hotel","Transfer","Mietwagen","Ticket","Voucher","Reisepass","Visum","Sonstiges"];
+  const DOCUMENT_TYPES=["PDF","Bild","Ticket","Voucher","Buchungsbestaetigung","Boarding Pass","Fahrkarte","Hotel","Flug","Transfer","Restaurant","Rechnung","Vertrag","Versicherung","Reisepass","Visum","QR-Code","Link","Sonstiges","Text","Dokument"];
   const DOCUMENT_VISIBILITIES=["Kundenportal","Intern"];
-  const DOCUMENT_ASSIGNMENTS=["Reise","Programmpunkt","Buchung"];
+  const DOCUMENT_ASSIGNMENTS=["Reise","Reisetag","Programmpunkt","Buchung","Allgemeines Kundendokument","Nicht zugeordnet"];
   const DOCUMENT_QUALITY_FILTERS=["","Vollstaendig","Hinweise","Kritisch","Nicht zugeordnet","Doppelt","Abgelaufen","Laeuft bald ab"];
   const DOCUMENT_REQUIRED_BY_PROGRAM_CATEGORY={
     flug:["Ticket"],
@@ -1529,9 +1533,9 @@
       documentId:documentId(doc,index),
       title:firstValue(doc.title,doc.name,doc.fileName,doc.originalName,`Dokument ${index+1}`),
       fileName:firstValue(doc.fileName,doc.originalName,doc.name,doc.title),
-      category:DOCUMENT_CATEGORIES.includes(categoryCandidate)?categoryCandidate:"Sonstiges",
+      category:categoryCandidate||"Sonstiges",
       type:firstValue(doc.type,categoryCandidate),
-      documentType:DOCUMENT_TYPES.includes(documentType)?documentType:"Dokument",
+      documentType:documentType||"Dokument",
       url,
       downloadUrl:safeDocumentUrl(firstValue(doc.downloadUrl,doc.downloadURL,doc.url)),
       storagePath:cleanValue(doc.storagePath),
@@ -1549,12 +1553,14 @@
       bookingId:firstValue(doc.bookingId,doc.booking,doc.reservationId),
       assignedTo:normalizeTags(doc.assignedTo||doc.assignments),
       expiryDate:dateInputValue(firstValue(doc.expiryDate,doc.expiresAt,doc.validUntil,doc.ablaufdatum)),
+      issueDate:dateInputValue(firstValue(doc.issueDate,doc.issuedAt,doc.createdDate,doc.ausstellungsdatum)),
       issuer:firstValue(doc.issuer,doc.provider,doc.vendor,doc.aussteller),
       referenceNumber:firstValue(doc.referenceNumber,doc.reference,doc.confirmationNumber,doc.ref),
       tags:normalizeTags(doc.tags),
       description:firstValue(doc.description,doc.note,doc.notes),
       note:firstValue(doc.note,doc.description),
-      internalNotes:firstValue(doc.internalNotes,doc.adminNotes,doc.privateNotes)
+      internalNotes:firstValue(doc.internalNotes,doc.adminNotes,doc.privateNotes),
+      status:firstValue(doc.status,doc.documentStatus,"Aktiv")
     };
   }
 
@@ -1573,8 +1579,8 @@
         documentId:documentId(item,index),
         title:cleanValue(item.title),
         fileName:cleanValue(item.fileName),
-        category:DOCUMENT_CATEGORIES.includes(item.category)?item.category:"Sonstiges",
-        documentType:DOCUMENT_TYPES.includes(item.documentType)?item.documentType:"Dokument",
+        category:cleanValue(item.category)||"Sonstiges",
+        documentType:cleanValue(item.documentType)||"Dokument",
         url:cleanValue(item.url),
         downloadUrl:cleanValue(item.downloadUrl),
         storagePath:cleanValue(item.storagePath),
@@ -1591,12 +1597,14 @@
         bookingId:cleanValue(item.bookingId),
         assignedTo:normalizeTags(item.assignedTo),
         expiryDate:dateInputValue(item.expiryDate),
+        issueDate:dateInputValue(item.issueDate),
         issuer:cleanValue(item.issuer),
         referenceNumber:cleanValue(item.referenceNumber),
         tags:normalizeTags(item.tags),
         description:cleanValue(item.description),
         note:cleanValue(item.note||item.description),
         internalNotes:cleanValue(item.internalNotes),
+        status:cleanValue(item.status)||"Aktiv",
         order:index
       }))
     };
@@ -1661,12 +1669,14 @@
       bookingId:item.bookingId,
       assignedTo:item.assignedTo,
       expiryDate:item.expiryDate,
+      issueDate:item.issueDate,
       issuer:item.issuer,
       referenceNumber:item.referenceNumber,
       tags:item.tags,
       description:item.description,
       note:item.note||item.description,
-      internalNotes:item.internalNotes
+      internalNotes:item.internalNotes,
+      status:item.status
     }));
   }
 
@@ -1678,7 +1688,18 @@
     return compactObject(next);
   }
 
-  function startDocumentEdit(customer){
+  function focusDocumentEditField(){
+    if(state.documentFocusIndex===null||!state.documentFocusField)return;
+    window.setTimeout(()=>{
+      const id=`document-${state.documentFocusIndex}-${state.documentFocusField}`;
+      const target=byId(id);
+      if(!target)return;
+      target.closest(".v2-document-edit-item")?.scrollIntoView({block:"start",behavior:"smooth"});
+      target.focus({preventScroll:true});
+    },80);
+  }
+
+  function startDocumentEdit(customer,{index=null,field=""}={}){
     resetCustomerEditState();
     resetTripEditState();
     resetProgramEditState();
@@ -1688,8 +1709,39 @@
     state.documentEditOriginal=documentEditFingerprint(draft);
     state.documentEditErrors={};
     state.documentEditSaving=false;
+    state.documentFocusIndex=Number.isFinite(index)?index:null;
+    state.documentFocusField=field||"";
     setDocumentEditMessage("","");
     renderCustomerDetail();
+    focusDocumentEditField();
+  }
+
+  function openDocumentEditor(customerId,index=null,field=""){
+    const id=customerId||state.selectedCustomerId;
+    const customer=customerById(id);
+    if(!customer)return;
+    if(state.route!=="customerDetail"||state.selectedCustomerId!==customer.customerId||state.selectedTab!=="dokumente"){
+      routeTo(`customers/${encodeURIComponent(customer.customerId)}/dokumente`);
+    }
+    startDocumentEdit(customer,{index:Number.isFinite(index)?index:null,field});
+  }
+
+  function applyDocumentSuggestion(index){
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return;
+    if(!state.documentEditMode)startDocumentEdit(customer,{index,field:"assignmentType"});
+    const doc=state.documentEditDraft?.documents?.[index];
+    if(!doc)return;
+    const row=documentAnalysis(customer).rows[index];
+    const inferred=row?.quality?.inferred;
+    if(!inferred)return;
+    doc.assignmentType=inferred.assignmentType||doc.assignmentType||"Reise";
+    if(inferred.programItemId)doc.programItemId=inferred.programItemId;
+    setDocumentEditMessage("Vorschlag uebernommen. Bitte speichern, um die Aenderung zu uebernehmen.","dirty");
+    state.documentFocusIndex=index;
+    state.documentFocusField=inferred.programItemId?"programItemId":"assignmentType";
+    renderCustomerDetail();
+    focusDocumentEditField();
   }
 
   function cancelDocumentEdit(){
@@ -1881,7 +1933,7 @@
   }
 
   function documentStatus(doc){
-    if(!doc.expiryDate)return "";
+    if(!doc.expiryDate)return "Kein Ablaufdatum";
     const today=new Date();
     today.setHours(0,0,0,0);
     const expires=dateValue(doc.expiryDate);
@@ -1889,12 +1941,28 @@
     const days=Math.ceil((expires.getTime()-today.getTime())/86400000);
     if(days<0)return "Abgelaufen";
     if(days<=30)return "Laeuft bald ab";
-    return "";
+    return "Gueltig";
   }
 
   function documentStatusBadge(doc){
     const status=documentStatus(doc);
     return status?badge(status):"";
+  }
+
+  function documentIssueListMarkup(doc,quality,{customer=null,index=0,edit=false}={}){
+    const issues=arrayValue(quality?.issues);
+    if(!issues.length)return "";
+    return `
+      <details class="v2-document-issues" open>
+        <summary>${issues.length} Hinweis${issues.length===1?"":"e"} direkt bearbeiten</summary>
+        <ul>
+          ${issues.map(issue=>{
+            const field=documentIssueField(issue);
+            return `<li><span>${escapeHtml(issue)}</span>${customer&&!edit?`<button class="v2-link-button" type="button" data-document-edit-action="edit-issue" data-document-customer="${escapeHtml(customer.customerId)}" data-document-index="${index}" data-document-field="${escapeHtml(field)}">Jetzt ergaenzen</button>`:""}</li>`;
+          }).join("")}
+        </ul>
+      </details>
+    `;
   }
 
   function documentIcon(doc){
@@ -2016,11 +2084,38 @@
     };
   }
 
+  function documentIssueField(issue){
+    const text=normalizeText(issue);
+    if(text.includes("kategorie"))return "category";
+    if(text.includes("reise"))return "tripId";
+    if(text.includes("programmpunkt")||text.includes("zugeordnet"))return "programItemId";
+    if(text.includes("buchung"))return "bookingId";
+    if(text.includes("ablauf"))return "expiryDate";
+    if(text.includes("beschreibung"))return "description";
+    if(text.includes("typ"))return "documentType";
+    if(text.includes("sichtbarkeit")||text.includes("intern"))return "visible";
+    return "title";
+  }
+
+  function documentCompleteness(doc,quality=documentQuality(doc)){
+    const needsExpiry=/pass|visum|versicherung|voucher|ticket|boarding/i.test(`${doc.documentType} ${doc.category}`);
+    const checks=[
+      Boolean(doc.documentType&&doc.documentType!=="Dokument"),
+      Boolean(doc.category&&doc.category!=="Sonstiges"),
+      Boolean(doc.description),
+      Boolean(doc.visibility),
+      Boolean(quality.explicit||quality.inferred||doc.assignmentType==="Allgemeines Kundendokument")
+    ];
+    if(needsExpiry)checks.push(Boolean(doc.expiryDate));
+    const done=checks.filter(Boolean).length;
+    return {done,total:checks.length,percent:checks.length?Math.round(done/checks.length*100):100};
+  }
+
   function documentAnalysis(customer){
     const docs=normalizedDocuments(customer);
     const programItems=flattenProgramItems(customer);
     const duplicateKeys=duplicateDocumentKeys(docs);
-    const rows=docs.map(doc=>({doc,quality:documentQuality(doc,{programItems,duplicateKeys})}));
+    const rows=docs.map((doc,index)=>({doc,index,quality:documentQuality(doc,{programItems,duplicateKeys})}));
     const missing=missingDocumentsForProgram(customer,rows);
     const expiry={
       expired:rows.filter(row=>row.quality.expiry==="Abgelaufen").length,
@@ -2118,7 +2213,29 @@
     const images=docs.filter(doc=>normalizeText(doc.documentType)==="bild").length;
     const tickets=docs.filter(doc=>/ticket/i.test(doc.category||doc.documentType)).length;
     const vouchers=docs.filter(doc=>/voucher/i.test(doc.category||doc.documentType)).length;
-    return {total:docs.length,pdf,images,tickets,vouchers,...quality};
+    const visible=docs.filter(doc=>doc.visibility!=="Intern"&&doc.visible!==false).length;
+    const internal=docs.length-visible;
+    const expired=docs.filter(doc=>documentStatus(doc)==="Abgelaufen").length;
+    const missingCategory=docs.filter(doc=>!doc.category||doc.category==="Sonstiges").length;
+    const missingType=docs.filter(doc=>!doc.documentType||doc.documentType==="Dokument").length;
+    return {total:docs.length,pdf,images,tickets,vouchers,visible,internal,expired,missingCategory,missingType,...quality};
+  }
+
+  function documentMetricButton(label,value,filter){
+    return `<button class="v2-summary-item v2-summary-button" type="button" data-document-filter="${escapeHtml(filter)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></button>`;
+  }
+
+  function applyDocumentMetricFilter(filter){
+    if(filter==="pdf")state.documentTypeFilter="pdf";
+    if(filter==="image")state.documentTypeFilter="image";
+    if(filter==="ticket")state.documentTypeFilter="ticket";
+    if(filter==="voucher")state.documentTypeFilter="voucher";
+    if(filter==="expired")state.documentQuality="Abgelaufen";
+    if(filter==="missing")state.documentQuality="Hinweise";
+    if(filter==="unassigned")state.documentQuality="Nicht zugeordnet";
+    if(filter==="visible")state.documentVisibility="visible";
+    if(filter==="internal")state.documentVisibility="internal";
+    renderDocuments();
   }
 
   function publishWorkflow(){
@@ -2194,21 +2311,6 @@
     return customer?.publishMeta?.activePortalShare||null;
   }
 
-  function portalPreviewUrl(customer){
-    const id=customer?.customerId||"";
-    const href=window.location.href.split("#")[0].split("?")[0];
-    const base=href.replace(/admin-v2\.html$/i,"index.html").replace(/admin\.html$/i,"index.html");
-    const params=new URLSearchParams();
-    params.set("customer",id);
-    params.set("admin","1");
-    return `${base}?${params.toString()}`;
-  }
-
-  function issuePortalPreviewGrant(customer){
-    const lib=portalShareLibrary();
-    if(lib?.issueAdminPreviewGrant)lib.issueAdminPreviewGrant(customer?.customerId||"");
-  }
-
   function resolvePortalLink(customer){
     if(!isPublished(customer)){
       return {status:"draft",url:"",display:"",hint:"Bitte zuerst veroeffentlichen und danach einen sicheren Link erzeugen.",canOpen:false,canCopy:false};
@@ -2220,7 +2322,7 @@
     const meta=customerShareMeta(customer);
     if(meta?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen.",canOpen:false,canCopy:false};
     if(meta?.shareId)return {status:"session-lost",url:"",display:"",hint:"Ein sicherer Share-Link existiert, der Token ist in dieser Sitzung aber nicht mehr verfuegbar. Bitte neuen Link erzeugen.",canOpen:false,canCopy:false};
-    return {status:"none",url:"",display:"",hint:"Noch kein sicherer Kundenportal-Link erzeugt.",canOpen:false,canCopy:false};
+    return {status:"none",url:"",display:"",hint:"Noch kein sicherer Kunden-Link erzeugt.",canOpen:false,canCopy:false};
   }
 
   function setPublicationMessage(message,kind=""){
@@ -2262,7 +2364,9 @@
   function publicationTabMarkup(customer){
     const status=publicationStatus(customer);
     const link=resolvePortalLink(customer);
+    const canPreview=Boolean(link.canOpen&&link.url);
     const warnings=publicationWarnings(customer);
+    const docs=documentSummary(customer);
     const lastPublished=customer.publishMeta?.lastPublishedAt||customer.publishMeta?.publishedAt;
     const publisher=customer.publishMeta?.lastPublisher||customer.publishMeta?.publisher||"Nicht hinterlegt";
     return `
@@ -2296,11 +2400,28 @@
           <p>${escapeHtml(link.hint)}</p>
           ${link.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}
           <div class="v2-document-actions">
-            ${portalButton("Portal-Vorschau oeffnen","preview")}
+            ${portalButton("Portal-Vorschau oeffnen","preview",{disabled:!canPreview})}
             ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
             ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
             ${portalButton("Sicheren Link erzeugen","create-share",{primary:!link.canOpen,disabled:!isPublished(customer)})}
             ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
+          </div>
+        </article>
+        <article class="v2-panel">
+          <div class="v2-panel-head">
+            <div>
+              <p class="v2-eyebrow">Dokumente</p>
+              <h3>Dokumentfreigabe</h3>
+            </div>
+            ${badge(`${docs.visible} sichtbar · ${docs.internal} intern`)}
+          </div>
+          <div class="v2-document-quality-grid">
+            ${summaryItem("Alle Dokumente",String(docs.total))}
+            ${summaryItem("Kundenportal sichtbar",String(docs.visible))}
+            ${summaryItem("Nur intern",String(docs.internal))}
+            ${summaryItem("Abgelaufen",String(docs.expired))}
+            ${summaryItem("Ohne Kategorie",String(docs.missingCategory))}
+            ${summaryItem("Ohne Typ",String(docs.missingType))}
           </div>
         </article>
         <article class="v2-panel">
@@ -2442,8 +2563,12 @@
   function openPortalPreviewV2(){
     const customer=customerById(state.selectedCustomerId);
     if(!customer)return;
-    issuePortalPreviewGrant(customer);
-    window.open(portalPreviewUrl(customer),"_blank","noopener");
+    const link=resolvePortalLink(customer);
+    if(!link.canOpen||!link.url){
+      setPublicationMessage("Noch kein sicherer Kunden-Link erzeugt.","error");
+      return;
+    }
+    window.open(link.url,"_blank","noopener");
   }
 
   function openPortalLinkV2(){
@@ -2500,6 +2625,14 @@
           </div>
         </div>
         ${uploadPanelMarkup()}
+        <div class="v2-document-quality-grid">
+          ${documentMetricButton("Vollstaendig",String(summary.complete),"")}
+          ${documentMetricButton("Hinweise",String(summary.issues),"missing")}
+          ${documentMetricButton("Nicht zugeordnet",String(summary.unassigned||0),"unassigned")}
+          ${documentMetricButton("Abgelaufen",String(summary.expired||0),"expired")}
+          ${documentMetricButton("Kundenportal sichtbar",String(summary.visible||0),"visible")}
+          ${documentMetricButton("Nur intern",String(summary.internal||0),"internal")}
+        </div>
         <div class="v2-document-controls">
           <label class="v2-filter-search">Dokument suchen
             <input id="documentSearchInput" type="search" placeholder="Dateiname, Tags, Kategorie" value="${escapeHtml(state.documentQuery)}">
@@ -2529,7 +2662,7 @@
           </label>
         </div>
         <div class="v2-document-grid">
-          ${records.length?records.map(({customer,doc,quality})=>documentCardMarkup(doc,{customer,quality})).join(""):`<article class="v2-empty"><h3>Keine Dokumente gefunden</h3><p>Die aktuelle Suche liefert kein Ergebnis.</p></article>`}
+          ${records.length?records.map(({customer,doc,quality,index})=>documentCardMarkup(doc,{customer,quality,index})).join(""):`<article class="v2-empty"><h3>Keine Dokumente gefunden</h3><p>Die aktuelle Suche liefert kein Ergebnis.</p></article>`}
         </div>
       </section>
     `;
@@ -2540,29 +2673,37 @@
     const downloadUrl=documentDownloadUrl(doc);
     const currentQuality=quality||documentQuality(doc,{programItems:customer?flattenProgramItems(customer):[]});
     const inferred=currentQuality.inferred;
+    const completeness=documentCompleteness(doc,currentQuality);
     return `
       <article class="v2-document-card">
         ${documentPreview(doc)}
         <div class="v2-document-body">
-          <div class="v2-meta">${badge(doc.category||"Sonstiges")}${badge(doc.documentType||"Dokument")}${documentStatusBadge(doc)}${badge(currentQuality.label)}${badge(doc.visibility||"Kundenportal")}</div>
+          <div class="v2-meta">${badge(doc.category||"Sonstiges")}${badge(doc.documentType||"Dokument")}${documentStatusBadge(doc)}${badge(currentQuality.label)}${badge(doc.visibility==="Intern"?"Nur intern":"Fuer Kunden sichtbar")}</div>
           <h3>${escapeHtml(doc.title||doc.fileName||"Dokument")}</h3>
           <p>${escapeHtml([customer?.customerName,doc.fileName,doc.description].filter(Boolean).join(" · "))}</p>
-          ${inferred?`<p class="v2-document-suggestion">Automatisch erkannt: ${escapeHtml(inferred.assignmentType)}${inferred.programTitle?` · ${escapeHtml(inferred.programTitle)}`:""} · ${escapeHtml(inferred.reason)}</p>`:""}
-          ${currentQuality.issues.length?`<details class="v2-document-issues"><summary>${currentQuality.issues.length} Hinweis${currentQuality.issues.length===1?"":"e"}</summary><ul>${currentQuality.issues.map(issue=>`<li>${escapeHtml(issue)}</li>`).join("")}</ul></details>`:""}
+          <div class="v2-quality-meter" aria-label="Dokumentenqualitaet ${escapeHtml(completeness.percent)} Prozent">
+            <span style="width:${escapeHtml(completeness.percent)}%"></span>
+            <strong>${escapeHtml(completeness.percent)}%</strong>
+            <small>${escapeHtml(completeness.done)} von ${escapeHtml(completeness.total)} Angaben vollstaendig</small>
+          </div>
+          ${inferred?`<p class="v2-document-suggestion">Vorschlag: ${escapeHtml(inferred.assignmentType)}${inferred.programTitle?` · ${escapeHtml(inferred.programTitle)}`:""} · ${escapeHtml(inferred.reason)}${customer&&!edit?` <button class="v2-link-button" type="button" data-document-edit-action="apply-suggestion" data-document-customer="${escapeHtml(customer.customerId)}" data-document-index="${index}">Uebernehmen</button>`:""}</p>`:""}
+          ${documentIssueListMarkup(doc,currentQuality,{customer,index,edit})}
           <div class="v2-document-info">
             ${doc.issuer?`<span>Aussteller: ${escapeHtml(doc.issuer)}</span>`:""}
             ${doc.referenceNumber?`<span>Referenz: ${escapeHtml(doc.referenceNumber)}</span>`:""}
-            ${doc.expiryDate?`<span>Ablauf: ${escapeHtml(formatDate(doc.expiryDate))}</span>`:""}
+            <span>Ablauf: ${escapeHtml(doc.expiryDate?formatDate(doc.expiryDate):"Kein Ablaufdatum")}</span>
             ${doc.uploadedAt?`<span>Upload: ${escapeHtml(formatUploadDate(doc.uploadedAt))}</span>`:""}
             ${doc.size||doc.fileSize?`<span>Groesse: ${escapeHtml(doc.size||doc.fileSize)}</span>`:""}
             ${doc.assignmentType?`<span>Zuordnung: ${escapeHtml(doc.assignmentType)}</span>`:""}
+            ${doc.status?`<span>Status: ${escapeHtml(doc.status)}</span>`:""}
           </div>
           ${normalizeTags(doc.tags).length?`<div class="v2-read-list">${normalizeTags(doc.tags).map(tag=>badge(tag)).join("")}</div>`:""}
           <div class="v2-document-actions">
             ${openUrl?`<a class="v2-button soft" href="${escapeHtml(openUrl)}" target="_blank" rel="noopener noreferrer">Oeffnen</a>`:""}
             ${downloadUrl?`<a class="v2-button soft" href="${escapeHtml(downloadUrl)}" download>Download</a>`:""}
             ${!currentQuality.explicit&&!currentQuality.inferred&&customer?`<button class="v2-button soft" type="button" data-open-documents="${escapeHtml(customer.customerId)}">Zuordnen</button>`:""}
-            ${edit?`<span class="v2-muted">Metadaten werden unten bearbeitet.</span>`:""}
+            ${customer&&!edit?`<button class="v2-button primary" type="button" data-document-edit-action="edit-one" data-document-customer="${escapeHtml(customer.customerId)}" data-document-index="${index}">Details bearbeiten</button>`:""}
+            ${edit?`<span class="v2-muted">Metadaten werden hier bearbeitet.</span>`:""}
           </div>
         </div>
       </article>
@@ -2590,10 +2731,10 @@
         <div class="v2-document-quality-grid">
           ${summaryItem("Automatisch verknuepft",String(summary.linkedAuto))}
           ${summaryItem("Manuell verknuepft",String(summary.linkedManual))}
-          ${summaryItem("Nicht zugeordnet",String(summary.unassigned))}
-          ${summaryItem("Abgelaufen",String(summary.expired))}
+          ${documentMetricButton("Nicht zugeordnet",String(summary.unassigned),"unassigned")}
+          ${documentMetricButton("Abgelaufen",String(summary.expired),"expired")}
           ${summaryItem("Laeuft bald ab",String(summary.expiring))}
-          ${summaryItem("Fehlende Dokumente",String(summary.missing))}
+          ${documentMetricButton("Fehlende Dokumente",String(summary.missing),"missing")}
         </div>
         ${(analysis.missing.length||analysis.expiry.expired||analysis.expiry.seven||analysis.expiry.thirty)?`
           <details class="v2-document-issues v2-document-quality-panel" open>
@@ -2607,7 +2748,7 @@
           </details>
         `:""}
         <div class="v2-document-grid">
-          ${docs.length?analysis.rows.map(row=>documentCardMarkup(row.doc,{customer,quality:row.quality})).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente vorhanden</h3><p>Bitte oben ein Dokument hochladen oder den klassischen Admin als Fallback nutzen.</p></article>`}
+          ${docs.length?analysis.rows.map(row=>documentCardMarkup(row.doc,{customer,quality:row.quality,index:row.index})).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente vorhanden</h3><p>Bitte oben ein Dokument hochladen oder den klassischen Admin als Fallback nutzen.</p></article>`}
         </div>
       </section>
     `;
@@ -2660,10 +2801,12 @@
           ${documentInput(prefix,"tripId","Reise",doc.tripId,{index})}
           ${documentInput(prefix,"url","Oeffnen-Link",doc.url,{type:"url",error:errors[`${prefix}-url`],index})}
           ${documentInput(prefix,"downloadUrl","Download-Link",doc.downloadUrl,{type:"url",error:errors[`${prefix}-downloadUrl`],index})}
+          ${documentInput(prefix,"issueDate","Ausstellungsdatum",doc.issueDate,{type:"date",index})}
           ${documentInput(prefix,"expiryDate","Ablaufdatum",doc.expiryDate,{type:"date",index})}
           ${documentInput(prefix,"issuer","Aussteller",doc.issuer,{index})}
           ${documentInput(prefix,"referenceNumber","Referenznummer",doc.referenceNumber,{index})}
           ${documentInput(prefix,"tags","Tags",normalizeTags(doc.tags).join(", "),{index})}
+          ${documentSelect(prefix,"status","Status",doc.status||"Aktiv",["Aktiv","Archiviert"],{index})}
           ${documentTextarea(prefix,"description","Beschreibung",doc.description,{index})}
           ${documentTextarea(prefix,"internalNotes","Interne Notizen (nur Admin)",doc.internalNotes,{index})}
         </div>
@@ -2684,7 +2827,8 @@
   function documentSelect(prefix,name,label,value,options,{index}={}){
     const id=`${prefix}-${name}`;
     const normalized=normalizeText(value);
-    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-document-index="${index}">${options.map(option=>`<option value="${escapeHtml(option)}" ${normalizeText(option)===normalized?"selected":""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
+    const allOptions=options.some(option=>normalizeText(option)===normalized)||!cleanValue(value)?options:[value,...options];
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-document-index="${index}">${allOptions.map(option=>`<option value="${escapeHtml(option)}" ${normalizeText(option)===normalized?"selected":""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
   }
 
   function documentVisibilityToggle(prefix,value,index){
@@ -2692,10 +2836,10 @@
     const visible=value!=="Intern";
     return `
       <label class="v2-edit-field v2-visibility-toggle" for="${id}">
-        <span>Sichtbarkeit</span>
+        <span>Im Kundenportal sichtbar</span>
         <input id="${id}" name="visible" type="checkbox" data-document-index="${index}" ${visible?"checked":""}>
-        <strong>${visible?"Kundenportal AN":"Kundenportal AUS"}</strong>
-        <small class="v2-field-hint">${visible?"Dokument ist im Kundenportal sichtbar.":"Dokument bleibt intern."}</small>
+        <strong>${visible?"AN · Fuer Kunden sichtbar":"AUS · Nur intern"}</strong>
+        <small class="v2-field-hint">${visible?"Dokument kann im Kundenportal erscheinen, wenn der Kunde veroeffentlicht wird.":"Dokument bleibt intern und darf nicht im Kundenportal erscheinen."}</small>
       </label>
     `;
   }
@@ -4018,7 +4162,16 @@
       if(documentAction){
         const action=documentAction.dataset.documentEditAction;
         const customer=customerById(state.selectedCustomerId);
+        const documentCustomerId=documentAction.dataset.documentCustomer||state.selectedCustomerId;
+        const index=Number(documentAction.dataset.documentIndex);
+        const field=documentAction.dataset.documentField||"";
         if(action==="edit"&&customer)startDocumentEdit(customer);
+        if(action==="edit-one")openDocumentEditor(documentCustomerId,Number.isFinite(index)?index:null,"title");
+        if(action==="edit-issue")openDocumentEditor(documentCustomerId,Number.isFinite(index)?index:null,field);
+        if(action==="apply-suggestion"){
+          openDocumentEditor(documentCustomerId,Number.isFinite(index)?index:null,"assignmentType");
+          applyDocumentSuggestion(Number.isFinite(index)?index:0);
+        }
         if(action==="cancel")cancelDocumentEdit();
         if(action==="delete")deleteDocumentEditItem(Number(documentAction.dataset.documentIndex));
         return;
@@ -4042,6 +4195,11 @@
       const openDocuments=event.target.closest("[data-open-documents]");
       if(openDocuments){
         routeTo(`customers/${encodeURIComponent(openDocuments.dataset.openDocuments)}/dokumente`);
+        return;
+      }
+      const documentFilter=event.target.closest("[data-document-filter]");
+      if(documentFilter){
+        applyDocumentMetricFilter(documentFilter.dataset.documentFilter);
         return;
       }
       const classic=event.target.closest("[data-classic-editor]");

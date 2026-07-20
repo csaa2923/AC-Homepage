@@ -102,8 +102,12 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/function isPdfDocument\(item\)/);
     assert.match(portalJs,/Herunterladen/);
     assert.match(portalJs,/Dieses Dokument ist derzeit nicht verfuegbar\./);
-    assert.match(portalHtml,/customer-portal\.js\?v=32/);
+    assert.match(portalHtml,/customer-portal\.js\?v=33/);
     assert.match(portalHtml,/redact-allowlist\.js\?v=3/);
+    assert.match(portalHtml,/portal-share-library\.js\?v=3/);
+    assert.match(portalJs,/data-open-portal-document/);
+    assert.match(portalJs,/hydrateShareDocumentUrls/);
+    assert.match(portalJs,/fetchPortalDocumentUrl/);
   });
 
   it("keeps browser redact-allowlist in sync with functions for document URL aliases",()=>{

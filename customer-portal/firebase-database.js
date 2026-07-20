@@ -29,6 +29,7 @@
     createPortalShare:customer=>service().createPortalShare(customer),
     listPortalSharesForCustomer:id=>service().listPortalSharesForCustomer(id),
     revokePortalShare:shareId=>service().revokePortalShare(shareId),
-    fetchPortalShareData:(shareId,rawToken)=>service().fetchPortalShareData(shareId,rawToken)
+    fetchPortalShareData:(shareId,rawToken)=>service().fetchPortalShareData(shareId,rawToken),
+    fetchPortalDocumentUrl:(shareId,rawToken,documentId)=>service().fetchPortalDocumentUrl(shareId,rawToken,documentId)
   };
 })();

@@ -1029,6 +1029,37 @@
     return payload;
   }
 
+  async function fetchPortalDocumentUrl(shareId,rawToken,documentId){
+    const shareLib=window.ACTPortalShareLibrary;
+    if(!shareLib)throw new Error("Portal-Share-Bibliothek fehlt.");
+    const baseUrl=shareLib.portalDocumentFunctionUrl?shareLib.portalDocumentFunctionUrl():"";
+    if(!baseUrl)throw new Error("Dokument-Endpunkt ist nicht konfiguriert.");
+    const params=new URLSearchParams({
+      share:shareId,
+      token:rawToken,
+      documentId:String(documentId||"").trim()
+    });
+    let response;
+    try{
+      response=await fetch(`${baseUrl}?${params.toString()}`,{
+        method:"GET",
+        headers:{Accept:"application/json"},
+        cache:"no-store"
+      });
+    }catch(networkError){
+      const error=new Error("Dieses Dokument ist derzeit nicht verfügbar.");
+      error.code="document-network";
+      throw error;
+    }
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok||!payload.ok||!payload.url){
+      const error=new Error(payload.error||"Dieses Dokument ist derzeit nicht verfügbar.");
+      error.code=response.status===404?"document-missing":"document-error";
+      throw error;
+    }
+    return payload;
+  }
+
   window.ACTFirebaseService={
     init,
     authContext,
@@ -1064,6 +1095,7 @@
     listPortalSharesForCustomer,
     revokePortalShare,
     fetchPortalShareData,
+    fetchPortalDocumentUrl,
     denormalizeFromFirestore,
     normalizeForFirestore
   };

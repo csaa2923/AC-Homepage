@@ -2537,6 +2537,10 @@
           const normalized={documents:normalizedDocuments(publishSource)};
           await restoreMissingDocumentUrls(normalized,customer.documents);
           publishSource.documents=documentSaveItems(normalized,customer.documents);
+          const missingVisible=publishSource.documents.filter(doc=>doc.visible!==false&&!safeDocumentUrl(doc.url||doc.downloadUrl));
+          if(missingVisible.length){
+            throw new Error(`Dokument "${missingVisible[0].title||"Ohne Titel"}": gueltiger Oeffnen-Link fehlt. Bitte Datei erneut hochladen oder Link setzen.`);
+          }
           updateLocalCustomer(publishSource);
         }
         const validation=workflow?.validateForPublish?workflow.validateForPublish(publishSource):{ok:true,errors:[]};

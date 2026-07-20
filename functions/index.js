@@ -13,6 +13,12 @@ exports.portalShare=onRequest({
   cors:false
 },(req,res)=>loadImpl().portalShare(req,res));
 
+exports.portalDocument=onRequest({
+  region:"europe-west1",
+  secrets:functionSecrets(),
+  cors:false
+},(req,res)=>loadImpl().portalDocument(req,res));
+
 exports.createPortalShare=onCall({
   region:"europe-west1",
   secrets:functionSecrets()

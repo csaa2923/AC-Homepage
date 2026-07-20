@@ -985,6 +985,61 @@
     }
   }
 
+  async function fetchShareDocumentUrl(item){
+    if(!isShareAccess)return "";
+    const documentId=String(item.documentId||item.id||"").trim();
+    if(!documentId)return "";
+    const db=window.ACTFirebaseDatabase;
+    if(!db?.fetchPortalDocumentUrl)return "";
+    const payload=await db.fetchPortalDocumentUrl(portalParams.shareId,portalParams.rawToken,documentId);
+    return safeDocumentUrl(payload?.url);
+  }
+
+  async function hydrateShareDocumentUrls(){
+    if(!isShareAccess||!customer)return;
+    const docs=(customer.documents||[]).filter(isPortalDocument);
+    let changed=false;
+    await Promise.all(docs.map(async item=>{
+      if(resolveDocumentUrl(item))return;
+      try{
+        const url=await fetchShareDocumentUrl(item);
+        if(!url)return;
+        item.url=url;
+        changed=true;
+      }catch(error){
+        console.warn(`[PortalDocuments] Share-URL fuer ${item.documentId||item.id||item.title||"Dokument"} fehlgeschlagen.`);
+      }
+    }));
+    if(changed)renderDocuments();
+  }
+
+  async function openShareDocument(item,button){
+    const existing=resolveDocumentUrl(item);
+    if(existing){
+      window.open(existing,"_blank","noopener,noreferrer");
+      return;
+    }
+    if(button){
+      button.disabled=true;
+      button.setAttribute("aria-busy","true");
+      button.textContent="Wird geladen ...";
+    }
+    try{
+      const url=await fetchShareDocumentUrl(item);
+      if(!url)throw new Error("Dieses Dokument ist derzeit nicht verfuegbar.");
+      item.url=url;
+      renderDocuments();
+      window.open(url,"_blank","noopener,noreferrer");
+    }catch(error){
+      window.alert(error&&error.message?error.message:"Dieses Dokument ist derzeit nicht verfuegbar.");
+      if(button){
+        button.disabled=false;
+        button.removeAttribute("aria-busy");
+        button.textContent="Dokument oeffnen";
+      }
+    }
+  }
+
   function renderDocuments(){
     const documents=(customer.documents||[]).map(normalizeDocument);
     const visibleDocuments=documents.filter(isPortalDocument);
@@ -992,6 +1047,7 @@
       const url=resolveDocumentUrl(item);
       const title=item.title||item.fileName||"Dokument";
       const fileName=item.fileName||title;
+      const documentId=item.documentId||item.id||"";
       const fields=[
         ["Dokumenttyp",item.type||"Sonstiges"],
         ["Hinweis",item.note],
@@ -1000,16 +1056,21 @@
       ];
       if(hasDisplayValue(item.category)&&item.category!==item.type)fields.splice(1,0,["Kategorie",item.category]);
       if(hasDisplayValue(item.expiryDate))fields.push(["Ablaufdatum",formatUploadDate(item.expiryDate)||item.expiryDate]);
-      if(!url)console.warn(`[PortalDocuments] Dokument ${item.documentId||item.id||title} ohne gueltige Datei-URL.`);
+      if(!url)console.warn(`[PortalDocuments] Dokument ${documentId||title} ohne gueltige Datei-URL.`);
       const preview=url&&isImageDocument(item)
         ?`<div class="document-preview"><img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" loading="lazy"></div>`
         :"";
-      const actions=url
-        ?`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${isPdfDocument(item)?"PDF oeffnen":isImageDocument(item)?"Bild oeffnen":"Oeffnen"}</a>
-          <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}">Herunterladen</a>`
-        :`<span class="button soft document-disabled" aria-disabled="true">Dieses Dokument ist derzeit nicht verfuegbar.</span>`;
+      let actions="";
+      if(url){
+        actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${isPdfDocument(item)?"PDF oeffnen":isImageDocument(item)?"Bild oeffnen":"Oeffnen"}</a>
+          <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}">Herunterladen</a>`;
+      }else if(isShareAccess&&documentId){
+        actions=`<button class="button primary" type="button" data-open-portal-document="${escapeHtml(documentId)}">Dokument oeffnen</button>`;
+      }else{
+        actions=`<span class="button soft document-disabled" aria-disabled="true">Dieses Dokument ist derzeit nicht verfuegbar.</span>`;
+      }
       return `
-      <article class="document-card ${url?"":"document-unavailable"}">
+      <article class="document-card ${url?"":"document-unavailable"}" data-document-id="${escapeHtml(documentId)}">
         <h3>${escapeHtml(title)}</h3>
         ${preview}
         ${definitionList(fields)}
@@ -1230,6 +1291,14 @@
         return;
       }
 
+      const openDocumentButton=event.target.closest("[data-open-portal-document]");
+      if(openDocumentButton){
+        const documentId=openDocumentButton.dataset.openPortalDocument;
+        const item=(customer.documents||[]).find(doc=>String(doc.documentId||doc.id||"")===documentId);
+        if(item)openShareDocument(item,openDocumentButton);
+        return;
+      }
+
       const action=event.target.closest("[data-action]");
       if(!action)return;
       const type=action.dataset.action;
@@ -1269,6 +1338,7 @@
     renderDataSourceNotice();
     renderAdminVersionHint();
     bindActions();
+    hydrateShareDocumentUrls();
   }
 
   function renderAdminVersionHint(){

@@ -29,13 +29,21 @@ function getAdminApp(){
     return admin.app();
   }catch(_){
     return admin.initializeApp({
-      projectId:process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||"alpine-concierge-tirol"
+      projectId:process.env.GCLOUD_PROJECT||process.env.GCP_PROJECT||"alpine-concierge-tirol",
+      storageBucket:process.env.FIREBASE_STORAGE_BUCKET||"alpine-concierge-tirol.firebasestorage.app"
     });
   }
 }
 
 function getDb(){
   return getAdminApp().firestore();
+}
+
+function getStorageBucket(){
+  const admin=getAdmin();
+  const app=getAdminApp();
+  const bucketName=process.env.FIREBASE_STORAGE_BUCKET||"alpine-concierge-tirol.firebasestorage.app";
+  return admin.storage(app).bucket(bucketName);
 }
 
 const {
@@ -49,6 +57,14 @@ const {
 }=require("./lib/portalShareCore");
 
 const {
+  enrichPublishedDocumentsFromDraft,
+  findVisibleSnapshotDocument,
+  matchDraftDocument,
+  publicDocumentUrl,
+  stringValue
+}=require("./lib/documentAccess");
+
+const {
   isOriginAllowed,
   isAdminAuth,
   validateShareAccess,
@@ -57,6 +73,20 @@ const {
   sanitizeToken,
   NEUTRAL_INVALID_MESSAGE
 }=require("./lib/httpPolicy");
+
+const SIGNED_URL_TTL_MS=5*60*1000;
+
+async function resolveStorageSignedUrl(storagePath){
+  const path=stringValue(storagePath).replace(/^\/+/,"");
+  if(!path)return "";
+  const file=getStorageBucket().file(path);
+  const [url]=await file.getSignedUrl({
+    version:"v4",
+    action:"read",
+    expires:Date.now()+SIGNED_URL_TTL_MS
+  });
+  return stringValue(url);
+}
 
 const rateBuckets=new Map();
 const RATE_LIMIT_WINDOW_MS=60000;
@@ -212,7 +242,8 @@ async function createPortalShare(request){
   const rawToken=generateRawToken();
   const tokenHash=hashToken(rawToken,secret);
   const publishedVersionId=customer.publishMeta?.version||published.version||"1.0";
-  const redacted=redactPublicSnapshot(published,{customerId});
+  const enriched=enrichPublishedDocumentsFromDraft(published,customer.draftData||null);
+  const redacted=redactPublicSnapshot(enriched,{customerId});
   const now=new Date().toISOString();
   const shareRecord={
     shareId,
@@ -262,6 +293,79 @@ async function createPortalShare(request){
   };
 }
 
+async function portalDocument(req,res){
+  applyCors(req,res);
+  if(req.method==="OPTIONS"){
+    applySecurityHeaders(res);
+    return res.status(204).send("");
+  }
+  if(req.method!=="GET"){
+    return neutralError(405,res,"Method not allowed");
+  }
+  const shareId=sanitizeShareId(req.query.shareId||req.query.share);
+  const rawToken=sanitizeToken(req.query.token,MAX_TOKEN_LENGTH);
+  const documentId=stringValue(req.query.documentId||req.query.doc);
+  if(!shareId||!rawToken||!documentId){
+    return neutralError(403,res,NEUTRAL_INVALID_MESSAGE);
+  }
+  const rateKey=`doc:${resolveClientIp(req)}:${shareId}`;
+  if(!checkRateLimit(rateKey)){
+    return neutralError(429,res,"Zu viele Anfragen. Bitte versuchen Sie es später erneut.",{retryAfter:60});
+  }
+  try{
+    const secret=getSecret();
+    if(!secret)return neutralError(503,res,"Portal-Zugang ist vorübergehend nicht verfügbar.");
+    const bundle=await loadShareBundle(shareId);
+    const validation=validateShareAccessLocal(bundle?.share,rawToken,secret);
+    if(!validation.ok||!bundle?.snapshot?.data){
+      return neutralError(403,res,neutralMessageForCode(validation.code));
+    }
+    if(bundle.share.permissions&&bundle.share.permissions.readDocuments===false){
+      return neutralError(403,res,NEUTRAL_INVALID_MESSAGE);
+    }
+    const snapshotDoc=findVisibleSnapshotDocument(bundle.snapshot.data,documentId);
+    if(!snapshotDoc){
+      return neutralError(403,res,NEUTRAL_INVALID_MESSAGE);
+    }
+    let url=publicDocumentUrl(snapshotDoc);
+    let fileName=stringValue(snapshotDoc.fileName||snapshotDoc.originalName||snapshotDoc.title);
+    let mimeType=stringValue(snapshotDoc.mimeType||snapshotDoc.contentType);
+    if(!url){
+      const db=getDb();
+      const customerId=stringValue(bundle.share.customerId||bundle.snapshot.customerId);
+      const customerSnap=await db.collection("customers").doc(customerId).get();
+      const draft=customerSnap.exists?(customerSnap.data().draftData||null):null;
+      const draftDoc=matchDraftDocument(snapshotDoc,draft?.documents||[]);
+      url=publicDocumentUrl(draftDoc);
+      if(!fileName)fileName=stringValue(draftDoc?.fileName||draftDoc?.filename||draftDoc?.originalName||snapshotDoc.title);
+      if(!mimeType)mimeType=stringValue(draftDoc?.mimeType||draftDoc?.contentType);
+      if(!url&&draftDoc?.storagePath){
+        try{
+          url=await resolveStorageSignedUrl(draftDoc.storagePath);
+        }catch(storageError){
+          console.warn("[portalDocument] signed url failed:",storageError&&storageError.message?storageError.message:"");
+          url="";
+        }
+      }
+    }
+    if(!url){
+      return neutralError(404,res,"Dieses Dokument ist derzeit nicht verfügbar.");
+    }
+    applySecurityHeaders(res);
+    res.status(200).json({
+      ok:true,
+      url,
+      fileName,
+      mimeType,
+      documentId,
+      expiresInSeconds:Math.round(SIGNED_URL_TTL_MS/1000)
+    });
+  }catch(error){
+    console.error("[portalDocument] request failed:",error&&error.code?error.code:"",error&&error.message?error.message:"");
+    return neutralError(500,res,"Dieses Dokument ist derzeit nicht verfügbar.");
+  }
+}
+
 async function revokePortalShare(request){
   if(!isAdminAuth(request.auth)){
     throw new HttpsError("permission-denied","Keine Admin-Berechtigung.");
@@ -283,6 +387,7 @@ async function revokePortalShare(request){
 
 module.exports={
   portalShare,
+  portalDocument,
   createPortalShare,
   revokePortalShare
 };

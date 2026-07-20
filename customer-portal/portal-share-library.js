@@ -53,6 +53,17 @@
     return `https://${region}-${projectId}.cloudfunctions.net/portalShare`;
   }
 
+  function portalDocumentFunctionUrl(){
+    const cfg=config();
+    if(cfg.portalDocumentUrl)return cfg.portalDocumentUrl;
+    if(cfg.useFunctionsEmulator&&cfg.functionsEmulatorHost){
+      return `${cfg.functionsEmulatorHost}/portalDocument`;
+    }
+    const shareUrl=portalShareFunctionUrl();
+    if(!shareUrl)return "";
+    return shareUrl.replace(/\/portalShare\/?$/,"/portalDocument");
+  }
+
   function readAdminPreviewGrant(customerId){
     try{
       const raw=localStorage.getItem(ADMIN_PREVIEW_GRANT_KEY)||sessionStorage.getItem(ADMIN_PREVIEW_GRANT_KEY);
@@ -111,6 +122,7 @@
     buildShareUrl,
     parseShareParams,
     portalShareFunctionUrl,
+    portalDocumentFunctionUrl,
     isProductionHost,
     isLocalDevHost,
     isTrustedAdminPreview,

@@ -77,7 +77,7 @@
 
   const customOptionValue="__custom";
   const masterData={
-    statuses:["Anfrage eingegangen","Angebot erstellt","Angebot gesendet","Angebot bestätigt","Zahlung offen","Anzahlung erhalten","Vollständig bezahlt","Programm in Bearbeitung","Programm veröffentlicht","Reise läuft","Reise abgeschlossen","Storniert"],
+    statuses:["Anfrage eingegangen","Angebot erstellt","Angebot gesendet","Angebot bestätigt","Zahlung offen","Anzahlung erhalten","Vollständig bezahlt","Programm in Bearbeitung","Programm veröffentlicht","Reise läuft","Reise abgeschlossen","Archiviert","Storniert"],
     publicationStates:["Entwurf","Intern geprüft","Veröffentlicht"],
     regions:["Achensee","Ganz Tirol","Innsbruck","Kitzbühel","Kufstein","Osttirol","Seefeld","Stubaital","Ötztal","Zillertal"],
     languages:["Deutsch","Englisch","Französisch","Italienisch"],
@@ -1488,7 +1488,10 @@
             <button class="button soft" type="button" data-publish-customer="${id}">${published?"Kundenseite aktualisieren":"Kundenseite veröffentlichen"}</button>
             <button class="button soft" type="button" data-copy-trip="${id}">Weitere Reise für diesen Kunden</button>
             <button class="button soft" type="button" data-copy-customer="${id}">Link kopieren</button>
-            <button class="button danger" type="button" data-delete-customer="${id}">Löschen</button>
+            ${isArchivedCustomer(customer)
+              ?`<button class="button soft" type="button" data-restore-customer="${id}">Wiederherstellen</button>`
+              :`<button class="button soft" type="button" data-archive-customer="${id}">Archivieren</button>`}
+            <button class="button danger" type="button" data-delete-customer="${id}">Endgültig löschen</button>
           </div>
         </article>
       `;
@@ -1584,7 +1587,9 @@
     if(filters.status)list=list.filter(customer=>String(customer.status||"")===filters.status);
     if(filters.region)list=list.filter(customer=>String(customer.region||"")===filters.region);
     if(filters.publication)list=list.filter(customer=>String(customer.publicationState||customer.publishStatus||"Entwurf")===filters.publication);
-    if(filters.quickTab&&filters.quickTab!=="all")list=list.filter(customer=>customerMatchesQuickTab(customer,filters.quickTab));
+    if(filters.quickTab==="archiviert")list=list.filter(isArchivedCustomer);
+    else list=list.filter(customer=>!isArchivedCustomer(customer));
+    if(filters.quickTab&&filters.quickTab!=="all"&&filters.quickTab!=="archiviert")list=list.filter(customer=>customerMatchesQuickTab(customer,filters.quickTab));
     list=list.filter(customer=>customerMatchesDateRange(customer,filters));
     return list;
   }
@@ -1598,7 +1603,8 @@
       {id:"entwurf",label:"Entwürfe"},
       {id:"veroeffentlicht",label:"Veröffentlicht"},
       {id:"aktiv",label:"Laufende Reisen"},
-      {id:"bevorstehend",label:"Bevorstehend"}
+      {id:"bevorstehend",label:"Bevorstehend"},
+      {id:"archiviert",label:"Archiviert"}
     ];
     tabs.innerHTML=items.map(item=>`<button type="button" class="${customerQuickTab===item.id?"active":""}" data-customer-quick-tab="${item.id}">${item.label}</button>`).join("");
   }
@@ -2992,6 +2998,8 @@
       renderPublishChanges();
       renderPublishHistory();
       renderAdminPreview();
+      const archiveButton=byId("archiveActiveCustomerButton");
+      if(archiveButton)archiveButton.textContent=isArchivedCustomer(activeCustomer())?"Diese Reise wiederherstellen":"Diese Reise archivieren";
     });
   }
 
@@ -3659,10 +3667,73 @@
     renderAll();
   }
 
+  function isArchivedCustomer(customer){
+    if(!customer||typeof customer!=="object")return false;
+    if(customer.archived===true||customer.archived==="true"||customer.archived===1||customer.archived==="1")return true;
+    const status=String(customer.status||"").trim().toLowerCase();
+    return status==="archiviert"||status==="archived";
+  }
+
+  function customerLifecycleLabel(customer){
+    return [customer?.customerName,customer?.tripName||customer?.tripTitle].filter(Boolean).join(" – ")||customer?.customerId||"Kunde";
+  }
+
+  function archiveCustomer(id){
+    const customer=customers[id];
+    if(!customer||isArchivedCustomer(customer))return;
+    const label=customerLifecycleLabel(customer);
+    if(!window.confirm(`Kunde archivieren?\n\n${label}\n\nDer Kunde verschwindet aus der aktiven Liste, bleibt aber wiederherstellbar.`))return;
+    customers[id]=normalizeCustomerData({
+      ...clone(customer),
+      archived:true,
+      status:"Archiviert",
+      archivedAt:new Date().toISOString(),
+      updatedAt:new Date().toLocaleDateString("de-DE")
+    },id);
+    saveCustomers();
+    const db=firebaseDatabase();
+    if(db){
+      db.saveDraftCustomer(customers[id]).then(()=>{
+        setFirebaseStatus("Kunde wurde archiviert.");
+      }).catch(error=>{
+        setFirebaseStatus(`Lokal archiviert. Firebase: ${error&&error.message?error.message:""}`,true);
+      });
+    }else setFirebaseStatus("Kunde wurde lokal archiviert.");
+    if(activeId===id){
+      activeId=Object.keys(customers).find(key=>!isArchivedCustomer(customers[key]))||"";
+      adminMode=activeId?"edit":"overview";
+    }
+    renderAll();
+  }
+
+  function restoreArchivedCustomer(id){
+    const customer=customers[id];
+    if(!customer||!isArchivedCustomer(customer))return;
+    const label=customerLifecycleLabel(customer);
+    if(!window.confirm(`Archivierten Kunden wiederherstellen?\n\n${label}`))return;
+    const next=clone(customer);
+    next.archived=false;
+    delete next.archivedAt;
+    if(/archiviert|archived/i.test(String(next.status||"")))next.status="Entwurf";
+    next.updatedAt=new Date().toLocaleDateString("de-DE");
+    customers[id]=normalizeCustomerData(next,id);
+    saveCustomers();
+    const db=firebaseDatabase();
+    if(db){
+      db.saveDraftCustomer(customers[id]).then(()=>{
+        setFirebaseStatus("Kunde wurde wiederhergestellt.");
+      }).catch(error=>{
+        setFirebaseStatus(`Lokal wiederhergestellt. Firebase: ${error&&error.message?error.message:""}`,true);
+      });
+    }else setFirebaseStatus("Kunde wurde lokal wiederhergestellt.");
+    renderAll();
+  }
+
   function deleteCustomer(id){
     const customer=customers[id]||{};
-    const label=[customer.customerName,customer.tripName||customer.tripTitle].filter(Boolean).join(" - ")||id;
-    if(!window.confirm(`Diesen Kunden / diese Reise wirklich löschen?\n\n${label}`))return;
+    const label=customerLifecycleLabel(customer)||id;
+    if(!window.confirm(`Kunde endgültig löschen?\n\n${label}\n\nDieser Schritt entfernt den Kunden dauerhaft.`))return;
+    if(!window.confirm(`Letzte Sicherheit:\n\n${label}\n\nWirklich unwiderruflich löschen? Archivieren ist die sicherere Alternative.`))return;
     delete customers[id];
     if(activeId===id)activeId=Object.keys(customers)[0]||"";
     adminMode="overview";
@@ -4290,6 +4361,10 @@
       if(copyTrip)copyTripForCustomer(copyTrip.dataset.copyTrip);
       const deleteCustomerButton=event.target.closest("[data-delete-customer]");
       if(deleteCustomerButton)deleteCustomer(deleteCustomerButton.dataset.deleteCustomer);
+      const archiveCustomerButton=event.target.closest("[data-archive-customer]");
+      if(archiveCustomerButton)archiveCustomer(archiveCustomerButton.dataset.archiveCustomer);
+      const restoreCustomerButton=event.target.closest("[data-restore-customer]");
+      if(restoreCustomerButton)restoreArchivedCustomer(restoreCustomerButton.dataset.restoreCustomer);
       const add=event.target.closest("[data-add-list]");
       if(add)addItem(add.dataset.addList);
       const remove=event.target.closest("[data-remove-item]");
@@ -4452,6 +4527,11 @@
     document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!byId("notifyDialog").hidden)closeNotifyDialog()});
     document.querySelectorAll('input[name="notifyMode"]').forEach(input=>input.addEventListener("change",updateNotifyPreparedText));
     byId("deleteActiveCustomerButton").addEventListener("click",()=>deleteCustomer(activeId));
+    byId("archiveActiveCustomerButton")?.addEventListener("click",()=>{
+      const customer=customers[activeId];
+      if(isArchivedCustomer(customer))restoreArchivedCustomer(activeId);
+      else archiveCustomer(activeId);
+    });
     byId("copyWhatsappButton").addEventListener("click",openWhatsappMessage);
     byId("exportButton").addEventListener("click",downloadJson);
     byId("migrateFirebaseButton").addEventListener("click",migrateLocalToFirebase);

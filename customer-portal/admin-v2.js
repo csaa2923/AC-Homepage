@@ -175,6 +175,139 @@
     return publicationState(customer)==="Veröffentlicht"||customer.publishStatus==="published";
   }
 
+  function isArchivedCustomer(customer){
+    if(!customer||typeof customer!=="object")return false;
+    if(customer.archived===true||customer.archived==="true"||customer.archived===1||customer.archived==="1")return true;
+    const status=normalizeText(customer.status||"");
+    return status==="archiviert"||status==="archived";
+  }
+
+  function customerLifecycleLabel(customer){
+    return [cleanValue(customer?.customerName),cleanValue(customer?.tripName||customer?.tripTitle)].filter(Boolean).join(" – ")||cleanValue(customer?.customerId)||"Kunde";
+  }
+
+  function confirmArchiveCustomer(customer){
+    const label=customerLifecycleLabel(customer);
+    return window.confirm(`Kunde archivieren?\n\n${label}\n\nDer Kunde verschwindet aus der aktiven Liste, bleibt aber wiederherstellbar.`);
+  }
+
+  function confirmDeleteCustomer(customer){
+    const label=customerLifecycleLabel(customer);
+    if(!window.confirm(`Kunde endgueltig loeschen?\n\n${label}\n\nDieser Schritt entfernt den Kunden dauerhaft (inkl. Firestore).`))return false;
+    return window.confirm(`Letzte Sicherheit:\n\n${label}\n\nWirklich unwiderruflich loeschen? Archivieren ist die sicherere Alternative.`);
+  }
+
+  async function revokeActiveSharesForCustomer(customer){
+    const db=window.ACTFirebaseDatabase;
+    if(!db?.listPortalSharesForCustomer||!db?.revokePortalShare)return;
+    try{
+      const shares=await withTimeout(db.listPortalSharesForCustomer(customer.customerId),AUTH_TIMEOUT_MS,"listPortalSharesForCustomer");
+      const active=arrayValue(shares).filter(share=>normalizeText(share?.status||"")!=="revoked");
+      for(const share of active){
+        if(!share?.shareId)continue;
+        await withTimeout(db.revokePortalShare(share.shareId),AUTH_TIMEOUT_MS,"revokePortalShare");
+      }
+    }catch(error){
+      console.warn("[ACT Admin V2] Share-Widerruf:",error&&error.message?error.message:"Fehler");
+    }
+  }
+
+  async function archiveCustomerV2(){
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer||isArchivedCustomer(customer))return null;
+    if(!confirmArchiveCustomer(customer))return null;
+    setCustomerEditMessage("Kunde wird archiviert ...","saving");
+    try{
+      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      await revokeActiveSharesForCustomer(customer);
+      const next=clone(customer);
+      next.archived=true;
+      next.status="Archiviert";
+      next.archivedAt=new Date().toISOString();
+      next.updatedAt=new Date().toLocaleDateString("de-DE");
+      next._lastSavedAt=new Date().toISOString();
+      await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(next),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+      updateLocalCustomer(compactObject(next));
+      state.detailFlashMessage="Kunde wurde archiviert.";
+      state.detailFlashKind="success";
+      routeTo("customers");
+      return next;
+    }catch(error){
+      console.error("[ACT Admin V2] Archivieren:",error&&error.message?error.message:"Fehler");
+      setCustomerEditMessage(error&&error.message?error.message:"Archivieren fehlgeschlagen.","error");
+      renderCustomerDetail();
+      return null;
+    }
+  }
+
+  async function restoreCustomerV2(){
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer||!isArchivedCustomer(customer))return null;
+    if(!window.confirm(`Archivierten Kunden wiederherstellen?\n\n${customerLifecycleLabel(customer)}`))return null;
+    setCustomerEditMessage("Kunde wird wiederhergestellt ...","saving");
+    try{
+      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      const next=clone(customer);
+      next.archived=false;
+      delete next.archivedAt;
+      if(normalizeText(next.status)==="archiviert"||normalizeText(next.status)==="archived")next.status="Entwurf";
+      next.updatedAt=new Date().toLocaleDateString("de-DE");
+      next._lastSavedAt=new Date().toISOString();
+      await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(next),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+      updateLocalCustomer(compactObject(next));
+      setCustomerEditMessage("Kunde wiederhergestellt.","success");
+      render();
+      return next;
+    }catch(error){
+      console.error("[ACT Admin V2] Wiederherstellen:",error&&error.message?error.message:"Fehler");
+      setCustomerEditMessage(error&&error.message?error.message:"Wiederherstellen fehlgeschlagen.","error");
+      renderCustomerDetail();
+      return null;
+    }
+  }
+
+  async function deleteCustomerV2(){
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return null;
+    if(!confirmDeleteCustomer(customer))return null;
+    setCustomerEditMessage("Kunde wird geloescht ...","saving");
+    try{
+      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      await revokeActiveSharesForCustomer(customer);
+      await withTimeout(window.ACTFirebaseDatabase.deleteCustomer(customer.customerId),AUTH_TIMEOUT_MS,"deleteCustomer");
+      state.customers=state.customers.filter(item=>String(item.customerId||"")!==String(customer.customerId||""));
+      resetCustomerEditState();
+      resetTripEditState();
+      resetProgramEditState();
+      resetDocumentEditState();
+      state.selectedCustomerId="";
+      state.detailFlashMessage="";
+      routeTo("customers");
+      return true;
+    }catch(error){
+      console.error("[ACT Admin V2] Loeschen:",error&&error.message?error.message:"Fehler");
+      setCustomerEditMessage(error&&error.message?error.message:"Loeschen fehlgeschlagen.","error");
+      renderCustomerDetail();
+      return null;
+    }
+  }
+
+  function customerLifecycleActionsMarkup(customer){
+    if(isArchivedCustomer(customer)){
+      return `
+        <button class="v2-button soft" type="button" data-customer-lifecycle-action="restore">Wiederherstellen</button>
+        <button class="v2-button soft" type="button" data-customer-lifecycle-action="delete">Endgueltig loeschen</button>
+      `;
+    }
+    return `
+      <button class="v2-button soft" type="button" data-customer-lifecycle-action="archive">Archivieren</button>
+      <button class="v2-button soft" type="button" data-customer-lifecycle-action="delete">Endgueltig loeschen</button>
+    `;
+  }
+
   function isActiveTrip(customer){
     const start=dateValue(customer.startDatePlain);
     const end=dateValue(customer.endDatePlain||customer.startDatePlain);
@@ -233,7 +366,7 @@
     const text=String(value||"");
     if(/veröffentlicht|published|aktiv|kundenportal|sichtbar|vollstaendig/i.test(text)||normalizeText(text).includes("vollstandig"))return "green";
     if(/entwurf|draft|anfrage|offen|prüfung/i.test(text))return "amber";
-    if(/intern|widerrufen|nicht sichtbar/i.test(text))return "gray";
+    if(/archiviert|archived|intern|widerrufen|nicht sichtbar/i.test(text))return "gray";
     if(/abgeschlossen/i.test(text))return "blue";
     return "rose";
   }
@@ -3365,18 +3498,21 @@
   }
 
   function stats(){
-    const total=state.customers.length;
-    const active=state.customers.filter(isActiveTrip).length;
-    const published=state.customers.filter(isPublished).length;
-    const drafts=state.customers.filter(customer=>!isPublished(customer)).length;
-    const arrivals=state.customers.filter(isArrivalToday).length;
-    const departures=state.customers.filter(isDepartureToday).length;
+    const activeCustomers=state.customers.filter(customer=>!isArchivedCustomer(customer));
+    const total=activeCustomers.length;
+    const active=activeCustomers.filter(isActiveTrip).length;
+    const published=activeCustomers.filter(isPublished).length;
+    const drafts=activeCustomers.filter(customer=>!isPublished(customer)).length;
+    const arrivals=activeCustomers.filter(isArrivalToday).length;
+    const departures=activeCustomers.filter(isDepartureToday).length;
     return {total,active,published,drafts,arrivals,departures};
   }
 
   function filteredCustomers(){
     const query=normalizeText(state.query);
     let list=[...state.customers];
+    if(state.status==="archived")list=list.filter(isArchivedCustomer);
+    else list=list.filter(customer=>!isArchivedCustomer(customer));
     if(query){
       list=list.filter(customer=>normalizeText([
         customer.customerName,
@@ -3395,7 +3531,7 @@
     else if(state.status==="departures")list=list.filter(isDepartureToday);
     else if(state.status==="draft")list=list.filter(customer=>!isPublished(customer));
     else if(state.status==="published")list=list.filter(isPublished);
-    else if(state.status)list=list.filter(customer=>String(customer.status||"")===state.status);
+    else if(state.status&&state.status!=="archived")list=list.filter(customer=>String(customer.status||"")===state.status);
     if(state.publication)list=list.filter(customer=>publicationState(customer)===state.publication);
     if(state.region)list=list.filter(customer=>String(customer.region||"")===state.region);
     return list.sort(compareCustomers);
@@ -3427,8 +3563,9 @@
   }
 
   function renderDashboardLists(){
-    const upcoming=state.customers.filter(isUpcomingTrip).sort((a,b)=>(dateValue(a.startDatePlain)?.getTime()||0)-(dateValue(b.startDatePlain)?.getTime()||0)).slice(0,5);
-    const recent=[...state.customers].sort((a,b)=>timestampValue(b)-timestampValue(a)).slice(0,5);
+    const activeCustomers=state.customers.filter(customer=>!isArchivedCustomer(customer));
+    const upcoming=activeCustomers.filter(isUpcomingTrip).sort((a,b)=>(dateValue(a.startDatePlain)?.getTime()||0)-(dateValue(b.startDatePlain)?.getTime()||0)).slice(0,5);
+    const recent=[...activeCustomers].sort((a,b)=>timestampValue(b)-timestampValue(a)).slice(0,5);
     byId("upcomingList").innerHTML=upcoming.length?upcoming.map(listItem).join(""):`<p class="v2-muted">Keine anstehenden Reisen mit vorhandenem Anreisedatum.</p>`;
     byId("recentList").innerHTML=recent.length?recent.map(listItem).join(""):`<p class="v2-muted">Keine zuletzt bearbeiteten Kunden verfügbar.</p>`;
   }
@@ -3493,7 +3630,8 @@
       ["published","Veröffentlicht"],
       ["active","Aktiv"],
       ["upcoming","Bevorstehend"],
-      ...Array.from(new Set(state.customers.map(c=>c.status).filter(Boolean))).sort().map(value=>[value,value])
+      ["archived","Archiviert"],
+      ...Array.from(new Set(state.customers.map(c=>c.status).filter(Boolean))).filter(value=>normalizeText(value)!=="archiviert").sort().map(value=>[value,value])
     ];
     const publicationOptions=[["","Alle"],...Array.from(new Set(state.customers.map(publicationState).filter(Boolean))).sort().map(value=>[value,value])];
     const regionOptions=[["","Alle Regionen"],...Array.from(new Set(state.customers.map(c=>c.region).filter(Boolean))).sort().map(value=>[value,value])];
@@ -3607,6 +3745,7 @@
         <div class="v2-detail-actions">
           <button class="v2-button soft" type="button" data-v2-route="customers">Zur Kundenuebersicht</button>
           <a class="v2-button primary" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Im klassischen Admin bearbeiten</a>
+          ${customerLifecycleActionsMarkup(customer)}
         </div>
         ${flash}
         <div class="v2-detail-hero">
@@ -3666,7 +3805,8 @@
     if(["draft","entwurf"].includes(normalized))return "Entwurf";
     if(["active","aktiv","reise laeuft","reise lauft","reise läuft"].includes(normalized))return "Aktiv";
     if(["published","veroeffentlicht","veroffentlicht","veröffentlicht"].includes(normalized))return "Veroeffentlicht";
-    if(["archived","abgeschlossen"].includes(normalized))return "Abgeschlossen";
+    if(["archived","archiviert"].includes(normalized))return "Archiviert";
+    if(["abgeschlossen"].includes(normalized))return "Abgeschlossen";
     if(["cancelled","canceled","storniert"].includes(normalized))return "Storniert";
     return text;
   }
@@ -5307,6 +5447,14 @@
         if(action==="remove-image")removeCustomerImage();
         return;
       }
+      const lifecycleAction=event.target.closest("[data-customer-lifecycle-action]");
+      if(lifecycleAction){
+        const action=lifecycleAction.dataset.customerLifecycleAction;
+        if(action==="archive")archiveCustomerV2();
+        if(action==="restore")restoreCustomerV2();
+        if(action==="delete")deleteCustomerV2();
+        return;
+      }
       const tripAction=event.target.closest("[data-trip-edit-action]");
       if(tripAction){
         const action=tripAction.dataset.tripEditAction;
@@ -5487,7 +5635,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

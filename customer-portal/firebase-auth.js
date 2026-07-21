@@ -1,6 +1,9 @@
 (function(){
   const ALLOWED_ROLES=["owner","admin"];
   const AUTH_OPERATION_TIMEOUT_MS=15000;
+  const CLAIMS_CHECK_ERROR="Admin-Berechtigung konnte nicht geprüft werden.";
+  const MISSING_ADMIN_ROLE_ERROR="Dieses Konto hat keine Admin-Berechtigung.";
+  const LOGIN_REQUIRED_ERROR="Bitte mit einem Admin-Konto anmelden.";
   const subscribers=[];
   let observerReady=false;
   let authAvailable=false;
@@ -10,6 +13,10 @@
 
   function isAllowedRole(role){
     return ALLOWED_ROLES.includes(String(role||""));
+  }
+
+  function hasResolvedClaims(){
+    return Boolean(tokenResult&&tokenResult.claims);
   }
 
   function neutralError(error){
@@ -69,13 +76,18 @@
 
   function getState(){
     const currentRole=role();
+    const claimsResolved=hasResolvedClaims();
+    const signedIn=Boolean(currentUser);
+    const allowed=isAllowedRole(currentRole);
     return {
       available:authAvailable,
-      signedIn:Boolean(currentUser),
+      signedIn,
       email:currentUser&&currentUser.email?currentUser.email:"",
       role:currentRole,
-      allowed:isAllowedRole(currentRole),
-      missingRole:Boolean(currentUser&&!isAllowedRole(currentRole)),
+      allowed,
+      missingRole:Boolean(signedIn&&claimsResolved&&!allowed),
+      claimsPending:Boolean(signedIn&&!claimsResolved&&!authError),
+      claimsError:Boolean(signedIn&&!claimsResolved&&Boolean(authError)),
       error:authError
     };
   }
@@ -93,10 +105,12 @@
       return getState();
     }
     try{
-      tokenResult=await withTimeout(currentUser.getIdTokenResult(Boolean(forceRefresh)),AUTH_OPERATION_TIMEOUT_MS,"Firebase claims");
+      const next=await withTimeout(currentUser.getIdTokenResult(Boolean(forceRefresh)),AUTH_OPERATION_TIMEOUT_MS,"Firebase claims");
+      tokenResult=next;
       authError="";
     }catch(error){
-      tokenResult=null;
+      // Keep a previously resolved tokenResult. Clearing it would falsely mark
+      // signed-in admins as missingRole during transient network/timeout errors.
       authError=neutralError(error);
     }
     return getState();
@@ -112,14 +126,19 @@
     notify();
   }
 
+  async function ensureObserver(){
+    const context=await authContext();
+    if(!observerReady&&context.authModule.onAuthStateChanged){
+      context.authModule.onAuthStateChanged(context.auth,user=>{handleAuthState(user)});
+      observerReady=true;
+    }
+    currentUser=context.auth.currentUser||currentUser;
+    return context;
+  }
+
   async function prepareAuth(){
     try{
-      const context=await authContext();
-      if(!observerReady&&context.authModule.onAuthStateChanged){
-        context.authModule.onAuthStateChanged(context.auth,user=>{handleAuthState(user)});
-        observerReady=true;
-      }
-      currentUser=context.auth.currentUser||currentUser;
+      await ensureObserver();
       if(currentUser)await refreshClaims(true);
       notify();
     }catch(error){
@@ -139,7 +158,7 @@
       return getState();
     }
     try{
-      const context=await authContext();
+      const context=await ensureObserver();
       const credential=await withTimeout(
         context.authModule.signInWithEmailAndPassword(context.auth,email,password),
         AUTH_OPERATION_TIMEOUT_MS,
@@ -147,7 +166,9 @@
       );
       currentUser=credential.user||context.auth.currentUser;
       await refreshClaims(true);
-      if(!getState().allowed)authError="Dieses Konto hat keine Admin-Berechtigung.";
+      const state=getState();
+      if(state.claimsError)authError=CLAIMS_CHECK_ERROR;
+      else if(!state.allowed)authError=MISSING_ADMIN_ROLE_ERROR;
       notify();
     }catch(error){
       currentUser=null;
@@ -171,14 +192,37 @@
     return getState();
   }
 
-  async function requireAdmin(){
-    const state=await prepareAuth();
+  function denyAdmin(state){
     if(state.allowed)return {allowed:true,state};
-    return {
-      allowed:false,
-      state,
-      message:state.missingRole?"Dieses Konto hat keine Admin-Berechtigung.":"Bitte mit einem Admin-Konto anmelden."
-    };
+    if(state.claimsPending){
+      return {allowed:false,state,message:"Admin-Berechtigung wird geprüft …",pending:true};
+    }
+    if(state.claimsError||(state.signedIn&&state.error&&!state.missingRole&&!hasResolvedClaims())){
+      return {allowed:false,state,message:CLAIMS_CHECK_ERROR,technical:true};
+    }
+    if(state.missingRole){
+      return {allowed:false,state,message:MISSING_ADMIN_ROLE_ERROR};
+    }
+    return {allowed:false,state,message:state.error||LOGIN_REQUIRED_ERROR};
+  }
+
+  async function requireAdmin(){
+    try{
+      await ensureObserver();
+    }catch(error){
+      authAvailable=false;
+      authError=neutralError(error);
+      return denyAdmin(getState());
+    }
+    if(!currentUser){
+      authError="";
+      return denyAdmin(getState());
+    }
+    // Prefer cached ID token first; force-refresh only if not yet allowed.
+    let state=await refreshClaims(false);
+    if(state.allowed)return {allowed:true,state};
+    state=await refreshClaims(true);
+    return denyAdmin(state);
   }
 
   function subscribe(callback){

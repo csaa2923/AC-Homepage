@@ -133,6 +133,56 @@ describe("publish workflow program flattening",()=>{
       accommodations:[]
     });
     assert.equal(fromV2Field.ok,true,fromV2Field.errors.join("; "));
-    assert.equal((fromV2Field.warnings||[]).length,0);
+    assert.ok(!(fromV2Field.warnings||[]).some(item=>item==="Unterkunft fehlt."));
+  });
+
+  it("reports concrete change labels instead of only area counts",()=>{
+    const workflow=loadWorkflow();
+    const published={
+      customerName:"Familie Test",
+      tripName:"Seefeld",
+      phone:"+43677",
+      concierge:"ACT",
+      image:"https://example.com/old.jpg",
+      accommodations:[{name:"Hotel Alt"}],
+      program:[{id:"p1",title:"Ankunft",dateValue:"2026-07-20"}],
+      documents:[{title:"Ticket",url:"https://example.com/a.pdf",visible:true}]
+    };
+    const draft={
+      ...published,
+      customerName:"Familie Neu",
+      image:"https://example.com/new.jpg",
+      accommodationName:"Hotel Neu",
+      accommodations:[],
+      program:[{id:"p1",title:"Ankunft spaet",dateValue:"2026-07-20"},{id:"p2",title:"Dinner",dateValue:"2026-07-21"}],
+      documents:[
+        {title:"Ticket",url:"https://example.com/a.pdf",visible:true},
+        {title:"Voucher",url:"https://example.com/b.pdf",visible:true}
+      ]
+    };
+    const comparison=workflow.compareDraftVsPublished(draft,published);
+    assert.ok(comparison.labels.includes("Kundendaten geändert"));
+    assert.ok(comparison.labels.includes("Kundenbild geändert"));
+    assert.ok(comparison.labels.some(label=>/Programm geändert/.test(label)));
+    assert.ok(comparison.labels.includes("Unterkunft geändert"));
+    assert.ok(comparison.labels.some(label=>/Dokument(e)? geändert/.test(label)));
+    const status=workflow.getPublishStatus(draft,published,{});
+    assert.equal(status.key,"pending");
+    assert.match(status.message,/Kundendaten geändert/);
+    assert.doesNotMatch(status.message,/Bereiche? geändert/);
+  });
+
+  it("warns when program points are missing without blocking publish",()=>{
+    const workflow=loadWorkflow();
+    const result=workflow.validateForPublish({
+      customerName:"Momo Holzer",
+      tripName:"Reise Seefeld",
+      phone:"+43677",
+      concierge:"Alpine Concierge Tirol",
+      accommodations:[{name:"Hotel Test"}],
+      program:[]
+    });
+    assert.equal(result.ok,true,result.errors.join("; "));
+    assert.ok(result.warnings.some(item=>/Keine Programmpunkte/.test(item)));
   });
 });

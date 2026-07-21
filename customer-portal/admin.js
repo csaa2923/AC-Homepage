@@ -3811,6 +3811,10 @@
       return;
     }
     if(passwordInput)passwordInput.value="";
+    if(authState.claimsError){
+      lockAdmin("Admin-Berechtigung konnte nicht geprüft werden.",true);
+      return;
+    }
     lockAdmin(authState.error||"Dieses Konto hat keine Admin-Berechtigung.",true);
   }
 
@@ -4627,6 +4631,10 @@
       unlock();
       loadFirebaseCustomers().then(runInitialAdminAction);
       loadFirebaseTemplates();
+      return;
+    }
+    if(authState.claimsError){
+      lockAdmin("Admin-Berechtigung konnte nicht geprüft werden.",true);
       return;
     }
     if(authState.missingRole){

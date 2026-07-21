@@ -11,8 +11,10 @@
     "startDate","endDate","startDatePlain","endDatePlain","travelPeriod",
     "region","weatherLocationName","latitude","longitude",
     "concierge","conciergeName","whatsappLink",
+    "image","imageUrl","heroImage","coverImage",
     "program","programItems","accommodations","restaurants","activities",
-    "documents","bookings","contact","weather","hotel","history"
+    "documents","bookings","contact","weather","hotel","history",
+    "accommodationName","hotelName"
   ]);
 
   const PROGRAM_ITEM_FIELDS=new Set([
@@ -155,6 +157,23 @@
     next.program=Array.isArray(source.program)?source.program.map(redactProgramItem):Array.isArray(source.programItems)?source.programItems.map(redactProgramItem):[];
     next.programItems=next.program;
     next.accommodations=Array.isArray(source.accommodations)?source.accommodations.map(redactAccommodation):[];
+    if(!next.accommodations.length){
+      const hotelName=stringValue(source.accommodationName||source.hotelName||(source.hotel&&source.hotel.name)||(source.hotel&&source.hotel.title));
+      if(hotelName){
+        next.accommodations=[redactAccommodation({
+          name:hotelName,
+          address:source.accommodationAddress||(source.hotel&&source.hotel.address)||"",
+          checkIn:source.checkIn||(source.hotel&&source.hotel.checkIn)||"",
+          checkOut:source.checkOut||(source.hotel&&source.hotel.checkOut)||"",
+          phone:source.accommodationPhone||(source.hotel&&source.hotel.phone)||""
+        })];
+      }
+    }
+    if(!next.hotel||typeof next.hotel!=="object"||!Object.keys(next.hotel).length){
+      next.hotel=next.accommodations[0]||{};
+    }else{
+      next.hotel=redactAccommodation(next.hotel);
+    }
     next.restaurants=Array.isArray(source.restaurants)?source.restaurants.map(redactProgramItem):[];
     next.activities=Array.isArray(source.activities)?source.activities.map(redactProgramItem):[];
     next.documents=(Array.isArray(source.documents)?source.documents:[])

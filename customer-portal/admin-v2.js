@@ -2619,9 +2619,9 @@
     const workflow=publishWorkflow();
     if(workflow?.getPublishStatus)return workflow.getPublishStatus(customer,customer?.publishedSnapshot||null,customer?.publishMeta||{});
     const comparison=draftComparison(customer);
-    if(!customer?.publishedSnapshot)return {key:"draft",label:"Entwurf",changeCount:comparison.count,message:"Noch keine Live-Version veroeffentlicht."};
-    if(comparison.count)return {key:"pending",label:"Aenderungen seit letzter Veroeffentlichung",changeCount:comparison.count,message:`${comparison.count} Bereiche geaendert.`};
-    return {key:"live",label:"Veroeffentlicht",changeCount:0,message:"Live-Version aktuell."};
+    if(!customer?.publishedSnapshot)return {key:"draft",label:"Nicht veroeffentlicht",changeCount:comparison.count,changes:comparison.changes||[],message:"Noch keine Live-Version veroeffentlicht."};
+    if(comparison.count)return {key:"pending",label:"Unveroeffentlichte Aenderungen",changeCount:comparison.count,changes:comparison.changes||[],message:(comparison.labels||comparison.changes||[]).map(item=>item.label||item).join(" · ")||`${comparison.count} Aenderungen erkannt.`};
+    return {key:"live",label:"Veroeffentlicht",changeCount:0,changes:[],message:"Live-Version aktuell."};
   }
 
   function portalShareLibrary(){
@@ -2672,24 +2672,24 @@
 
   function resolvePortalLink(customer){
     if(!isPublished(customer)){
-      return {status:"draft",url:"",display:"",hint:"Bitte zuerst veroeffentlichen. Danach einmal einen stabilen Kundenlink erzeugen.",canOpen:false,canCopy:false,hasActiveShare:false};
+      return {status:"draft",url:"",display:"",hint:"Bitte zuerst veroeffentlichen. Danach einmal einen stabilen Kundenlink erzeugen und dem Kunden senden.",canOpen:false,canCopy:false,hasActiveShare:false};
     }
     const sessionShare=activeShareToken(customer.customerId);
-    if(sessionShare?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen. Erzeuge bei Bedarf einen neuen Link.",canOpen:false,canCopy:false,hasActiveShare:false};
+    if(sessionShare?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen. Erzeugen Sie bei Bedarf einen neuen Link fuer den Kunden.",canOpen:false,canCopy:false,hasActiveShare:false};
     const sessionUrl=secureShareUrl(sessionShare?.shareUrl);
-    if(sessionUrl)return {status:"active",url:sessionUrl,display:sessionUrl,hint:`Stabiler Kundenlink aktiv${sessionShare.publishedVersionId?` (Version ${sessionShare.publishedVersionId})`:""}. Nach dem Veroeffentlichen wird dieser Link automatisch aktualisiert — kein neuer Link noetig.`,canOpen:true,canCopy:true,hasActiveShare:true};
+    if(sessionUrl)return {status:"active",url:sessionUrl,display:sessionUrl,hint:`Stabiler Kundenlink aktiv${sessionShare.publishedVersionId?` (Version ${sessionShare.publishedVersionId})`:""}. Nach erneutem Veroeffentlichen bleibt derselbe Link gueltig.`,canOpen:true,canCopy:true,hasActiveShare:true};
     const meta=customerShareMeta(customer);
-    if(meta?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen. Erzeuge bei Bedarf einen neuen Link.",canOpen:false,canCopy:false,hasActiveShare:false};
+    if(meta?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen. Erzeugen Sie bei Bedarf einen neuen Link fuer den Kunden.",canOpen:false,canCopy:false,hasActiveShare:false};
     if(meta?.shareId)return {status:"session-lost",url:"",display:"",hint:"Ein stabiler Kundenlink ist aktiv. Der Kunde kann denselben Link weiter nutzen. In dieser Admin-Sitzung ist der Token nicht sichtbar — Oeffnen/Kopieren geht deshalb nicht. Nur bei Verlust „Neuen Link erzeugen“ nutzen.",canOpen:false,canCopy:false,hasActiveShare:true};
-    return {status:"missing",url:"",display:"",hint:"Noch kein sicherer Kundenlink. Einmal erzeugen und dem Kunden senden; spaetere Veroeffentlichungen aktualisieren denselben Link.",canOpen:false,canCopy:false,hasActiveShare:false};
+    return {status:"missing",url:"",display:"",hint:"Noch kein sicherer Kundenlink. Einmal erzeugen und dem Kunden senden. Spaetere Veroeffentlichungen aktualisieren denselben Link automatisch.",canOpen:false,canCopy:false,hasActiveShare:false};
   }
 
   function portalLinkBadgeLabel(status){
     if(status==="active")return "Sicherer Link aktiv";
     if(status==="session-lost")return "Link aktiv (nicht kopierbar)";
-    if(status==="revoked")return "Widerrufen";
-    if(status==="draft")return "Noch Entwurf";
-    return "Link fehlt";
+    if(status==="revoked")return "Link widerrufen";
+    if(status==="draft")return "Noch nicht veroeffentlicht";
+    return "Kein Link vorhanden";
   }
 
   function adminPortalPreviewUrl(customerId){
@@ -2710,6 +2710,18 @@
     }
   }
 
+  async function requireAdminAccessForPublication(){
+    setPublicationMessage("Admin-Berechtigung wird geprüft …","saving");
+    updatePublicationActions();
+    const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+    if(!authCheck.allowed){
+      const error=new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      error.code=authCheck.technical?"act/auth-check-failed":authCheck.pending?"act/auth-pending":"act/auth-denied";
+      throw error;
+    }
+    return authCheck;
+  }
+
   function updatePublicationActions(){
     all("[data-publication-action]").forEach(button=>{
       button.disabled=state.publicationSaving;
@@ -2725,17 +2737,31 @@
     const workflow=publishWorkflow();
     const validation=workflow?.validateForPublish?workflow.validateForPublish(customer):{ok:true,errors:[],warnings:[]};
     arrayValue(validation.warnings).forEach(item=>warnings.push(item));
-    const internalDocs=docs.filter(doc=>doc.visibility==="Intern"||doc.visible===false).length;
+    const programItems=workflow?.flattenProgramItems
+      ?workflow.flattenProgramItems(customer.program||customer.programItems||[],{customer})
+      :[];
+    if(!programItems.length&&!arrayValue(validation.warnings).some(item=>/Programmpunkt/i.test(item))){
+      warnings.push("Keine Programmpunkte vorhanden.");
+    }
     const visibleWithoutUrl=docs.filter(doc=>doc.visibility!=="Intern"&&doc.visible!==false&&!safeDocumentUrl(doc.url||doc.downloadUrl));
-    if(internalDocs)warnings.push(`${internalDocs} interne Dokumente werden nicht im Kundenportal angezeigt.`);
     if(visibleWithoutUrl.length)warnings.push(`${visibleWithoutUrl.length} sichtbare Dokumente haben keinen Oeffnen-Link und sind im Kundenportal nicht oeffnenbar.`);
-    if(status.key==="pending")warnings.push("Es gibt Aenderungen seit der letzten Veroeffentlichung.");
-    if(isPublished(customer)&&!resolvePortalLink(customer).hasActiveShare)warnings.push("Noch kein stabiler Kundenlink erzeugt. Einmal erzeugen und dem Kunden senden.");
-    if(isPublished(customer)&&resolvePortalLink(customer).status==="session-lost")warnings.push("Kundenlink ist aktiv, aber in dieser Sitzung nicht kopierbar. Nur bei Verlust neu erzeugen.");
+    const link=resolvePortalLink(customer);
+    if(isPublished(customer)&&!link.hasActiveShare)warnings.push("Noch kein stabiler Kundenlink erzeugt. Einmal erzeugen und dem Kunden senden.");
+    if(link.status==="session-lost")warnings.push("Kundenlink ist aktiv, aber in dieser Sitzung nicht kopierbar. Nur bei Verlust neu erzeugen.");
+    if(link.status==="revoked")warnings.push("Der Kundenlink wurde widerrufen. Bei Bedarf neu erzeugen.");
+    if(status.key==="pending"&&status.changeCount)warnings.push("Es gibt unveroeffentlichte Aenderungen. Bitte erneut veroeffentlichen.");
     if(analysis.missing.length)warnings.push(`${analysis.missing.length} erwartete Dokumente fehlen bei Programmpunkten.`);
     if(analysis.expiry.expired)warnings.push(`${analysis.expiry.expired} Dokumente sind abgelaufen.`);
     if(analysis.expiry.thirty)warnings.push(`${analysis.expiry.thirty} Dokumente laufen innerhalb von 30 Tagen ab.`);
     return warnings;
+  }
+
+  function publicationChangesMarkup(status){
+    const changes=arrayValue(status?.changes);
+    if(status?.key==="live")return `<p class="v2-muted">Keine unveroeffentlichten Aenderungen.</p>`;
+    if(status?.key==="draft")return `<p class="v2-muted">Nach der ersten Veroeffentlichung erscheint hier, was sich gegenueber der Live-Version geaendert hat.</p>`;
+    if(!changes.length)return `<p class="v2-muted">${escapeHtml(status?.message||"Status wird berechnet.")}</p>`;
+    return `<ul class="v2-change-list">${changes.map(item=>`<li>${escapeHtml(item.label||item)}</li>`).join("")}</ul>`;
   }
 
   function portalButton(label,action,{primary=false,disabled=false}={}){
@@ -2749,25 +2775,38 @@
     const docs=documentSummary(customer);
     const lastPublished=customer.publishMeta?.lastPublishedAt||customer.publishMeta?.publishedAt;
     const publisher=customer.publishMeta?.lastPublisher||customer.publishMeta?.publisher||"Nicht hinterlegt";
+    const version=displayValue(customer.publishMeta?.version||customer.version,"1.0");
+    const published=isPublished(customer)&&Boolean(customer.publishedSnapshot);
     return `
       <section class="v2-publication-overview">
         <div class="v2-tab-actions">
-          ${portalButton("Jetzt veroeffentlichen","publish",{primary:true})}
+          ${portalButton(published?"Erneut veroeffentlichen":"Jetzt veroeffentlichen","publish",{primary:true})}
           <a class="v2-button soft" href="admin.html#publish-history">Publish-Historie im Classic Admin oeffnen</a>
           <span class="v2-edit-status ${escapeHtml(state.publicationMessageKind)}" id="publicationStatusMessage" aria-live="polite">${escapeHtml(state.publicationMessage)}</span>
         </div>
         <article class="v2-publication-hero">
           <div>
-            <p class="v2-eyebrow">Veroeffentlichung</p>
+            <p class="v2-eyebrow">Veroeffentlichungsstatus</p>
             <h3>${escapeHtml(status.label||publicationState(customer))}</h3>
-            <p>${escapeHtml(status.message||"Status wird aus der bestehenden Publish-Logik berechnet.")}</p>
-            <div class="v2-meta">${badge(publicationState(customer))}${status.changeCount?badge("Aenderungen seit letzter Veroeffentlichung"):badge("Live-Version aktuell")}</div>
+            <p>${escapeHtml(status.key==="pending"?"Es gibt unveroeffentlichte Aenderungen — Details siehe unten.":(status.message||"Status wird aus der bestehenden Publish-Logik berechnet."))}</p>
+            <div class="v2-meta">${badge(published?"Veroeffentlicht":"Nicht veroeffentlicht")}${badge(portalLinkBadgeLabel(link.status))}</div>
           </div>
           <div class="v2-publication-facts">
             ${summaryItem("Letzte Veroeffentlichung",formatPublishDateTime(lastPublished))}
             ${summaryItem("Veroeffentlicht von",displayValue(publisher))}
-            ${summaryItem("Version",displayValue(customer.publishMeta?.version||customer.version,"1.0"))}
+            ${summaryItem("Version",version)}
+            ${summaryItem("Sicherer Link",portalLinkBadgeLabel(link.status))}
           </div>
+        </article>
+        <article class="v2-panel">
+          <div class="v2-panel-head">
+            <div>
+              <p class="v2-eyebrow">Aenderungen</p>
+              <h3>Seit letzter Veroeffentlichung</h3>
+            </div>
+            ${badge(status.changeCount?`${status.changeCount} erkannt`:"Aktuell")}
+          </div>
+          ${publicationChangesMarkup(status)}
         </article>
         <article class="v2-panel">
           <div class="v2-panel-head">
@@ -2784,8 +2823,8 @@
             ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
             ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
             ${link.hasActiveShare
-              ?portalButton("Neuen Link erzeugen (ersetzt alten)","create-share-new",{disabled:!isPublished(customer),primary:link.status==="session-lost"})
-              :portalButton("Stabilen Kundenlink erzeugen","create-share",{primary:true,disabled:!isPublished(customer)})}
+              ?portalButton("Neuen Link erzeugen (ersetzt alten)","create-share-new",{disabled:!published,primary:link.status==="session-lost"||link.status==="revoked"})
+              :portalButton("Stabilen Kundenlink erzeugen","create-share",{primary:true,disabled:!published})}
             ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
           </div>
         </article>
@@ -2812,9 +2851,9 @@
               <p class="v2-eyebrow">Pruefung vor Publish</p>
               <h3>Hinweise</h3>
             </div>
-            ${badge(warnings.length?"Hinweise":"Vollstaendig")}
+            ${badge(warnings.length?"Hinweise":"Bereit")}
           </div>
-          ${warnings.length?`<ul class="v2-warning-list">${warnings.map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>`:`<p>Keine kritischen Hinweise fuer die Veroeffentlichungsansicht.</p>`}
+          ${warnings.length?`<ul class="v2-warning-list">${warnings.map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>`:`<p>Keine Hinweise. Veroeffentlichung kann durchgefuehrt werden.</p>`}
         </article>
       </section>
     `;
@@ -2831,8 +2870,8 @@
       try{
         const db=window.ACTFirebaseDatabase;
         if(!db?.publishCustomer)throw new Error("Publish-Funktion ist nicht verfuegbar.");
-        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
-        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        await requireAdminAccessForPublication();
+        setPublicationMessage("Veroeffentlichung wird vorbereitet ...","saving");
         const workflow=publishWorkflow();
         const publishSource=clone(customer);
         if(Array.isArray(publishSource.documents)&&publishSource.documents.length){
@@ -2913,7 +2952,7 @@
         }
         updateLocalCustomer(compactObject(publishCandidate));
         state.publicationSaving=false;
-        setPublicationMessage(`Veroeffentlichung erfolgreich abgeschlossen.${refreshNote}`,"success");
+        setPublicationMessage(`Veroeffentlichung erfolgreich (Version ${nextVersion}).${refreshNote}`,"success");
         render();
         return publishCandidate;
       }catch(error){
@@ -2945,8 +2984,8 @@
         const db=window.ACTFirebaseDatabase;
         if(!db?.createPortalShare)throw new Error("Share-Funktion ist nicht verfuegbar.");
         if(!isPublished(customer)||!customer.publishedSnapshot)throw new Error("Bitte zuerst veroeffentlichen.");
-        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
-        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        await requireAdminAccessForPublication();
+        setPublicationMessage(forceNew?"Neuer Kundenlink wird erzeugt ...":"Kundenlink wird erzeugt ...","saving");
         const result=await withTimeout(db.createPortalShare(clone(customer),{forceNew}),AUTH_TIMEOUT_MS,"createPortalShare");
         if(result?.reused){
           const session=activeShareToken(customer.customerId);
@@ -2986,8 +3025,8 @@
         updateLocalCustomer(next);
         state.publicationSaving=false;
         setPublicationMessage(forceNew
-          ?"Neuer Kundenlink wurde erzeugt. Bitte dem Kunden den neuen Link senden."
-          :"Stabiler Kundenlink wurde erzeugt. Nach spaeteren Veroeffentlichungen bleibt derselbe Link gueltig.","success");
+          ?"Neuer Kundenlink wurde erzeugt. Bitte dem Kunden den neuen Link senden — der alte Link funktioniert nicht mehr."
+          :"Stabiler Kundenlink wurde erzeugt. Bitte Link kopieren und dem Kunden senden. Spaetere Veroeffentlichungen behalten denselben Link.","success");
         render();
         return shareUrl;
       }catch(error){
@@ -3020,8 +3059,8 @@
       try{
         const db=window.ACTFirebaseDatabase;
         if(!db?.revokePortalShare)throw new Error("Share-Widerruf ist nicht verfuegbar.");
-        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
-        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        await requireAdminAccessForPublication();
+        setPublicationMessage("Share-Link wird widerrufen ...","saving");
         await withTimeout(db.revokePortalShare(share.shareId),AUTH_TIMEOUT_MS,"revokePortalShare");
         saveShareToken(customer.customerId,{shareId:share.shareId,status:"revoked",shareUrl:null,revokedAt:new Date().toISOString()});
         const next=clone(customer);
@@ -3034,7 +3073,7 @@
       }catch(error){
         console.error("[ACT Admin V2] Share-Link widerrufen:",error&&error.message?error.message:"Fehler");
         state.publicationSaving=false;
-        setPublicationMessage("Share-Link konnte nicht widerrufen werden. Bitte erneut versuchen.","error");
+        setPublicationMessage(error&&error.message?error.message:"Share-Link konnte nicht widerrufen werden. Bitte erneut versuchen.","error");
         updatePublicationActions();
         return null;
       }finally{
@@ -3392,6 +3431,7 @@
   }
 
   function loginErrorMessage(authState){
+    if(authState?.claimsError)return "Admin-Berechtigung konnte nicht geprüft werden.";
     if(authState?.missingRole||authState?.signedIn&&!authState?.allowed)return MISSING_ROLE_ERROR;
     return authState?.error||TECHNICAL_LOGIN_ERROR;
   }
@@ -3476,6 +3516,8 @@
       if(authState.allowed){
         showShell(authState);
         await loadCustomers();
+      }else if(authState.claimsError){
+        showLogin("Admin-Berechtigung konnte nicht geprüft werden.",true);
       }else if(authState.missingRole){
         await signOutAfterMissingRole();
         showLogin(MISSING_ROLE_ERROR,true);

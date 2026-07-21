@@ -98,17 +98,43 @@
       region:customer.region||"",
       weatherLocationName:customer.weatherLocationName||"",
       companions:customer.companions||"",
-      concierge:customer.concierge||"",
+      concierge:customer.concierge||customer.conciergeName||"",
       phone:customer.phone||"",
       email:customer.email||"",
       whatsapp:customer.whatsapp||"",
-      status:customer.status||""
+      status:customer.status||"",
+      notes:customer.notes||customer.requirements||customer.wishes||""
     };
   }
 
-  function accommodationSignature(items){
+  function imageSignature(customer){
+    const source=customer||{};
+    return String(source.image||source.imageUrl||source.heroImage||source.coverImage||"").trim();
+  }
+
+  function accommodationList(customer){
+    const source=customer||{};
+    const list=Array.isArray(source.accommodations)?source.accommodations.filter(Boolean):[];
+    if(list.length)return list;
+    const hotel=source.hotel&&typeof source.hotel==="object"?source.hotel:{};
+    const stay=source.stay&&typeof source.stay==="object"?source.stay:{};
+    const name=String(source.accommodationName||source.hotelName||hotel.name||hotel.title||stay.name||"").trim();
+    if(!name)return [];
+    return [{
+      name,
+      address:source.accommodationAddress||hotel.address||stay.address||"",
+      checkIn:source.checkIn||hotel.checkIn||stay.checkIn||"",
+      checkOut:source.checkOut||hotel.checkOut||stay.checkOut||"",
+      contact:hotel.contact||"",
+      phone:source.accommodationPhone||hotel.phone||stay.phone||"",
+      notes:hotel.notes||stay.notes||""
+    }];
+  }
+
+  function accommodationSignature(customerOrItems){
+    const items=Array.isArray(customerOrItems)?customerOrItems:accommodationList(customerOrItems);
     return (items||[]).map(item=>({
-      name:item.name||"",
+      name:item.name||item.hotel||item.title||"",
       address:item.address||"",
       checkIn:item.checkIn||"",
       checkOut:item.checkOut||"",
@@ -136,14 +162,16 @@
       changes.push({label,kind,detail:detail||""});
     };
 
-    if(stableJson(masterSignature(draft))!==stableJson(masterSignature(pub))){
-      add("Stammdaten","changed");
-    }
-    if(stableJson(contactSignature(draft.contact))!==stableJson(contactSignature(pub.contact))){
-      add("Kontakt","changed");
-    }
-    if((draft.weatherLocationName||"")!==(pub.weatherLocationName||"")||(draft.latitude||"")!==(pub.latitude||"")||(draft.longitude||"")!==(pub.longitude||"")){
-      add("Wetter-Ort","changed");
+    const customerDataChanged=
+      stableJson(masterSignature(draft))!==stableJson(masterSignature(pub))||
+      stableJson(contactSignature(draft.contact))!==stableJson(contactSignature(pub.contact))||
+      (draft.weatherLocationName||"")!==(pub.weatherLocationName||"")||
+      (draft.latitude||"")!==(pub.latitude||"")||
+      (draft.longitude||"")!==(pub.longitude||"");
+    if(customerDataChanged)add("Kundendaten geändert","changed");
+
+    if(imageSignature(draft)!==imageSignature(pub)){
+      add("Kundenbild geändert","changed");
     }
 
     const draftProgram=programSignature(draft.program||draft.programItems,{customer:draft});
@@ -157,26 +185,31 @@
       const previous=pubProgram.find(entry=>entry.id===item.id);
       return stableJson(item)!==stableJson(previous);
     }).length;
+    const programTouched=newCount||changedCount||removedCount||stableJson(draftProgram)!==stableJson(pubProgram);
+    if(programTouched){
+      const touched=newCount+changedCount+removedCount;
+      if(touched>0)add(touched===1?"Programm geändert":`Programm geändert (${touched} Punkte)`,"changed");
+      else add("Programm geändert","changed");
+    }
 
-    if(newCount)add(newCount===1?"Neuer Programmpunkt":`${newCount} neue Programmpunkte`,"new");
-    if(changedCount)add(changedCount===1?"Programmpunkt geändert":`${changedCount} Programmpunkte geändert`,"changed");
-    if(removedCount)add(removedCount===1?"Programmpunkt entfernt":`${removedCount} Programmpunkte entfernt`,"removed");
-
-    if(stableJson(accommodationSignature(draft.accommodations))!==stableJson(accommodationSignature(pub.accommodations))){
-      add("Unterkunft","changed");
+    if(stableJson(accommodationSignature(draft))!==stableJson(accommodationSignature(pub))){
+      add("Unterkunft geändert","changed");
     }
 
     const draftDocs=documentSignature(draft.documents);
     const pubDocs=documentSignature(pub.documents);
-    const newDocs=draftDocs.filter(item=>{
-      return !pubDocs.some(previous=>stableJson(previous)===stableJson(item));
-    }).length;
     if(stableJson(draftDocs)!==stableJson(pubDocs)){
-      if(newDocs)add(newDocs===1?"Dokument ergänzt":`${newDocs} Dokumente ergänzt`,"new");
-      else add("Dokumente geändert","changed");
+      const maxLen=Math.max(draftDocs.length,pubDocs.length);
+      let docChanges=Math.abs(draftDocs.length-pubDocs.length);
+      const limit=Math.min(draftDocs.length,pubDocs.length);
+      for(let index=0;index<limit;index+=1){
+        if(stableJson(draftDocs[index])!==stableJson(pubDocs[index]))docChanges+=1;
+      }
+      if(!docChanges)docChanges=1;
+      add(docChanges===1?"1 Dokument geändert":`${docChanges} Dokumente geändert`,"changed");
     }
 
-    return {changes,count:changes.length};
+    return {changes,count:changes.length,labels:changes.map(item=>item.label)};
   }
 
   function publishComparePayload(customer){
@@ -184,13 +217,14 @@
     return {
       master:masterSignature(source),
       contact:contactSignature(source.contact),
+      image:imageSignature(source),
       weather:{
         weatherLocationName:source.weatherLocationName||"",
         latitude:source.latitude||"",
         longitude:source.longitude||""
       },
       program:programSignature(source.program||source.programItems,{customer:source}),
-      accommodations:accommodationSignature(source.accommodations),
+      accommodations:accommodationSignature(source),
       documents:documentSignature(source.documents)
     };
   }
@@ -219,6 +253,7 @@
     if(c.startDatePlain&&c.endDatePlain&&c.endDatePlain<c.startDatePlain)errors.push("Reisezeitraum ist ungültig (Ende vor Start).");
 
     const programItems=flattenProgramItems(c.program||c.programItems||[],{customer:c});
+    if(!programItems.length)warnings.push("Keine Programmpunkte vorhanden.");
     programItems.forEach((item,index)=>{
       const label=item.title||`Programmpunkt ${index+1}`;
       if(!String(item.title||"").trim())errors.push(`${label}: Titel fehlt.`);
@@ -227,8 +262,9 @@
 
     (c.documents||[]).forEach(item=>{
       const visible=item.visible!==false&&item.visible!=="false"&&item.visible!=="Nein";
-      if(visible&&!String(item.url||"").trim())errors.push(`Dokument "${item.title||"Ohne Titel"}": gültiger Link fehlt.`);
-      if(visible&&item.url&&!/^https?:\/\//i.test(item.url))errors.push(`Dokument "${item.title||"Ohne Titel"}": Link muss mit http:// oder https:// beginnen.`);
+      const url=String(item.url||item.downloadUrl||"").trim();
+      if(visible&&!url)errors.push(`Dokument "${item.title||"Ohne Titel"}": gültiger Link fehlt.`);
+      if(visible&&url&&!/^https?:\/\//i.test(url))errors.push(`Dokument "${item.title||"Ohne Titel"}": Link muss mit http:// oder https:// beginnen.`);
     });
 
     if(!hasAccommodation(c))warnings.push("Unterkunft fehlt.");
@@ -244,24 +280,28 @@
       icon:"🔴",
       label:"Fehler beim Veröffentlichen",
       tone:"error",
+      changeCount:0,
+      changes:[],
       message:meta.publishError
     };
     const comparison=compareDraftVsPublished(draft,published||null);
     if(!published)return {
       key:"draft",
       icon:"🟡",
-      label:"Entwurf vorhanden",
+      label:"Nicht veröffentlicht",
       tone:"draft",
       changeCount:comparison.count,
-      message:"Noch keine Live-Version veröffentlicht."
+      changes:comparison.changes,
+      message:"Noch keine Live-Version veröffentlicht. Speichern Sie zuerst, dann veröffentlichen."
     };
     if(!comparison.count)return {
       key:"live",
       icon:"🟢",
-      label:"Live-Version aktuell",
+      label:"Veröffentlicht",
       tone:"live",
       changeCount:0,
-      message:"Entwurf entspricht der veröffentlichten Version."
+      changes:[],
+      message:"Live-Version aktuell — Entwurf entspricht der veröffentlichten Version."
     };
     return {
       key:"pending",
@@ -269,7 +309,8 @@
       label:"Unveröffentlichte Änderungen",
       tone:"pending",
       changeCount:comparison.count,
-      message:`${comparison.count} Bereich${comparison.count===1?"":"e"} geändert.`
+      changes:comparison.changes,
+      message:comparison.labels.join(" · ")
     };
   }
 
@@ -348,6 +389,8 @@
     formatPublishDateTime,
     buildHistoryEntry,
     buildPortalHistoryText,
-    buildNotificationTexts
+    buildNotificationTexts,
+    imageSignature,
+    accommodationList
   };
 })();

@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin.css?v=40">
+<link rel="stylesheet" href="admin.css?v=41">
 <link rel="stylesheet" href="wizard.css?v=4">
 </head>
 <body>
@@ -19,6 +19,7 @@
       <p class="eyebrow">Interne Verwaltung</p>
       <h1>Kundenportal Admin</h1>
       <p class="muted">Mit freigegebenem Firebase-Admin-Konto anmelden. Der Adminbereich wird erst nach Rollenpruefung freigegeben.</p>
+      <p class="muted"><strong>Hinweis:</strong> Der Standard-Einstieg ist <a href="admin-v2.html">Admin V2</a>. Classic bleibt als Uebergangs- und Notfallzugang erhalten.</p>
       <form id="adminLoginForm">
         <label>E-Mail
           <input id="adminEmailInput" type="email" autocomplete="username" placeholder="admin@example.com">
@@ -30,10 +31,15 @@
       </form>
       <button class="button soft" id="resetLocalDataButton" type="button">Lokale Admin-Daten zurücksetzen</button>
       <p class="form-message" id="loginMessage" aria-live="polite"></p>
+      <a class="button soft" href="admin-v2.html" style="display:inline-flex;margin-top:8px;text-decoration:none;justify-content:center;">Zu Admin V2 wechseln</a>
     </div>
   </section>
 
   <section class="admin-shell" id="adminShell" hidden>
+    <div class="classic-transition-banner" role="status">
+      <p>Classic Admin – Uebergangsloesung. Neue Funktionen werden ausschliesslich in Admin V2 entwickelt.</p>
+      <a class="button soft" href="admin-v2.html">Zu Admin V2 wechseln</a>
+    </div>
     <header class="admin-header">
       <div>
         <p class="eyebrow">Alpine Concierge Tirol</p>

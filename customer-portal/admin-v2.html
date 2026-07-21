@@ -8,14 +8,14 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=27">
+<link rel="stylesheet" href="admin-v2.css?v=28">
 </head>
 <body>
 <main>
   <section class="v2-login" id="loginScreen">
     <div class="v2-login-card">
       <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol Logo" width="118" height="88">
-      <p class="v2-eyebrow">Interne Verwaltung</p>
+      <p class="v2-eyebrow">Interne Verwaltung · Standard-Einstieg</p>
       <h1>Admin 2.0</h1>
       <p class="v2-muted">Mit freigegebenem Firebase-Admin-Konto anmelden. Die bestehende Rollenpruefung bleibt unveraendert.</p>
       <form id="adminLoginForm">
@@ -28,7 +28,7 @@
         <button class="v2-button primary" id="loginButton" type="submit">Anmelden</button>
       </form>
       <p class="v2-form-message" id="loginMessage" aria-live="polite"></p>
-      <a class="v2-text-link" href="admin.html">Zum klassischen Admin</a>
+      <a class="v2-text-link" href="admin.html">Classic Admin – Uebergangsloesung</a>
     </div>
   </section>
 
@@ -60,7 +60,7 @@
           <span>Einstellungen</span>
         </button>
       </nav>
-      <a class="v2-classic-link" href="admin.html">Klassischer Admin</a>
+      <a class="v2-classic-link" href="admin.html">Classic Admin – Uebergangsloesung</a>
     </aside>
 
     <section class="v2-main">
@@ -176,8 +176,8 @@
       <section class="v2-view" id="calendarView" data-title="Kalender">
         <div class="v2-placeholder">
           <h2>Kalender</h2>
-          <p>Dieser Bereich wird in einer spaeteren Ausbaustufe angebunden.</p>
-          <a class="v2-button soft" href="admin.html#bookings-dashboard">Buchungen im klassischen Admin oeffnen</a>
+          <p>Dieser Bereich wird in einer spaeteren Ausbaustufe angebunden. Buchungen liegen weiterhin im Classic Admin.</p>
+          <a class="v2-button soft" href="admin.html#bookings-dashboard">Buchungen im Classic Admin oeffnen</a>
         </div>
       </section>
 
@@ -188,8 +188,12 @@
       <section class="v2-view" id="settingsView" data-title="Einstellungen">
         <div class="v2-placeholder">
           <h2>Einstellungen</h2>
-          <p>Dieser Bereich wird in einer spaeteren Ausbaustufe angebunden.</p>
-          <a class="v2-button soft" href="admin.html">Klassischen Admin oeffnen</a>
+          <p>Dieser Bereich wird in einer spaeteren Ausbaustufe angebunden. Legacy-Module oeffnen Sie gezielt im Classic Admin.</p>
+          <div class="v2-document-actions">
+            <a class="v2-button soft" href="admin.html#crm-dashboard">CRM im Classic Admin oeffnen</a>
+            <a class="v2-button soft" href="admin.html#bookings-dashboard">Buchungen im Classic Admin oeffnen</a>
+            <a class="v2-button soft" href="admin.html#templates">Vorlagen im Classic Admin oeffnen</a>
+          </div>
         </div>
       </section>
     </section>
@@ -228,6 +232,6 @@
 <script src="firebase-auth.js?v=3"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=5"></script>
-<script src="admin-v2.js?v=32"></script>
+<script src="admin-v2.js?v=33"></script>
 </body>
 </html>

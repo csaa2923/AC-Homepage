@@ -1781,7 +1781,7 @@
             <h3>Dokumente direkt hochladen</h3>
             <p>Dateien werden mit der bestehenden Firebase-Storage-Funktion hochgeladen und danach im Kundenentwurf gespeichert.</p>
           </div>
-          <a class="v2-button soft" href="admin.html#customers">Upload im klassischen Admin</a>
+          <a class="v2-button soft" href="admin.html#customers">Upload im Classic Admin oeffnen</a>
         </div>
         ${customer?"":`
           <label class="v2-edit-field">Kunde
@@ -2264,7 +2264,7 @@
       }catch(error){
         console.error("[ACT Admin V2] Dokument-Upload:",error&&error.message?error.message:"Fehler");
         const message=error&&error.message?error.message:"Upload fehlgeschlagen.";
-        setDocumentEditMessage(message===documentUploadUnavailableMessage()?message:"Upload fehlgeschlagen. Bitte Datei pruefen oder den klassischen Admin verwenden.","error");
+        setDocumentEditMessage(message===documentUploadUnavailableMessage()?message:"Upload fehlgeschlagen. Bitte Datei pruefen oder den Classic Admin verwenden.","error");
         setUploadState(upload.id,{status:"error",progress:0,error:error&&error.message?error.message:"Upload fehlgeschlagen."});
       }
     }
@@ -2738,7 +2738,7 @@
       <section class="v2-publication-overview">
         <div class="v2-tab-actions">
           ${portalButton("Jetzt veroeffentlichen","publish",{primary:true})}
-          <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Im klassischen Admin oeffnen</a>
+          <a class="v2-button soft" href="admin.html#publish-history">Publish-Historie im Classic Admin oeffnen</a>
           <span class="v2-edit-status ${escapeHtml(state.publicationMessageKind)}" id="publicationStatusMessage" aria-live="polite">${escapeHtml(state.publicationMessage)}</span>
         </div>
         <article class="v2-publication-hero">
@@ -3188,7 +3188,7 @@
       <section class="v2-documents-overview">
         <div class="v2-tab-actions">
           <button class="v2-button primary" type="button" data-document-edit-action="edit">Dokumente bearbeiten</button>
-          <a class="v2-button soft" href="admin.html#customers">Upload im klassischen Admin</a>
+          <a class="v2-button soft" href="admin.html#customers">Upload im Classic Admin oeffnen</a>
           <span class="v2-edit-status ${state.documentEditMessageKind}" id="documentEditStatus" aria-live="polite">${escapeHtml(state.documentEditMessage)}</span>
         </div>
         ${uploadPanelMarkup(customer)}
@@ -3217,7 +3217,7 @@
           </details>
         `:""}
         <div class="v2-document-grid">
-          ${docs.length?analysis.rows.map(row=>documentCardMarkup(row.doc,{customer,quality:row.quality,index:row.index})).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente vorhanden</h3><p>Bitte oben ein Dokument hochladen oder den klassischen Admin als Fallback nutzen.</p></article>`}
+          ${docs.length?analysis.rows.map(row=>documentCardMarkup(row.doc,{customer,quality:row.quality,index:row.index})).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente vorhanden</h3><p>Bitte oben ein Dokument hochladen oder den Classic Admin als Fallback nutzen.</p></article>`}
         </div>
       </section>
     `;
@@ -3233,12 +3233,12 @@
         <div class="v2-edit-head">
           <div>
             <h3>Dokument-Metadaten bearbeiten</h3>
-            <p class="v2-muted">Uploads bleiben im klassischen Admin. Hier werden nur Metadaten im bestehenden Kundenentwurf gepflegt.</p>
+            <p class="v2-muted">Falls der Upload hier scheitert, nutzen Sie „Upload im Classic Admin oeffnen“. Metadaten werden im Kundenentwurf gepflegt.</p>
           </div>
           <span class="v2-edit-status ${escapeHtml(statusKind)}" id="documentEditStatus" aria-live="polite">${escapeHtml(status)}</span>
         </div>
         <div class="v2-document-editor">
-          ${arrayValue(draft.documents).map((doc,index)=>documentEditItemMarkup(doc,index)).join("")||`<article class="v2-empty"><h3>Keine Dokumente vorhanden</h3><p>Bitte Dokumente zuerst im klassischen Admin hochladen.</p></article>`}
+          ${arrayValue(draft.documents).map((doc,index)=>documentEditItemMarkup(doc,index)).join("")||`<article class="v2-empty"><h3>Keine Dokumente vorhanden</h3><p>Bitte Dokumente zuerst hochladen oder den Classic Admin als Fallback nutzen.</p></article>`}
         </div>
         <div class="v2-edit-actions">
           <button class="v2-button primary" type="submit" data-document-edit-action="save" ${state.documentEditSaving?"disabled aria-busy=\"true\"":""}>Speichern</button>
@@ -3700,7 +3700,6 @@
           </div>
           <div class="v2-actions">
             <span class="v2-button soft">Kunde oeffnen</span>
-            <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Alter Admin</a>
           </div>
         </div>
       </article>
@@ -3744,8 +3743,8 @@
       <header class="v2-detail-head">
         <div class="v2-detail-actions">
           <button class="v2-button soft" type="button" data-v2-route="customers">Zur Kundenuebersicht</button>
-          <a class="v2-button primary" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Im klassischen Admin bearbeiten</a>
           ${customerLifecycleActionsMarkup(customer)}
+          <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Classic Admin – Uebergangsloesung</a>
         </div>
         ${flash}
         <div class="v2-detail-hero">
@@ -3909,7 +3908,7 @@
     if(state.tripEditMode)return tripEditFormMarkup(customer);
     const trip=buildTripViewModel(customer);
     if(trip.error){
-      return `<article class="v2-empty"><h3>Reisedaten konnten nicht angezeigt werden</h3><p>Der Kundentab bleibt verfuegbar. Bitte versuchen Sie es erneut oder oeffnen Sie den klassischen Admin.</p><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a></article>`;
+      return `<article class="v2-empty"><h3>Reisedaten konnten nicht angezeigt werden</h3><p>Der Kundentab bleibt verfuegbar. Bitte versuchen Sie es erneut oder oeffnen Sie den Classic Admin.</p><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Kunde im Classic Admin oeffnen</a></article>`;
     }
     const heroMeta=[trip.nights,trip.region,trip.total?`${trip.total} Reisende`:""].filter(Boolean).join(" · ");
     const docs=documentSummary(customer);
@@ -3976,7 +3975,7 @@
       ])
     ].filter(Boolean);
     if(!cards.length){
-      return `<article class="v2-empty v2-trip-empty"><span class="v2-trip-empty-icon" aria-hidden="true"></span><h3>Fuer diesen Kunden sind noch keine Reisedaten hinterlegt.</h3><p>Sie koennen die Reisedaten jetzt direkt in Admin 2.0 erfassen.</p><div class="v2-tab-actions"><button class="v2-button primary" type="button" data-trip-edit-action="edit">Reise bearbeiten</button><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Im klassischen Admin bearbeiten</a></div></article>`;
+      return `<article class="v2-empty v2-trip-empty"><span class="v2-trip-empty-icon" aria-hidden="true"></span><h3>Fuer diesen Kunden sind noch keine Reisedaten hinterlegt.</h3><p>Sie koennen die Reisedaten jetzt direkt in Admin 2.0 erfassen.</p><div class="v2-tab-actions"><button class="v2-button primary" type="button" data-trip-edit-action="edit">Reise bearbeiten</button><a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}">Kunde im Classic Admin oeffnen</a></div></article>`;
     }
     return `
       <section class="v2-trip-overview">
@@ -5013,7 +5012,7 @@
     const customer=customerById(state.wizardSavedCustomerId||draft.customerId);
     const phoneDisplay=composeWizardPhone(draft)||cleanValue(draft.phone)||"-";
     const link=customer?resolvePortalLink(customer):null;
-    return `<section class="v2-wizard-panel"><h3>6. Abschluss</h3><p>Speichern Sie den Entwurf oder schliessen Sie die Anlage mit „Fertig“ ab.</p><div class="v2-wizard-finish"><p><strong>${escapeHtml(wizardCustomerName(draft))}</strong> · ${escapeHtml(draft.tripTitle||"Neue Reise")}</p><p class="v2-muted">Interne Kundennummer: <strong>${escapeHtml(draft.internalNumber||"-")}</strong> · ${escapeHtml(phoneDisplay)}</p><div class="v2-document-actions"><button class="v2-button primary" type="button" data-wizard-action="save" ${state.wizardSaving?"disabled":""}>Speichern</button><button class="v2-button soft" type="button" data-wizard-action="finish" ${state.wizardSaving?"disabled":""}>Fertig</button><button class="v2-button soft" type="button" data-wizard-action="save-draft" ${state.wizardSaving?"disabled":""}>Entwurf speichern</button><button class="v2-button soft" type="button" data-wizard-action="open-customer" ${customer?"":"disabled"}>Kunde oeffnen</button><button class="v2-button soft" type="button" data-wizard-action="publish" ${customer?"":"disabled"}>Veroeffentlichen</button><button class="v2-button soft" type="button" data-wizard-action="create-share" ${customer&&isPublished(customer)?"":"disabled"}>${(customer&&resolvePortalLink(customer).hasActiveShare)?"Kundenlink aktualisieren":"Stabilen Kundenlink erzeugen"}</button></div>${link?.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}<p class="v2-muted">Bewusster Fallback: <a class="v2-text-link" href="admin.html" target="_blank" rel="noopener noreferrer">Klassischen Admin in neuem Tab oeffnen</a> (startet keinen neuen Kunden).</p></div></section>`;
+    return `<section class="v2-wizard-panel"><h3>6. Abschluss</h3><p>Speichern Sie den Entwurf oder schliessen Sie die Anlage mit „Fertig“ ab.</p><div class="v2-wizard-finish"><p><strong>${escapeHtml(wizardCustomerName(draft))}</strong> · ${escapeHtml(draft.tripTitle||"Neue Reise")}</p><p class="v2-muted">Interne Kundennummer: <strong>${escapeHtml(draft.internalNumber||"-")}</strong> · ${escapeHtml(phoneDisplay)}</p><div class="v2-document-actions"><button class="v2-button primary" type="button" data-wizard-action="save" ${state.wizardSaving?"disabled":""}>Speichern</button><button class="v2-button soft" type="button" data-wizard-action="finish" ${state.wizardSaving?"disabled":""}>Fertig</button><button class="v2-button soft" type="button" data-wizard-action="save-draft" ${state.wizardSaving?"disabled":""}>Entwurf speichern</button><button class="v2-button soft" type="button" data-wizard-action="open-customer" ${customer?"":"disabled"}>Kunde oeffnen</button><button class="v2-button soft" type="button" data-wizard-action="publish" ${customer?"":"disabled"}>Veroeffentlichen</button><button class="v2-button soft" type="button" data-wizard-action="create-share" ${customer&&isPublished(customer)?"":"disabled"}>${(customer&&resolvePortalLink(customer).hasActiveShare)?"Kundenlink aktualisieren":"Stabilen Kundenlink erzeugen"}</button></div>${link?.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}<p class="v2-muted">Bewusster Fallback: <a class="v2-text-link" href="admin.html" target="_blank" rel="noopener noreferrer">Classic Admin – Uebergangsloesung</a> (startet keinen neuen Kunden).</p></div></section>`;
   }
 
   function renderNewCustomerWizard(){

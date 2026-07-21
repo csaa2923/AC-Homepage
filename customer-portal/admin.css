@@ -42,6 +42,9 @@ h3{font-size:25px}
 .admin-shell.is-editing #templates{display:none}
 .admin-shell.is-editing .overview-only{display:none!important}
 .admin-header{display:grid;gap:18px;padding:24px clamp(18px,4vw,54px);background:linear-gradient(90deg,var(--green),var(--green-2));color:#f8f1dd;overflow:hidden}
+.classic-transition-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 18px;padding:12px clamp(18px,4vw,54px);border-bottom:1px solid rgba(216,183,106,.35);background:#fff8e8;color:#3a2f14}
+.classic-transition-banner p{margin:0;font-size:13px;line-height:1.45;max-width:72ch}
+.classic-transition-banner .button{flex:0 0 auto;text-decoration:none}
 .admin-header>div:first-child{min-width:0}
 .admin-header h1{font-size:clamp(26px,3.2vw,42px);overflow-wrap:break-word;word-break:break-word;max-width:100%}
 .admin-header .eyebrow{color:var(--gold-2)}

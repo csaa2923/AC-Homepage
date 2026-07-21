@@ -53,7 +53,8 @@ p{color:var(--muted);line-height:1.55}
 .v2-button.soft,.v2-button.small,.v2-classic-link,.v2-text-link{min-height:44px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-weight:750;text-decoration:none;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
 .v2-button:hover,.v2-classic-link:hover,.v2-text-link:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(20,38,31,.10)}
 .v2-button.small{min-height:44px}
-.v2-classic-link{margin-top:auto}
+.v2-classic-link{margin-top:auto;min-height:auto;padding:10px 8px;border:0;border-radius:0;background:transparent;box-shadow:none;color:var(--muted);font-size:12px;font-weight:650;text-align:left;text-decoration:underline;text-underline-offset:3px}
+.v2-classic-link:hover{transform:none;box-shadow:none;color:var(--green)}
 .v2-main{min-width:0;max-width:100%;padding:calc(26px + var(--mobile-safe-top)) clamp(16px,3vw,38px) 48px}
 .v2-topbar,.v2-section-toolbar,.v2-panel-head{min-width:0;max-width:100%;display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
 .v2-topbar>*,.v2-section-toolbar>*{min-width:0;max-width:100%}

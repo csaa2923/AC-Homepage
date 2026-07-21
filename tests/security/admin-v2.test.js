@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=27/);
-    assert.match(html,/admin-v2\.js\?v=32/);
+    assert.match(html,/admin-v2\.css\?v=28/);
+    assert.match(html,/admin-v2\.js\?v=33/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -133,7 +133,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/tripReadCard\("Region und Aufenthalt"/);
     assert.match(js,/tripReadCard\("Wuensche und Hinweise"/);
     assert.match(js,/Fuer diesen Kunden sind noch keine Reisedaten hinterlegt\./);
-    assert.match(js,/Im klassischen Admin bearbeiten/);
+    assert.match(js,/Kunde im Classic Admin oeffnen/);
     assert.match(js,/data-trip-edit-action="edit">Reise bearbeiten/);
     assert.match(css,/\.v2-trip-hero/);
     assert.match(css,/\.v2-trip-grid/);
@@ -362,11 +362,11 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=27/);
+    assert.match(html,/admin-v2\.css\?v=28/);
     assert.match(html,/portal-share-library\.js\?v=2/);
     assert.match(html,/publish-workflow\.js\?v=6/);
     assert.match(html,/firebase-storage\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=32"><\/script>/);
+    assert.match(html,/admin-v2\.js\?v=33"><\/script>/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -477,7 +477,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/portal-share-library\.js\?v=2/);
     assert.match(html,/publish-workflow\.js\?v=6/);
     assert.match(html,/firebase-service\.js\?v=23/);
-    assert.match(html,/admin-v2\.js\?v=32/);
+    assert.match(html,/admin-v2\.js\?v=33/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function publishCustomerV2\(\)/);
@@ -550,7 +550,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/CUSTOMER_NOT_FOUND_ERROR/);
     assert.match(js,/function classicEditorUrl\(id\)/);
     assert.match(js,/admin\.html\?editCustomer=\$\{encodeURIComponent\(id\|\|""\)\}#master-data/);
-    assert.match(js,/Im klassischen Admin bearbeiten/);
+    assert.match(js,/Classic Admin – Uebergangsloesung/);
     assert.match(js,/Zur Kundenuebersicht/);
   });
 
@@ -566,8 +566,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=27/);
-    assert.match(html,/admin-v2\.js\?v=32/);
+    assert.match(html,/admin-v2\.css\?v=28/);
+    assert.match(html,/admin-v2\.js\?v=33/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -623,7 +623,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.doesNotMatch(js,/window\.location\.href="admin\.html\?newCustomer=1#master-data"/);
     assert.doesNotMatch(js,/function openNewCustomer\(\)\{[^}]*location\.href/);
     assert.doesNotMatch(js,/href="admin\.html\?newCustomer=1#master-data"/);
-    assert.match(js,/Klassischen Admin in neuem Tab oeffnen/);
+    assert.match(js,/Classic Admin – Uebergangsloesung/);
     assert.match(js,/href="admin\.html"/);
   });
 
@@ -746,5 +746,31 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(adminJs,/newCustomer:params\.get\("newCustomer"\)==="1"/);
     assert.match(adminJs,/switchActiveCustomer\(action\.editCustomer,"edit"\)/);
     assert.match(adminJs,/newCustomer\(\)/);
+  });
+
+  it("makes admin v2 the standard entry while keeping classic as labeled transitional access",()=>{
+    const v2Html=readProjectFile("customer-portal/admin-v2.html");
+    const v2Js=readProjectFile("customer-portal/admin-v2.js");
+    const classicHtml=readProjectFile("customer-portal/admin.html");
+    const classicCss=readProjectFile("customer-portal/admin.css");
+    assert.match(v2Html,/Standard-Einstieg/);
+    assert.match(v2Html,/class="v2-classic-link" href="admin\.html">Classic Admin – Uebergangsloesung/);
+    assert.match(v2Html,/CRM im Classic Admin oeffnen/);
+    assert.match(v2Html,/Buchungen im Classic Admin oeffnen/);
+    assert.match(v2Html,/Vorlagen im Classic Admin oeffnen/);
+    assert.doesNotMatch(v2Js,/Alter Admin|Im klassischen Admin bearbeiten|Zum klassischen Admin/);
+    assert.match(v2Js,/data-open-editor="\$\{escapeHtml\(customer\.customerId\)\}"/);
+    assert.match(v2Js,/if\(open\)\{openCustomerDetail\(open\.dataset\.openEditor\);return;\}/);
+    assert.match(v2Js,/Classic Admin – Uebergangsloesung/);
+    assert.match(v2Js,/Publish-Historie im Classic Admin oeffnen/);
+    assert.match(v2Js,/function openNewCustomer\(\)/);
+    assert.match(v2Js,/kein Redirect zum klassischen Admin/);
+    assert.match(classicHtml,/admin\.css\?v=41/);
+    assert.match(classicHtml,/Der Standard-Einstieg ist <a href="admin-v2\.html">Admin V2<\/a>/);
+    assert.match(classicHtml,/class="classic-transition-banner"/);
+    assert.match(classicHtml,/Classic Admin – Uebergangsloesung\. Neue Funktionen werden ausschliesslich in Admin V2 entwickelt\./);
+    assert.match(classicHtml,/href="admin-v2\.html">Zu Admin V2 wechseln/);
+    assert.match(classicCss,/\.classic-transition-banner\{/);
+    assert.doesNotMatch(classicHtml,/meta http-equiv="refresh"/i);
   });
 });

@@ -2680,8 +2680,24 @@
     if(sessionUrl)return {status:"active",url:sessionUrl,display:sessionUrl,hint:`Stabiler Kundenlink aktiv${sessionShare.publishedVersionId?` (Version ${sessionShare.publishedVersionId})`:""}. Nach dem Veroeffentlichen wird dieser Link automatisch aktualisiert — kein neuer Link noetig.`,canOpen:true,canCopy:true,hasActiveShare:true};
     const meta=customerShareMeta(customer);
     if(meta?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen. Erzeuge bei Bedarf einen neuen Link.",canOpen:false,canCopy:false,hasActiveShare:false};
-    if(meta?.shareId)return {status:"session-lost",url:"",display:"",hint:"Ein stabiler Kundenlink ist aktiv. Der Kunde kann denselben Link weiter nutzen. Der Token ist in dieser Admin-Sitzung nicht mehr sichtbar — nur bei Verlust einen neuen Link erzeugen.",canOpen:false,canCopy:false,hasActiveShare:true};
+    if(meta?.shareId)return {status:"session-lost",url:"",display:"",hint:"Ein stabiler Kundenlink ist aktiv. Der Kunde kann denselben Link weiter nutzen. In dieser Admin-Sitzung ist der Token nicht sichtbar — Oeffnen/Kopieren geht deshalb nicht. Nur bei Verlust „Neuen Link erzeugen“ nutzen.",canOpen:false,canCopy:false,hasActiveShare:true};
     return {status:"missing",url:"",display:"",hint:"Noch kein sicherer Kundenlink. Einmal erzeugen und dem Kunden senden; spaetere Veroeffentlichungen aktualisieren denselben Link.",canOpen:false,canCopy:false,hasActiveShare:false};
+  }
+
+  function portalLinkBadgeLabel(status){
+    if(status==="active")return "Sicherer Link aktiv";
+    if(status==="session-lost")return "Link aktiv (nicht kopierbar)";
+    if(status==="revoked")return "Widerrufen";
+    if(status==="draft")return "Noch Entwurf";
+    return "Link fehlt";
+  }
+
+  function adminPortalPreviewUrl(customerId){
+    const id=cleanValue(customerId);
+    if(!id)return "";
+    const href=window.location.href.split("#")[0].split("?")[0];
+    const base=href.replace(/admin(?:-v2)?\.html$/i,"index.html");
+    return `${base}?customer=${encodeURIComponent(id)}&admin=1`;
   }
 
   function setPublicationMessage(message,kind=""){
@@ -2729,7 +2745,6 @@
   function publicationTabMarkup(customer){
     const status=publicationStatus(customer);
     const link=resolvePortalLink(customer);
-    const canPreview=Boolean(link.canOpen&&link.url);
     const warnings=publicationWarnings(customer);
     const docs=documentSummary(customer);
     const lastPublished=customer.publishMeta?.lastPublishedAt||customer.publishMeta?.publishedAt;
@@ -2760,16 +2775,16 @@
               <p class="v2-eyebrow">Kundenportal</p>
               <h3>Sicherer Zugang</h3>
             </div>
-            ${badge(link.status==="active"?"Sicherer Link aktiv":link.status==="revoked"?"Widerrufen":"Link fehlt")}
+            ${badge(portalLinkBadgeLabel(link.status))}
           </div>
           <p>${escapeHtml(link.hint)}</p>
           ${link.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}
           <div class="v2-document-actions">
-            ${portalButton("Portal-Vorschau oeffnen","preview",{disabled:!canPreview})}
+            ${portalButton("Portal-Vorschau oeffnen","preview")}
             ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
             ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
             ${link.hasActiveShare
-              ?portalButton("Neuen Link erzeugen (ersetzt alten)","create-share-new",{disabled:!isPublished(customer)})
+              ?portalButton("Neuen Link erzeugen (ersetzt alten)","create-share-new",{disabled:!isPublished(customer),primary:link.status==="session-lost"})
               :portalButton("Stabilen Kundenlink erzeugen","create-share",{primary:true,disabled:!isPublished(customer)})}
             ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
           </div>
@@ -3031,13 +3046,14 @@
 
   function openPortalPreviewV2(){
     const customer=customerById(state.selectedCustomerId);
-    if(!customer)return;
-    const link=resolvePortalLink(customer);
-    if(!link.canOpen||!link.url){
-      setPublicationMessage("Noch kein sicherer Kunden-Link erzeugt.","error");
+    if(!customer?.customerId)return;
+    const previewUrl=adminPortalPreviewUrl(customer.customerId);
+    if(!previewUrl){
+      setPublicationMessage("Admin-Vorschau konnte nicht geoeffnet werden.","error");
       return;
     }
-    window.open(link.url,"_blank","noopener");
+    portalShareLibrary()?.issueAdminPreviewGrant?.(customer.customerId);
+    window.open(previewUrl,"_blank","noopener");
   }
 
   function openPortalLinkV2(){
@@ -3047,6 +3063,10 @@
       window.open(link.url,"_blank","noopener");
       return;
     }
+    if(link?.status==="session-lost"){
+      setPublicationMessage("Der Kundenlink ist aktiv, aber in dieser Sitzung nicht oeffnenbar. Bei Verlust „Neuen Link erzeugen“ nutzen.","error");
+      return;
+    }
     setPublicationMessage(link?.hint||"Bitte zuerst einen sicheren Link erzeugen.","error");
   }
 
@@ -3054,6 +3074,10 @@
     const customer=customerById(state.selectedCustomerId);
     const link=customer?resolvePortalLink(customer):null;
     if(!link?.canCopy||!link.url){
+      if(link?.status==="session-lost"){
+        setPublicationMessage("Der Kundenlink ist aktiv, aber in dieser Sitzung nicht kopierbar. Bei Verlust „Neuen Link erzeugen“ nutzen.","error");
+        return false;
+      }
       setPublicationMessage(link?.hint||"Bitte zuerst einen sicheren Link erzeugen.","error");
       return false;
     }
@@ -5634,7 +5658,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=28/);
-    assert.match(html,/admin-v2\.js\?v=33/);
+    assert.match(html,/admin-v2\.css\?v=29/);
+    assert.match(html,/admin-v2\.js\?v=34/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -362,11 +362,11 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=28/);
+    assert.match(html,/admin-v2\.css\?v=29/);
     assert.match(html,/portal-share-library\.js\?v=2/);
     assert.match(html,/publish-workflow\.js\?v=6/);
     assert.match(html,/firebase-storage\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=33"><\/script>/);
+    assert.match(html,/admin-v2\.js\?v=34"><\/script>/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -456,9 +456,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/class="v2-quality-meter"/);
     assert.match(js,/documentMetricButton\("Kundenportal sichtbar"/);
     assert.match(js,/documentMetricButton\("Nur intern"/);
-    assert.match(js,/Noch kein sicherer Kunden-Link erzeugt/);
-    assert.match(js,/const canPreview=Boolean\(link\.canOpen&&link\.url\)/);
-    assert.match(js,/if\(!link\.canOpen\|\|!link\.url\)/);
+    assert.match(js,/function portalLinkBadgeLabel\(status\)/);
+    assert.match(js,/Link aktiv \(nicht kopierbar\)/);
+    assert.match(js,/function openPortalPreviewV2\(\)/);
+    assert.match(js,/adminPortalPreviewUrl\(customer\.customerId\)/);
+    assert.match(js,/issueAdminPreviewGrant\?\.\(customer\.customerId\)/);
+    assert.doesNotMatch(js,/const canPreview=Boolean\(link\.canOpen&&link\.url\)/);
     assert.doesNotMatch(js,/params\.set\("customer"/);
     assert.match(js,/ACTPortalShareLibrary\.buildShareUrl|lib\?\.buildShareUrl/);
     assert.match(js,/window\.ACTFirebaseDatabase\.saveDraftCustomer\(fullCustomer\)/);
@@ -477,9 +480,15 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/portal-share-library\.js\?v=2/);
     assert.match(html,/publish-workflow\.js\?v=6/);
     assert.match(html,/firebase-service\.js\?v=23/);
-    assert.match(html,/admin-v2\.js\?v=33/);
+    assert.match(html,/admin-v2\.js\?v=34/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
+    assert.match(js,/function portalLinkBadgeLabel\(status\)/);
+    assert.match(js,/Link aktiv \(nicht kopierbar\)/);
+    assert.match(js,/function adminPortalPreviewUrl\(customerId\)/);
+    assert.match(js,/issueAdminPreviewGrant\?\.\(customer\.customerId\)/);
+    assert.match(js,/portalButton\("Portal-Vorschau oeffnen","preview"\)/);
+    assert.doesNotMatch(js,/badge\(link\.status==="active"\?"Sicherer Link aktiv":link\.status==="revoked"\?"Widerrufen":"Link fehlt"\)/);
     assert.match(js,/function publishCustomerV2\(\)/);
     assert.match(js,/workflow\?\.validateForPublish\?workflow\.validateForPublish\(publishSource\)/);
     assert.match(js,/db\.publishCustomer\(clone\(publishCandidate\),meta\)/);
@@ -566,8 +575,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=28/);
-    assert.match(html,/admin-v2\.js\?v=33/);
+    assert.match(html,/admin-v2\.css\?v=29/);
+    assert.match(html,/admin-v2\.js\?v=34/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);

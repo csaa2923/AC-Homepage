@@ -52,6 +52,8 @@ p{color:var(--muted);line-height:1.55}
 .v2-create,.v2-button.primary{min-height:48px;padding:0 18px;background:var(--green);color:white;font-weight:850;box-shadow:0 12px 26px rgba(13,59,47,.20)}
 .v2-button.soft,.v2-button.small,.v2-classic-link,.v2-text-link{min-height:44px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-weight:750;text-decoration:none;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
 .v2-button:hover,.v2-classic-link:hover,.v2-text-link:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(20,38,31,.10)}
+.v2-button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
+.v2-button:disabled:hover{transform:none;box-shadow:none}
 .v2-button.small{min-height:44px}
 .v2-classic-link{margin-top:auto;min-height:auto;padding:10px 8px;border:0;border-radius:0;background:transparent;box-shadow:none;color:var(--muted);font-size:12px;font-weight:650;text-align:left;text-decoration:underline;text-underline-offset:3px}
 .v2-classic-link:hover{transform:none;box-shadow:none;color:var(--green)}

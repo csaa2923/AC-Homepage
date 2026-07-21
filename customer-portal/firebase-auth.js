@@ -82,6 +82,7 @@
     return {
       available:authAvailable,
       signedIn,
+      uid:currentUser&&currentUser.uid?currentUser.uid:"",
       email:currentUser&&currentUser.email?currentUser.email:"",
       role:currentRole,
       allowed,

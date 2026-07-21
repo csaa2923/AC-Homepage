@@ -2628,8 +2628,23 @@
     return window.ACTPortalShareLibrary||null;
   }
 
+  function adminAuthUid(){
+    return window.ACTFirebaseAuth?.getState?.()?.uid||"";
+  }
+
+  function hydrateShareTokens(){
+    portalShareLibrary()?.hydrateAdminShares?.(adminAuthUid());
+  }
+
+  function clearShareTokens(){
+    portalShareLibrary()?.clearAdminShares?.(adminAuthUid());
+  }
+
   function loadShareTokens(){
-    try{return JSON.parse(sessionStorage.getItem(SHARE_TOKEN_KEY)||"{}");}catch(error){
+    try{
+      const key=portalShareLibrary()?.SHARE_SESSION_KEY||SHARE_TOKEN_KEY;
+      return JSON.parse(sessionStorage.getItem(key)||"{}");
+    }catch(error){
       return {};
     }
   }
@@ -2637,6 +2652,11 @@
   function saveShareToken(customerId,data){
     const id=String(customerId||"");
     if(!id)return;
+    const lib=portalShareLibrary();
+    if(lib?.persistAdminShare){
+      lib.persistAdminShare(adminAuthUid(),id,data||null);
+      return;
+    }
     const all=loadShareTokens();
     if(data)all[id]=data;
     else delete all[id];
@@ -2644,10 +2664,16 @@
   }
 
   function activeShareToken(customerId){
-    return loadShareTokens()[String(customerId||"")]||null;
+    const id=String(customerId||"");
+    const fromSession=loadShareTokens()[id]||null;
+    if(fromSession?.shareUrl&&fromSession.status!=="revoked")return fromSession;
+    const expected=customerShareMeta(customerById(id)||{})?.shareId||"";
+    return portalShareLibrary()?.readAdminShare?.(adminAuthUid(),id,expected)||fromSession;
   }
 
   function secureShareUrl(url){
+    const lib=portalShareLibrary();
+    if(lib?.isSecureShareUrl)return lib.isSecureShareUrl(url)||"";
     const raw=cleanValue(url);
     if(!raw)return "";
     try{
@@ -2671,6 +2697,7 @@
   }
 
   function resolvePortalLink(customer){
+    hydrateShareTokens();
     if(!isPublished(customer)){
       return {status:"draft",url:"",display:"",hint:"Bitte zuerst veroeffentlichen. Danach einmal einen stabilen Kundenlink erzeugen und dem Kunden senden.",canOpen:false,canCopy:false,hasActiveShare:false};
     }
@@ -2680,16 +2707,16 @@
     if(sessionUrl)return {status:"active",url:sessionUrl,display:sessionUrl,hint:`Stabiler Kundenlink aktiv${sessionShare.publishedVersionId?` (Version ${sessionShare.publishedVersionId})`:""}. Nach erneutem Veroeffentlichen bleibt derselbe Link gueltig.`,canOpen:true,canCopy:true,hasActiveShare:true};
     const meta=customerShareMeta(customer);
     if(meta?.status==="revoked")return {status:"revoked",url:"",display:"",hint:"Der sichere Link wurde widerrufen. Erzeugen Sie bei Bedarf einen neuen Link fuer den Kunden.",canOpen:false,canCopy:false,hasActiveShare:false};
-    if(meta?.shareId)return {status:"session-lost",url:"",display:"",hint:"Ein stabiler Kundenlink ist aktiv. Der Kunde kann denselben Link weiter nutzen. In dieser Admin-Sitzung ist der Token nicht sichtbar — Oeffnen/Kopieren geht deshalb nicht. Nur bei Verlust „Neuen Link erzeugen“ nutzen.",canOpen:false,canCopy:false,hasActiveShare:true};
+    if(meta?.shareId)return {status:"session-lost",url:"",display:"",hint:"Ein Kundenlink existiert serverseitig, aber der Zugriffsschluessel ist in diesem Browser nicht verfuegbar (z. B. nach neuem Geraet oder geloeschten Browserdaten). Der Kunde kann den bisherigen Link weiter nutzen. Ersetzen Sie den Link nur, wenn Sie ihn selbst erneut senden muessen — der alte Link wird dann ungueltig.",canOpen:false,canCopy:false,hasActiveShare:true};
     return {status:"missing",url:"",display:"",hint:"Noch kein sicherer Kundenlink. Einmal erzeugen und dem Kunden senden. Spaetere Veroeffentlichungen aktualisieren denselben Link automatisch.",canOpen:false,canCopy:false,hasActiveShare:false};
   }
 
   function portalLinkBadgeLabel(status){
-    if(status==="active")return "Sicherer Link aktiv";
-    if(status==="session-lost")return "Link aktiv (nicht kopierbar)";
+    if(status==="active")return "Link aktiv";
+    if(status==="session-lost")return "Link aktiv – Zugriffsschluessel nicht verfuegbar";
     if(status==="revoked")return "Link widerrufen";
     if(status==="draft")return "Noch nicht veroeffentlicht";
-    return "Kein Link vorhanden";
+    return "Kein Link";
   }
 
   function adminPortalPreviewUrl(customerId){
@@ -2747,7 +2774,7 @@
     if(visibleWithoutUrl.length)warnings.push(`${visibleWithoutUrl.length} sichtbare Dokumente haben keinen Oeffnen-Link und sind im Kundenportal nicht oeffnenbar.`);
     const link=resolvePortalLink(customer);
     if(isPublished(customer)&&!link.hasActiveShare)warnings.push("Noch kein stabiler Kundenlink erzeugt. Einmal erzeugen und dem Kunden senden.");
-    if(link.status==="session-lost")warnings.push("Kundenlink ist aktiv, aber in dieser Sitzung nicht kopierbar. Nur bei Verlust neu erzeugen.");
+    if(link.status==="session-lost")warnings.push("Zugriffsschluessel fuer den Kundenlink ist in diesem Browser nicht verfuegbar. Link nur bei Bedarf ersetzen.");
     if(link.status==="revoked")warnings.push("Der Kundenlink wurde widerrufen. Bei Bedarf neu erzeugen.");
     if(status.key==="pending"&&status.changeCount)warnings.push("Es gibt unveroeffentlichte Aenderungen. Bitte erneut veroeffentlichen.");
     if(analysis.missing.length)warnings.push(`${analysis.missing.length} erwartete Dokumente fehlen bei Programmpunkten.`);
@@ -2823,8 +2850,8 @@
             ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
             ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
             ${link.hasActiveShare
-              ?portalButton("Neuen Link erzeugen (ersetzt alten)","create-share-new",{disabled:!published,primary:link.status==="session-lost"||link.status==="revoked"})
-              :portalButton("Stabilen Kundenlink erzeugen","create-share",{primary:true,disabled:!published})}
+              ?portalButton(link.status==="session-lost"?"Link ersetzen (macht alten ungueltig)":"Link ersetzen (macht alten ungueltig)","create-share-new",{disabled:!published,primary:false})
+              :portalButton("Sicheren Kundenlink erzeugen","create-share",{primary:true,disabled:!published})}
             ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
           </div>
         </article>
@@ -2973,7 +3000,7 @@
     const customer=customerById(state.selectedCustomerId);
     if(!customer)return null;
     if(forceNew){
-      const confirmed=window.confirm("Neuen Link erzeugen?\n\nDer bisherige Kundenlink wird ungültig. Der Kunde braucht dann den neuen Link.");
+      const confirmed=window.confirm("Link wirklich ersetzen?\n\nDer bisherige Kundenlink wird ungueltig. Bereits versendete Links funktionieren danach nicht mehr. Der Kunde braucht den neuen Link.");
       if(!confirmed)return null;
     }
     state.publicationSaving=true;
@@ -3469,6 +3496,7 @@
     clearPassword();
     setScreenVisibility(false);
     byId("userLabel").textContent=authState?.email||"Admin";
+    hydrateShareTokens();
     window.scrollTo({top:0,left:0,behavior:"auto"});
     resetHorizontalScroll();
   }
@@ -5481,6 +5509,7 @@
     byId("logoutButton").addEventListener("click",async()=>{
       if(!confirmDiscardCustomerEdit())return;
       try{
+        clearShareTokens();
         await withTimeout(window.ACTFirebaseAuth?.signOut?.(),AUTH_TIMEOUT_MS,"signOut");
       }catch(error){
         console.error("[ACT Admin V2] Abmeldung:",error&&error.message?error.message:"Fehler");

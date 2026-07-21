@@ -11,7 +11,7 @@ const ALLOWED_ROOT_FIELDS=new Set([
   "image","imageUrl","heroImage","coverImage",
   "program","programItems","accommodations","restaurants","activities",
   "documents","bookings","contact","weather","hotel","history",
-  "accommodationName","hotelName"
+  "accommodationName","hotelName","internalNumber","customerNumber"
 ]);
 
 const PROGRAM_ITEM_FIELDS=new Set([
@@ -153,6 +153,10 @@ function redactPublicSnapshot(customer,options){
   const source=clone(customer||{});
   const next=pickFields(source,ALLOWED_ROOT_FIELDS);
   next.customerId=next.customerId||options?.customerId||"";
+  if(!stringValue(next.internalNumber)){
+    next.internalNumber=stringValue(source.internalNumber||source.customerNumber||(source.crm&&source.crm.internalNumber));
+  }
+  if(!stringValue(next.internalNumber))delete next.internalNumber;
   next.program=Array.isArray(source.program)?source.program.map(redactProgramItem):Array.isArray(source.programItems)?source.programItems.map(redactProgramItem):[];
   next.programItems=next.program;
   next.accommodations=Array.isArray(source.accommodations)?source.accommodations.map(redactAccommodation):[];

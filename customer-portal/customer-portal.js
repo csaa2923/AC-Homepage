@@ -687,7 +687,25 @@
     `;
   }
 
+  function portalCustomerNumber(source){
+    const customer=source||{};
+    const candidates=[
+      customer.internalNumber,
+      customer.customerNumber,
+      customer.crm&&customer.crm.internalNumber
+    ];
+    for(const candidate of candidates){
+      const value=String(candidate||"").trim();
+      if(!value)continue;
+      if(value===String(customer.customerId||"").trim())continue;
+      if(/^kunde-/i.test(value))continue;
+      return value;
+    }
+    return "";
+  }
+
   function renderMeta(){
+    const customerNumber=portalCustomerNumber(customer);
     const items=[
       ["Reisezeitraum",tripPeriod()],
       ["Region",customer.region],
@@ -695,7 +713,7 @@
       ["Reisestatus",customer.status],
       ["Countdown",daysUntil(customer.startDate)],
       ["Concierge",customer.concierge],
-      ["Kunden-ID",customerId],
+      ...(customerNumber?[["Kundennummer",customerNumber]]:[]),
       ["Portal",`Version ${customer.version}`],
       ["Veröffentlichung",customer.publicationState]
     ].filter(([,value])=>hasDisplayValue(value));

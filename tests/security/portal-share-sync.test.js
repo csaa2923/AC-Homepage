@@ -56,8 +56,9 @@ describe("portal share sync on publish",()=>{
     assert.match(impl,/if\(!forceNew&&activeShares\.length\)/);
     assert.match(adminV2,/db\.refreshPortalShares\(publishCandidate\.customerId\)/);
     assert.match(adminV2,/createPortalShareV2\(\{forceNew:true\}\)|\{\s*forceNew\s*\}/);
+    assert.match(adminV2,/Sicheren Kundenlink erzeugen/);
     assert.match(adminV2,/Stabilen Kundenlink erzeugen/);
-    assert.match(adminV2,/Neuen Link erzeugen \(ersetzt alten\)/);
+    assert.match(adminV2,/Link ersetzen/);
     assert.match(adminV2,/derselbe Link bleibt gueltig|denselben Link/);
   });
 });

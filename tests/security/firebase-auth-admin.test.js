@@ -10,6 +10,7 @@ const authSource=fs.readFileSync(path.join(root,"customer-portal/firebase-auth.j
 function loadAuth({getIdTokenResult}={}){
   const calls=[];
   const user={
+    uid:"owner-uid",
     email:"owner@test.local",
     async getIdTokenResult(forceRefresh){
       calls.push(Boolean(forceRefresh));
@@ -71,6 +72,7 @@ describe("firebase auth admin claim resolution",()=>{
     const check=await auth.requireAdmin();
     assert.equal(check.allowed,true);
     assert.equal(auth.getState().allowed,true);
+    assert.equal(auth.getState().uid,"owner-uid");
     assert.equal(auth.getState().missingRole,false);
     assert.match(auth.getState().error,/Firebase ist nicht erreichbar|nicht abgeschlossen|fehlgeschlagen/);
   });

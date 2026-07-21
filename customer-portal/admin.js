@@ -1085,6 +1085,7 @@
   }
 
   function resolveCustomerPortalLink(customerId){
+    portalShareLibrary()?.hydrateAdminShares?.(adminAuthUid());
     const customer=customers[customerId]||{};
     const published=isCustomerPublished(customer);
     if(!published){
@@ -1191,20 +1192,38 @@
   }
 
   function loadShareTokens(){
-    try{return JSON.parse(sessionStorage.getItem(SHARE_TOKEN_KEY)||"{}");}catch(error){
+    try{
+      const key=portalShareLibrary()?.SHARE_SESSION_KEY||SHARE_TOKEN_KEY;
+      return JSON.parse(sessionStorage.getItem(key)||"{}");
+    }catch(error){
       return {};
     }
   }
 
+  function adminAuthUid(){
+    return window.ACTFirebaseAuth?.getState?.()?.uid||"";
+  }
+
   function saveShareToken(customerId,data){
+    const id=customerId||activeId;
+    if(!id)return;
+    const lib=portalShareLibrary();
+    if(lib?.persistAdminShare){
+      lib.persistAdminShare(adminAuthUid(),id,data||null);
+      return;
+    }
     const all=loadShareTokens();
-    if(data)all[customerId]=data;
-    else delete all[customerId];
+    if(data)all[id]=data;
+    else delete all[id];
     sessionStorage.setItem(SHARE_TOKEN_KEY,JSON.stringify(all));
   }
 
   function activeShareToken(customerId){
-    return loadShareTokens()[customerId||activeId]||null;
+    const id=customerId||activeId;
+    const fromSession=loadShareTokens()[id]||null;
+    if(fromSession?.shareUrl&&fromSession.status!=="revoked")return fromSession;
+    const expected=customerShareMeta(customers[id]||{})?.shareId||"";
+    return portalShareLibrary()?.readAdminShare?.(adminAuthUid(),id,expected)||fromSession;
   }
 
   function buildShareLink(shareId,rawToken){
@@ -4322,6 +4341,7 @@
     });
     byId("logoutButton").addEventListener("click",async()=>{
       sessionStorage.removeItem(SESSION_KEY);
+      portalShareLibrary()?.clearAdminShares?.(adminAuthUid());
       await window.ACTFirebaseAuth?.signOut?.();
       lockAdmin("Abgemeldet.");
     });
@@ -4563,6 +4583,7 @@
   function unlock(){
     byId("loginScreen").hidden=true;
     byId("adminShell").hidden=false;
+    portalShareLibrary()?.hydrateAdminShares?.(adminAuthUid());
     try{
       resetSaveStateForCustomer();
       renderAll();

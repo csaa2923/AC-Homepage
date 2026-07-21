@@ -1371,7 +1371,14 @@
     hint.hidden=false;
     const stand=customer.updatedAt||customer.publishMeta?.lastPublishedAt||"";
     const standText=stand?new Date(stand).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"}):stand;
-    hint.textContent=`Admin-Vorschau · ${dataSource==="local-draft"?"Entwurf (noch nicht veröffentlicht)":"Entwurf/Live"} · Version ${customer.version||"1.0"}${standText?` · Stand: ${standText}`:""}`;
+    const sourceLabel=dataSource==="local-draft"
+      ?"Entwurf (noch nicht veröffentlicht)"
+      :dataSource==="firebase"
+        ?"Live aus Firestore (nicht Share-Link)"
+        :dataSource==="local"
+          ?"Lokale Live-Kopie"
+          :"Vorschau";
+    hint.textContent=`Admin-Vorschau · ${sourceLabel} · Version ${customer.version||"1.0"}${standText?` · Stand: ${standText}`:""}`;
   }
 
   function renderDataSourceNotice(){
@@ -1379,7 +1386,7 @@
     const target=document.getElementById("publicationStatus");
     if(!target)return;
     const visibleCount=(customer.documents||[]).filter(isPortalDocument).length;
-    const sourceLabel=dataSource==="share"?"Share-Link (aktuelle Live-Version)":dataSource==="firebase"?"Firestore publishedData":dataSource==="local"?"localStorage (veröffentlicht)":dataSource==="local-draft"?"Admin-Entwurf (localStorage)":"Demo";
+    const sourceLabel=dataSource==="share"?"Share-Link (Kundenportal)":dataSource==="firebase"?"Firestore publishedData (Portal-Vorschau)":dataSource==="local"?"localStorage (veröffentlicht)":dataSource==="local-draft"?"Admin-Entwurf (localStorage)":"Demo";
     target.textContent=`${target.textContent} · Datenquelle: ${sourceLabel} · ${visibleCount} sichtbare Dokumente`;
   }
 

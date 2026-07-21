@@ -2845,10 +2845,12 @@
           </div>
           <p>${escapeHtml(link.hint)}</p>
           ${link.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}
+          <p class="v2-muted">Portal-Vorschau zeigt die Live-Version aus Firestore. Das Kundenportal liest den Share-Snapshot — nach jeder Veroeffentlichung muss dieser aktualisiert werden (automatisch oder per Button).</p>
           <div class="v2-document-actions">
             ${portalButton("Portal-Vorschau oeffnen","preview")}
             ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
             ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
+            ${portalButton("Kundenportal-Inhalt aktualisieren","sync-shares",{disabled:!published||!link.hasActiveShare})}
             ${link.hasActiveShare
               ?portalButton(link.status==="session-lost"?"Link ersetzen (macht alten ungueltig)":"Link ersetzen (macht alten ungueltig)","create-share-new",{disabled:!published,primary:false})
               :portalButton("Sicheren Kundenlink erzeugen","create-share",{primary:true,disabled:!published})}
@@ -2941,51 +2943,130 @@
         const result=await withTimeout(db.publishCustomer(clone(publishCandidate),meta),AUTH_TIMEOUT_MS,"publishCustomer");
         publishCandidate.publishedSnapshot=result?.publishedData||publishCandidate.publishedSnapshot||null;
         publishCandidate.publishMeta={...(publishCandidate.publishMeta||{}),...(result?.publishMeta||{}),publishError:""};
+        const hasShare=Boolean(customerShareMeta(publishCandidate)?.shareId||activeShareToken(publishCandidate.customerId)?.shareId);
         let refreshNote="";
-        try{
-          if(db.refreshPortalShares){
-            const refresh=await withTimeout(db.refreshPortalShares(publishCandidate.customerId),AUTH_TIMEOUT_MS,"refreshPortalShares");
-            const count=Number(refresh?.refreshedCount||0);
-            if(count>0){
-              refreshNote=` ${count} Kundenlink${count===1?"":"s"} aktualisiert — der Kunde behält denselben Link.`;
-              const active=customerShareMeta(publishCandidate)||activeShareToken(publishCandidate.customerId);
-              if(active?.shareId){
-                publishCandidate.publishMeta={
-                  ...(publishCandidate.publishMeta||{}),
-                  activePortalShare:{
-                    ...(publishCandidate.publishMeta?.activePortalShare||{}),
-                    shareId:active.shareId,
-                    status:"active",
-                    publishedVersionId:refresh.publishedVersionId||publishCandidate.version||"1.0",
-                    lastRefreshedAt:new Date().toISOString()
-                  }
-                };
-                const session=activeShareToken(publishCandidate.customerId);
-                if(session?.shareUrl){
-                  saveShareToken(publishCandidate.customerId,{
-                    ...session,
-                    publishedVersionId:refresh.publishedVersionId||publishCandidate.version||"1.0",
-                    status:"active"
-                  });
-                }
-              }
-            }else if(!(customerShareMeta(publishCandidate)?.shareId||activeShareToken(publishCandidate.customerId)?.shareId)){
-              refreshNote=" Noch kein Kundenlink vorhanden — einmal erzeugen und dem Kunden senden.";
+        let refreshKind="success";
+        if(!hasShare){
+          refreshNote=" Noch kein Kundenlink vorhanden — einmal erzeugen und dem Kunden senden.";
+        }else{
+          try{
+            setPublicationMessage("Veroeffentlichung gespeichert — Kundenportal wird aktualisiert ...","saving");
+            const sync=await syncPublishedSharesForCustomer(publishCandidate);
+            Object.assign(publishCandidate,sync.customer);
+            if(sync.ok){
+              refreshNote=` Kundenportal aktualisiert (${sync.refreshedCount} Link${sync.refreshedCount===1?"":"s"}) — derselbe Link bleibt gueltig.`;
+            }else{
+              refreshKind="warning";
+              refreshNote=" Veroeffentlicht, aber Kundenportal-Inhalt nicht aktualisiert. Bitte „Kundenportal-Inhalt aktualisieren“ klicken.";
             }
+          }catch(refreshError){
+            console.warn("[ACT Admin V2] Share-Refresh:",refreshError&&refreshError.message?refreshError.message:"Fehler");
+            refreshKind="warning";
+            refreshNote=" Veroeffentlicht, aber Kundenportal-Inhalt nicht aktualisiert. Bitte „Kundenportal-Inhalt aktualisieren“ klicken.";
           }
-        }catch(refreshError){
-          console.warn("[ACT Admin V2] Share-Refresh:",refreshError&&refreshError.message?refreshError.message:"Fehler");
-          refreshNote=" Hinweis: Kundenlinks konnten nicht automatisch aktualisiert werden.";
         }
         updateLocalCustomer(compactObject(publishCandidate));
         state.publicationSaving=false;
-        setPublicationMessage(`Veroeffentlichung erfolgreich (Version ${nextVersion}).${refreshNote}`,"success");
+        setPublicationMessage(`Veroeffentlichung erfolgreich (Version ${nextVersion}).${refreshNote}`,refreshKind);
         render();
         return publishCandidate;
       }catch(error){
         console.error("[ACT Admin V2] Veroeffentlichung:",error&&error.message?error.message:"Fehler");
         state.publicationSaving=false;
         setPublicationMessage(error&&error.message?error.message:"Die Veroeffentlichung konnte nicht abgeschlossen werden. Bitte erneut versuchen.","error");
+        updatePublicationActions();
+        return null;
+      }finally{
+        publicationPromise=null;
+      }
+    })();
+    return publicationPromise;
+  }
+
+  async function syncPublishedSharesForCustomer(customer){
+    const db=window.ACTFirebaseDatabase;
+    if(!db)throw new Error("Datenbank ist nicht verfuegbar.");
+    const id=customer.customerId;
+    let refresh=null;
+    let mode="refresh";
+    if(db.refreshPortalShares){
+      try{
+        refresh=await withTimeout(db.refreshPortalShares(id),AUTH_TIMEOUT_MS,"refreshPortalShares");
+      }catch(error){
+        console.warn("[ACT Admin V2] refreshPortalShares:",error&&error.message?error.message:"Fehler");
+        refresh=null;
+      }
+    }
+    if(!(Number(refresh?.refreshedCount||0)>0)&&db.createPortalShare){
+      mode="reuse";
+      refresh=await withTimeout(db.createPortalShare(clone(customer),{forceNew:false}),AUTH_TIMEOUT_MS,"createPortalShare-reuse");
+    }
+    const refreshedCount=Number(refresh?.refreshedCount||(refresh?.reused?1:0)||0);
+    const publishedVersionId=refresh?.publishedVersionId||customer.publishMeta?.version||customer.version||"1.0";
+    const next=clone(customer);
+    if(refreshedCount>0){
+      const active=customerShareMeta(next)||activeShareToken(id);
+      const shareId=refresh?.shareId||active?.shareId||"";
+      if(shareId){
+        next.publishMeta={
+          ...(next.publishMeta||{}),
+          activePortalShare:{
+            ...(next.publishMeta?.activePortalShare||{}),
+            shareId,
+            status:"active",
+            publishedVersionId,
+            lastRefreshedAt:new Date().toISOString()
+          }
+        };
+        const session=activeShareToken(id);
+        if(session?.shareUrl){
+          saveShareToken(id,{
+            ...session,
+            shareId,
+            publishedVersionId,
+            status:"active"
+          });
+        }
+      }
+      return {ok:true,customer:next,refreshedCount,publishedVersionId,mode};
+    }
+    return {ok:false,customer:next,refreshedCount:0,publishedVersionId,mode};
+  }
+
+  async function syncPortalSharesV2(){
+    if(state.publicationSaving||publicationPromise)return publicationPromise;
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return null;
+    if(!isPublished(customer)||!customer.publishedSnapshot){
+      setPublicationMessage("Bitte zuerst veroeffentlichen.","error");
+      return null;
+    }
+    const hasShare=Boolean(customerShareMeta(customer)?.shareId||activeShareToken(customer.customerId)?.shareId);
+    if(!hasShare){
+      setPublicationMessage("Kein Kundenlink vorhanden — zuerst erzeugen.","error");
+      return null;
+    }
+    state.publicationSaving=true;
+    setPublicationMessage("Kundenportal-Inhalt wird aktualisiert ...","saving");
+    updatePublicationActions();
+    publicationPromise=(async()=>{
+      try{
+        await requireAdminAccessForPublication();
+        setPublicationMessage("Kundenportal-Inhalt wird aktualisiert ...","saving");
+        const sync=await syncPublishedSharesForCustomer(customer);
+        updateLocalCustomer(compactObject(sync.customer));
+        state.publicationSaving=false;
+        if(sync.ok){
+          setPublicationMessage(`Kundenportal aktualisiert (Version ${sync.publishedVersionId}). Derselbe Link bleibt gueltig — Kundenportal neu laden.`,"success");
+        }else{
+          setPublicationMessage("Kundenportal-Inhalt konnte nicht aktualisiert werden. Bitte erneut versuchen oder Functions-Deployment pruefen.","error");
+        }
+        render();
+        return sync.ok?sync.customer:null;
+      }catch(error){
+        console.error("[ACT Admin V2] Share-Sync:",error&&error.message?error.message:"Fehler");
+        state.publicationSaving=false;
+        setPublicationMessage(error&&error.message?error.message:"Kundenportal-Inhalt konnte nicht aktualisiert werden.","error");
         updatePublicationActions();
         return null;
       }finally{
@@ -5599,6 +5680,7 @@
         if(action==="preview")openPortalPreviewV2();
         if(action==="open")openPortalLinkV2();
         if(action==="copy")copyPortalLinkV2();
+        if(action==="sync-shares")syncPortalSharesV2();
         if(action==="create-share")createPortalShareV2();
         if(action==="create-share-new")createPortalShareV2({forceNew:true});
         if(action==="revoke-share")revokePortalShareV2();

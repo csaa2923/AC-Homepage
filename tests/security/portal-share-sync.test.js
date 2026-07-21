@@ -54,11 +54,12 @@ describe("portal share sync on publish",()=>{
     assert.match(index,/exports\.refreshPortalShares=onCall/);
     assert.match(impl,/async function refreshPortalShares\(request\)/);
     assert.match(impl,/if\(!forceNew&&activeShares\.length\)/);
-    assert.match(adminV2,/db\.refreshPortalShares\(publishCandidate\.customerId\)/);
+    assert.match(adminV2,/syncPublishedSharesForCustomer/);
+    assert.match(adminV2,/syncPortalSharesV2/);
+    assert.match(adminV2,/Kundenportal-Inhalt aktualisieren/);
     assert.match(adminV2,/createPortalShareV2\(\{forceNew:true\}\)|\{\s*forceNew\s*\}/);
     assert.match(adminV2,/Sicheren Kundenlink erzeugen/);
-    assert.match(adminV2,/Stabilen Kundenlink erzeugen/);
     assert.match(adminV2,/Link ersetzen/);
-    assert.match(adminV2,/derselbe Link bleibt gueltig|denselben Link/);
+    assert.match(adminV2,/derselbe Link bleibt gueltig|denselben Link|Kundenportal aktualisiert/);
   });
 });

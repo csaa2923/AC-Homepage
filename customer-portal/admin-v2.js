@@ -2942,7 +2942,15 @@
         const meta={version:nextVersion,comment:"Admin V2",publisher:PUBLISH_EDITOR,publishedAt:new Date().toISOString(),changes:comparison.changes||[]};
         const result=await withTimeout(db.publishCustomer(clone(publishCandidate),meta),AUTH_TIMEOUT_MS,"publishCustomer");
         publishCandidate.publishedSnapshot=result?.publishedData||publishCandidate.publishedSnapshot||null;
-        publishCandidate.publishMeta={...(publishCandidate.publishMeta||{}),...(result?.publishMeta||{}),publishError:""};
+        const contentHash=workflow?.publishContentHash
+          ?workflow.publishContentHash(workflow.normalizeForPublishCompare?workflow.normalizeForPublishCompare(publishCandidate):publishCandidate)
+          :"";
+        publishCandidate.publishMeta={
+          ...(publishCandidate.publishMeta||{}),
+          ...(result?.publishMeta||{}),
+          contentHash,
+          publishError:""
+        };
         const hasShare=Boolean(customerShareMeta(publishCandidate)?.shareId||activeShareToken(publishCandidate.customerId)?.shareId);
         let refreshNote="";
         let refreshKind="success";

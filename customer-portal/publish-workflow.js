@@ -155,26 +155,68 @@
     };
   }
 
+  function normalizeForPublishCompare(customer){
+    if(!customer||typeof customer!=="object")return {};
+    let snapshot;
+    try{
+      snapshot=JSON.parse(JSON.stringify(customer));
+    }catch(error){
+      snapshot={...(customer||{})};
+    }
+    delete snapshot.publishedSnapshot;
+    delete snapshot.publishMeta;
+    delete snapshot.publishHistory;
+    delete snapshot.crm;
+    snapshot.program=flattenProgramItems(snapshot.program||snapshot.programItems||[],{customer:snapshot});
+    snapshot.programItems=snapshot.program;
+    if(typeof window!=="undefined"&&window.ACTBookingLibrary){
+      try{
+        const applied=window.ACTBookingLibrary.applyBookingsToProgram(snapshot);
+        snapshot.program=applied.program;
+        snapshot.programItems=applied.program;
+        snapshot.bookings=window.ACTBookingLibrary.publishedBookings(snapshot);
+      }catch(bookingError){
+        /* keep flattened program */
+      }
+    }
+    const redact=typeof window!=="undefined"
+      ?(window.ACTRedactPublicSnapshot?.redactPublicSnapshot||window.ACTRedactAllowlist?.redactPublicSnapshot)
+      :null;
+    if(typeof redact==="function"){
+      snapshot=redact(snapshot,{customerId:snapshot.customerId||""});
+    }
+    if(!Array.isArray(snapshot.accommodations))snapshot.accommodations=[];
+    if(!snapshot.accommodations.length&&snapshot.hotel&&typeof snapshot.hotel==="object"){
+      snapshot.accommodations=[snapshot.hotel];
+    }
+    snapshot.contact=snapshot.contact&&typeof snapshot.contact==="object"?snapshot.contact:{};
+    if(!snapshot.contact.phone&&snapshot.phone)snapshot.contact.phone=snapshot.phone;
+    if(!snapshot.contact.whatsapp&&snapshot.whatsapp)snapshot.contact.whatsapp=snapshot.whatsapp;
+    if(!snapshot.contact.email&&snapshot.email)snapshot.contact.email=snapshot.email;
+    return snapshot;
+  }
+
   function compareDraftVsPublished(draft,published){
     const changes=[];
-    const pub=published||{};
+    const left=normalizeForPublishCompare(draft||{});
+    const pub=published?normalizeForPublishCompare(published):{};
     const add=(label,kind,detail)=>{
       changes.push({label,kind,detail:detail||""});
     };
 
     const customerDataChanged=
-      stableJson(masterSignature(draft))!==stableJson(masterSignature(pub))||
-      stableJson(contactSignature(draft.contact))!==stableJson(contactSignature(pub.contact))||
-      (draft.weatherLocationName||"")!==(pub.weatherLocationName||"")||
-      (draft.latitude||"")!==(pub.latitude||"")||
-      (draft.longitude||"")!==(pub.longitude||"");
+      stableJson(masterSignature(left))!==stableJson(masterSignature(pub))||
+      stableJson(contactSignature(left.contact))!==stableJson(contactSignature(pub.contact))||
+      (left.weatherLocationName||"")!==(pub.weatherLocationName||"")||
+      (left.latitude||"")!==(pub.latitude||"")||
+      (left.longitude||"")!==(pub.longitude||"");
     if(customerDataChanged)add("Kundendaten geändert","changed");
 
-    if(imageSignature(draft)!==imageSignature(pub)){
+    if(imageSignature(left)!==imageSignature(pub)){
       add("Kundenbild geändert","changed");
     }
 
-    const draftProgram=programSignature(draft.program||draft.programItems,{customer:draft});
+    const draftProgram=programSignature(left.program||left.programItems,{customer:left});
     const pubProgram=programSignature(pub.program||pub.programItems,{customer:pub});
     const pubIds=new Set(pubProgram.map(item=>item.id).filter(Boolean));
     const draftIds=new Set(draftProgram.map(item=>item.id).filter(Boolean));
@@ -192,14 +234,13 @@
       else add("Programm geändert","changed");
     }
 
-    if(stableJson(accommodationSignature(draft))!==stableJson(accommodationSignature(pub))){
+    if(stableJson(accommodationSignature(left))!==stableJson(accommodationSignature(pub))){
       add("Unterkunft geändert","changed");
     }
 
-    const draftDocs=documentSignature(draft.documents);
+    const draftDocs=documentSignature(left.documents);
     const pubDocs=documentSignature(pub.documents);
     if(stableJson(draftDocs)!==stableJson(pubDocs)){
-      const maxLen=Math.max(draftDocs.length,pubDocs.length);
       let docChanges=Math.abs(draftDocs.length-pubDocs.length);
       const limit=Math.min(draftDocs.length,pubDocs.length);
       for(let index=0;index<limit;index+=1){
@@ -284,25 +325,42 @@
       changes:[],
       message:meta.publishError
     };
-    const comparison=compareDraftVsPublished(draft,published||null);
-    if(!published)return {
-      key:"draft",
-      icon:"🟡",
-      label:"Nicht veröffentlicht",
-      tone:"draft",
-      changeCount:comparison.count,
-      changes:comparison.changes,
-      message:"Noch keine Live-Version veröffentlicht. Speichern Sie zuerst, dann veröffentlichen."
-    };
-    if(!comparison.count)return {
-      key:"live",
-      icon:"🟢",
-      label:"Veröffentlicht",
-      tone:"live",
-      changeCount:0,
-      changes:[],
-      message:"Live-Version aktuell — Entwurf entspricht der veröffentlichten Version."
-    };
+    if(!published){
+      const comparison=compareDraftVsPublished(draft,null);
+      return {
+        key:"draft",
+        icon:"🟡",
+        label:"Nicht veröffentlicht",
+        tone:"draft",
+        changeCount:comparison.count,
+        changes:comparison.changes,
+        message:"Noch keine Live-Version veröffentlicht. Speichern Sie zuerst, dann veröffentlichen."
+      };
+    }
+    const draftHash=publishContentHash(normalizeForPublishCompare(draft||{}));
+    if(meta.contentHash&&draftHash&&draftHash===meta.contentHash){
+      return {
+        key:"live",
+        icon:"🟢",
+        label:"Veröffentlicht",
+        tone:"live",
+        changeCount:0,
+        changes:[],
+        message:"Live-Version aktuell — Entwurf entspricht der veröffentlichten Version."
+      };
+    }
+    const comparison=compareDraftVsPublished(draft,published);
+    if(!comparison.count){
+      return {
+        key:"live",
+        icon:"🟢",
+        label:"Veröffentlicht",
+        tone:"live",
+        changeCount:0,
+        changes:[],
+        message:"Live-Version aktuell — Entwurf entspricht der veröffentlichten Version."
+      };
+    }
     return {
       key:"pending",
       icon:"🟠",
@@ -379,6 +437,7 @@
     DEFAULT_EDITOR,
     bumpVersion,
     compareDraftVsPublished,
+    normalizeForPublishCompare,
     publishComparePayload,
     publishContentHash,
     hasAccommodation,

@@ -172,6 +172,34 @@ describe("publish workflow program flattening",()=>{
     assert.doesNotMatch(status.message,/Bereiche? geändert/);
   });
 
+  it("clears pending changes when draft matches published after redaction",()=>{
+    const workflow=loadWorkflow();
+    const draft={
+      customerId:"kunde-1",
+      customerName:"Familie Test",
+      tripName:"Seefeld",
+      phone:"+43677",
+      whatsapp:"+43677",
+      email:"a@b.c",
+      notes:"Nur intern",
+      companions:"2",
+      concierge:"Alpine Concierge Tirol",
+      image:"https://example.com/a.jpg",
+      accommodationName:"Hotel Test",
+      accommodations:[],
+      program:[{id:"p1",title:"Ankunft",dateValue:"2026-07-20"}],
+      documents:[{title:"Ticket",url:"https://example.com/a.pdf",visible:true}],
+      contact:{phone:"+43677",whatsapp:"+43677",email:"a@b.c"}
+    };
+    const published=workflow.normalizeForPublishCompare(draft);
+    const comparison=workflow.compareDraftVsPublished(draft,published);
+    assert.equal(comparison.count,0,comparison.labels.join(" · "));
+    const hash=workflow.publishContentHash(published);
+    const status=workflow.getPublishStatus(draft,published,{contentHash:hash});
+    assert.equal(status.key,"live");
+    assert.equal(status.changeCount,0);
+  });
+
   it("warns when program points are missing without blocking publish",()=>{
     const workflow=loadWorkflow();
     const result=workflow.validateForPublish({

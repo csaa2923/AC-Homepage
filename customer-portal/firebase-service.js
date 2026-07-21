@@ -709,6 +709,47 @@
     };
   }
 
+  async function uploadCustomerImage(customerId,file,meta,onProgress){
+    const ready=await ensureDb();
+    const {storageModule}=ready.modules;
+    if(!customerId)throw new Error("Kunden-ID fehlt.");
+    validateUploadFile(file,{kind:"image"});
+    if(!ready.auth.currentUser)throw new Error("Firebase Upload abgebrochen: Kein angemeldeter Benutzer vorhanden.");
+    const filename=safeSegment(file.name);
+    const imageId=uniqueUploadId();
+    const path=`customers/${safeSegment(customerId)}/documents/kundenbild/${Date.now()}-${imageId}-${filename}`;
+    const fileRef=storageModule.ref(ready.storage,path);
+    const metadata={
+      contentType:file.type||"image/jpeg",
+      customMetadata:{
+        customerId:String(customerId),
+        imageId,
+        title:String(meta&&meta.title||"Kundenbild"),
+        originalName:String(file.name),
+        purpose:"customer-cover"
+      }
+    };
+    const uploadPromise=new Promise((resolve,reject)=>{
+      const task=storageModule.uploadBytesResumable(fileRef,file,metadata);
+      task.on("state_changed",snapshot=>{
+        const percent=snapshot.totalBytes?Math.round((snapshot.bytesTransferred/snapshot.totalBytes)*100):0;
+        if(typeof onProgress==="function")onProgress(percent,snapshot);
+      },reject,()=>resolve(task.snapshot));
+    });
+    const snapshot=await withTimeout(uploadPromise,25000,"Firebase Storage Upload fuer Kundenbild fehlgeschlagen.");
+    const url=await storageModule.getDownloadURL(snapshot.ref);
+    return {
+      id:imageId,
+      title:meta&&meta.title?meta.title:"Kundenbild",
+      url,
+      downloadUrl:url,
+      storagePath:path,
+      fileName:file.name,
+      contentType:file.type||"",
+      uploadedAt:new Date().toISOString()
+    };
+  }
+
   function crmCollectionRef(ready){
     const ctx=ready||state;
     const {firestoreModule}=ctx.modules;
@@ -1093,6 +1134,7 @@
     prepareStorageReference,
     resolveDocumentDownloadUrl,
     uploadCustomerDocument,
+    uploadCustomerImage,
     loadTemplatesForAdmin,
     saveTemplate,
     deleteTemplate,

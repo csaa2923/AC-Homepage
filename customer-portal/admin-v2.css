@@ -130,6 +130,13 @@ p{color:var(--muted);line-height:1.55}
 .v2-badge.gray{background:#edf0ed;color:#5d6863}
 .v2-empty,.v2-placeholder{padding:24px}
 .v2-detail-head{min-width:0;display:grid;gap:18px;margin-bottom:18px;padding:24px;background:linear-gradient(135deg,#fff,#edf5ee);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow)}
+.v2-detail-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,280px);gap:18px;align-items:stretch}
+.v2-detail-cover{margin:0;position:relative;overflow:hidden;border-radius:18px;background:#dfe8e3;min-height:160px}
+.v2-detail-cover img{display:block;width:100%;height:100%;min-height:160px;object-fit:cover}
+.v2-detail-cover-actions{position:absolute;left:10px;right:10px;bottom:10px;display:flex;flex-wrap:wrap;gap:8px}
+.v2-customer-image-editor{display:grid;gap:10px}
+.v2-customer-image-preview{display:grid;gap:12px}
+.v2-customer-image-preview img{width:100%;max-width:420px;height:180px;object-fit:cover;border-radius:16px;border:1px solid var(--line);background:#dfe8e3}
 .v2-detail-actions{display:flex;gap:10px;flex-wrap:wrap}
 .v2-detail-title{min-width:0;display:grid;gap:10px}
 .v2-detail-title h2{margin-bottom:0;overflow-wrap:anywhere;word-break:normal}
@@ -314,6 +321,7 @@ p{color:var(--muted);line-height:1.55}
   .v2-filter-summary{font-size:14px}
   .v2-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .v2-detail-head{padding:18px}
+  .v2-detail-hero{grid-template-columns:1fr}
   .v2-detail-title h2{font-size:24px;line-height:1.12}
   .v2-card,.v2-panel,.v2-empty,.v2-placeholder{border-radius:20px}
   .v2-detail-actions .v2-button{width:100%}

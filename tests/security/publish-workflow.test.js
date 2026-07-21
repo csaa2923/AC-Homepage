@@ -111,4 +111,28 @@ describe("publish workflow program flattening",()=>{
     assert.equal(result.ok,false);
     assert.ok(result.errors.some(error=>/Termindatum fehlt/.test(error)));
   });
+
+  it("treats missing accommodation as a soft warning and accepts V2 accommodation fields",()=>{
+    const workflow=loadWorkflow();
+    const missing=workflow.validateForPublish({
+      customerName:"Momo Holzer",
+      tripName:"Reise Seefeld",
+      phone:"+43677",
+      concierge:"Alpine Concierge Tirol",
+      accommodations:[]
+    });
+    assert.equal(missing.ok,true,missing.errors.join("; "));
+    assert.ok(missing.warnings.some(item=>item==="Unterkunft fehlt."));
+
+    const fromV2Field=workflow.validateForPublish({
+      customerName:"Momo Holzer",
+      tripName:"Reise Seefeld",
+      phone:"+43677",
+      concierge:"Alpine Concierge Tirol",
+      accommodationName:"Hotel Seefeld Lodge",
+      accommodations:[]
+    });
+    assert.equal(fromV2Field.ok,true,fromV2Field.errors.join("; "));
+    assert.equal((fromV2Field.warnings||[]).length,0);
+  });
 });

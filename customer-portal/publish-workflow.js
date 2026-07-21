@@ -199,8 +199,19 @@
     return stableJson(publishComparePayload(customer));
   }
 
+  function hasAccommodation(customer){
+    const c=customer||{};
+    if((c.accommodations||[]).some(item=>String(item?.name||item?.hotel||item?.title||"").trim()))return true;
+    if(String(c.accommodationName||c.hotelName||"").trim())return true;
+    const hotel=c.hotel&&typeof c.hotel==="object"?c.hotel:{};
+    if(String(hotel.name||hotel.title||"").trim())return true;
+    const stayCandidates=[c.stay,c.accommodation,c.accommodationData].filter(item=>item&&typeof item==="object");
+    return stayCandidates.some(item=>String(item.name||item.hotel?.name||item.title||"").trim());
+  }
+
   function validateForPublish(customer){
     const errors=[];
+    const warnings=[];
     const c=customer||{};
     if(!String(c.customerName||"").trim())errors.push("Kundenname fehlt.");
     if(!String(c.tripName||c.tripTitle||"").trim())errors.push("Reisebezeichnung fehlt.");
@@ -220,10 +231,10 @@
       if(visible&&item.url&&!/^https?:\/\//i.test(item.url))errors.push(`Dokument "${item.title||"Ohne Titel"}": Link muss mit http:// oder https:// beginnen.`);
     });
 
-    if(!(c.accommodations||[]).some(item=>String(item.name||"").trim()))errors.push("Unterkunft fehlt.");
-    if(!String(c.concierge||"").trim())errors.push("Persönlicher Concierge fehlt.");
+    if(!hasAccommodation(c))warnings.push("Unterkunft fehlt.");
+    if(!String(c.concierge||c.conciergeName||"").trim())errors.push("Persönlicher Concierge fehlt.");
 
-    return {ok:errors.length===0,errors};
+    return {ok:errors.length===0,errors,warnings};
   }
 
   function getPublishStatus(draft,published,publishMeta){
@@ -329,6 +340,7 @@
     compareDraftVsPublished,
     publishComparePayload,
     publishContentHash,
+    hasAccommodation,
     validateForPublish,
     flattenProgramItems,
     programDayBucket,

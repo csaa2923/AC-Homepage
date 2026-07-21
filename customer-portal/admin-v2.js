@@ -426,6 +426,7 @@
 
   function customerEditValues(customer){
     const contact=customer?.contact&&typeof customer.contact==="object"?customer.contact:{};
+    const imageUrl=cleanValue(customer?.image||customer?.imageUrl||customer?.heroImage||customer?.coverImage);
     return {
       customerName:String(customer?.customerName||"").trim(),
       companions:Array.isArray(customer?.companions)?customer.companions.filter(Boolean).join(", "):String(customer?.companions||"").trim(),
@@ -435,7 +436,8 @@
       email:String(customer?.email||contact.email||"").trim(),
       whatsapp:String(customer?.whatsapp||customer?.whatsappLink||contact.whatsapp||"").trim(),
       requirements:Array.isArray(customer?.requirements)?customer.requirements.filter(Boolean).join("\n"):String(customer?.requirements||"").trim(),
-      contactInfo:String(contact.name||contact.primary||contact.note||"").trim()
+      contactInfo:String(contact.name||contact.primary||contact.note||"").trim(),
+      imageUrl
     };
   }
 
@@ -573,7 +575,25 @@
     const errors={};
     if(!values.customerName)errors.customerName="Bitte einen Kundennamen eingeben.";
     if(values.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email))errors.email="Bitte eine gueltige E-Mail-Adresse eingeben.";
+    if(values.imageUrl&&!safeWebUrl(values.imageUrl)&&!safeDocumentUrl(values.imageUrl))errors.imageUrl="Bitte eine gueltige Bild-URL eingeben.";
     return {valid:!Object.keys(errors).length,errors,values};
+  }
+
+  function applyCustomerImageToCustomer(customer,imageUrl){
+    const next=clone(customer);
+    const url=cleanValue(imageUrl);
+    if(url){
+      next.image=url;
+      next.imageUrl=url;
+    }else{
+      delete next.image;
+      delete next.imageUrl;
+      delete next.heroImage;
+      delete next.coverImage;
+    }
+    next.updatedAt=new Date().toLocaleDateString("de-DE");
+    next._lastSavedAt=new Date().toISOString();
+    return compactObject(next);
   }
 
   function mergeCustomerEdit(customer,values){
@@ -596,6 +616,16 @@
     };
     if(values.contactInfo)next.contact.note=values.contactInfo;
     else if(next.contact)delete next.contact.note;
+    const imageUrl=cleanValue(values.imageUrl);
+    if(imageUrl){
+      next.image=imageUrl;
+      next.imageUrl=imageUrl;
+    }else{
+      delete next.image;
+      delete next.imageUrl;
+      delete next.heroImage;
+      delete next.coverImage;
+    }
     next.updatedAt=new Date().toLocaleDateString("de-DE");
     next._lastSavedAt=new Date().toISOString();
     return compactObject(next);
@@ -648,6 +678,105 @@
       }
     })();
     return customerSavePromise;
+  }
+
+  async function saveCustomerImageChange(customer,imageUrl,{message="Kundenbild gespeichert"}={}){
+    const fullCustomer=applyCustomerImageToCustomer(customer,imageUrl);
+    const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+    if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+    await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+    updateLocalCustomer(fullCustomer);
+    if(state.customerEditMode&&state.customerEditDraft){
+      state.customerEditDraft.imageUrl=cleanValue(imageUrl);
+      state.customerEditOriginal=editFingerprint(state.customerEditDraft);
+    }
+    setCustomerEditMessage(message,"success");
+    render();
+    return fullCustomer;
+  }
+
+  async function uploadSelectedCustomerImage(file){
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer||!file)return null;
+    if(!window.ACTFirebaseStorage?.uploadCustomerImage){
+      setCustomerEditMessage("Bild-Upload ist derzeit nicht verfuegbar.","error");
+      renderCustomerDetail();
+      return null;
+    }
+    state.customerEditSaving=true;
+    setCustomerEditMessage("Bild wird hochgeladen ...","saving");
+    updateCustomerEditActions();
+    renderCustomerDetail();
+    try{
+      const uploaded=await withTimeout(
+        window.ACTFirebaseStorage.uploadCustomerImage(customer.customerId,file,{title:"Kundenbild"}),
+        AUTH_TIMEOUT_MS,
+        "uploadCustomerImage"
+      );
+      const url=cleanValue(uploaded?.url||uploaded?.downloadUrl);
+      if(!url)throw new Error("Upload ohne Bild-URL.");
+      if(state.customerEditMode&&state.customerEditDraft){
+        state.customerEditDraft.imageUrl=url;
+        state.customerEditSaving=false;
+        setCustomerEditMessage("Bild hochgeladen – bitte Speichern tippen.","dirty");
+        renderCustomerDetail();
+        return uploaded;
+      }
+      await saveCustomerImageChange(customer,url,{message:"Kundenbild aktualisiert"});
+      state.customerEditSaving=false;
+      return uploaded;
+    }catch(error){
+      console.error("[ACT Admin V2] Kundenbild Upload:",error&&error.message?error.message:"Fehler");
+      state.customerEditSaving=false;
+      setCustomerEditMessage(error&&error.message?error.message:"Kundenbild konnte nicht hochgeladen werden.","error");
+      updateCustomerEditActions();
+      renderCustomerDetail();
+      return null;
+    }
+  }
+
+  async function removeCustomerImage(){
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer)return;
+    if(state.customerEditMode&&state.customerEditDraft){
+      state.customerEditDraft.imageUrl="";
+      setCustomerEditMessage("Bild entfernt – bitte Speichern tippen.","dirty");
+      renderCustomerDetail();
+      return;
+    }
+    if(!window.confirm("Kundenbild entfernen und Standardbild verwenden?"))return;
+    state.customerEditSaving=true;
+    setCustomerEditMessage("Bild wird entfernt ...","saving");
+    try{
+      await saveCustomerImageChange(customer,"",{message:"Kundenbild entfernt"});
+      state.customerEditSaving=false;
+    }catch(error){
+      console.error("[ACT Admin V2] Kundenbild entfernen:",error&&error.message?error.message:"Fehler");
+      state.customerEditSaving=false;
+      setCustomerEditMessage(error&&error.message?error.message:"Kundenbild konnte nicht entfernt werden.","error");
+      renderCustomerDetail();
+    }
+  }
+
+  function customerImageEditorMarkup(customer,draft=null,errors={}){
+    const previewUrl=cleanValue(draft?.imageUrl)||customerImage(customer);
+    const hasCustom=Boolean(cleanValue(draft?.imageUrl)||cleanValue(customer?.image||customer?.imageUrl||customer?.heroImage||customer?.coverImage));
+    const busy=state.customerEditSaving;
+    return `
+      <div class="v2-edit-field full v2-customer-image-editor">
+        <span>Kundenbild</span>
+        <div class="v2-customer-image-preview">
+          <img src="${escapeHtml(previewUrl)}" alt="Kundenbild Vorschau">
+          <div class="v2-document-actions">
+            <label class="v2-button soft ${busy?"disabled":""}" for="customerImageUploadInput">Bild aendern</label>
+            <input class="v2-file-input" id="customerImageUploadInput" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-customer-image-upload ${busy?"disabled":""}>
+            <button class="v2-button soft" type="button" data-customer-edit-action="remove-image" ${busy||!hasCustom?"disabled":""}>Entfernen</button>
+          </div>
+        </div>
+        ${draft?inputField("imageUrl","Bild-URL",draft.imageUrl,{type:"url",error:errors.imageUrl}):""}
+        <small class="v2-muted">JPG, PNG oder WEBP. Das Bild erscheint in der Kundenuebersicht und im Kundendetail.</small>
+      </div>
+    `;
   }
 
   function dateInputValue(value){
@@ -829,6 +958,23 @@
     next.accommodationAddress=values.accommodationAddress;
     next.accommodationCity=values.accommodationCity;
     next.accommodationCountry=values.accommodationCountry;
+    if(values.accommodationName){
+      const hotel={
+        ...(next.hotel&&typeof next.hotel==="object"?next.hotel:{}),
+        name:values.accommodationName,
+        address:values.accommodationAddress,
+        city:values.accommodationCity,
+        country:values.accommodationCountry
+      };
+      next.hotel=hotel;
+      const list=arrayValue(next.accommodations).map(item=>({...item}));
+      if(list.length){
+        list[0]={...list[0],...hotel};
+        next.accommodations=list;
+      }else{
+        next.accommodations=[hotel];
+      }
+    }
     next.arrivalType=values.arrivalType;
     next.arrivalDetails=values.arrivalText;
     if(values.notes.length||"travelNotes" in next)next.travelNotes=values.notes;
@@ -2427,6 +2573,9 @@
     const docs=normalizedDocuments(customer);
     const analysis=documentAnalysis(customer);
     const status=publicationStatus(customer);
+    const workflow=publishWorkflow();
+    const validation=workflow?.validateForPublish?workflow.validateForPublish(customer):{ok:true,errors:[],warnings:[]};
+    arrayValue(validation.warnings).forEach(item=>warnings.push(item));
     const internalDocs=docs.filter(doc=>doc.visibility==="Intern"||doc.visible===false).length;
     const visibleWithoutUrl=docs.filter(doc=>doc.visibility!=="Intern"&&doc.visible!==false&&!safeDocumentUrl(doc.url||doc.downloadUrl));
     if(internalDocs)warnings.push(`${internalDocs} interne Dokumente werden nicht im Kundenportal angezeigt.`);
@@ -2548,9 +2697,24 @@
           }
           updateLocalCustomer(publishSource);
         }
-        const validation=workflow?.validateForPublish?workflow.validateForPublish(publishSource):{ok:true,errors:[]};
+        const validation=workflow?.validateForPublish?workflow.validateForPublish(publishSource):{ok:true,errors:[],warnings:[]};
         if(!validation.ok){
           throw new Error(validation.errors?.[0]||"Veroeffentlichung nicht moeglich: Pflichtfelder fehlen.");
+        }
+        const softWarnings=arrayValue(validation.warnings);
+        if(softWarnings.length){
+          state.publicationSaving=false;
+          updatePublicationActions();
+          setPublicationMessage(softWarnings.join(" "),"warning");
+          renderCustomerDetail();
+          const proceed=window.confirm(`${softWarnings.join("\n")}\n\nTrotzdem veroeffentlichen?`);
+          if(!proceed){
+            publicationPromise=null;
+            return null;
+          }
+          state.publicationSaving=true;
+          setPublicationMessage("Veroeffentlichung wird fortgesetzt ...","saving");
+          updatePublicationActions();
         }
         const comparison=draftComparison(publishSource);
         const nextVersion=workflow?.bumpVersion?workflow.bumpVersion(publishSource.version||"1.0"):publishSource.version||"1.0";
@@ -3445,11 +3609,23 @@
           <a class="v2-button primary" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Im klassischen Admin bearbeiten</a>
         </div>
         ${flash}
-        <div class="v2-detail-title">
-          <p class="v2-eyebrow">Kundendetail</p>
-          <h2>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</h2>
-          <p>${escapeHtml(displayValue(customer.tripName||customer.tripTitle,"Kein Reisetitel"))}</p>
-          <div class="v2-meta">${badge(customer.status||"Status nicht hinterlegt")}${badge(publicationState(customer))}</div>
+        <div class="v2-detail-hero">
+          <div class="v2-detail-title">
+            <p class="v2-eyebrow">Kundendetail</p>
+            <h2>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</h2>
+            <p>${escapeHtml(displayValue(customer.tripName||customer.tripTitle,"Kein Reisetitel"))}</p>
+            <div class="v2-meta">${badge(customer.status||"Status nicht hinterlegt")}${badge(publicationState(customer))}</div>
+          </div>
+          <figure class="v2-detail-cover">
+            <img src="${escapeHtml(customerImage(customer))}" alt="">
+            ${!state.customerEditMode?`
+              <div class="v2-detail-cover-actions">
+                <label class="v2-button soft" for="customerImageUploadInput">Bild aendern</label>
+                <input class="v2-file-input" id="customerImageUploadInput" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-customer-image-upload ${state.customerEditSaving?"disabled":""}>
+                ${cleanValue(customer.image||customer.imageUrl||customer.heroImage||customer.coverImage)?`<button class="v2-button soft" type="button" data-customer-edit-action="remove-image" ${state.customerEditSaving?"disabled":""}>Entfernen</button>`:""}
+              </div>
+            `:""}
+          </figure>
         </div>
         <div class="v2-detail-summary" aria-label="Kundenzusammenfassung">
           ${summaryItem("Region",displayValue(customer.region,"Keine Region"))}
@@ -3822,6 +3998,7 @@
           <span class="v2-edit-status ${escapeHtml(statusKind)}" id="customerEditStatus" aria-live="polite">${escapeHtml(status)}</span>
         </div>
         <div class="v2-edit-grid">
+          ${customerImageEditorMarkup(customer,draft,errors)}
           ${inputField("customerName","Kundenname",draft.customerName,{required:true,error:errors.customerName,autocomplete:"name"})}
           ${inputField("companions","Begleitpersonen",draft.companions)}
           ${inputField("language","Sprache",draft.language,{autocomplete:"language"})}
@@ -5003,6 +5180,10 @@
     }
     const dirty=hasDirtyCustomerEdit();
     setCustomerEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
+    if(field.name==="imageUrl"){
+      const preview=document.querySelector(".v2-customer-image-preview img");
+      if(preview)preview.src=cleanValue(field.value)||customerImage(customerById(state.selectedCustomerId)||{});
+    }
   }
 
   function handleTripEditInput(event){
@@ -5123,6 +5304,7 @@
         const customer=customerById(state.selectedCustomerId);
         if(action==="edit"&&customer)startCustomerEdit(customer);
         if(action==="cancel")cancelCustomerEdit();
+        if(action==="remove-image")removeCustomerImage();
         return;
       }
       const tripAction=event.target.closest("[data-trip-edit-action]");
@@ -5226,6 +5408,12 @@
       if(event.target.id==="documentQualityFilter"){state.documentQuality=event.target.value;renderDocuments();}
       if(event.target.id==="documentSortSelect"){state.documentSort=event.target.value;renderDocuments();}
       if(event.target.id==="documentUploadCustomerSelect"){state.documentUploadCustomerId=event.target.value;renderDocuments();}
+      if(event.target.matches("[data-customer-image-upload]")){
+        const file=event.target.files&&event.target.files[0];
+        event.target.value="";
+        if(file)uploadSelectedCustomerImage(file);
+        return;
+      }
       if(event.target.matches("[data-document-upload]")){
         startDocumentUploads(event.target.files,event.target.dataset.uploadCustomer||state.documentUploadCustomerId);
         event.target.value="";
@@ -5299,7 +5487,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

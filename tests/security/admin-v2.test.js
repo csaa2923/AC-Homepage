@@ -32,8 +32,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=3/);
-    assert.match(html,/admin-v2\.css\?v=26/);
-    assert.match(html,/admin-v2\.js\?v=29/);
+    assert.match(html,/admin-v2\.css\?v=27/);
+    assert.match(html,/admin-v2\.js\?v=31/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -362,13 +362,18 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=26/);
+    assert.match(html,/admin-v2\.css\?v=27/);
     assert.match(html,/portal-share-library\.js\?v=2/);
-    assert.match(html,/publish-workflow\.js\?v=5/);
-    assert.match(html,/firebase-storage\.js\?v=4/);
-    assert.match(html,/admin-v2\.js\?v=29"><\/script>/);
+    assert.match(html,/publish-workflow\.js\?v=6/);
+    assert.match(html,/firebase-storage\.js\?v=5/);
+    assert.match(html,/admin-v2\.js\?v=31"><\/script>/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
+    assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
+    assert.match(js,/data-customer-image-upload/);
+    assert.match(js,/function uploadSelectedCustomerImage\(file\)/);
+    assert.match(js,/function removeCustomerImage\(\)/);
+    assert.match(js,/Bild aendern/);
     assert.match(js,/resolveDocumentDownloadUrl/);
     assert.match(js,/function documentUploadReady\(\)/);
     assert.match(js,/typeof window\.ACTFirebaseStorage\?\.uploadCustomerDocument==="function"/);
@@ -470,9 +475,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/redact-allowlist\.js\?v=3/);
     assert.match(html,/redact-public-snapshot\.js\?v=2/);
     assert.match(html,/portal-share-library\.js\?v=2/);
-    assert.match(html,/publish-workflow\.js\?v=5/);
-    assert.match(html,/firebase-service\.js\?v=22/);
-    assert.match(html,/admin-v2\.js\?v=29/);
+    assert.match(html,/publish-workflow\.js\?v=6/);
+    assert.match(html,/firebase-service\.js\?v=23/);
+    assert.match(html,/admin-v2\.js\?v=31/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function publishCustomerV2\(\)/);
@@ -561,8 +566,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=26/);
-    assert.match(html,/admin-v2\.js\?v=29/);
+    assert.match(html,/admin-v2\.css\?v=27/);
+    assert.match(html,/admin-v2\.js\?v=31/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -637,12 +642,17 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/aria-invalid="\$\{error\?"true":"false"\}"/);
     assert.match(js,/data-customer-edit-action="save"/);
     assert.match(js,/data-customer-edit-action="cancel"/);
+    assert.match(js,/data-customer-edit-action="remove-image"/);
+    assert.match(js,/function customerImageEditorMarkup\(/);
+    assert.match(js,/function applyCustomerImageToCustomer\(/);
+    assert.match(js,/imageUrl/);
   });
 
   it("preserves non-customer data by merging edits into the full customer object",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     assert.match(js,/const fullCustomer=mergeCustomerEdit\(customer,validation\.values\)/);
     assert.match(js,/next\.customerName=values\.customerName/);
+    assert.match(js,/next\.image=imageUrl/);
     assert.match(js,/next\.contact=\{/);
     assert.match(js,/next\.updatedAt=new Date\(\)\.toLocaleDateString\("de-DE"\)/);
     assert.doesNotMatch(js,/next\.program=\[\]|next\.documents=\[\]|next\.publishedSnapshot=null|next\.publishMeta=\{\}/);

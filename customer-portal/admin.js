@@ -3334,16 +3334,20 @@
 
   function renderPublishValidationErrors(container,validation){
     if(!container)return;
-    if(validation.ok){
+    const errors=Array.isArray(validation.errors)?validation.errors:[];
+    const warnings=Array.isArray(validation.warnings)?validation.warnings:[];
+    if(!errors.length&&!warnings.length){
       container.hidden=true;
       container.innerHTML="";
       return;
     }
     container.hidden=false;
-    container.innerHTML=validation.errors.map(item=>{
+    const errorMarkup=errors.map(item=>{
       const text=formatValidationError(item);
       return `<p><button class="validation-jump" type="button" data-validation-jump="${escapeHtml(item)}">${escapeHtml(text)}</button></p>`;
     }).join("");
+    const warningMarkup=warnings.map(item=>`<p class="publish-warning">${escapeHtml(item)} (Warnung – Veroeffentlichung trotzdem moeglich)</p>`).join("");
+    container.innerHTML=`${errorMarkup}${warningMarkup}`;
     container.querySelectorAll("[data-validation-jump]").forEach(button=>{
       button.addEventListener("click",()=>scrollToPublishFix(button.dataset.validationJump||""));
     });

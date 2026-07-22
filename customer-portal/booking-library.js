@@ -4,6 +4,48 @@
   const PAYMENT_STATUSES=["Offen","Anzahlungsrechnung gesendet","Anzahlung bezahlt","Restzahlung offen","Vollständig bezahlt","Vor Ort zu zahlen","Inklusive","Storniert","Rückerstattet"];
   const DOCUMENT_TYPES=["Voucher","Ticket","Bestätigung","Rechnung","Speisekarte","Lageplan","PDF","Bild"];
   const DEADLINE_TYPES=["Stornofrist","Zahlungsfrist","Bestätigungsfrist","Rückmeldefrist"];
+  const BOOKING_STATUS_ALIASES={
+    "entwurf":"Geplant",
+    "draft":"Geplant",
+    "geplant":"Geplant",
+    "angefragt":"Angefragt",
+    "requested":"Angefragt",
+    "option":"Reserviert",
+    "in abstimmung":"In Abstimmung",
+    "reserviert":"Reserviert",
+    "bestaetigt":"Bestätigt",
+    "bestätigt":"Bestätigt",
+    "bestatigt":"Bestätigt",
+    "confirmed":"Bestätigt",
+    "warteliste":"Warteliste",
+    "bezahlt":"Bezahlt",
+    "teilbezahlt":"Teilbezahlt",
+    "storniert":"Storniert",
+    "cancelled":"Storniert",
+    "canceled":"Storniert",
+    "abgeschlossen":"Abgeschlossen",
+    "done":"Abgeschlossen"
+  };
+  const PAYMENT_STATUS_ALIASES={
+    "offen":"Offen",
+    "open":"Offen",
+    "teilweise bezahlt":"Anzahlung bezahlt",
+    "teilbezahlt":"Anzahlung bezahlt",
+    "partial":"Anzahlung bezahlt",
+    "bezahlt":"Vollständig bezahlt",
+    "vollständig bezahlt":"Vollständig bezahlt",
+    "vollstaendig bezahlt":"Vollständig bezahlt",
+    "vollstandig bezahlt":"Vollständig bezahlt",
+    "paid":"Vollständig bezahlt",
+    "rueckerstattet":"Rückerstattet",
+    "rückerstattet":"Rückerstattet",
+    "ruckerstattet":"Rückerstattet",
+    "refunded":"Rückerstattet",
+    "nicht relevant":"Inklusive",
+    "n/a":"Inklusive",
+    "na":"Inklusive",
+    "inklusive":"Inklusive"
+  };
 
   const STATUS_META={
     "Geplant":{icon:"📋",color:"#5b6b7a",className:"booking-status-planned"},
@@ -82,18 +124,41 @@
     return next;
   }
 
+  function aliasLookup(map,value){
+    const raw=String(value||"").trim();
+    if(!raw)return "";
+    const key=raw.toLocaleLowerCase("de-DE").normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    const compact=key.replace(/\s+/g," ");
+    return map[compact]||map[key]||"";
+  }
+
+  function canonicalBookingStatus(value){
+    const raw=String(value||"").trim();
+    if(!raw)return "Geplant";
+    if(BOOKING_STATUSES.includes(raw))return raw;
+    return aliasLookup(BOOKING_STATUS_ALIASES,raw)||raw;
+  }
+
+  function canonicalPaymentStatus(value){
+    const raw=String(value||"").trim();
+    if(!raw)return "Offen";
+    if(PAYMENT_STATUSES.includes(raw))return raw;
+    return aliasLookup(PAYMENT_STATUS_ALIASES,raw)||raw;
+  }
+
   function normalizeBooking(raw,customer){
+    const incoming=raw&&typeof raw==="object"?raw:{};
     const base=defaultBooking(customer);
-    const next={...base,...(raw||{})};
+    const next={...base,...incoming};
     next.bookingId=next.bookingId||freshId("booking");
     next.customerId=next.customerId||customer?.customerId||"";
     next.tripId=next.tripId||next.customerId;
     next.type=String(next.type||"Sonstiges").trim();
     next.title=String(next.title||"").trim();
     next.provider=String(next.provider||"").trim();
-    next.bookingStatus=String(next.bookingStatus||"Geplant").trim();
-    next.paymentStatus=String(next.paymentStatus||"Offen").trim();
-    next.currency=String(next.currency||"EUR").trim();
+    next.bookingStatus=canonicalBookingStatus(next.bookingStatus||next.status||"Geplant");
+    next.paymentStatus=canonicalPaymentStatus(next.paymentStatus||"Offen");
+    next.currency=String(next.currency||"EUR").trim()||"EUR";
     next.documents=Array.isArray(next.documents)?next.documents.map(normalizeDocument):[];
     next.archived=!!next.archived;
     next.visibleForCustomer=!!next.visibleForCustomer;
@@ -101,7 +166,16 @@
     next.providerRef=next.providerRef&&typeof next.providerRef==="object"?next.providerRef:{type:next.type,name:next.provider,reusable:false};
     next.updatedAt=next.updatedAt||new Date().toISOString();
     next.createdAt=next.createdAt||next.updatedAt;
+    Object.keys(incoming).forEach(key=>{
+      if(!(key in next))next[key]=incoming[key];
+    });
     return next;
+  }
+
+  function mergeBookingPreserve(existing,updates){
+    const previous=existing&&typeof existing==="object"?existing:{};
+    const patch=updates&&typeof updates==="object"?updates:{};
+    return normalizeBooking({...previous,...patch}, {customerId:patch.customerId||previous.customerId});
   }
 
   function computeMargin(internalPrice,customerPrice,existing){
@@ -138,14 +212,43 @@
     return "ok";
   }
 
+  function isNumericPrice(value){
+    const raw=String(value??"").trim();
+    if(!raw)return true;
+    return Number.isFinite(Number(raw.replace(",",".")));
+  }
+
+  function isHttpUrl(value){
+    const raw=String(value||"").trim();
+    if(!raw)return true;
+    return /^https?:\/\//i.test(raw);
+  }
+
+  function isEmail(value){
+    const raw=String(value||"").trim();
+    if(!raw)return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw);
+  }
+
   function validateBooking(booking){
     const errors=[];
-    if(!booking?.customerId)errors.push("Kunde fehlt.");
-    if(!String(booking?.title||"").trim())errors.push("Titel fehlt.");
-    if(!String(booking?.date||"").trim())errors.push("Datum fehlt.");
-    if(!String(booking?.bookingStatus||"").trim())errors.push("Status fehlt.");
-    if(!String(booking?.type||"").trim())errors.push("Typ fehlt.");
-    return {ok:!errors.length,errors};
+    const fieldErrors={};
+    const add=(field,message)=>{
+      errors.push(message);
+      if(field&&!fieldErrors[field])fieldErrors[field]=message;
+    };
+    if(!booking?.customerId)add("customerId","Kunde fehlt.");
+    if(!String(booking?.title||"").trim())add("title","Titel fehlt.");
+    if(!String(booking?.date||"").trim())add("date","Datum fehlt.");
+    else if(!parseDate(booking.date))add("date","Datum ist ungültig.");
+    if(!String(booking?.bookingStatus||"").trim())add("bookingStatus","Status fehlt.");
+    if(!String(booking?.type||"").trim())add("type","Typ fehlt.");
+    if(!isNumericPrice(booking?.customerPrice))add("customerPrice","Preis muss numerisch sein.");
+    if(!isNumericPrice(booking?.internalPrice))add("internalPrice","Einkaufspreis muss numerisch sein.");
+    if(!isHttpUrl(booking?.website))add("website","URL muss mit http:// oder https:// beginnen.");
+    if(!isHttpUrl(booking?.navigationUrl))add("navigationUrl","Navigations-URL muss mit http:// oder https:// beginnen.");
+    if(!isEmail(booking?.email))add("email","E-Mail ist ungültig.");
+    return {ok:!errors.length,errors,fieldErrors};
   }
 
   function bookingWarnings(booking){
@@ -357,8 +460,13 @@
     DOCUMENT_TYPES,
     DEADLINE_TYPES,
     STATUS_META,
+    BOOKING_STATUS_ALIASES,
+    PAYMENT_STATUS_ALIASES,
     defaultBooking,
     normalizeBooking,
+    mergeBookingPreserve,
+    canonicalBookingStatus,
+    canonicalPaymentStatus,
     normalizeDocument,
     statusMeta,
     validateBooking,

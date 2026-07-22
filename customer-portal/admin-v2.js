@@ -55,6 +55,22 @@
     publicationSaving:false,
     publicationMessage:"",
     publicationMessageKind:"",
+    bookingQuery:"",
+    bookingCustomerFilter:"",
+    bookingStatusFilter:"",
+    bookingTypeFilter:"",
+    bookingProviderFilter:"",
+    bookingDateFrom:"",
+    bookingDateTo:"",
+    bookingSort:"date",
+    bookingIncludeArchived:false,
+    bookingEditOpen:false,
+    bookingEditDraft:null,
+    bookingEditOriginalId:"",
+    bookingEditErrors:{},
+    bookingEditSaving:false,
+    bookingMessage:"",
+    bookingMessageKind:"",
     wizardOpen:false,
     wizardStep:0,
     wizardDraft:null,
@@ -91,6 +107,7 @@
     ["kunde","Kunde"],
     ["reise","Reise"],
     ["programm","Programm"],
+    ["buchungen","Buchungen"],
     ["dokumente","Dokumente"],
     ["kommunikation","Kommunikation"],
     ["veroeffentlichung","Veroeffentlichung"]
@@ -531,8 +548,8 @@
     const raw=String(hashValue||"").replace(/^#/,"").replace(/^\/+/,"")||"dashboard";
     const parts=raw.split("/").filter(Boolean);
     const main=parts[0]||"dashboard";
-    if(["dashboard","customers","calendar","documents","settings"].includes(main)&&parts.length===1){
-      return {route:main,customerId:"",tab:""};
+    if(["dashboard","customers","bookings","calendar","documents","settings"].includes(main)&&parts.length===1){
+      return {route:main==="calendar"?"bookings":main,customerId:"",tab:""};
     }
     if(main==="customers"&&parts[1]){
       const tab=parts[2]||"kunde";
@@ -607,7 +624,7 @@
   }
 
   function hasDirtyEdits(){
-    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit()||hasDirtyDocumentEdit()||state.wizardOpen;
+    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit()||hasDirtyDocumentEdit()||state.wizardOpen||Boolean(window.ACTAdminV2Bookings?.isDirty?.());
   }
 
   function setCustomerEditMessage(message,kind=""){
@@ -3658,7 +3675,14 @@
       const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
       if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
       const map=await withTimeout(window.ACTFirebaseDatabase.loadCustomersForAdmin(),AUTH_TIMEOUT_MS,"loadCustomersForAdmin");
-      state.customers=Object.values(map||{}).filter(Boolean);
+      state.customers=Object.values(map||{}).filter(Boolean).map(customer=>{
+        const next={...customer};
+        if(!Array.isArray(next.bookings))next.bookings=[];
+        if(window.ACTBookingLibrary?.normalizeBooking){
+          next.bookings=next.bookings.map(item=>window.ACTBookingLibrary.normalizeBooking(item,next));
+        }
+        return next;
+      });
       state.loading=false;
       setStatus(state.customers.length?`${state.customers.length} Kunden aus Firebase geladen.`:"Noch keine Kunden in Firebase vorhanden.");
       render();
@@ -3963,7 +3987,7 @@
         `).join("")}
       </div>
       <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="dokumente"?documentsTabMarkup(customer):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
+        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
       </section>
     `;
   }
@@ -4600,7 +4624,9 @@
     renderDashboardLists();
     renderCustomers();
     renderDocuments();
+    if(window.ACTAdminV2Bookings?.renderBookings)window.ACTAdminV2Bookings.renderBookings();
     renderCustomerDetail();
+    window.ACTAdminV2Bookings?.renderBookingEditor?.();
     renderNewCustomerWizard();
   }
 
@@ -4614,6 +4640,7 @@
       resetTripEditState();
       resetProgramEditState();
       resetDocumentEditState();
+      window.ACTAdminV2Bookings?.closeEditor?.();
     }
     state.route=parsed.route;
     state.selectedCustomerId=parsed.customerId||"";
@@ -5594,11 +5621,28 @@
   }
 
   function bind(){
+    window.ACTAdminV2Bookings?.bind?.({
+      getState:()=>state,
+      patchState:patch=>Object.assign(state,patch||{}),
+      escapeHtml,
+      badge,
+      byId,
+      customerById,
+      updateLocalCustomer,
+      clone,
+      compactObject,
+      withTimeout,
+      AUTH_TIMEOUT_MS,
+      routeTo,
+      render,
+      flattenProgramItems
+    });
     byId("adminLoginForm").addEventListener("submit",event=>{event.preventDefault();signIn();});
     byId("logoutButton").addEventListener("click",async()=>{
       if(!confirmDiscardCustomerEdit())return;
       try{
         clearShareTokens();
+        window.ACTAdminV2Bookings?.closeEditor?.();
         await withTimeout(window.ACTFirebaseAuth?.signOut?.(),AUTH_TIMEOUT_MS,"signOut");
       }catch(error){
         console.error("[ACT Admin V2] Abmeldung:",error&&error.message?error.message:"Fehler");
@@ -5612,6 +5656,7 @@
     byId("resetFiltersButton").addEventListener("click",resetFilters);
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);
     document.addEventListener("click",event=>{
+      if(window.ACTAdminV2Bookings?.handleClick?.(event))return;
       const wizardAction=event.target.closest("[data-wizard-action]");
       if(wizardAction){
         handleWizardAction(wizardAction.dataset.wizardAction);
@@ -5721,6 +5766,7 @@
       if(event.target.id==="retryDetailButton"&&confirmDiscardCustomerEdit())loadCustomers();
     });
     document.addEventListener("input",event=>{
+      if(window.ACTAdminV2Bookings?.handleInput?.(event))return;
       handleWizardInput(event);
       handleCustomerEditInput(event);
       handleTripEditInput(event);
@@ -5729,6 +5775,7 @@
       if(event.target.id==="documentSearchInput"){state.documentQuery=event.target.value;renderDocuments();}
     });
     document.addEventListener("change",event=>{
+      if(window.ACTAdminV2Bookings?.handleChange?.(event))return;
       handleWizardInput(event);
       handleTripEditInput(event);
       handleProgramEditInput(event);

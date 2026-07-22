@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=30">
+<link rel="stylesheet" href="admin-v2.css?v=33">
 </head>
 <body>
 <main>
@@ -47,9 +47,9 @@
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19"/><path d="M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/><path d="M20 19v-1.2a3 3 0 0 0-2.2-2.9"/><path d="M16 5.3a3 3 0 0 1 0 5.4"/></svg>
           <span>Kunden</span>
         </button>
-        <button class="v2-nav-item" type="button" data-v2-route="calendar">
+        <button class="v2-nav-item" type="button" data-v2-route="bookings">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
-          <span>Kalender</span>
+          <span>Buchungen</span>
         </button>
         <button class="v2-nav-item" type="button" data-v2-route="documents">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v6h5M9 14h6M9 18h6"/></svg>
@@ -173,12 +173,8 @@
         <div id="customerDetailRoot"></div>
       </section>
 
-      <section class="v2-view" id="calendarView" data-title="Kalender">
-        <div class="v2-placeholder">
-          <h2>Kalender</h2>
-          <p>Dieser Bereich wird in einer spaeteren Ausbaustufe angebunden. Buchungen liegen weiterhin im Classic Admin.</p>
-          <a class="v2-button soft" href="admin.html#bookings-dashboard">Buchungen im Classic Admin oeffnen</a>
-        </div>
+      <section class="v2-view" id="bookingsView" data-title="Buchungen">
+        <div id="bookingsRoot"></div>
       </section>
 
       <section class="v2-view" id="documentsView" data-title="Dokumente">
@@ -191,7 +187,7 @@
           <p>Dieser Bereich wird in einer spaeteren Ausbaustufe angebunden. Legacy-Module oeffnen Sie gezielt im Classic Admin.</p>
           <div class="v2-document-actions">
             <a class="v2-button soft" href="admin.html#crm-dashboard">CRM im Classic Admin oeffnen</a>
-            <a class="v2-button soft" href="admin.html#bookings-dashboard">Buchungen im Classic Admin oeffnen</a>
+            <a class="v2-button soft" href="#bookings">Buchungen in Admin V2 oeffnen</a>
             <a class="v2-button soft" href="admin.html#templates">Vorlagen im Classic Admin oeffnen</a>
           </div>
         </div>
@@ -223,15 +219,19 @@
   </div>
 </div>
 
+<div id="bookingEditorHost"></div>
+
 <script src="firebase-config.js"></script>
 <script src="redact-allowlist.js?v=5"></script>
 <script src="redact-public-snapshot.js?v=2"></script>
 <script src="portal-share-library.js?v=3"></script>
 <script src="publish-workflow.js?v=8"></script>
+<script src="booking-library.js?v=2"></script>
 <script src="firebase-service.js?v=23"></script>
 <script src="firebase-auth.js?v=5"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=5"></script>
-<script src="admin-v2.js?v=39"></script>
+<script src="admin-v2-bookings.js?v=2"></script>
+<script src="admin-v2.js?v=40"></script>
 </body>
 </html>

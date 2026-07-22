@@ -186,17 +186,51 @@ describe("booking library ops ready 2",()=>{
 describe("admin v2 bookings wiring",()=>{
   it("loads booking scripts and exposes bookings route/tab",()=>{
     assert.match(adminHtml,/booking-library\.js\?v=2/);
-    assert.match(adminHtml,/admin-v2-bookings\.js\?v=2/);
+    assert.match(adminHtml,/admin-v2-bookings\.js\?v=3/);
     assert.match(adminHtml,/data-v2-route="bookings"/);
     assert.match(adminHtml,/id="bookingsView"/);
     assert.match(adminHtml,/id="bookingEditorHost"/);
     assert.match(adminV2,/\["buchungen","Buchungen"\]/);
     assert.match(adminV2,/ACTAdminV2Bookings/);
+    assert.match(adminV2,/bookingDocUploading/);
     assert.match(bookingsUi,/mergeBookingPreserve/);
     assert.match(bookingsUi,/saveDraftCustomer/);
     assert.match(bookingsUi,/saveBookingRecord/);
+    assert.match(bookingsUi,/uploadBookingDocument/);
+    assert.match(bookingsUi,/bookingDocumentsMarkup|Buchungsdokumente/);
+    assert.match(bookingsUi,/data-booking-doc-action="remove"/);
+    assert.match(bookingsUi,/data-booking-doc-action/);
+    assert.match(bookingsUi,/const docAction=event\.target\.closest\("\[data-booking-doc-action\]"\);[\s\S]*const action=event\.target\.closest\("\[data-booking-action\]"\)/);
     assert.match(bookingsUi,/Spiegelung ist fehlgeschlagen|Spiegelung fehlgeschlagen/);
     assert.doesNotMatch(bookingsUi,/firebase\.firestore\(/);
     assert.doesNotMatch(bookingsUi,/getFirestore\(/);
+  });
+
+  it("keeps multiple legacy booking documents when editing other fields",()=>{
+    const lib=loadLibrary();
+    const existing=lib.normalizeBooking({
+      bookingId:"booking-docs",
+      customerId:"k1",
+      title:"Mit Docs",
+      date:"2026-08-20",
+      bookingStatus:"Angefragt",
+      documents:[
+        {id:"d1",title:"Voucher",type:"Voucher",url:"https://example.com/a.pdf",visible:true,fileSize:1200,uploadedAt:"2026-07-01T10:00:00.000Z"},
+        {id:"d2",title:"Intern",type:"Rechnung",url:"https://example.com/b.pdf",visible:false,fileName:"rechnung.pdf"}
+      ]
+    },{customerId:"k1"});
+    const merged=lib.mergeBookingPreserve(existing,{
+      bookingId:"booking-docs",
+      customerId:"k1",
+      title:"Mit Docs aktualisiert",
+      date:"2026-08-20",
+      bookingStatus:"Bestätigt",
+      documents:existing.documents
+    });
+    assert.equal(merged.documents.length,2);
+    assert.equal(merged.documents[0].id,"d1");
+    assert.equal(merged.documents[0].url,"https://example.com/a.pdf");
+    assert.equal(merged.documents[1].visible,false);
+    assert.equal(merged.documents[1].fileName,"rechnung.pdf");
   });
 });

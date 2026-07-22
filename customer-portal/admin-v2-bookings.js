@@ -331,7 +331,7 @@
               <label class="full v2-edit-check"><input name="visibleForCustomer" type="checkbox" ${draft.visibleForCustomer?"checked":""}><span>Im Kundenportal sichtbar</span></label>
               <input type="hidden" name="bookingId" value="${escapeHtml(draft.bookingId||"")}">
             </form>
-            ${(draft.documents||[]).length?`<div class="v2-panel"><p class="v2-eyebrow">Dokumente</p><ul class="v2-warning-list">${(draft.documents||[]).map(doc=>`<li>${escapeHtml(doc.title||doc.fileName||"Dokument")}${doc.url?` · <a href="${escapeHtml(doc.url)}" target="_blank" rel="noopener">Oeffnen</a>`:""}</li>`).join("")}</ul><p class="v2-muted">Dokument-Upload weiterhin im Classic Admin oder im Dokumente-Tab.</p></div>`:`<p class="v2-muted">Noch keine Buchungsdokumente. Upload im Classic Admin oder Dokumente-Tab.</p>`}
+            ${bookingDocumentsMarkup(draft)}
           </div>
           <p class="v2-edit-status ${escapeHtml(s.bookingMessageKind||"")}" aria-live="polite">${escapeHtml(s.bookingMessage||"")}</p>
           <footer class="v2-wizard-footer">
@@ -341,6 +341,82 @@
           </footer>
         </div>
       </div>
+    `;
+  }
+
+  function formatDocSize(value){
+    const size=Number(value||0);
+    if(!Number.isFinite(size)||size<=0)return "";
+    if(size<1024)return `${size} B`;
+    if(size<1024*1024)return `${Math.round(size/102.4)/10} KB`;
+    return `${Math.round(size/104857.6)/10} MB`;
+  }
+
+  function formatDocDate(value){
+    if(!value)return "";
+    const date=new Date(value);
+    if(Number.isNaN(date.getTime()))return String(value);
+    return date.toLocaleString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+  }
+
+  function documentUrl(doc){
+    const raw=String(doc?.url||doc?.downloadUrl||doc?.downloadURL||doc?.fileUrl||doc?.link||"").trim();
+    return /^https?:\/\//i.test(raw)?raw:"";
+  }
+
+  function bookingDocumentsMarkup(draft){
+    const library=lib();
+    const docs=Array.isArray(draft?.documents)?draft.documents:[];
+    const types=library?.DOCUMENT_TYPES||["PDF","Voucher","Ticket","Bestätigung","Rechnung","Bild"];
+    const uploading=Boolean(state().bookingDocUploading);
+    const uploadReady=typeof window.ACTFirebaseStorage?.uploadBookingDocument==="function"
+      ||typeof window.ACTFirebaseStorage?.uploadCustomerDocument==="function";
+    return `
+      <section class="v2-panel v2-booking-docs" aria-label="Buchungsdokumente">
+        <div class="v2-panel-head">
+          <div>
+            <p class="v2-eyebrow">Dokumente</p>
+            <h3>Buchungsdokumente</h3>
+          </div>
+          ${badge(`${docs.length} Datei${docs.length===1?"":"en"}`)}
+        </div>
+        <p class="v2-muted">Upload nutzt die bestehende Firebase-Storage-Funktion. Sichtbare Dokumente erscheinen im Kundenportal nur, wenn die Buchung selbst fuer Kunden sichtbar ist.</p>
+        <div class="v2-booking-doc-upload">
+          <label>Dokumenttyp
+            <select id="bookingDocumentType" ${uploading||state().bookingEditSaving?"disabled":""}>
+              ${types.map(type=>`<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="v2-button soft v2-file-label" for="bookingDocumentUpload">${uploading?"Wird hochgeladen ...":"Dokument hochladen"}</label>
+          <input class="v2-file-input" id="bookingDocumentUpload" type="file" accept=".pdf,image/*,.jpg,.jpeg,.png,.webp,application/pdf" ${uploading||state().bookingEditSaving||!uploadReady?"disabled":""}>
+        </div>
+        ${uploadReady?"":`<p class="v2-upload-warning">Upload ist derzeit nicht verfuegbar. Bitte Anmeldung und Firebase Storage pruefen.</p>`}
+        <div class="v2-booking-doc-list">
+          ${docs.length?docs.map((doc,index)=>{
+            const url=documentUrl(doc);
+            const size=formatDocSize(doc.fileSize||doc.size);
+            const uploaded=formatDocDate(doc.uploadedAt||doc.uploadDate||doc.createdAt);
+            const visible=doc.visible!==false;
+            return `
+              <article class="v2-booking-doc-item" data-booking-doc-index="${index}">
+                <div class="v2-meta">
+                  ${badge(doc.type||"Dokument")}
+                  ${badge(visible?"Portal sichtbar":"Nur intern")}
+                  ${size?badge(size):""}
+                </div>
+                <h4>${escapeHtml(doc.title||doc.fileName||doc.originalName||"Dokument")}</h4>
+                <p>${escapeHtml([doc.fileName||doc.originalName||"",uploaded?`Upload: ${uploaded}`:""].filter(Boolean).join(" · ")||"Keine weiteren Angaben")}</p>
+                <div class="v2-document-actions">
+                  ${url?`<a class="v2-button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Oeffnen</a>`:`<button class="v2-button soft" type="button" disabled>Kein Link</button>`}
+                  ${url?`<a class="v2-button soft" href="${escapeHtml(url)}" download="${escapeHtml(doc.fileName||doc.title||"dokument")}" target="_blank" rel="noopener noreferrer">Download</a>`:""}
+                  <button class="v2-button soft" type="button" data-booking-doc-action="toggle-visible" data-booking-doc-index="${index}" ${state().bookingEditSaving?"disabled":""}>${visible?"Intern setzen":"Sichtbar setzen"}</button>
+                  <button class="v2-button soft" type="button" data-booking-doc-action="remove" data-booking-doc-index="${index}" ${state().bookingEditSaving?"disabled":""}>Entfernen</button>
+                </div>
+              </article>
+            `;
+          }).join(""):`<article class="v2-empty"><h3>Noch keine Dokumente</h3><p>Laden Sie Voucher, Tickets oder Bestaetigungen direkt hier hoch.</p></article>`}
+        </div>
+      </section>
     `;
   }
 
@@ -385,11 +461,18 @@
       internalNote:String(data.get("internalNote")||"").trim(),
       customerNote:String(data.get("customerNote")||"").trim(),
       visibleForCustomer:form.elements.visibleForCustomer?.checked===true,
-      documents:Array.isArray(existing?.documents)?existing.documents:(state().bookingEditDraft?.documents||[]),
+      documents:currentDraftDocuments(existing),
       providerRef:{type:String(data.get("type")||"").trim(),name:String(data.get("provider")||"").trim(),reusable:true},
       updatedAt:new Date().toISOString()
     };
     return library.mergeBookingPreserve(existing||state().bookingEditDraft||{},updates);
+  }
+
+  function currentDraftDocuments(existing){
+    const draftDocs=state().bookingEditDraft?.documents;
+    if(Array.isArray(draftDocs))return draftDocs.map(item=>({...item}));
+    if(Array.isArray(existing?.documents))return existing.documents.map(item=>({...item}));
+    return [];
   }
 
   function findBooking(customerId,bookingId){
@@ -412,12 +495,14 @@
     const customer=h().customerById(customerId||booking?.customerId)||null;
     const draft=library.normalizeBooking(booking||library.defaultBooking(customer),customer||{customerId:customerId||""});
     if(!booking&&customerId)draft.customerId=customerId;
+    draft.documents=Array.isArray(draft.documents)?draft.documents.map(item=>({...item})):[];
     h().patchState({
       bookingEditOpen:true,
       bookingEditDraft:draft,
       bookingEditOriginalId:booking?.bookingId||"",
       bookingEditErrors:{},
       bookingEditSaving:false,
+      bookingDocUploading:false,
       bookingMessage:"",
       bookingMessageKind:""
     });
@@ -430,7 +515,8 @@
       bookingEditDraft:null,
       bookingEditOriginalId:"",
       bookingEditErrors:{},
-      bookingEditSaving:false
+      bookingEditSaving:false,
+      bookingDocUploading:false
     });
     h().render();
   }
@@ -442,9 +528,105 @@
     if(draft)h().patchState({bookingEditDraft:draft});
   }
 
+  function ensureDraftBookingIds(){
+    const library=lib();
+    const draft=state().bookingEditDraft||{};
+    const form=h().byId("bookingEditForm");
+    const customerId=String(form?.elements?.customerId?.value||draft.customerId||"").trim();
+    let bookingId=String(form?.elements?.bookingId?.value||draft.bookingId||"").trim();
+    if(!bookingId&&library)bookingId=library.freshId("booking");
+    if(form?.elements?.bookingId)form.elements.bookingId.value=bookingId;
+    const next={...draft,customerId:customerId||draft.customerId||"",bookingId,documents:Array.isArray(draft.documents)?draft.documents.map(item=>({...item})):[]};
+    h().patchState({bookingEditDraft:next});
+    return next;
+  }
+
+  async function uploadBookingDocument(file){
+    const library=lib();
+    if(!library||!file||state().bookingDocUploading||state().bookingEditSaving)return;
+    syncFormIntoDraft();
+    const draft=ensureDraftBookingIds();
+    if(!draft.customerId){
+      h().patchState({bookingMessage:"Bitte zuerst einen Kunden waehlen.","bookingMessageKind":"error"});
+      h().render();
+      return;
+    }
+    const docType=String(h().byId("bookingDocumentType")?.value||"PDF").trim()||"PDF";
+    h().patchState({bookingDocUploading:true,bookingMessage:"Dokument wird hochgeladen ...",bookingMessageKind:"saving"});
+    h().render();
+    try{
+      const authCheck=await h().withTimeout(window.ACTFirebaseAuth.requireAdmin(),h().AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      let uploaded=null;
+      const storage=window.ACTFirebaseStorage;
+      if(storage?.uploadBookingDocument){
+        uploaded=await h().withTimeout(
+          storage.uploadBookingDocument(draft.customerId,draft.bookingId,file,{type:docType,title:file.name}),
+          Math.max(h().AUTH_TIMEOUT_MS,30000),
+          "uploadBookingDocument"
+        );
+      }else if(storage?.uploadCustomerDocument){
+        uploaded=await h().withTimeout(
+          storage.uploadCustomerDocument(draft.customerId,file,{type:`bookings/${draft.bookingId}/${docType}`,title:file.name}),
+          Math.max(h().AUTH_TIMEOUT_MS,30000),
+          "uploadCustomerDocument"
+        );
+      }else{
+        throw new Error("Upload-Funktion ist nicht verfuegbar.");
+      }
+      const doc=library.normalizeDocument({...uploaded,type:docType,visible:true});
+      const documents=[...(Array.isArray(draft.documents)?draft.documents:[]),doc];
+      h().patchState({
+        bookingEditDraft:{...draft,documents},
+        bookingDocUploading:false,
+        bookingMessage:"Dokument hochgeladen. Bitte Buchung speichern, damit der Stand dauerhaft bleibt.",
+        bookingMessageKind:"success"
+      });
+      h().render();
+    }catch(error){
+      console.error("[ACT Admin V2] Buchungsdokument:",error&&error.message?error.message:"Fehler");
+      h().patchState({
+        bookingDocUploading:false,
+        bookingMessage:error&&error.message?error.message:"Dokument-Upload fehlgeschlagen.",
+        bookingMessageKind:"error"
+      });
+      h().render();
+    }
+  }
+
+  function removeBookingDocument(index){
+    const draft=state().bookingEditDraft;
+    if(!draft||state().bookingEditSaving)return;
+    const docs=Array.isArray(draft.documents)?[...draft.documents]:[];
+    if(!docs[index])return;
+    const label=docs[index].title||docs[index].fileName||"Dokument";
+    if(!window.confirm(`Dokument „${label}“ wirklich entfernen?\n\nDie Datei wird aus der Buchung entfernt. Speichern nicht vergessen.`))return;
+    docs.splice(index,1);
+    h().patchState({
+      bookingEditDraft:{...draft,documents:docs},
+      bookingMessage:"Dokument entfernt. Bitte speichern.",
+      bookingMessageKind:"warning"
+    });
+    h().render();
+  }
+
+  function toggleBookingDocumentVisible(index){
+    const draft=state().bookingEditDraft;
+    if(!draft||state().bookingEditSaving)return;
+    const docs=Array.isArray(draft.documents)?draft.documents.map(item=>({...item})):[];
+    if(!docs[index])return;
+    docs[index].visible=docs[index].visible===false;
+    h().patchState({
+      bookingEditDraft:{...draft,documents:docs},
+      bookingMessage:docs[index].visible?"Dokument fuer Portal sichtbar markiert. Bitte speichern.":"Dokument intern markiert. Bitte speichern.",
+      bookingMessageKind:"success"
+    });
+    h().render();
+  }
+
   async function saveBooking(){
     const library=lib();
-    if(!library||state().bookingEditSaving)return;
+    if(!library||state().bookingEditSaving||state().bookingDocUploading)return;
     const booking=readBookingForm();
     if(!booking)return;
     const validation=library.validateBooking(booking);
@@ -565,6 +747,14 @@
   }
 
   function handleClick(event){
+    const docAction=event.target.closest("[data-booking-doc-action]");
+    if(docAction){
+      const index=Number(docAction.dataset.bookingDocIndex);
+      if(!Number.isFinite(index))return true;
+      if(docAction.dataset.bookingDocAction==="remove")removeBookingDocument(index);
+      if(docAction.dataset.bookingDocAction==="toggle-visible")toggleBookingDocumentVisible(index);
+      return true;
+    }
     const metric=event.target.closest("[data-booking-metric]");
     if(metric){
       const key=metric.dataset.bookingMetric;
@@ -597,7 +787,7 @@
       return true;
     }
     if(type==="cancel-edit"){
-      if(state().bookingEditSaving)return true;
+      if(state().bookingEditSaving||state().bookingDocUploading)return true;
       if(isDirty()&&!window.confirm("Bearbeitung verwerfen?"))return true;
       closeEditor();
       return true;
@@ -615,6 +805,12 @@
 
   function handleChange(event){
     const id=event.target.id;
+    if(id==="bookingDocumentUpload"){
+      const file=event.target.files&&event.target.files[0];
+      event.target.value="";
+      if(file)uploadBookingDocument(file);
+      return true;
+    }
     if(id==="bookingSearchInput"){h().patchState({bookingQuery:event.target.value});h().render();return true;}
     if(id==="bookingCustomerFilter"){h().patchState({bookingCustomerFilter:event.target.value});h().render();return true;}
     if(id==="bookingStatusFilter"){h().patchState({bookingStatusFilter:event.target.value});h().render();return true;}

@@ -69,6 +69,7 @@
     bookingEditOriginalId:"",
     bookingEditErrors:{},
     bookingEditSaving:false,
+    bookingDocUploading:false,
     bookingMessage:"",
     bookingMessageKind:"",
     wizardOpen:false,

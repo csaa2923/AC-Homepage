@@ -266,10 +266,34 @@ function initHeroVideo(){
   const hero=document.querySelector(".hero");
   const video=document.querySelector(".hero-video");
   if(!hero||!video)return;
+  const deep="var(--act-deep-green)";
+  const overlay=`linear-gradient(180deg,${deep} 0%,rgba(5,39,31,.96) 12%,rgba(5,39,31,.78) 28%,rgba(5,39,31,.38) 48%,rgba(5,39,31,.08) 65%,rgba(0,17,13,.55) 100%)`;
   const poster=new Image();
-  poster.onload=()=>{video.setAttribute("poster","video/hero-poster.jpg");hero.style.backgroundImage="linear-gradient(rgba(0,12,9,.42),rgba(0,15,12,.72)),url('video/hero-poster.jpg')"};
+  poster.onload=()=>{
+    video.setAttribute("poster","video/hero-poster.jpg");
+    hero.style.backgroundImage=`${overlay},url('video/hero-poster.jpg')`;
+  };
   poster.src="video/hero-poster.jpg";
   video.addEventListener("error",()=>video.remove());
+}
+
+function initHeaderScroll(){
+  const topbar=document.querySelector(".topbar");
+  if(!topbar)return;
+  const threshold=90;
+  let ticking=false;
+  const update=()=>{
+    const scrolled=window.scrollY>threshold;
+    topbar.classList.toggle("is-scrolled",scrolled);
+    document.body.classList.toggle("is-scrolled",scrolled);
+    ticking=false;
+  };
+  window.addEventListener("scroll",()=>{
+    if(ticking)return;
+    ticking=true;
+    requestAnimationFrame(update);
+  },{passive:true});
+  update();
 }
 
 const REVEAL_SINGLE_SELECTORS=[
@@ -329,31 +353,15 @@ function initScrollReveal(){
   actObserveReveal(document);
 }
 
-function initHeaderScroll(){
-  const topbar=document.querySelector(".topbar");
-  if(!topbar)return;
-  const threshold=56;
-  let ticking=false;
-  const update=()=>{
-    topbar.classList.toggle("is-scrolled",window.scrollY>threshold);
-    ticking=false;
-  };
-  window.addEventListener("scroll",()=>{
-    if(ticking)return;
-    ticking=true;
-    requestAnimationFrame(update);
-  },{passive:true});
-  update();
-}
-
 document.addEventListener("DOMContentLoaded",()=>{
   initHeroVideo();
   initHeaderScroll();
   initScrollReveal();
   document.querySelectorAll(".lang-switch button").forEach(btn=>btn.addEventListener("click",()=>setLang(btn.dataset.lang)));
-  const burger=document.querySelector(".burger"),nav=document.querySelector("nav");
+  const burger=document.querySelector(".burger");
+  const nav=document.querySelector("#primaryNav")||document.querySelector(".topbar nav.menu-links");
   if(burger&&nav)burger.addEventListener("click",()=>{const open=nav.classList.toggle("open");burger.setAttribute("aria-expanded",open?"true":"false")});
-  if(nav)nav.querySelectorAll("a").forEach(a=>a.addEventListener("click",()=>nav.classList.remove("open")));
+  if(nav)nav.querySelectorAll("a").forEach(a=>a.addEventListener("click",()=>{nav.classList.remove("open");if(burger)burger.setAttribute("aria-expanded","false")}));
   populateNumberSelect("adults",1,10);
   populateNumberSelect("children",0,10);
   document.querySelectorAll("input[name='dateMode']").forEach(input=>input.addEventListener("change",updateDateMode));

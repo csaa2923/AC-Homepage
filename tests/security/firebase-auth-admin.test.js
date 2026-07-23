@@ -3,8 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import {describe,it} from "node:test";
+import {fileURLToPath} from "node:url";
 
-const root=path.resolve(process.cwd(),"..","..");
+const root=path.join(path.dirname(fileURLToPath(import.meta.url)),"../..");
 const authSource=fs.readFileSync(path.join(root,"customer-portal/firebase-auth.js"),"utf8");
 
 function loadAuth({getIdTokenResult}={}){
@@ -112,5 +113,37 @@ describe("firebase auth admin claim resolution",()=>{
     const check=await auth.requireAdmin();
     assert.equal(check.allowed,true);
     assert.deepEqual(calls,[false]);
+  });
+
+  it("keeps a verified admin session when a later refresh returns empty role claims",async()=>{
+    let emptyNext=false;
+    const {auth}=loadAuth({
+      async getIdTokenResult(){
+        if(emptyNext)return {claims:{}};
+        return {claims:{role:"owner"}};
+      }
+    });
+    assert.equal((await auth.prepareAuth()).allowed,true);
+    emptyNext=true;
+    const check=await auth.requireAdmin();
+    assert.equal(check.allowed,true);
+    assert.equal(auth.getState().allowed,true);
+    assert.equal(auth.getState().missingRole,false);
+  });
+
+  it("still denies after session when claims resolve to an explicit non-admin role",async()=>{
+    let revoke=false;
+    const {auth}=loadAuth({
+      async getIdTokenResult(){
+        if(revoke)return {claims:{role:"viewer"}};
+        return {claims:{role:"owner"}};
+      }
+    });
+    assert.equal((await auth.prepareAuth()).allowed,true);
+    revoke=true;
+    const check=await auth.requireAdmin();
+    assert.equal(check.allowed,false);
+    assert.equal(check.state.missingRole,true);
+    assert.equal(check.message,"Dieses Konto hat keine Admin-Berechtigung.");
   });
 });

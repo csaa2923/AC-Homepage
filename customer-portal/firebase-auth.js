@@ -10,9 +10,23 @@
   let currentUser=null;
   let tokenResult=null;
   let authError="";
+  let sessionAdminGranted=false;
+  let claimsRefreshChain=Promise.resolve();
 
   function isAllowedRole(role){
-    return ALLOWED_ROLES.includes(String(role||""));
+    return ALLOWED_ROLES.includes(String(role||"").toLowerCase());
+  }
+
+  function roleFromClaims(claims){
+    if(!claims||typeof claims!=="object")return "";
+    if(claims.role)return String(claims.role).trim();
+    if(claims.adminRole)return String(claims.adminRole).trim();
+    if(claims.admin===true||claims.admin==="true"||claims.isAdmin===true)return "admin";
+    if(Array.isArray(claims.roles)){
+      const hit=claims.roles.map(item=>String(item||"").trim().toLowerCase()).find(item=>ALLOWED_ROLES.includes(item));
+      if(hit)return hit;
+    }
+    return "";
   }
 
   function hasResolvedClaims(){
@@ -71,14 +85,19 @@
   }
 
   function role(){
-    return tokenResult&&tokenResult.claims?tokenResult.claims.role:"";
+    return roleFromClaims(tokenResult&&tokenResult.claims);
   }
 
   function getState(){
     const currentRole=role();
     const claimsResolved=hasResolvedClaims();
     const signedIn=Boolean(currentUser);
-    const allowed=isAllowedRole(currentRole);
+    const roleAllowed=isAllowedRole(currentRole);
+    if(roleAllowed)sessionAdminGranted=true;
+    if(!signedIn)sessionAdminGranted=false;
+    // Explicit non-admin role always denies. Empty/transient claims keep a verified session.
+    const explicitNonAdmin=Boolean(String(currentRole||"").trim()&&!roleAllowed);
+    const allowed=Boolean(roleAllowed||(signedIn&&sessionAdminGranted&&!explicitNonAdmin));
     return {
       available:authAvailable,
       signedIn,
@@ -86,7 +105,7 @@
       email:currentUser&&currentUser.email?currentUser.email:"",
       role:currentRole,
       allowed,
-      missingRole:Boolean(signedIn&&claimsResolved&&!allowed),
+      missingRole:Boolean(signedIn&&claimsResolved&&explicitNonAdmin),
       claimsPending:Boolean(signedIn&&!claimsResolved&&!authError),
       claimsError:Boolean(signedIn&&!claimsResolved&&Boolean(authError)),
       error:authError
@@ -100,13 +119,29 @@
     });
   }
 
-  async function refreshClaims(forceRefresh){
+  async function refreshClaimsUnlocked(forceRefresh){
     if(!currentUser){
       tokenResult=null;
       return getState();
     }
     try{
       const next=await withTimeout(currentUser.getIdTokenResult(Boolean(forceRefresh)),AUTH_OPERATION_TIMEOUT_MS,"Firebase claims");
+      const nextRole=roleFromClaims(next&&next.claims);
+      const previousRole=role();
+      // Never overwrite a known admin session with a transient empty/missing role claim.
+      // Parallel refresh races previously wiped a good token and showed "keine Admin-Berechtigung".
+      if(isAllowedRole(previousRole)&&!isAllowedRole(nextRole)){
+        if(!String(nextRole||"").trim()){
+          authError="";
+          return getState();
+        }
+        // Explicit demotion (e.g. role changed to "user") is accepted below.
+      }
+      // Keep verified session when a refresh returns empty claims while session was already granted.
+      if(sessionAdminGranted&&!String(nextRole||"").trim()&&isAllowedRole(previousRole)){
+        authError="";
+        return getState();
+      }
       tokenResult=next;
       authError="";
     }catch(error){
@@ -117,12 +152,19 @@
     return getState();
   }
 
+  function refreshClaims(forceRefresh){
+    const run=claimsRefreshChain.then(()=>refreshClaimsUnlocked(forceRefresh),()=>refreshClaimsUnlocked(forceRefresh));
+    claimsRefreshChain=run.then(()=>{},()=>{});
+    return run;
+  }
+
   async function handleAuthState(user){
     currentUser=user||null;
     if(currentUser)await refreshClaims(true);
     else{
       tokenResult=null;
       authError="";
+      sessionAdminGranted=false;
     }
     notify();
   }
@@ -169,11 +211,13 @@
       await refreshClaims(true);
       const state=getState();
       if(state.claimsError)authError=CLAIMS_CHECK_ERROR;
-      else if(!state.allowed)authError=MISSING_ADMIN_ROLE_ERROR;
+      else if(state.missingRole)authError=MISSING_ADMIN_ROLE_ERROR;
+      else if(!state.allowed)authError=state.error||LOGIN_REQUIRED_ERROR;
       notify();
     }catch(error){
       currentUser=null;
       tokenResult=null;
+      sessionAdminGranted=false;
       authError=neutralError(error);
       notify();
     }
@@ -189,6 +233,7 @@
     }
     currentUser=null;
     tokenResult=null;
+    sessionAdminGranted=false;
     notify();
     return getState();
   }
@@ -207,6 +252,10 @@
     return {allowed:false,state,message:state.error||LOGIN_REQUIRED_ERROR};
   }
 
+  function keepVerifiedSession(state){
+    return {allowed:true,state:{...state,allowed:true,missingRole:false},degraded:true};
+  }
+
   async function requireAdmin(){
     try{
       await ensureObserver();
@@ -217,13 +266,28 @@
     }
     if(!currentUser){
       authError="";
+      sessionAdminGranted=false;
       return denyAdmin(getState());
     }
-    // Prefer cached ID token first; force-refresh only if not yet allowed.
+    // Soft refresh first — force-refresh races previously wiped good claims and
+    // showed a false "keine Admin-Berechtigung" on publish/share.
+    const hadSession=Boolean(sessionAdminGranted||getState().allowed);
     let state=await refreshClaims(false);
     if(state.allowed)return {allowed:true,state};
     state=await refreshClaims(true);
-    return denyAdmin(state);
+    if(state.allowed)return {allowed:true,state};
+    // Already verified admin in this browser session: only deny on an explicit non-admin role.
+    if(hadSession){
+      const currentRole=String(role()||"").trim();
+      if(currentRole&&!isAllowedRole(currentRole))return denyAdmin(getState());
+      return keepVerifiedSession(getState());
+    }
+    // Prefer technical retry over a hard missing-role deny when claims are unresolved.
+    const finalState=getState();
+    if(finalState.signedIn&&!finalState.missingRole&&(finalState.claimsError||finalState.claimsPending||!hasResolvedClaims())){
+      return denyAdmin({...finalState,claimsError:true,missingRole:false,error:finalState.error||CLAIMS_CHECK_ERROR});
+    }
+    return denyAdmin(finalState);
   }
 
   function subscribe(callback){

@@ -85,7 +85,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(authJs,/context\.authModule\.signOut\(context\.auth\),AUTH_OPERATION_TIMEOUT_MS,"Firebase signOut"/);
     assert.match(authJs,/auth\/operation-timeout/);
     assert.match(authJs,/CLAIMS_CHECK_ERROR="Admin-Berechtigung konnte nicht geprüft werden\."/);
-    assert.match(authJs,/missingRole:Boolean\(signedIn&&claimsResolved&&!allowed\)/);
+    assert.match(authJs,/missingRole:Boolean\(signedIn&&claimsResolved&&explicitNonAdmin\)/);
     assert.match(authJs,/claimsError:Boolean\(signedIn&&!claimsResolved&&Boolean\(authError\)\)/);
     assert.match(authJs,/Keep a previously resolved tokenResult/);
     assert.match(authJs,/let state=await refreshClaims\(false\);/);

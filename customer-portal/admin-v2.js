@@ -2758,9 +2758,25 @@
   async function requireAdminAccessForPublication(){
     setPublicationMessage("Admin-Berechtigung wird geprüft …","saving");
     updatePublicationActions();
-    const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+    let authCheck;
+    try{
+      authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+    }catch(error){
+      const timeout=error&&error.code==="act/timeout";
+      const message=timeout
+        ?"Admin-Berechtigung konnte nicht geprüft werden. Bitte erneut versuchen."
+        :(error&&error.message?error.message:"Admin-Berechtigung konnte nicht geprüft werden.");
+      const err=new Error(message);
+      err.code=timeout?"act/auth-check-failed":"act/auth-check-failed";
+      throw err;
+    }
     if(!authCheck.allowed){
-      const error=new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      const message=authCheck.pending
+        ?"Admin-Berechtigung wird geprüft … Bitte erneut versuchen."
+        :authCheck.technical
+          ?(authCheck.message||"Admin-Berechtigung konnte nicht geprüft werden.")
+          :(authCheck.message||"Keine Admin-Berechtigung.");
+      const error=new Error(message);
       error.code=authCheck.technical?"act/auth-check-failed":authCheck.pending?"act/auth-pending":"act/auth-denied";
       throw error;
     }

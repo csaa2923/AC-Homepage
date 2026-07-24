@@ -1,12 +1,15 @@
 /**
  * Admin V2 Kommunikationszentrale — buendelt bestehende Kanaele (Portal, mailto, WhatsApp).
- * Keine parallelen Versand-APIs. PDF/Erinnerungen bewusst nur vorbereitet.
+ * E-Mail: produktiv ueber mailto + Vorlagen (kein Server-Mail).
  * Anbindung: ACTAdminV2Communication.bind(host)
  */
 (function(){
   "use strict";
 
   let host=null;
+
+  const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const EMAIL_TEMPLATE_IDS=["general","program","bookings","documents","portal"];
 
   function h(){
     if(!host)throw new Error("ACTAdminV2Communication ist nicht gebunden.");
@@ -46,6 +49,11 @@
     return String(customer?.email||customer?.contact?.email||"").trim();
   }
 
+  function isValidEmail(value){
+    const email=String(value||"").trim();
+    return Boolean(email&&EMAIL_RE.test(email));
+  }
+
   function customerWhatsappRaw(customer){
     return String(customer?.whatsapp||customer?.contact?.whatsapp||customer?.phone||customer?.contact?.phone||"").trim();
   }
@@ -60,35 +68,170 @@
 
   function portalUrlForNotify(customer){
     const link=portalLinkInfo(customer);
-    return link?.url||"";
+    return link?.canCopy&&link.url?link.url:(link?.url||"");
   }
 
-  function notificationTexts(customer){
-    const workflow=window.ACTPublishWorkflow;
-    const meta={
-      version:customer?.publishMeta?.version||customer?.version||"",
-      changes:[],
-      portalLink:portalUrlForNotify(customer)||"(Kundenlink noch nicht verfuegbar)"
-    };
-    if(workflow?.buildNotificationTexts)return workflow.buildNotificationTexts(customer,meta);
-    const name=customer?.customerName||"Kunde";
-    const trip=customer?.tripName||customer?.tripTitle||"Ihre Reise";
-    return {
-      whatsapp:`Guten Tag, hier finden Sie Ihr persoenliches Reiseprogramm von Alpine Concierge Tirol (${name} / ${trip}):\n${meta.portalLink}`,
-      email:`Guten Tag,\n\nIhr persoenliches Reiseprogramm (${trip}) ist bereit.\n\nLink: ${meta.portalLink}\n\nMit freundlichen Gruessen\nAlpine Concierge Tirol`
-    };
+  function tripLabel(customer){
+    return String(customer?.tripName||customer?.tripTitle||customer?.travel?.title||"Ihre Reise").trim()||"Ihre Reise";
+  }
+
+  function customerLabel(customer){
+    return String(customer?.customerName||"Kunde").trim()||"Kunde";
+  }
+
+  function portalLinkLine(customer){
+    const url=portalUrlForNotify(customer);
+    if(url)return url;
+    return "Kundenlink noch nicht verfuegbar — bitte zuerst veroeffentlichen und einen sicheren Link erzeugen.";
   }
 
   function bookingOverviewText(customer){
     const bookings=Array.isArray(customer?.bookings)?customer.bookings.filter(item=>!item?.archived):[];
-    if(!bookings.length)return `Guten Tag,\n\nfuer ${customer?.customerName||"Sie"} liegen aktuell keine aktiven Buchungen vor.\n\nAlpine Concierge Tirol`;
-    const lines=bookings.slice(0,20).map(item=>{
+    if(!bookings.length){
+      return [
+        `Guten Tag ${customerLabel(customer)},`,
+        ``,
+        `fuer Ihre Reise „${tripLabel(customer)}“ liegen aktuell keine aktiven Buchungen vor.`,
+        ``,
+        `Bei Fragen melden Sie sich gerne.`,
+        ``,
+        `Mit freundlichen Gruessen`,
+        `Alpine Concierge Tirol`
+      ].join("\n");
+    }
+    const lines=bookings.slice(0,25).map(item=>{
       const title=item.title||item.type||"Buchung";
       const date=item.date||"";
       const status=item.bookingStatus||item.status||"";
       return `• ${title}${date?` (${date})`:""}${status?` – ${status}`:""}`;
     });
-    return `Guten Tag,\n\nBuchungsuebersicht fuer ${customer?.customerName||"Sie"}:\n\n${lines.join("\n")}\n\nAlpine Concierge Tirol`;
+    return [
+      `Guten Tag ${customerLabel(customer)},`,
+      ``,
+      `hier die aktuelle Buchungsuebersicht zu Ihrer Reise „${tripLabel(customer)}“:`,
+      ``,
+      ...lines,
+      ``,
+      `Mit freundlichen Gruessen`,
+      `Alpine Concierge Tirol`
+    ].join("\n");
+  }
+
+  function documentHintText(customer){
+    const docs=documentStats(customer);
+    const portal=portalLinkLine(customer);
+    return [
+      `Guten Tag ${customerLabel(customer)},`,
+      ``,
+      `zu Ihrer Reise „${tripLabel(customer)}“ stehen Unterlagen bereit.`,
+      ``,
+      `Aktuell hinterlegt: ${docs.total} Kundendokument(e), davon ${docs.visible} im Kundenportal sichtbar.`,
+      docs.bookingDocs?`Zusaetzlich: ${docs.bookingDocs} Buchungsdokument(e).`:"",
+      ``,
+      `Dokumente oeffnen Sie bequem im Kundenportal:`,
+      portal,
+      ``,
+      `Hinweis: Anhaenge koennen ueber diesen Weg nicht automatisch mitgeschickt werden.`,
+      ``,
+      `Mit freundlichen Gruessen`,
+      `Alpine Concierge Tirol`
+    ].filter(item=>item!=="").join("\n");
+  }
+
+  function generalMessageText(customer){
+    return [
+      `Guten Tag ${customerLabel(customer)},`,
+      ``,
+      `wir melden uns zu Ihrer Reise „${tripLabel(customer)}“.`,
+      ``,
+      `[Ihre Nachricht hier]`,
+      ``,
+      `Mit freundlichen Gruessen`,
+      `Alpine Concierge Tirol`
+    ].join("\n");
+  }
+
+  function programMessageText(customer){
+    const workflow=window.ACTPublishWorkflow;
+    const meta={
+      version:customer?.publishMeta?.version||customer?.version||"",
+      changes:[],
+      portalLink:portalLinkLine(customer)
+    };
+    if(workflow?.buildNotificationTexts){
+      const texts=workflow.buildNotificationTexts(customer,meta);
+      if(texts?.email)return texts.email;
+    }
+    return [
+      `Guten Tag ${customerLabel(customer)},`,
+      ``,
+      `Ihr persoenliches Reiseprogramm zu „${tripLabel(customer)}“ ist bereit.`,
+      meta.version?`Version: ${meta.version}`:"",
+      ``,
+      `Link zum Kundenportal:`,
+      meta.portalLink,
+      ``,
+      `Mit freundlichen Gruessen`,
+      `Alpine Concierge Tirol`
+    ].filter(Boolean).join("\n");
+  }
+
+  function portalLinkMessageText(customer){
+    return [
+      `Guten Tag ${customerLabel(customer)},`,
+      ``,
+      `hier ist Ihr persoenlicher Zugang zum Kundenportal fuer „${tripLabel(customer)}“:`,
+      ``,
+      portalLinkLine(customer),
+      ``,
+      `Bitte speichern Sie den Link gut ab. Bei Fragen sind wir jederzeit erreichbar.`,
+      ``,
+      `Mit freundlichen Gruessen`,
+      `Alpine Concierge Tirol`
+    ].join("\n");
+  }
+
+  function emailTemplateDefs(){
+    return [
+      {id:"general",label:"Allgemeine Nachricht",subject:"Nachricht von Alpine Concierge Tirol",build:generalMessageText},
+      {id:"program",label:"Reiseprogramm",subject:"Ihr Reiseprogramm – Alpine Concierge Tirol",build:programMessageText},
+      {id:"bookings",label:"Buchungsuebersicht",subject:"Ihre Buchungsuebersicht – Alpine Concierge Tirol",build:bookingOverviewText},
+      {id:"documents",label:"Dokumentenhinweis",subject:"Ihre Dokumente – Alpine Concierge Tirol",build:documentHintText},
+      {id:"portal",label:"Kundenportal-Link",subject:"Ihr Kundenportal-Link – Alpine Concierge Tirol",build:portalLinkMessageText}
+    ];
+  }
+
+  function selectedEmailTemplateId(){
+    const id=String(state().communicationEmailTemplate||"general").trim();
+    return EMAIL_TEMPLATE_IDS.includes(id)?id:"general";
+  }
+
+  function resolveEmailTemplate(customer,templateId){
+    const id=EMAIL_TEMPLATE_IDS.includes(templateId)?templateId:"general";
+    const def=emailTemplateDefs().find(item=>item.id===id)||emailTemplateDefs()[0];
+    return {
+      id:def.id,
+      label:def.label,
+      subject:def.subject,
+      body:def.build(customer)
+    };
+  }
+
+  function buildMailtoUrl(to,subject,body){
+    const email=String(to||"").trim();
+    if(!isValidEmail(email))return "";
+    const params=[];
+    if(subject)params.push(`subject=${encodeURIComponent(String(subject))}`);
+    if(body)params.push(`body=${encodeURIComponent(String(body))}`);
+    const query=params.length?`?${params.join("&")}`:"";
+    return `mailto:${encodeURIComponent(email)}${query}`;
+  }
+
+  function notificationTexts(customer){
+    return {
+      whatsapp:programMessageText(customer).replace(/^Guten Tag[^\n]*/,"Guten Tag, Ihr persoenliches Reiseprogramm von Alpine Concierge Tirol ist bereit."),
+      email:programMessageText(customer)
+    };
   }
 
   function documentStats(customer){
@@ -122,6 +265,66 @@
     return `<p class="v2-comm-prepared">${escapeHtml(text)}</p>`;
   }
 
+  function emailStatusBadge(email){
+    if(!email)return badge("Keine E-Mail");
+    if(!isValidEmail(email))return badge("Ungueltige Adresse");
+    return badge("Adresse gueltig");
+  }
+
+  function emailCardMarkup(customer){
+    const email=customerEmail(customer);
+    const valid=isValidEmail(email);
+    const templateId=selectedEmailTemplateId();
+    const template=resolveEmailTemplate(customer,templateId);
+    const mailto=valid?buildMailtoUrl(email,template.subject,template.body):"";
+    const docs=documentStats(customer);
+    const link=portalLinkInfo(customer);
+    const portalReady=Boolean(link?.canCopy&&link.url);
+    const disableReason=!email
+      ?"Bitte zuerst eine Kunden-E-Mail hinterlegen."
+      :(!valid?"Die hinterlegte E-Mail-Adresse ist ungueltig.":"");
+
+    return `
+      <article class="v2-comm-card v2-comm-email-card">
+        <div class="v2-comm-card-head">
+          <span class="v2-comm-icon" aria-hidden="true">@</span>
+          <div>
+            <p class="v2-eyebrow">E-Mail</p>
+            <h3>E-Mail verfassen</h3>
+          </div>
+          ${emailStatusBadge(email)}
+        </div>
+        <div class="v2-comm-facts">
+          ${summaryItem("Kunde",displayValue(customerLabel(customer)))}
+          ${summaryItem("Empfaenger",displayValue(email,"Nicht hinterlegt"))}
+          ${summaryItem("Reise",displayValue(tripLabel(customer)))}
+          ${summaryItem("Portal-Link",portalReady?"Verfuegbar":"Nicht verfuegbar")}
+        </div>
+        ${!valid?`<p class="v2-comm-prepared">${escapeHtml(disableReason||"Keine gueltige Empfaengeradresse.")}</p>`:""}
+        <label class="v2-comm-template-label" for="communicationEmailTemplate">
+          <span>Vorlage</span>
+          <select id="communicationEmailTemplate" data-comm-email-template ${valid?"":"disabled"}>
+            ${emailTemplateDefs().map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===templateId?"selected":""}>${escapeHtml(item.label)}</option>`).join("")}
+          </select>
+        </label>
+        <div class="v2-comm-email-preview" aria-live="polite">
+          <p class="v2-eyebrow">Betreff</p>
+          <p class="v2-comm-email-subject">${escapeHtml(template.subject)}</p>
+          <p class="v2-eyebrow">Textvorschau</p>
+          <pre class="v2-comm-email-body">${escapeHtml(template.body)}</pre>
+        </div>
+        <div class="v2-document-actions">
+          ${actionButton("E-Mail verfassen","email-compose",{href:mailto,disabled:!valid,primary:true,title:disableReason})}
+          ${actionButton("Reiseprogramm", "email-program",{href:valid?buildMailtoUrl(email,resolveEmailTemplate(customer,"program").subject,resolveEmailTemplate(customer,"program").body):"",disabled:!valid})}
+          ${actionButton("Buchungsuebersicht","email-bookings",{href:valid?buildMailtoUrl(email,resolveEmailTemplate(customer,"bookings").subject,resolveEmailTemplate(customer,"bookings").body):"",disabled:!valid})}
+          ${actionButton("Portal-Link","email-portal",{href:valid?buildMailtoUrl(email,resolveEmailTemplate(customer,"portal").subject,resolveEmailTemplate(customer,"portal").body):"",disabled:!valid})}
+          ${actionButton("Dokumentenhinweis","email-documents",{href:valid?buildMailtoUrl(email,resolveEmailTemplate(customer,"documents").subject,resolveEmailTemplate(customer,"documents").body):"",disabled:!valid})}
+        </div>
+        ${preparedNote(`Anhaenge: per mailto nicht moeglich (${docs.total} Kundendokumente / ${docs.visible} im Portal). Dokumente teilen Sie ueber das Kundenportal.`)}
+      </article>
+    `;
+  }
+
   function emptyCustomerMarkup(){
     return `
       <section class="v2-comm-overview">
@@ -142,15 +345,11 @@
     const published=h().isPublished(customer);
     const link=portalLinkInfo(customer);
     const lastPublished=customer.publishMeta?.lastPublishedAt||customer.publishMeta?.publishedAt;
-    const email=customerEmail(customer);
     const waRaw=customerWhatsappRaw(customer);
     const waDigits=whatsappDigits(customer);
     const docs=documentStats(customer);
     const texts=notificationTexts(customer);
     const bookingText=bookingOverviewText(customer);
-    const mailtoBase=email?`mailto:${encodeURIComponent(email)}`:"";
-    const mailtoProgram=email?`${mailtoBase}?subject=${encodeURIComponent("Ihr Reiseprogramm – Alpine Concierge Tirol")}&body=${encodeURIComponent(texts.email)}`:"";
-    const mailtoBookings=email?`${mailtoBase}?subject=${encodeURIComponent("Ihre Buchungsuebersicht – Alpine Concierge Tirol")}&body=${encodeURIComponent(bookingText)}`:"";
     const waOpen=waDigits?`https://api.whatsapp.com/send?phone=${encodeURIComponent(waDigits)}`:"";
     const waPortal=waDigits?`https://api.whatsapp.com/send?phone=${encodeURIComponent(waDigits)}&text=${encodeURIComponent(texts.whatsapp)}`:"";
     const waBookings=waDigits?`https://api.whatsapp.com/send?phone=${encodeURIComponent(waDigits)}&text=${encodeURIComponent(bookingText)}`:"";
@@ -191,26 +390,7 @@
             </div>
           </article>
 
-          <article class="v2-comm-card">
-            <div class="v2-comm-card-head">
-              <span class="v2-comm-icon" aria-hidden="true">@</span>
-              <div>
-                <p class="v2-eyebrow">E-Mail</p>
-                <h3>Ueber E-Mail-Client</h3>
-              </div>
-              ${badge(email?"E-Mail hinterlegt":"Keine E-Mail")}
-            </div>
-            <div class="v2-comm-facts">
-              ${summaryItem("Kunden-E-Mail",displayValue(email,"Nicht hinterlegt"))}
-            </div>
-            <div class="v2-document-actions">
-              ${actionButton("E-Mail senden","email-plain",{href:mailtoBase,disabled:!email,primary:true,title:email?"":"Bitte zuerst eine Kunden-E-Mail hinterlegen"})}
-              ${actionButton("Reiseprogramm senden","email-program",{href:mailtoProgram,disabled:!email,title:email?"":"Bitte zuerst eine Kunden-E-Mail hinterlegen"})}
-              ${actionButton("Buchungsuebersicht senden","email-bookings",{href:mailtoBookings,disabled:!email,title:email?"":"Bitte zuerst eine Kunden-E-Mail hinterlegen"})}
-              ${actionButton("Dokumente senden","email-docs",{disabled:true,title:"Dokumentenversand per E-Mail ist noch nicht angebunden"})}
-            </div>
-            ${preparedNote("Dokumente senden: vorbereitet — noch ohne Server-Versand. Sichtbarkeit laeuft ueber das Kundenportal.")}
-          </article>
+          ${emailCardMarkup(customer)}
 
           <article class="v2-comm-card">
             <div class="v2-comm-card-head">
@@ -243,7 +423,7 @@
               ${badge("Vorbereitet")}
             </div>
             <div class="v2-document-actions">
-              ${actionButton("Reiseprogramm", "pdf-program",{disabled:true,title:"PDF-Erzeugung ist noch nicht angebunden"})}
+              ${actionButton("Reiseprogramm","pdf-program",{disabled:true,title:"PDF-Erzeugung ist noch nicht angebunden"})}
               ${actionButton("Buchungsuebersicht","pdf-bookings",{disabled:true,title:"PDF-Erzeugung ist noch nicht angebunden"})}
               ${actionButton("Dokumentenpaket","pdf-pack",{disabled:true,title:"PDF-Erzeugung ist noch nicht angebunden"})}
               ${actionButton("Download","pdf-download",{disabled:true,title:"Noch nicht verfuegbar"})}
@@ -337,7 +517,7 @@
         h().routeTo(h().detailHash(customer.customerId,"dokumente"));
         return true;
       }
-      if(action==="email-plain"||action==="email-program"||action==="email-bookings"){
+      if(action==="email-compose"||action==="email-program"||action==="email-bookings"||action==="email-portal"||action==="email-documents"||action==="email-plain"){
         setMessage("E-Mail-Client wird geoeffnet …","saving");
         return true;
       }
@@ -366,9 +546,18 @@
       event.preventDefault();
       return true;
     }
-    // Links with href navigate naturally; still set status for feedback.
     handleAction(action);
     if(button.tagName==="BUTTON")event.preventDefault();
+    return true;
+  }
+
+  function handleChange(event){
+    const select=event.target.closest("[data-comm-email-template]");
+    if(!select)return false;
+    const next=String(select.value||"general").trim();
+    h().patchState({communicationEmailTemplate:EMAIL_TEMPLATE_IDS.includes(next)?next:"general"});
+    if(state().route==="communication")renderCommunicationView();
+    else if(typeof h().render==="function")h().render();
     return true;
   }
 
@@ -378,6 +567,14 @@
     communicationTabMarkup,
     communicationMarkup,
     handleClick,
-    setMessage
+    handleChange,
+    setMessage,
+    // Test helpers
+    isValidEmail,
+    buildMailtoUrl,
+    resolveEmailTemplate,
+    emailTemplateDefs,
+    customerEmail,
+    EMAIL_TEMPLATE_IDS
   };
 })();

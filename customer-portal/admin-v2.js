@@ -14,6 +14,7 @@
     selectedTab:"kunde",
     communicationMessage:"",
     communicationMessageKind:"",
+    communicationEmailTemplate:"general",
     customerEditMode:false,
     customerEditDraft:null,
     customerEditOriginal:"",
@@ -5825,6 +5826,7 @@
     });
     document.addEventListener("change",event=>{
       if(window.ACTAdminV2Bookings?.handleChange?.(event))return;
+      if(window.ACTAdminV2Communication?.handleChange?.(event))return;
       handleWizardInput(event);
       handleTripEditInput(event);
       handleProgramEditInput(event);

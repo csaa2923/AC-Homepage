@@ -15,6 +15,7 @@
     communicationMessage:"",
     communicationMessageKind:"",
     communicationEmailTemplate:"general",
+    communicationWhatsappTemplate:"greeting",
     customerEditMode:false,
     customerEditDraft:null,
     customerEditOriginal:"",

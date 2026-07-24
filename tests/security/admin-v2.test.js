@@ -33,8 +33,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=9/);
-    assert.match(html,/admin-v2\.css\?v=36/);
-    assert.match(html,/admin-v2\.js\?v=43/);
+    assert.match(html,/admin-v2\.css\?v=37/);
+    assert.match(html,/admin-v2\.js\?v=44/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -371,11 +371,11 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=36/);
+    assert.match(html,/admin-v2\.css\?v=37/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=8/);
     assert.match(html,/firebase-storage\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=43/);
+    assert.match(html,/admin-v2\.js\?v=44/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -490,8 +490,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=8/);
     assert.match(html,/firebase-service\.js\?v=23/);
-    assert.match(html,/admin-v2-communication\.js\?v=2/);
-    assert.match(html,/admin-v2\.js\?v=43/);
+    assert.match(html,/admin-v2-communication\.js\?v=3/);
+    assert.match(html,/admin-v2\.js\?v=44/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -603,8 +603,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=36/);
-    assert.match(html,/admin-v2\.js\?v=43/);
+    assert.match(html,/admin-v2\.css\?v=37/);
+    assert.match(html,/admin-v2\.js\?v=44/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -819,9 +819,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/data-v2-route="communication"/);
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
-    assert.match(html,/admin-v2-communication\.js\?v=2/);
-    assert.match(html,/admin-v2\.js\?v=43/);
-    assert.match(html,/admin-v2\.css\?v=36/);
+    assert.match(html,/admin-v2-communication\.js\?v=3/);
+    assert.match(html,/admin-v2\.js\?v=44/);
+    assert.match(html,/admin-v2\.css\?v=37/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);
     assert.match(js,/ACTAdminV2Communication\?\.bind/);
@@ -829,11 +829,18 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/ACTAdminV2Communication\?\.handleChange/);
     assert.match(js,/parsed\.route==="communication"/);
     assert.match(js,/communicationEmailTemplate/);
+    assert.match(js,/communicationWhatsappTemplate/);
     assert.match(comm,/ACTAdminV2Communication/);
     assert.match(comm,/Bitte zuerst einen Kunden auswaehlen/);
     assert.match(comm,/E-Mail verfassen/);
     assert.match(comm,/buildMailtoUrl/);
     assert.match(comm,/resolveEmailTemplate/);
+    assert.match(comm,/buildWhatsappUrl/);
+    assert.match(comm,/resolveWhatsappTemplate/);
+    assert.match(comm,/analyzeWhatsappNumber/);
+    assert.match(comm,/Begruessung/);
+    assert.match(comm,/Individuelle Nachricht/);
+    assert.match(comm,/data-comm-whatsapp-template/);
     assert.match(comm,/Allgemeine Nachricht/);
     assert.match(comm,/Dokumentenhinweis/);
     assert.match(comm,/Kundenportal-Link/);
@@ -842,6 +849,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-comm-grid/);
     assert.match(css,/\.v2-comm-card/);
     assert.match(css,/\.v2-comm-email-preview/);
+    assert.match(css,/\.v2-comm-whatsapp-card/);
     assert.doesNotMatch(comm,/\bTODO\b/);
   });
 });

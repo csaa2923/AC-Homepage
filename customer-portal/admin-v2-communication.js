@@ -10,6 +10,8 @@
 
   const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const EMAIL_TEMPLATE_IDS=["general","program","bookings","documents","portal"];
+  const WA_TEMPLATE_IDS=["greeting","program","bookings","portal","documents","free"];
+  const ACT_WA_SIGNATURE=["Freundliche Gruesse","Alpine Concierge Tirol"];
 
   function h(){
     if(!host)throw new Error("ACTAdminV2Communication ist nicht gebunden.");
@@ -58,8 +60,38 @@
     return String(customer?.whatsapp||customer?.contact?.whatsapp||customer?.phone||customer?.contact?.phone||"").trim();
   }
 
+  function whatsappDigitsFromRaw(raw){
+    return String(raw||"").replace(/\D/g,"");
+  }
+
+  function analyzeWhatsappNumber(raw){
+    const display=String(raw||"").trim();
+    const digits=whatsappDigitsFromRaw(display);
+    if(!display||!digits){
+      return {raw:display,digits:"",valid:false,status:"missing",hint:"Keine Telefonnummer hinterlegt.",badge:"Keine Nummer"};
+    }
+    if(digits.length<8){
+      return {raw:display,digits,valid:false,status:"too-short",hint:"Nummer zu kurz fuer WhatsApp (weniger als 8 Ziffern). Die Anzeige wurde nicht veraendert.",badge:"Ungueltig (zu kurz)"};
+    }
+    if(digits.length>15){
+      return {raw:display,digits,valid:false,status:"too-long",hint:"Nummer zu lang (max. 15 Ziffern). Die Anzeige wurde nicht veraendert.",badge:"Ungueltig (zu lang)"};
+    }
+    if(digits.startsWith("0")){
+      return {raw:display,digits,valid:true,status:"local-zero",hint:"Nummer beginnt mit 0. WhatsApp erwartet meist die internationale Vorwahl ohne fuehrende Null (z. B. 43…). Die Anzeige wurde nicht veraendert.",badge:"Hinweis: fuehrende Null"};
+    }
+    return {raw:display,digits,valid:true,status:"ok",hint:"Nummer fuer WhatsApp-Deep-Link nutzbar.",badge:"Nummer gueltig"};
+  }
+
+  function analyzeCustomerWhatsapp(customer){
+    return analyzeWhatsappNumber(customerWhatsappRaw(customer));
+  }
+
   function whatsappDigits(customer){
-    return customerWhatsappRaw(customer).replace(/\D/g,"");
+    return analyzeCustomerWhatsapp(customer).digits;
+  }
+
+  function actSignatureLines(){
+    return ["",...ACT_WA_SIGNATURE];
   }
 
   function portalLinkInfo(customer){
@@ -94,9 +126,7 @@
         `fuer Ihre Reise „${tripLabel(customer)}“ liegen aktuell keine aktiven Buchungen vor.`,
         ``,
         `Bei Fragen melden Sie sich gerne.`,
-        ``,
-        `Mit freundlichen Gruessen`,
-        `Alpine Concierge Tirol`
+        ...actSignatureLines()
       ].join("\n");
     }
     const lines=bookings.slice(0,25).map(item=>{
@@ -111,9 +141,7 @@
       `hier die aktuelle Buchungsuebersicht zu Ihrer Reise „${tripLabel(customer)}“:`,
       ``,
       ...lines,
-      ``,
-      `Mit freundlichen Gruessen`,
-      `Alpine Concierge Tirol`
+      ...actSignatureLines()
     ].join("\n");
   }
 
@@ -131,10 +159,8 @@
       `Dokumente oeffnen Sie bequem im Kundenportal:`,
       portal,
       ``,
-      `Hinweis: Anhaenge koennen ueber diesen Weg nicht automatisch mitgeschickt werden.`,
-      ``,
-      `Mit freundlichen Gruessen`,
-      `Alpine Concierge Tirol`
+      `Hinweis: Dateien werden ueber das Kundenportal bereitgestellt und nicht als Anhang mitgeschickt.`,
+      ...actSignatureLines()
     ].filter(item=>item!=="").join("\n");
   }
 
@@ -145,9 +171,28 @@
       `wir melden uns zu Ihrer Reise „${tripLabel(customer)}“.`,
       ``,
       `[Ihre Nachricht hier]`,
+      ...actSignatureLines()
+    ].join("\n");
+  }
+
+  function greetingText(customer){
+    return [
+      `Guten Tag ${customerLabel(customer)},`,
       ``,
-      `Mit freundlichen Gruessen`,
-      `Alpine Concierge Tirol`
+      `herzlich willkommen bei Alpine Concierge Tirol.`,
+      `Wir freuen uns, Ihre Reise „${tripLabel(customer)}“ zu begleiten.`,
+      ``,
+      `Bei Fragen sind wir jederzeit fuer Sie da.`,
+      ...actSignatureLines()
+    ].join("\n");
+  }
+
+  function freeMessageText(customer){
+    return [
+      `Guten Tag ${customerLabel(customer)},`,
+      ``,
+      `[Ihre Nachricht hier]`,
+      ...actSignatureLines()
     ].join("\n");
   }
 
@@ -170,9 +215,29 @@
       ``,
       `Link zum Kundenportal:`,
       meta.portalLink,
+      ...actSignatureLines()
+    ].filter(Boolean).join("\n");
+  }
+
+  function programWhatsappText(customer){
+    const workflow=window.ACTPublishWorkflow;
+    const meta={
+      version:customer?.publishMeta?.version||customer?.version||"",
+      changes:[],
+      portalLink:portalLinkLine(customer)
+    };
+    if(workflow?.buildNotificationTexts){
+      const texts=workflow.buildNotificationTexts(customer,meta);
+      if(texts?.whatsapp)return texts.whatsapp;
+    }
+    return [
+      `Guten Tag ${customerLabel(customer)},`,
       ``,
-      `Mit freundlichen Gruessen`,
-      `Alpine Concierge Tirol`
+      `Ihr persoenliches Reiseprogramm von Alpine Concierge Tirol zu „${tripLabel(customer)}“ ist bereit.`,
+      meta.version?`Version: ${meta.version}`:"",
+      ``,
+      `Link: ${meta.portalLink}`,
+      ...actSignatureLines()
     ].filter(Boolean).join("\n");
   }
 
@@ -185,9 +250,7 @@
       portalLinkLine(customer),
       ``,
       `Bitte speichern Sie den Link gut ab. Bei Fragen sind wir jederzeit erreichbar.`,
-      ``,
-      `Mit freundlichen Gruessen`,
-      `Alpine Concierge Tirol`
+      ...actSignatureLines()
     ].join("\n");
   }
 
@@ -227,9 +290,40 @@
     return `mailto:${encodeURIComponent(email)}${query}`;
   }
 
+  function whatsappTemplateDefs(){
+    return [
+      {id:"greeting",label:"Begruessung",build:greetingText},
+      {id:"program",label:"Reiseprogramm",build:programWhatsappText},
+      {id:"bookings",label:"Buchungsuebersicht",build:bookingOverviewText},
+      {id:"portal",label:"Kundenportal",build:portalLinkMessageText},
+      {id:"documents",label:"Dokumentenhinweis",build:documentHintText},
+      {id:"free",label:"Individuelle Nachricht",build:freeMessageText}
+    ];
+  }
+
+  function selectedWhatsappTemplateId(){
+    const id=String(state().communicationWhatsappTemplate||"greeting").trim();
+    return WA_TEMPLATE_IDS.includes(id)?id:"greeting";
+  }
+
+  function resolveWhatsappTemplate(customer,templateId){
+    const id=WA_TEMPLATE_IDS.includes(templateId)?templateId:"greeting";
+    const def=whatsappTemplateDefs().find(item=>item.id===id)||whatsappTemplateDefs()[0];
+    return {id:def.id,label:def.label,body:def.build(customer)};
+  }
+
+  function buildWhatsappUrl(phoneDigits,text){
+    const digits=whatsappDigitsFromRaw(phoneDigits);
+    if(!digits||digits.length<8||digits.length>15)return "";
+    const encodedPhone=encodeURIComponent(digits);
+    const message=String(text||"");
+    if(!message)return `https://api.whatsapp.com/send?phone=${encodedPhone}`;
+    return `https://api.whatsapp.com/send?phone=${encodedPhone}&text=${encodeURIComponent(message)}`;
+  }
+
   function notificationTexts(customer){
     return {
-      whatsapp:programMessageText(customer).replace(/^Guten Tag[^\n]*/,"Guten Tag, Ihr persoenliches Reiseprogramm von Alpine Concierge Tirol ist bereit."),
+      whatsapp:programWhatsappText(customer),
       email:programMessageText(customer)
     };
   }
@@ -325,6 +419,63 @@
     `;
   }
 
+  function whatsappCardMarkup(customer){
+    const phone=analyzeCustomerWhatsapp(customer);
+    const published=h().isPublished(customer);
+    const link=portalLinkInfo(customer);
+    const portalReady=Boolean(link?.canCopy&&link.url);
+    const hasTrip=Boolean(String(customer?.tripName||customer?.tripTitle||customer?.travel?.title||"").trim());
+    const templateId=selectedWhatsappTemplateId();
+    const template=resolveWhatsappTemplate(customer,templateId);
+    const composeUrl=phone.valid?buildWhatsappUrl(phone.digits,template.body):"";
+    const openUrl=phone.valid?buildWhatsappUrl(phone.digits,""):"";
+    const disableReason=!phone.digits
+      ?"Bitte zuerst eine WhatsApp- oder Telefonnummer hinterlegen."
+      :(!phone.valid?phone.hint:"");
+
+    return `
+      <article class="v2-comm-card v2-comm-whatsapp-card">
+        <div class="v2-comm-card-head">
+          <span class="v2-comm-icon" aria-hidden="true">W</span>
+          <div>
+            <p class="v2-eyebrow">WhatsApp</p>
+            <h3>Nachricht senden</h3>
+          </div>
+          ${badge(phone.badge)}
+        </div>
+        <div class="v2-comm-facts">
+          ${summaryItem("Kunde",displayValue(customerLabel(customer)))}
+          ${summaryItem("Telefonnummer",displayValue(phone.raw,"Nicht hinterlegt"))}
+          ${summaryItem("Nummer gueltig?",phone.valid?(phone.status==="local-zero"?"Mit Hinweis":"Ja"):"Nein")}
+          ${summaryItem("Portal veroeffentlicht?",published?"Ja":"Nein")}
+          ${summaryItem("Reise vorhanden?",hasTrip?"Ja":"Nein")}
+          ${summaryItem("Portal-Link",portalReady?"Verfuegbar":"Nicht verfuegbar")}
+        </div>
+        ${phone.hint?`<p class="v2-comm-prepared">${escapeHtml(phone.hint)}</p>`:""}
+        <label class="v2-comm-template-label" for="communicationWhatsappTemplate">
+          <span>Vorlage</span>
+          <select id="communicationWhatsappTemplate" data-comm-whatsapp-template ${phone.valid?"":"disabled"}>
+            ${whatsappTemplateDefs().map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===templateId?"selected":""}>${escapeHtml(item.label)}</option>`).join("")}
+          </select>
+        </label>
+        <div class="v2-comm-email-preview" aria-live="polite">
+          <p class="v2-eyebrow">Nachrichtenvorschau</p>
+          <pre class="v2-comm-email-body">${escapeHtml(template.body)}</pre>
+        </div>
+        <div class="v2-document-actions">
+          ${actionButton("WhatsApp oeffnen","wa-open",{href:openUrl,disabled:!phone.valid,primary:true,title:disableReason})}
+          ${actionButton("Kundenportal senden","wa-portal",{href:phone.valid?buildWhatsappUrl(phone.digits,resolveWhatsappTemplate(customer,"portal").body):"",disabled:!phone.valid,title:disableReason})}
+          ${actionButton("Reiseprogramm senden","wa-program",{href:phone.valid?buildWhatsappUrl(phone.digits,resolveWhatsappTemplate(customer,"program").body):"",disabled:!phone.valid,title:disableReason})}
+          ${actionButton("Buchungsuebersicht senden","wa-bookings",{href:phone.valid?buildWhatsappUrl(phone.digits,resolveWhatsappTemplate(customer,"bookings").body):"",disabled:!phone.valid,title:disableReason})}
+          ${actionButton("Freie Nachricht","wa-compose",{href:composeUrl,disabled:!phone.valid,title:disableReason||"Oeffnet die ausgewaehlte Vorlage in WhatsApp"})}
+          ${actionButton("Dokumentenhinweis","wa-documents",{href:phone.valid?buildWhatsappUrl(phone.digits,resolveWhatsappTemplate(customer,"documents").body):"",disabled:!phone.valid,title:disableReason})}
+          ${actionButton("Begruessung","wa-greeting",{href:phone.valid?buildWhatsappUrl(phone.digits,resolveWhatsappTemplate(customer,"greeting").body):"",disabled:!phone.valid,title:disableReason})}
+        </div>
+        ${preparedNote("Versand oeffnet WhatsApp auf diesem Geraet (api.whatsapp.com). Keine WhatsApp Business API, keine Server-Kommunikation.")}
+      </article>
+    `;
+  }
+
   function emptyCustomerMarkup(){
     return `
       <section class="v2-comm-overview">
@@ -345,14 +496,7 @@
     const published=h().isPublished(customer);
     const link=portalLinkInfo(customer);
     const lastPublished=customer.publishMeta?.lastPublishedAt||customer.publishMeta?.publishedAt;
-    const waRaw=customerWhatsappRaw(customer);
-    const waDigits=whatsappDigits(customer);
     const docs=documentStats(customer);
-    const texts=notificationTexts(customer);
-    const bookingText=bookingOverviewText(customer);
-    const waOpen=waDigits?`https://api.whatsapp.com/send?phone=${encodeURIComponent(waDigits)}`:"";
-    const waPortal=waDigits?`https://api.whatsapp.com/send?phone=${encodeURIComponent(waDigits)}&text=${encodeURIComponent(texts.whatsapp)}`:"";
-    const waBookings=waDigits?`https://api.whatsapp.com/send?phone=${encodeURIComponent(waDigits)}&text=${encodeURIComponent(bookingText)}`:"";
     const msg=state().communicationMessage||"";
     const msgKind=state().communicationMessageKind||"";
 
@@ -392,26 +536,7 @@
 
           ${emailCardMarkup(customer)}
 
-          <article class="v2-comm-card">
-            <div class="v2-comm-card-head">
-              <span class="v2-comm-icon" aria-hidden="true">W</span>
-              <div>
-                <p class="v2-eyebrow">WhatsApp</p>
-                <h3>Ueber WhatsApp-Link</h3>
-              </div>
-              ${badge(waDigits?"Nummer hinterlegt":"Keine Nummer")}
-            </div>
-            <div class="v2-comm-facts">
-              ${summaryItem("Telefon / WhatsApp",displayValue(waRaw,"Nicht hinterlegt"))}
-            </div>
-            <div class="v2-document-actions">
-              ${actionButton("WhatsApp oeffnen","wa-open",{href:waOpen,disabled:!waDigits,primary:true,title:waDigits?"":"Bitte WhatsApp- oder Telefonnummer hinterlegen"})}
-              ${actionButton("Kundenportal-Link senden","wa-portal",{href:waPortal,disabled:!waDigits,title:waDigits?"":"Bitte WhatsApp- oder Telefonnummer hinterlegen"})}
-              ${actionButton("Reiseprogramm senden","wa-program",{href:waPortal,disabled:!waDigits,title:"Nutzt denselben Aktualisierungstext wie der Portal-Link"})}
-              ${actionButton("Buchungsuebersicht senden","wa-bookings",{href:waBookings,disabled:!waDigits})}
-            </div>
-            ${preparedNote("Versand oeffnet WhatsApp auf diesem Geraet. Keine WhatsApp Business API.")}
-          </article>
+          ${whatsappCardMarkup(customer)}
 
           <article class="v2-comm-card">
             <div class="v2-comm-card-head">
@@ -521,7 +646,7 @@
         setMessage("E-Mail-Client wird geoeffnet …","saving");
         return true;
       }
-      if(action==="wa-open"||action==="wa-portal"||action==="wa-program"||action==="wa-bookings"){
+      if(action==="wa-open"||action==="wa-portal"||action==="wa-program"||action==="wa-bookings"||action==="wa-compose"||action==="wa-documents"||action==="wa-greeting"){
         setMessage("WhatsApp wird geoeffnet …","saving");
         return true;
       }
@@ -552,13 +677,23 @@
   }
 
   function handleChange(event){
-    const select=event.target.closest("[data-comm-email-template]");
-    if(!select)return false;
-    const next=String(select.value||"general").trim();
-    h().patchState({communicationEmailTemplate:EMAIL_TEMPLATE_IDS.includes(next)?next:"general"});
-    if(state().route==="communication")renderCommunicationView();
-    else if(typeof h().render==="function")h().render();
-    return true;
+    const emailSelect=event.target.closest("[data-comm-email-template]");
+    if(emailSelect){
+      const next=String(emailSelect.value||"general").trim();
+      h().patchState({communicationEmailTemplate:EMAIL_TEMPLATE_IDS.includes(next)?next:"general"});
+      if(state().route==="communication")renderCommunicationView();
+      else if(typeof h().render==="function")h().render();
+      return true;
+    }
+    const waSelect=event.target.closest("[data-comm-whatsapp-template]");
+    if(waSelect){
+      const next=String(waSelect.value||"greeting").trim();
+      h().patchState({communicationWhatsappTemplate:WA_TEMPLATE_IDS.includes(next)?next:"greeting"});
+      if(state().route==="communication")renderCommunicationView();
+      else if(typeof h().render==="function")h().render();
+      return true;
+    }
+    return false;
   }
 
   window.ACTAdminV2Communication={
@@ -575,6 +710,12 @@
     resolveEmailTemplate,
     emailTemplateDefs,
     customerEmail,
-    EMAIL_TEMPLATE_IDS
+    EMAIL_TEMPLATE_IDS,
+    analyzeWhatsappNumber,
+    analyzeCustomerWhatsapp,
+    buildWhatsappUrl,
+    resolveWhatsappTemplate,
+    whatsappTemplateDefs,
+    WA_TEMPLATE_IDS
   };
 })();

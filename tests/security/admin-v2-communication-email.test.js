@@ -102,7 +102,7 @@ describe("admin v2 communication email hub",()=>{
 
     const documents=api.resolveEmailTemplate(customer,"documents");
     assert.match(documents.body,/Dokument/);
-    assert.match(documents.body,/Anhaenge koennen ueber diesen Weg nicht/);
+    assert.match(documents.body,/Kundenportal bereitgestellt|nicht als Anhang/);
 
     const general=api.resolveEmailTemplate(customer,"general");
     assert.match(general.body,/Ihre Nachricht hier/);

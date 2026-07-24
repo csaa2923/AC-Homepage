@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=34">
+<link rel="stylesheet" href="admin-v2.css?v=35">
 </head>
 <body>
 <main>
@@ -50,6 +50,10 @@
         <button class="v2-nav-item" type="button" data-v2-route="bookings">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
           <span>Buchungen</span>
+        </button>
+        <button class="v2-nav-item" type="button" data-v2-route="communication">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v10H8l-4 3V6z"/><path d="M8 10h8M8 13h5"/></svg>
+          <span>Kommunikation</span>
         </button>
         <button class="v2-nav-item" type="button" data-v2-route="documents">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v6h5M9 14h6M9 18h6"/></svg>
@@ -177,6 +181,10 @@
         <div id="bookingsRoot"></div>
       </section>
 
+      <section class="v2-view" id="communicationView" data-title="Kommunikation">
+        <div id="communicationRoot"></div>
+      </section>
+
       <section class="v2-view" id="documentsView" data-title="Dokumente">
         <div id="documentsRoot"></div>
       </section>
@@ -232,6 +240,7 @@
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=5"></script>
 <script src="admin-v2-bookings.js?v=3"></script>
-<script src="admin-v2.js?v=41"></script>
+<script src="admin-v2-communication.js?v=1"></script>
+<script src="admin-v2.js?v=42"></script>
 </body>
 </html>

@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {describe,it} from "node:test";
+import {fileURLToPath} from "node:url";
 
-const root=path.resolve(process.cwd(),"..","..");
+const root=path.join(path.dirname(fileURLToPath(import.meta.url)),"../..");
 
 function readProjectFile(relativePath){
   return fs.readFileSync(path.join(root,relativePath),"utf8");
@@ -31,9 +32,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const TECHNICAL_LOGIN_ERROR="Die Anmeldung konnte nicht abgeschlossen werden\. Bitte erneut versuchen\."/);
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
-    assert.match(html,/firebase-auth\.js\?v=5/);
-    assert.match(html,/admin-v2\.css\?v=30/);
-    assert.match(html,/admin-v2\.js\?v=37/);
+    assert.match(html,/firebase-auth\.js\?v=9/);
+    assert.match(html,/admin-v2\.css\?v=35/);
+    assert.match(html,/admin-v2\.js\?v=42/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -119,7 +120,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/Anforderungen \/ Wuensche/);
     assert.match(js,/role="tablist"/);
     assert.match(js,/aria-selected="\$\{key===tab\?"true":"false"\}"/);
-    assert.match(js,/tab==="programm"\?programTabMarkup\(customer\):tab==="dokumente"\?documentsTabMarkup\(customer\):tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
+    assert.match(js,/tab==="kommunikation"\?\(window\.ACTAdminV2Communication\?\.communicationTabMarkup\?\.\(customer\)\|\|placeholderTabMarkup\(\)\):tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.doesNotMatch(js,/Familie Mueller|Familie Rossi|Herr Schneider|mockCustomers|Mock-Daten/i);
     assert.match(js,/data-customer-edit-action="edit">Bearbeiten/);
   });
@@ -127,7 +128,7 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("renders the trip tab read-only from the already loaded customer object",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(js,/tab==="reise"\?tripTabMarkup\(customer\):tab==="programm"\?programTabMarkup\(customer\):tab==="dokumente"\?documentsTabMarkup\(customer\):tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
+    assert.match(js,/tab==="buchungen"\?\(window\.ACTAdminV2Bookings\?\.bookingsTabMarkup\?\.\(customer\)\|\|placeholderTabMarkup\(\)\):tab==="dokumente"\?documentsTabMarkup\(customer\):tab==="kommunikation"/);
     assert.match(js,/function buildTripViewModel\(customer\)/);
     assert.match(js,/function tripTabMarkup\(customer\)/);
     assert.match(js,/const travel=objectValue\(customer\.travel,customer\.trip,customer\.tripData,customer\.travelData,customer\.journey,customer\.reise,customer\.profile\?\.travel\)/);
@@ -370,11 +371,11 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=30/);
+    assert.match(html,/admin-v2\.css\?v=35/);
     assert.match(html,/portal-share-library\.js\?v=3/);
-    assert.match(html,/publish-workflow\.js\?v=7/);
+    assert.match(html,/publish-workflow\.js\?v=8/);
     assert.match(html,/firebase-storage\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=37"><\/script>/);
+    assert.match(html,/admin-v2\.js\?v=42/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -487,9 +488,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/redact-allowlist\.js\?v=5/);
     assert.match(html,/redact-public-snapshot\.js\?v=2/);
     assert.match(html,/portal-share-library\.js\?v=3/);
-    assert.match(html,/publish-workflow\.js\?v=7/);
+    assert.match(html,/publish-workflow\.js\?v=8/);
     assert.match(html,/firebase-service\.js\?v=23/);
-    assert.match(html,/admin-v2\.js\?v=37/);
+    assert.match(html,/admin-v2-communication\.js\?v=1/);
+    assert.match(html,/admin-v2\.js\?v=42/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -530,10 +532,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/clearShareTokens/);
     assert.match(js,/getState\(\)\?\.uid|getState\?\.\(\)\?\.uid/);
     assert.match(js,/Sicheren Kundenlink erzeugen/);
-    assert.match(js,/Stabilen Kundenlink erzeugen/);
     assert.match(js,/Link ersetzen/);
     assert.match(js,/Share-Link widerrufen/);
-    assert.match(js,/db\.refreshPortalShares\(publishCandidate\.customerId\)/);
+    assert.match(js,/db\.refreshPortalShares\(id\)/);
     assert.match(js,/createPortalShareV2\(\{forceNew:true\}\)/);
     assert.match(js,/publicationWarnings\(customer\)/);
     assert.match(js,/sichtbare Dokumente haben keinen Oeffnen-Link/);
@@ -602,8 +603,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=30/);
-    assert.match(html,/admin-v2\.js\?v=37/);
+    assert.match(html,/admin-v2\.css\?v=35/);
+    assert.match(html,/admin-v2\.js\?v=42/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -792,7 +793,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(v2Html,/Standard-Einstieg/);
     assert.match(v2Html,/class="v2-classic-link" href="admin\.html">Classic Admin – Uebergangsloesung/);
     assert.match(v2Html,/CRM im Classic Admin oeffnen/);
-    assert.match(v2Html,/Buchungen im Classic Admin oeffnen/);
+    assert.match(v2Html,/Buchungen in Admin V2 oeffnen|Buchungen im Classic Admin oeffnen/);
     assert.match(v2Html,/Vorlagen im Classic Admin oeffnen/);
     assert.doesNotMatch(v2Js,/Alter Admin|Im klassischen Admin bearbeiten|Zum klassischen Admin/);
     assert.match(v2Js,/data-open-editor="\$\{escapeHtml\(customer\.customerId\)\}"/);
@@ -808,5 +809,34 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(classicHtml,/href="admin-v2\.html">Zu Admin V2 wechseln/);
     assert.match(classicCss,/\.classic-transition-banner\{/);
     assert.doesNotMatch(classicHtml,/meta http-equiv="refresh"/i);
+  });
+
+  it("integrates the communication hub into admin v2 navigation and customer context",()=>{
+    const html=readProjectFile("customer-portal/admin-v2.html");
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    const comm=readProjectFile("customer-portal/admin-v2-communication.js");
+    assert.match(html,/data-v2-route="communication"/);
+    assert.match(html,/id="communicationView"/);
+    assert.match(html,/id="communicationRoot"/);
+    assert.match(html,/admin-v2-communication\.js\?v=1/);
+    assert.match(js,/\["kommunikation","Kommunikation"\]/);
+    assert.match(js,/"communication"/);
+    assert.match(js,/ACTAdminV2Communication\?\.bind/);
+    assert.match(js,/ACTAdminV2Communication\?\.renderCommunicationView/);
+    assert.match(js,/parsed\.route==="communication"/);
+    assert.match(comm,/ACTAdminV2Communication/);
+    assert.match(comm,/Bitte zuerst einen Kunden auswaehlen/);
+    assert.match(comm,/Kundenportal/);
+    assert.match(comm,/E-Mail/);
+    assert.match(comm,/WhatsApp/);
+    assert.match(comm,/Erinnerungen/);
+    assert.match(comm,/Dokumente senden/);
+    assert.match(comm,/vorbereitet/);
+    assert.match(comm,/buildNotificationTexts/);
+    assert.match(comm,/data-comm-action/);
+    assert.match(css,/\.v2-comm-grid/);
+    assert.match(css,/\.v2-comm-card/);
+    assert.doesNotMatch(comm,/\bTODO\b/);
   });
 });

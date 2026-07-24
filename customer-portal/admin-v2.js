@@ -12,6 +12,8 @@
     filtersExpanded:false,
     selectedCustomerId:"",
     selectedTab:"kunde",
+    communicationMessage:"",
+    communicationMessageKind:"",
     customerEditMode:false,
     customerEditDraft:null,
     customerEditOriginal:"",
@@ -549,7 +551,7 @@
     const raw=String(hashValue||"").replace(/^#/,"").replace(/^\/+/,"")||"dashboard";
     const parts=raw.split("/").filter(Boolean);
     const main=parts[0]||"dashboard";
-    if(["dashboard","customers","bookings","calendar","documents","settings"].includes(main)&&parts.length===1){
+    if(["dashboard","customers","bookings","calendar","documents","settings","communication"].includes(main)&&parts.length===1){
       return {route:main==="calendar"?"bookings":main,customerId:"",tab:""};
     }
     if(main==="customers"&&parts[1]){
@@ -4004,7 +4006,7 @@
         `).join("")}
       </div>
       <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
+        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
       </section>
     `;
   }
@@ -4642,6 +4644,7 @@
     renderCustomers();
     renderDocuments();
     if(window.ACTAdminV2Bookings?.renderBookings)window.ACTAdminV2Bookings.renderBookings();
+    if(window.ACTAdminV2Communication?.renderCommunicationView)window.ACTAdminV2Communication.renderCommunicationView();
     renderCustomerDetail();
     window.ACTAdminV2Bookings?.renderBookingEditor?.();
     renderNewCustomerWizard();
@@ -4659,9 +4662,16 @@
       resetDocumentEditState();
       window.ACTAdminV2Bookings?.closeEditor?.();
     }
+    const previousCustomerId=state.selectedCustomerId;
     state.route=parsed.route;
-    state.selectedCustomerId=parsed.customerId||"";
-    state.selectedTab=parsed.tab||"kunde";
+    // Kommunikationszentrale behält den zuletzt geoeffneten Kunden.
+    if(parsed.route==="communication"){
+      state.selectedCustomerId=previousCustomerId||"";
+      state.selectedTab="";
+    }else{
+      state.selectedCustomerId=parsed.customerId||"";
+      state.selectedTab=parsed.tab||"kunde";
+    }
     const viewId=parsed.route==="customerDetail"?"customerDetailView":`${parsed.route}View`;
     all(".v2-view").forEach(view=>view.classList.toggle("active",view.id===viewId));
     all("[data-v2-route]").forEach(button=>{
@@ -5654,6 +5664,27 @@
       render,
       flattenProgramItems
     });
+    window.ACTAdminV2Communication?.bind?.({
+      getState:()=>state,
+      patchState:patch=>Object.assign(state,patch||{}),
+      escapeHtml,
+      badge,
+      byId,
+      customerById,
+      displayValue,
+      summaryItem,
+      documentSummary,
+      isPublished,
+      formatPublishDateTime,
+      resolvePortalLink,
+      portalLinkBadgeLabel,
+      copyPortalLinkV2,
+      openPortalLinkV2,
+      openPortalPreviewV2,
+      detailHash,
+      routeTo,
+      render
+    });
     byId("adminLoginForm").addEventListener("submit",event=>{event.preventDefault();signIn();});
     byId("logoutButton").addEventListener("click",async()=>{
       if(!confirmDiscardCustomerEdit())return;
@@ -5674,6 +5705,7 @@
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);
     document.addEventListener("click",event=>{
       if(window.ACTAdminV2Bookings?.handleClick?.(event))return;
+      if(window.ACTAdminV2Communication?.handleClick?.(event))return;
       const wizardAction=event.target.closest("[data-wizard-action]");
       if(wizardAction){
         handleWizardAction(wizardAction.dataset.wizardAction);

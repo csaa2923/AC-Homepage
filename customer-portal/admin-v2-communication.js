@@ -514,24 +514,21 @@
       available:false,
       status:link?.status||"missing",
       reason:"no-library",
-      hint:api?"QR nicht verfuegbar.":"QR-Modul nicht geladen.",
+      hint:api?"QR nicht verfuegbar.":"QR-Modul nicht geladen. Hard-Reload (Ctrl+F5) oder Deployment von Operations Ready 3.5 pruefen.",
       url:""
     };
     const published=h().isPublished(customer);
-    const canQr=Boolean(api&&analysis.ok&&analysis.url);
+    const canQr=Boolean(api&&analysis.ok&&analysis.url&&(api.hasGenerator?api.hasGenerator():true));
     const disableReason=canQr?"":(analysis.hint||"QR-Code nicht verfuegbar.");
-    let preview="";
-    if(canQr){
-      const svg=api.createSvgMarkup(analysis.url,{
-        cellSize:4,
-        margin:4,
-        alt:api.accessibleAlt(customerLabel(customer))
-      });
-      if(svg.ok)preview=svg.markup;
-    }
+    const previewResult=api?.renderPreviewMarkup
+      ?api.renderPreviewMarkup(link,customerLabel(customer),{cellSize:4})
+      :{ok:false,markup:"",hint:analysis.hint};
+    const preview=previewResult.ok&&previewResult.markup
+      ?`<div class="v2-comm-qr-preview">${previewResult.markup}</div>`
+      :`<div class="v2-comm-qr-preview"><p class="v2-muted">${escapeHtml(previewResult.hint||analysis.hint||"QR-Code nicht verfuegbar.")}</p></div>`;
 
     return `
-      <article class="v2-comm-card v2-comm-qr-card">
+      <article class="v2-comm-card v2-comm-qr-card" id="communicationQrCard">
         <div class="v2-comm-card-head">
           <span class="v2-comm-icon" aria-hidden="true">QR</span>
           <div>
@@ -548,7 +545,7 @@
           ${summaryItem("Ziel",canQr?"Persoenliches Kundenportal":"—")}
         </div>
         <p class="v2-muted">${escapeHtml(analysis.hint||"")}</p>
-        ${preview?`<div class="v2-comm-qr-preview">${preview}</div>`:""}
+        ${preview}
         <div class="v2-document-actions">
           ${actionButton("QR-Code anzeigen","qr-show",{disabled:!canQr,primary:true,title:disableReason})}
           ${actionButton("Als PNG speichern","qr-download-png",{disabled:!canQr,title:disableReason})}
@@ -752,9 +749,17 @@
               ${summaryItem("Share-Link",h().portalLinkBadgeLabel(link.status))}
             </div>
             <p>${escapeHtml(link.hint||"")}</p>
+            ${link.canCopy?(()=>{
+              const api=qrApi();
+              const preview=api?.renderPreviewMarkup?.(link,customerLabel(customer),{cellSize:3});
+              if(preview?.ok&&preview.markup)return `<div class="v2-comm-qr-preview">${preview.markup}</div>`;
+              if(!api)return `<div class="v2-comm-qr-preview"><p class="v2-muted">QR-Modul nicht geladen — siehe QR-Karte unten bzw. Hard-Reload.</p></div>`;
+              return "";
+            })():""}
             <div class="v2-document-actions">
               ${actionButton("Link kopieren","copy-link",{disabled:!link.canCopy,primary:true,title:link.canCopy?"":"Kein kopierbarer Link in dieser Sitzung"})}
               ${actionButton("Portal oeffnen","open-portal",{disabled:!link.canOpen,title:link.canOpen?"":"Portal-Link nicht oeffnenbar"})}
+              ${link.canCopy?actionButton("QR anzeigen","qr-show"):""}
               ${actionButton("Vorschau oeffnen","open-preview")}
               ${actionButton("Zur Veroeffentlichung","goto-publish")}
             </div>

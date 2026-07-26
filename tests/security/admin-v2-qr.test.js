@@ -93,7 +93,7 @@ function loadPdfWithQr(){
 describe("admin v2 secure qr integration",()=>{
   it("wires local vendor without CDN",()=>{
     assert.match(html,/vendor\/qrcode-generator\/qrcode\.js\?v=1\.4\.4/);
-    assert.match(html,/admin-v2-qr\.js\?v=1/);
+    assert.match(html,/admin-v2-qr\.js\?v=2/);
     assert.doesNotMatch(html,/cdn\.jsdelivr|api\.qrserver|chart\.googleapis|qrserver\.com/i);
     assert.ok(fs.existsSync(path.join(root,"customer-portal/vendor/qrcode-generator/qrcode.js")));
     assert.ok(fs.existsSync(path.join(root,"customer-portal/vendor/qrcode-generator/LICENSE")));

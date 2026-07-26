@@ -20,10 +20,6 @@
     "127.0.0.1"
   ]);
 
-  function generator(){
-    return typeof qrcode==="function"?qrcode:(typeof window!=="undefined"&&typeof window.qrcode==="function"?window.qrcode:null);
-  }
-
   function escapeHtml(value){
     return String(value??"")
       .replace(/&/g,"&amp;")
@@ -45,6 +41,7 @@
     const host=String(hostname||"").toLowerCase();
     if(!host)return false;
     if(ALLOWED_HOSTS.has(host))return true;
+    if(host.endsWith(".vercel.app"))return true;
     try{
       if(typeof window!=="undefined"&&window.location&&String(window.location.hostname||"").toLowerCase()===host)return true;
     }catch(_error){/* ignore */}
@@ -53,6 +50,14 @@
 
   function shareLibrary(){
     return (typeof window!=="undefined"&&window.ACTPortalShareLibrary)||null;
+  }
+
+  function generator(){
+    const fromWindow=typeof window!=="undefined"&&typeof window.qrcode==="function"?window.qrcode:null;
+    const fromGlobal=typeof qrcode==="function"?qrcode:null;
+    const factory=fromGlobal||fromWindow;
+    if(factory&&typeof window!=="undefined"&&typeof window.qrcode!=="function")window.qrcode=factory;
+    return factory;
   }
 
   /**
@@ -156,12 +161,30 @@
 
     const validated=validateSecureQrUrl(link.url);
     if(!validated.ok){
+      const reasonHints={
+        "foreign-domain":"Der Portal-Link liegt auf einer nicht erlaubten Domain.",
+        "insecure-http":"QR-Codes erfordern HTTPS (außer localhost).",
+        "customer-fallback":"Unsicherer Kunden-Link (?customer=) ist für QR-Codes nicht erlaubt.",
+        "not-secure-share":"Der Link ist kein sicherer Share-Link.",
+        "missing-params":"Share- oder Token-Parameter fehlen."
+      };
       return {
         ok:false,
         available:false,
         status,
         reason:validated.reason,
-        hint:"Der Link erfüllt nicht die Sicherheitsanforderungen für QR-Codes.",
+        hint:reasonHints[validated.reason]||"Der Link erfüllt nicht die Sicherheitsanforderungen für QR-Codes.",
+        url:""
+      };
+    }
+
+    if(!generator()){
+      return {
+        ok:false,
+        available:false,
+        status,
+        reason:"generator-missing",
+        hint:"QR-Generator nicht geladen. Bitte Hard-Reload (Ctrl+F5). Fehlt das Skript weiterhin, ist Operations Ready 3.5 noch nicht deployt.",
         url:""
       };
     }
@@ -188,18 +211,48 @@
   function createSvgMarkup(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN,alt="QR-Code zum Kundenportal"}={}){
     const validated=validateSecureQrUrl(safeUrl);
     if(!validated.ok)return {ok:false,reason:validated.reason,svg:"",markup:""};
-    const qr=buildQrInstance(validated.safeUrl);
-    const svg=typeof qr.createSvgTag==="function"
-      ?qr.createSvgTag(cellSize,margin,alt,"Alpine Concierge Tirol")
-      :"";
-    if(!svg||!/<svg[\s>]/i.test(svg))return {ok:false,reason:"empty-svg",svg:"",markup:""};
-    return {
-      ok:true,
-      reason:"ok",
-      svg,
-      markup:`<div class="act-qr-frame" role="img" aria-label="${escapeHtml(alt)}">${svg}</div>`,
-      alt
-    };
+    try{
+      const qr=buildQrInstance(validated.safeUrl);
+      const svg=typeof qr.createSvgTag==="function"
+        ?qr.createSvgTag(cellSize,margin,alt,"Alpine Concierge Tirol")
+        :"";
+      if(!svg||!/<svg[\s>]/i.test(svg))return {ok:false,reason:"empty-svg",svg:"",markup:""};
+      return {
+        ok:true,
+        reason:"ok",
+        svg,
+        markup:`<div class="act-qr-frame" role="img" aria-label="${escapeHtml(alt)}">${svg}</div>`,
+        alt
+      };
+    }catch(_error){
+      return {ok:false,reason:"render-failed",svg:"",markup:""};
+    }
+  }
+
+  /**
+   * Safe preview helper for Admin UI panels. Never throws. Never returns URL/token text.
+   */
+  function renderPreviewMarkup(link,customerName,{cellSize=4}={}){
+    const analysis=analyzePortalQr(link);
+    if(!analysis.ok||!analysis.url){
+      return {ok:false,reason:analysis.reason,hint:analysis.hint||"QR nicht verfuegbar.",markup:""};
+    }
+    const svg=createSvgMarkup(analysis.url,{
+      cellSize,
+      margin:DEFAULT_MARGIN,
+      alt:accessibleAlt(customerName)
+    });
+    if(!svg.ok){
+      return {
+        ok:false,
+        reason:svg.reason,
+        hint:svg.reason==="generator-missing"||!generator()
+          ?"QR-Generator nicht geladen. Hard-Reload oder Deployment von Operations Ready 3.5 pruefen."
+          :"QR-Code konnte nicht erzeugt werden.",
+        markup:""
+      };
+    }
+    return {ok:true,reason:"ok",hint:analysis.hint,markup:svg.markup};
   }
 
   function createDataUrl(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN}={}){
@@ -382,6 +435,7 @@
     createSvgMarkup,
     createDataUrl,
     createPngDataUrl,
+    renderPreviewMarkup,
     accessibleAlt,
     buildFilename,
     normalizeFilePart,
@@ -390,6 +444,7 @@
     downloadPng,
     openPrintView,
     pdfQrBlock,
-    escapeHtml
+    escapeHtml,
+    hasGenerator:()=>Boolean(generator())
   };
 })();

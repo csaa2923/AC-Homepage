@@ -2833,29 +2833,35 @@
     return `<ul class="v2-change-list">${changes.map(item=>`<li>${escapeHtml(item.label||item)}</li>`).join("")}</ul>`;
   }
 
+  function portalQrPreviewBlock(customer,link,{cellSize=4}={}){
+    const api=window.ACTQRCodeLibrary;
+    if(!api){
+      return `<div class="v2-comm-qr-preview v2-pub-qr-preview"><p class="v2-muted">QR-Modul nicht geladen. Hard-Reload (Ctrl+F5). Fehlt es weiter, ist Operations Ready 3.5 noch nicht deployt.</p></div>`;
+    }
+    const preview=api.renderPreviewMarkup
+      ?api.renderPreviewMarkup(link,customer?.customerName||"",{cellSize})
+      :{ok:false,hint:"QR-Vorschau nicht verfuegbar.",markup:""};
+    if(preview.ok&&preview.markup){
+      return `<div class="v2-comm-qr-preview v2-pub-qr-preview">${preview.markup}<p class="v2-muted" style="margin:8px 0 0">Ihr persoenliches Kundenportal</p></div>`;
+    }
+    return `<div class="v2-comm-qr-preview v2-pub-qr-preview"><p class="v2-muted">${escapeHtml(preview.hint||"QR-Code nicht verfuegbar.")}</p></div>`;
+  }
+
   function publicationQrPanelMarkup(customer,link){
     const api=window.ACTQRCodeLibrary;
     const analysis=api?.analyzePortalQr?.(link)||{
       ok:false,
       available:false,
       status:link?.status||"missing",
-      hint:api?"QR nicht verfuegbar.":"QR-Modul nicht geladen.",
+      hint:api?"QR nicht verfuegbar.":"QR-Modul nicht geladen. Hard-Reload oder Deployment von Operations Ready 3.5 pruefen.",
       url:""
     };
-    const canQr=Boolean(api&&analysis.ok&&analysis.url);
-    let preview="";
-    if(canQr){
-      const svg=api.createSvgMarkup(analysis.url,{
-        cellSize:3,
-        margin:4,
-        alt:api.accessibleAlt(customer?.customerName||"")
-      });
-      if(svg.ok)preview=`<div class="v2-comm-qr-preview v2-pub-qr-preview">${svg.markup}</div>`;
-    }
+    const canQr=Boolean(api&&analysis.ok&&analysis.url&&(api.hasGenerator?api.hasGenerator():true));
+    const preview=portalQrPreviewBlock(customer,link,{cellSize:4});
     const disable=canQr?"":"disabled";
     const title=canQr?"":` title="${escapeHtml(analysis.hint||"QR nicht verfuegbar")}"`;
     return `
-      <article class="v2-panel v2-pub-qr-panel">
+      <article class="v2-panel v2-pub-qr-panel" id="publicationQrPanel">
         <div class="v2-panel-head">
           <div>
             <p class="v2-eyebrow">QR-Code</p>
@@ -2964,10 +2970,13 @@
           <p>${escapeHtml(link.hint)}</p>
           ${link.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}
           <p class="v2-muted">Portal-Vorschau zeigt die Live-Version aus Firestore. Das Kundenportal liest den Share-Snapshot — nach jeder Veroeffentlichung muss dieser aktualisiert werden (automatisch oder per Button).</p>
+          ${link.canCopy?portalQrPreviewBlock(customer,link,{cellSize:4}):""}
           <div class="v2-document-actions">
             ${portalButton("Portal-Vorschau oeffnen","preview")}
             ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
             ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
+            ${link.canCopy?portalButton("QR anzeigen","qr-show"):""}
+            ${link.canCopy?portalButton("QR als PNG","qr-download-png"):""}
             ${portalButton("Kundenportal-Inhalt aktualisieren","sync-shares",{disabled:!published||!link.hasActiveShare})}
             ${link.hasActiveShare
               ?portalButton(link.status==="session-lost"?"Link ersetzen (macht alten ungueltig)":"Link ersetzen (macht alten ungueltig)","create-share-new",{disabled:!published,primary:false})

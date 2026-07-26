@@ -388,6 +388,9 @@ describe("travel actions navigation destination", () => {
     assert.ok(companion.stats.some(stat => stat.key === "end"));
     assert.equal(companion.map.ok, true);
     assert.equal(companion.map.hasRouteLine, true);
+    assert.ok(Array.isArray(companion.map.routePoints));
+    assert.ok(companion.map.routePoints.length>=2);
+    assert.ok(companion.map.bounds);
     assert.match(companion.map.overlaySvg, /polyline/i);
     assert.equal(companion.elevationProfile.show, false);
     assert.ok(companion.summary.some(line => /Distanz/i.test(line)));

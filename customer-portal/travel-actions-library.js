@@ -1035,7 +1035,8 @@
     const numericDistance=file?.distanceKm??parseCoordNumber(String(source.distanceKm||"").replace(",",".").replace(/[^\d.]/g,""));
     const routeShape=inferRouteShape(start,end,numericDistance);
     const map=staticMapPreview(source);
-    const overlay=projectRouteOverlay(points,paddedMapBounds(file?.bounds||map.bounds)||file?.bounds||map.bounds);
+    const mapBounds=paddedMapBounds(file?.bounds||map.bounds)||normalizeBounds(map.bounds)||boundsFromPoints(points);
+    const overlay=projectRouteOverlay(points,mapBounds||file?.bounds||map.bounds);
     // Elevation series only from persisted point elevations — never invent a profile from gain/loss scalars.
     const rawRoutePoints=Array.isArray(source.gpxFile?.routePoints)
       ?source.gpxFile.routePoints
@@ -1071,7 +1072,9 @@
         embedUrl:map.embedUrl||"",
         linkUrl:map.linkUrl||"",
         overlaySvg:overlay.ok?overlay.svg:"",
-        hasRouteLine:Boolean(overlay.ok),
+        hasRouteLine:Boolean(overlay.ok||points.length>=2),
+        routePoints:points,
+        bounds:mapBounds,
         latitude:map.latitude,
         longitude:map.longitude,
         endLatitude:map.endLatitude,

@@ -103,9 +103,10 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/function isPdfDocument\(item\)/);
     assert.match(portalJs,/Herunterladen/);
     assert.match(portalJs,/Dieses Dokument ist derzeit nicht verfuegbar\./);
-    assert.match(portalHtml,/customer-portal\.js\?v=44/);
+    assert.match(portalHtml,/customer-portal\.js\?v=45/);
     assert.match(portalHtml,/redact-allowlist\.js\?v=10/);
-    assert.match(portalHtml,/travel-actions-library\.js\?v=9/);
+    assert.match(portalHtml,/travel-actions-library\.js\?v=10/);
+    assert.match(portalHtml,/leaflet@1\.9\.4/);
     assert.match(portalHtml,/portal-share-library\.js\?v=4/);
     assert.match(portalJs,/data-open-portal-document/);
     assert.match(portalJs,/hydrateShareDocumentUrls/);
@@ -117,13 +118,16 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/Wanderübersicht|Wanderuebersicht/);
     assert.match(portalJs,/Kurzinfo/);
     assert.match(portalJs,/Hoehenprofil|Höhenprofil/);
-    assert.match(portalJs,/data-map-src/);
+    assert.match(portalJs,/data-hike-map/);
+    assert.match(portalJs,/function mountHikeLeafletMap\(/);
     assert.match(portalJs,/function observeLazyMaps\(/);
     assert.match(portalJs,/IntersectionObserver/);
+    assert.match(portalJs,/L\.polyline|polyline\(/);
     assert.match(portalJs,/Kartenleiste/);
     assert.match(portalJs,/resolveHikeCompanion/);
     assert.match(portalCss,/hike-companion/);
     assert.match(portalCss,/hike-toolbar/);
+    assert.match(portalCss,/hike-leaflet-map/);
     assert.doesNotMatch(portalJs,/extractRouteFromXml/);
   });
 

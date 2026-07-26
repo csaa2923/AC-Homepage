@@ -643,11 +643,21 @@
         </ul>
       </div>
     `:"";
+    const mapPayload=companion?.map?.ok?escapeHtml(JSON.stringify({
+      embedUrl:companion.map.embedUrl||"",
+      points:Array.isArray(companion.map.routePoints)?companion.map.routePoints:[],
+      bounds:companion.map.bounds||null,
+      start:Number.isFinite(Number(companion.map.latitude))&&Number.isFinite(Number(companion.map.longitude))
+        ?{latitude:Number(companion.map.latitude),longitude:Number(companion.map.longitude)}
+        :null,
+      end:Number.isFinite(Number(companion.map.endLatitude))&&Number.isFinite(Number(companion.map.endLongitude))
+        ?{latitude:Number(companion.map.endLatitude),longitude:Number(companion.map.endLongitude)}
+        :null
+    })):"";
     const mapBlock=companion?.map?.ok?`
       <div class="hike-map travel-map-preview">
         <div class="hike-map-frame">
-          <iframe data-map-src="${escapeHtml(companion.map.embedUrl)}" title="Route auf Karte" loading="lazy" referrerpolicy="no-referrer" tabindex="-1"></iframe>
-          ${companion.map.overlaySvg?`<div class="hike-route-overlay">${companion.map.overlaySvg}</div>`:""}
+          <div class="hike-leaflet-map" data-hike-map="${mapPayload}" role="region" aria-label="Interaktive Routenkarte"></div>
         </div>
       </div>
     `:"";
@@ -711,28 +721,126 @@
     return `<div class="hike-toolbar card-actions" aria-label="Kartenleiste">${buttons.join("")}${hint}</div>`;
   }
 
+  function mountHikeLeafletMap(el){
+    if(!el||el.dataset.hikeReady==="1")return;
+    el.dataset.hikeReady="1";
+    let payload={};
+    try{payload=JSON.parse(el.getAttribute("data-hike-map")||"{}");}catch(_error){payload={};}
+    const points=Array.isArray(payload.points)?payload.points:[];
+    const latLngs=points
+      .map(point=>[Number(point.latitude??point.lat),Number(point.longitude??point.lng??point.lon)])
+      .filter(pair=>Number.isFinite(pair[0])&&Number.isFinite(pair[1])&&!(pair[0]===0&&pair[1]===0));
+    const bounds=payload.bounds&&typeof payload.bounds==="object"?payload.bounds:null;
+    const L=window.L;
+
+    if(!L){
+      // Fallback without Leaflet: interactive OSM embed (no synced route overlay).
+      if(payload.embedUrl){
+        const frame=document.createElement("iframe");
+        frame.src=String(payload.embedUrl);
+        frame.title="Route auf Karte";
+        frame.loading="lazy";
+        frame.referrerPolicy="no-referrer";
+        frame.className="hike-map-fallback-frame";
+        el.replaceWith(frame);
+      }
+      return;
+    }
+
+    const map=L.map(el,{
+      zoomControl:true,
+      scrollWheelZoom:true,
+      dragging:true,
+      touchZoom:true,
+      doubleClickZoom:true,
+      boxZoom:true,
+      keyboard:true,
+      attributionControl:true
+    });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{
+      maxZoom:19,
+      attribution:"&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>"
+    }).addTo(map);
+
+    if(latLngs.length>=2){
+      L.polyline(latLngs,{
+        color:"#c45c26",
+        weight:4,
+        opacity:0.95,
+        lineJoin:"round",
+        lineCap:"round"
+      }).addTo(map);
+    }
+    if(payload.start&&Number.isFinite(Number(payload.start.latitude))&&Number.isFinite(Number(payload.start.longitude))){
+      L.circleMarker([Number(payload.start.latitude),Number(payload.start.longitude)],{
+        radius:7,
+        color:"#1f6b57",
+        fillColor:"#1f6b57",
+        fillOpacity:1,
+        weight:2
+      }).addTo(map).bindTooltip("Start",{direction:"top",offset:[0,-6]});
+    }
+    if(payload.end&&Number.isFinite(Number(payload.end.latitude))&&Number.isFinite(Number(payload.end.longitude))){
+      L.circleMarker([Number(payload.end.latitude),Number(payload.end.longitude)],{
+        radius:7,
+        color:"#8b3d31",
+        fillColor:"#8b3d31",
+        fillOpacity:1,
+        weight:2
+      }).addTo(map).bindTooltip("Ziel",{direction:"top",offset:[0,-6]});
+    }
+
+    const fitPairs=[];
+    if(bounds
+      &&Number.isFinite(Number(bounds.minLat))
+      &&Number.isFinite(Number(bounds.minLng))
+      &&Number.isFinite(Number(bounds.maxLat))
+      &&Number.isFinite(Number(bounds.maxLng))){
+      fitPairs.push([Number(bounds.minLat),Number(bounds.minLng)]);
+      fitPairs.push([Number(bounds.maxLat),Number(bounds.maxLng)]);
+    }else if(latLngs.length){
+      latLngs.forEach(pair=>fitPairs.push(pair));
+    }
+    if(fitPairs.length>=2){
+      map.fitBounds(fitPairs,{padding:[18,18],maxZoom:16,animate:false});
+    }else if(fitPairs.length===1){
+      map.setView(fitPairs[0],14,{animate:false});
+    }
+
+    // Layout may still be settling when the card first becomes visible.
+    requestAnimationFrame(()=>{
+      map.invalidateSize({animate:false});
+      setTimeout(()=>map.invalidateSize({animate:false}),120);
+    });
+  }
+
   function observeLazyMaps(rootEl){
     const scope=rootEl||document;
     const frames=[...scope.querySelectorAll("iframe[data-map-src]")];
-    if(!frames.length)return;
-    const activate=frame=>{
+    const hikeMaps=[...scope.querySelectorAll("[data-hike-map]:not([data-hike-ready])")];
+    const activateFrame=frame=>{
       const src=frame.getAttribute("data-map-src");
       if(!src||frame.getAttribute("src"))return;
       frame.setAttribute("src",src);
       frame.removeAttribute("data-map-src");
     };
+    const activateHike=el=>mountHikeLeafletMap(el);
+
     if(!("IntersectionObserver" in window)){
-      frames.forEach(activate);
+      frames.forEach(activateFrame);
+      hikeMaps.forEach(activateHike);
       return;
     }
     const observer=new IntersectionObserver(entries=>{
       entries.forEach(entry=>{
         if(!entry.isIntersecting)return;
-        activate(entry.target);
+        if(entry.target.matches("iframe[data-map-src]"))activateFrame(entry.target);
+        else activateHike(entry.target);
         observer.unobserve(entry.target);
       });
     },{rootMargin:"160px 0px",threshold:0.01});
     frames.forEach(frame=>observer.observe(frame));
+    hikeMaps.forEach(node=>observer.observe(node));
   }
 
   function travelMetaRows(item,{omitTravelStats=false,omitWeather=false}={}){

@@ -1,6 +1,7 @@
 /**
- * Admin V2 Kommunikationszentrale — buendelt bestehende Kanaele (Portal, mailto, WhatsApp).
+ * Admin V2 Kommunikationszentrale — buendelt bestehende Kanaele (Portal, mailto, WhatsApp, PDF-Druck).
  * E-Mail: produktiv ueber mailto + Vorlagen (kein Server-Mail).
+ * WhatsApp: Deep-Links. PDF: druckoptimiertes HTML + Browser-Print (ACTAdminV2Pdf).
  * Anbindung: ACTAdminV2Communication.bind(host)
  */
 (function(){
@@ -11,6 +12,7 @@
   const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const EMAIL_TEMPLATE_IDS=["general","program","bookings","documents","portal"];
   const WA_TEMPLATE_IDS=["greeting","program","bookings","portal","documents","free"];
+  const PDF_DOC_IDS=["program","bookings","info"];
   const ACT_WA_SIGNATURE=["Freundliche Gruesse","Alpine Concierge Tirol"];
 
   function h(){
@@ -419,6 +421,100 @@
     `;
   }
 
+  function pdfApi(){
+    return window.ACTAdminV2Pdf||null;
+  }
+
+  function selectedPdfDocumentId(){
+    const id=String(state().communicationPdfDocument||"program").trim();
+    return PDF_DOC_IDS.includes(id)?id:"program";
+  }
+
+  function pdfDocumentDefs(){
+    return [
+      {id:"program",label:"Reiseprogramm"},
+      {id:"bookings",label:"Buchungsuebersicht"},
+      {id:"info",label:"Concierge-Infoblatt"}
+    ];
+  }
+
+  function pdfCardMarkup(customer){
+    const api=pdfApi();
+    const docId=selectedPdfDocumentId();
+    const analysis=api?.analyzeDocument?.(docId,customer)||{ok:false,errors:["PDF-Modul nicht geladen."],warnings:[],stats:{}};
+    const stats=analysis.stats||{};
+    const programCount=api?.programItemCount?.(customer)??0;
+    const bookingCount=api?.publicBookings?.(customer)?.length??0;
+    const published=h().isPublished(customer);
+    const trip=tripLabel(customer);
+    const period=stats.period||"";
+    const filename=api?.buildFilename?.(docId,customer)||"";
+    const canOpen=Boolean(api&&analysis.ok);
+    const disableReason=!api
+      ?"PDF-Modul nicht geladen."
+      :(analysis.errors||[]).join(" ");
+
+    return `
+      <article class="v2-comm-card v2-comm-pdf-card">
+        <div class="v2-comm-card-head">
+          <span class="v2-comm-icon" aria-hidden="true">PDF</span>
+          <div>
+            <p class="v2-eyebrow">PDF</p>
+            <h3>Reiseunterlagen</h3>
+          </div>
+          ${badge(analysis.ok?"Bereit":"Daten unvollstaendig")}
+        </div>
+        <div class="v2-comm-facts">
+          ${summaryItem("Kunde",displayValue(customerLabel(customer)))}
+          ${summaryItem("Reise",displayValue(trip,"Nicht hinterlegt"))}
+          ${summaryItem("Reisedatum",displayValue(period,"Nicht hinterlegt"))}
+          ${summaryItem("Programmpunkte",String(programCount))}
+          ${summaryItem("Buchungen (sichtbar)",String(bookingCount))}
+          ${summaryItem("Veroeffentlicht?",published?"Ja":"Nein")}
+        </div>
+        ${(analysis.errors||[]).length?`<p class="v2-comm-prepared">${escapeHtml((analysis.errors||[]).join(" "))}</p>`:""}
+        ${(analysis.warnings||[]).length?`<p class="v2-muted">${escapeHtml((analysis.warnings||[]).join(" · "))}</p>`:""}
+        <label class="v2-comm-template-label" for="communicationPdfDocument">
+          <span>Ausgabe</span>
+          <select id="communicationPdfDocument" data-comm-pdf-document>
+            ${pdfDocumentDefs().map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===docId?"selected":""}>${escapeHtml(item.label)}</option>`).join("")}
+          </select>
+        </label>
+        ${filename?`<p class="v2-muted">Dateiname: ${escapeHtml(filename)}</p>`:""}
+        <div class="v2-document-actions">
+          ${actionButton("Reiseprogramm erstellen","pdf-program",{primary:docId==="program"})}
+          ${actionButton("Buchungsuebersicht erstellen","pdf-bookings",{primary:docId==="bookings"})}
+          ${actionButton("Concierge-Infoblatt erstellen","pdf-info",{primary:docId==="info"})}
+          ${actionButton("Vorschau oeffnen","pdf-preview",{disabled:!canOpen,title:disableReason})}
+          ${actionButton("Als PDF speichern / Drucken","pdf-print",{disabled:!canOpen,title:disableReason||"Oeffnet die Vorschau; Drucken starten Sie dort manuell"})}
+        </div>
+        ${preparedNote("Ausgabe als druckoptimiertes HTML im Browser (A4). Keine PDF-Library, keine Server-PDF-API. QR-Code nur als Platzhalter vorbereitet.")}
+      </article>
+    `;
+  }
+
+  function openPdfDocument(docType,customer){
+    const api=pdfApi();
+    if(!api?.openDocument){
+      setMessage("PDF-Modul nicht geladen.","error");
+      return false;
+    }
+    const type=PDF_DOC_IDS.includes(docType)?docType:selectedPdfDocumentId();
+    h().patchState({communicationPdfDocument:type});
+    const result=api.openDocument(type,customer,{autoPrint:false});
+    if(result.blocked){
+      setMessage(result.errors?.[0]||"Vorschaufenster blockiert.","error");
+      return false;
+    }
+    if(!result.ok){
+      setMessage((result.errors||["Ausgabe nicht moeglich."]).join(" "),"error");
+      return false;
+    }
+    const warn=result.warnings?.length?` Hinweise: ${result.warnings.join(" · ")}`:"";
+    setMessage(`Vorschau geoeffnet (${result.filename||"PDF"}). Drucken Sie dort manuell.${warn}`,"success");
+    return true;
+  }
+
   function whatsappCardMarkup(customer){
     const phone=analyzeCustomerWhatsapp(customer);
     const published=h().isPublished(customer);
@@ -538,24 +634,7 @@
 
           ${whatsappCardMarkup(customer)}
 
-          <article class="v2-comm-card">
-            <div class="v2-comm-card-head">
-              <span class="v2-comm-icon" aria-hidden="true">PDF</span>
-              <div>
-                <p class="v2-eyebrow">PDF</p>
-                <h3>Exporte</h3>
-              </div>
-              ${badge("Vorbereitet")}
-            </div>
-            <div class="v2-document-actions">
-              ${actionButton("Reiseprogramm","pdf-program",{disabled:true,title:"PDF-Erzeugung ist noch nicht angebunden"})}
-              ${actionButton("Buchungsuebersicht","pdf-bookings",{disabled:true,title:"PDF-Erzeugung ist noch nicht angebunden"})}
-              ${actionButton("Dokumentenpaket","pdf-pack",{disabled:true,title:"PDF-Erzeugung ist noch nicht angebunden"})}
-              ${actionButton("Download","pdf-download",{disabled:true,title:"Noch nicht verfuegbar"})}
-              ${actionButton("Vorschau","pdf-preview",{disabled:true,title:"Noch nicht verfuegbar"})}
-            </div>
-            ${preparedNote("PDF-Erzeugung ist vorbereitet und wird spaeter angebunden. Drucken ist weiterhin ueber Browser / Classic Wizard moeglich.")}
-          </article>
+          ${pdfCardMarkup(customer)}
 
           <article class="v2-comm-card">
             <div class="v2-comm-card-head">
@@ -650,7 +729,16 @@
         setMessage("WhatsApp wird geoeffnet …","saving");
         return true;
       }
-      if(String(action||"").startsWith("pdf-")||action==="email-docs"){
+      if(action==="pdf-program"||action==="pdf-bookings"||action==="pdf-info"||action==="pdf-preview"||action==="pdf-print"){
+        const type=action==="pdf-preview"||action==="pdf-print"
+          ?selectedPdfDocumentId()
+          :action.replace("pdf-","");
+        openPdfDocument(type,customer);
+        if(state().route==="communication")renderCommunicationView();
+        else if(typeof h().render==="function")h().render();
+        return true;
+      }
+      if(action==="pdf-pack"||action==="pdf-download"||action==="email-docs"){
         setMessage("Diese Funktion ist vorbereitet und noch nicht angebunden.","warning");
         return true;
       }
@@ -693,6 +781,14 @@
       else if(typeof h().render==="function")h().render();
       return true;
     }
+    const pdfSelect=event.target.closest("[data-comm-pdf-document]");
+    if(pdfSelect){
+      const next=String(pdfSelect.value||"program").trim();
+      h().patchState({communicationPdfDocument:PDF_DOC_IDS.includes(next)?next:"program"});
+      if(state().route==="communication")renderCommunicationView();
+      else if(typeof h().render==="function")h().render();
+      return true;
+    }
     return false;
   }
 
@@ -716,6 +812,10 @@
     buildWhatsappUrl,
     resolveWhatsappTemplate,
     whatsappTemplateDefs,
-    WA_TEMPLATE_IDS
+    WA_TEMPLATE_IDS,
+    selectedPdfDocumentId,
+    pdfDocumentDefs,
+    openPdfDocument,
+    PDF_DOC_IDS
   };
 })();

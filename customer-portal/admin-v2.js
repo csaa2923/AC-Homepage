@@ -16,6 +16,7 @@
     communicationMessageKind:"",
     communicationEmailTemplate:"general",
     communicationWhatsappTemplate:"greeting",
+    communicationPdfDocument:"program",
     customerEditMode:false,
     customerEditDraft:null,
     customerEditOriginal:"",
@@ -1340,6 +1341,7 @@
       contactName:firstValue(item.contactName,item.contact,item.contactPerson,item.ansprechpartner),
       contactPhone:firstValue(item.contactPhone,item.phone,item.telefon,item.mobile),
       contactEmail:firstValue(item.contactEmail,item.email,item.mail),
+      meetingPoint:firstValue(item.meetingPoint,item.treffpunkt,item.meeting),
       price:firstValue(item.price,item.cost,item.kosten),
       currency:firstValue(item.currency,item.waehrung,item.currencyCode,"EUR"),
       priority:firstValue(item.priority,item.importance,item.prioritaet),
@@ -1427,6 +1429,7 @@
         contactName:cleanValue(item.contactName),
         contactPhone:cleanValue(item.contactPhone),
         contactEmail:cleanValue(item.contactEmail),
+        meetingPoint:cleanValue(item.meetingPoint),
         price:cleanValue(item.price),
         currency:firstValue(item.currency,"EUR"),
         priority:cleanValue(item.priority),
@@ -1502,7 +1505,7 @@
   function addProgramItem(dayIndex){
     const day=state.programEditDraft?.days?.[dayIndex];
     if(!day)return;
-    day.items.push({time:"",startTime:"",endTime:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",venueName:"",locationAddress:"",locationCity:"",locationCountry:"",eventUrl:"",websiteUrl:"",contactName:"",contactPhone:"",contactEmail:"",price:"",currency:"EUR",priority:"",imageUrl:"",ticketNumber:"",voucherNumber:"",weatherPlaceholder:"",notes:"",internalNotes:""});
+    day.items.push({time:"",startTime:"",endTime:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",venueName:"",locationAddress:"",locationCity:"",locationCountry:"",eventUrl:"",websiteUrl:"",contactName:"",contactPhone:"",contactEmail:"",meetingPoint:"",price:"",currency:"EUR",priority:"",imageUrl:"",ticketNumber:"",voucherNumber:"",weatherPlaceholder:"",notes:"",internalNotes:""});
     setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
     renderCustomerDetail();
   }
@@ -1607,6 +1610,7 @@
         contactName:item.contactName,
         contactPhone:item.contactPhone,
         contactEmail:item.contactEmail,
+        meetingPoint:item.meetingPoint,
         price:item.price,
         currency:item.currency,
         priority:item.priority,
@@ -5678,6 +5682,9 @@
       documentSummary,
       isPublished,
       formatPublishDateTime,
+      formatDate,
+      formatPeriod,
+      generatedProgramDays,
       resolvePortalLink,
       portalLinkBadgeLabel,
       copyPortalLinkV2,
@@ -5686,6 +5693,15 @@
       detailHash,
       routeTo,
       render
+    });
+    window.ACTAdminV2Pdf?.bind?.({
+      getState:()=>state,
+      escapeHtml,
+      isPublished,
+      formatDate,
+      formatPeriod,
+      generatedProgramDays,
+      resolvePortalLink
     });
     byId("adminLoginForm").addEventListener("submit",event=>{event.preventDefault();signIn();});
     byId("logoutButton").addEventListener("click",async()=>{

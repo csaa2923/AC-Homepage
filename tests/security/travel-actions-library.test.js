@@ -322,4 +322,92 @@ describe("travel actions navigation destination", () => {
     assert.ok(start.latitude > 47 && start.latitude < 48);
     assert.ok(start.longitude > 11 && start.longitude < 12);
   });
+
+  it("resolveHikeCompanion uses only persisted route fields", () => {
+    const lib = loadLibrary();
+    const analysis = lib.extractRouteFromXml(SAMPLE_GPX, "gpx");
+    const companion = lib.resolveHikeCompanion({
+      title: "Seefeld Rundweg",
+      category: "Wandern",
+      difficulty: "leicht",
+      gpxFile: {
+        url: "https://example.com/route.gpx",
+        fileName: "route.gpx",
+        startLatitude: analysis.startLatitude,
+        startLongitude: analysis.startLongitude,
+        endLatitude: analysis.endLatitude,
+        endLongitude: analysis.endLongitude,
+        routePoints: analysis.routePoints,
+        bounds: analysis.bounds,
+        distanceKm: analysis.distanceKm,
+        elevationGainM: analysis.elevationGainM,
+        elevationLossM: analysis.elevationLossM,
+        durationMinutes: 45,
+        pointCount: analysis.pointCount
+      }
+    }, "Mozilla/5.0 (Windows)");
+    assert.equal(companion.show, true);
+    assert.ok(companion.stats.some(stat => stat.key === "distance"));
+    assert.ok(companion.stats.some(stat => stat.key === "ascent"));
+    assert.ok(companion.stats.some(stat => stat.key === "start"));
+    assert.ok(companion.stats.some(stat => stat.key === "end"));
+    assert.equal(companion.map.ok, true);
+    assert.equal(companion.map.hasRouteLine, true);
+    assert.match(companion.map.overlaySvg, /polyline/i);
+    assert.equal(companion.elevationProfile.show, false);
+    assert.ok(companion.summary.some(line => /Distanz/i.test(line)));
+    assert.ok(companion.summary.some(line => /Schwierigkeit/i.test(line)));
+    assert.equal(companion.toolbar.navigation.show, true);
+    assert.equal(companion.toolbar.gpx.show, true);
+    assert.match(companion.toolbar.mapsLabel, /Google Maps/i);
+  });
+
+  it("does not show elevation profile without persisted elevation series", () => {
+    const lib = loadLibrary();
+    const companion = lib.resolveHikeCompanion({
+      gpxFile: {
+        url: "https://example.com/route.gpx",
+        routePoints: [
+          {latitude: 47.33, longitude: 11.18},
+          {latitude: 47.34, longitude: 11.19}
+        ],
+        distanceKm: 2.4,
+        elevationGainM: 120
+      }
+    });
+    assert.equal(companion.elevationProfile.show, false);
+    assert.equal(companion.elevationProfile.svg, "");
+  });
+
+  it("builds elevation profile only from persisted point elevations", () => {
+    const lib = loadLibrary();
+    const companion = lib.resolveHikeCompanion({
+      gpxFile: {
+        url: "https://example.com/route.gpx",
+        routePoints: [
+          {latitude: 47.33, longitude: 11.18, elevation: 1180},
+          {latitude: 47.331, longitude: 11.185, elevation: 1220},
+          {latitude: 47.332, longitude: 11.19, elevation: 1200}
+        ]
+      }
+    });
+    assert.equal(companion.elevationProfile.show, true);
+    assert.match(companion.elevationProfile.svg, /polyline/i);
+    assert.equal(companion.elevationProfile.minElevation, 1180);
+    assert.equal(companion.elevationProfile.maxElevation, 1220);
+  });
+
+  it("infers Rundweg vs Streckenwanderung from start/end gap", () => {
+    const lib = loadLibrary();
+    assert.equal(lib.inferRouteShape(
+      {ok: true, latitude: 47.33, longitude: 11.18},
+      {ok: true, latitude: 47.3301, longitude: 11.1801},
+      5
+    ), "Rundweg");
+    assert.equal(lib.inferRouteShape(
+      {ok: true, latitude: 47.33, longitude: 11.18},
+      {ok: true, latitude: 47.4, longitude: 11.3},
+      12
+    ), "Streckenwanderung");
+  });
 });

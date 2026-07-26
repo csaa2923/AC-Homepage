@@ -559,11 +559,12 @@
     return {...item,navigationUrl:linked.navigationUrl};
   }
 
-  function travelActionsMarkup(item,{compact=false}={}){
+  function travelActionsMarkup(item,{compact=false,mode="all"}={}){
     const lib=travelLib();
     const source=itemForTravelActions(item);
     const actions=lib?.programItemActions?lib.programItemActions(source):null;
     if(!actions){
+      if(mode==="secondary")return "";
       const nav=itemNavigationUrl(source);
       return nav?`<a class="button soft" href="${escapeHtml(nav)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:"";
     }
@@ -581,52 +582,160 @@
       kmlFile:source.kmlFile||null
     }));
     const hasRouteFile=Boolean(actions.gpx.show||actions.kml.show);
-    if(actions.maps?.show||hasRouteFile){
-      buttons.push(`<a class="button soft" href="${escapeHtml(actions.maps?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${travelPayload}">${escapeHtml(actions.maps?.label||"In Maps oeffnen")}</a>`);
+    const includeToolbar=mode==="all"||mode==="toolbar";
+    const includeSecondary=mode==="all"||mode==="secondary";
+    if(includeToolbar){
+      if(actions.maps?.show||hasRouteFile){
+        buttons.push(`<a class="button soft" href="${escapeHtml(actions.maps?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${travelPayload}">${escapeHtml(actions.maps?.label||"In Maps oeffnen")}</a>`);
+      }
+      if(actions.navigation.show)buttons.push(`<a class="button ${compact?"soft":"primary"}" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
+      else if(actions.navigation.hint&&mode!=="toolbar")buttons.push(`<p class="travel-nav-missing">${escapeHtml(actions.navigation.hint)}</p>`);
+      if(actions.gpx.show){
+        buttons.push(`<a class="button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
+      }
+      if(actions.kml.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.kml.url)}" download="${escapeHtml(actions.kml.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}</a>`);
     }
-    if(actions.navigation.show)buttons.push(`<a class="button ${compact?"soft":"primary"}" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
-    else if(actions.navigation.hint)buttons.push(`<p class="travel-nav-missing">${escapeHtml(actions.navigation.hint)}</p>`);
-    if(actions.gpx.show){
-      buttons.push(`<a class="button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
+    if(includeSecondary){
+      if(actions.komoot.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.komoot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.komoot.label)}</a>`);
+      if(actions.outdooractive.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.outdooractive.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.outdooractive.label)}</a>`);
+      if(actions.calendar.show)buttons.push(`<button class="button soft" type="button" data-calendar-id="${escapeHtml(item.id)}">${escapeHtml(actions.calendar.label)}</button>`);
+      if(actions.ticketQr.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.ticketQr.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.ticketQr.label)}</a>`);
+      if(actions.ticketPdf.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.ticketPdf.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.ticketPdf.label)}</a>`);
+      if(actions.voucher.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.voucher.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.voucher.label)}</a>`);
     }
-    if(actions.kml.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.kml.url)}" download="${escapeHtml(actions.kml.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}</a>`);
-    if(actions.komoot.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.komoot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.komoot.label)}</a>`);
-    if(actions.outdooractive.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.outdooractive.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.outdooractive.label)}</a>`);
-    if(actions.calendar.show)buttons.push(`<button class="button soft" type="button" data-calendar-id="${escapeHtml(item.id)}">${escapeHtml(actions.calendar.label)}</button>`);
-    if(actions.ticketQr.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.ticketQr.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.ticketQr.label)}</a>`);
-    if(actions.ticketPdf.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.ticketPdf.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.ticketPdf.label)}</a>`);
-    if(actions.voucher.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.voucher.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.voucher.label)}</a>`);
-    const hint=actions.gpx.show&&!compact?`<p class="travel-offline-hint">${escapeHtml(actions.meta.offlineHint)}</p>`:"";
+    const hint=includeToolbar&&actions.gpx.show&&!compact?`<p class="travel-offline-hint">${escapeHtml(actions.meta.offlineHint)}</p>`:"";
     return `${buttons.join("")}${hint}`;
   }
 
-  function travelMapMarkup(item){
-    const lib=travelLib();
-    const source=itemForTravelActions(item);
-    const map=lib?.staticMapPreview?lib.staticMapPreview(source):null;
-    if(!map?.ok)return "";
-    const actions=lib?.programItemActions?lib.programItemActions(source):null;
-    const mapsUrl=actions?.maps?.show?actions.maps.url:"";
-    const navUrl=actions?.navigation?.show?actions.navigation.url:"";
-    const endLabel=map.endLatitude!=null&&map.endLongitude!=null
-      &&!(map.endLatitude===map.latitude&&map.endLongitude===map.longitude)
-      ?`<p class="travel-map-meta">Ziel: ${escapeHtml(String(map.endLatitude))}, ${escapeHtml(String(map.endLongitude))}</p>`
-      :"";
+  function hikeWeatherMarkup(item){
+    const weather=weatherForDate(item.dateValue||"");
+    if(!weather)return "";
+    const tempMin=Number.isFinite(Number(weather.tempMin))?Math.round(Number(weather.tempMin)):null;
+    const tempMax=Number.isFinite(Number(weather.tempMax))?Math.round(Number(weather.tempMax)):null;
+    const temp=tempMin!==null&&tempMax!==null?`${tempMin}–${tempMax}°C`:"";
+    const precip=Number.isFinite(Number(weather.rainProbability))?`${Math.round(Number(weather.rainProbability))}% Regen`:"";
+    const parts=[weather.condition||weather.summary||"",temp,precip].filter(Boolean);
+    if(!parts.length)return "";
     return `
-      <div class="travel-map-preview">
-        <iframe src="${escapeHtml(map.embedUrl)}" title="Route auf Karte" loading="lazy" referrerpolicy="no-referrer" tabindex="-1"></iframe>
-        <div class="travel-map-actions card-actions">
-          ${mapsUrl?`<a class="button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${escapeHtml(JSON.stringify({
-            latitude:source.latitude||"",longitude:source.longitude||"",address:source.address||"",locationAddress:source.locationAddress||"",location:source.location||"",googleMapsUrl:source.googleMapsUrl||"",appleMapsUrl:source.appleMapsUrl||"",navigationUrl:source.navigationUrl||"",gpxFile:source.gpxFile||null,kmlFile:source.kmlFile||null
-          }))}">Route auf Karte</a>`:""}
-          ${navUrl?`<a class="button soft travel-map-link" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}
+      <div class="hike-weather" aria-label="Wetter">
+        <span class="hike-weather-icon" aria-hidden="true">${escapeHtml(weather.symbol||"☀️")}</span>
+        <div>
+          <strong>Wetter</strong>
+          <p>${escapeHtml(parts.join(" · "))}</p>
         </div>
-        ${endLabel}
       </div>
     `;
   }
 
-  function travelMetaRows(item){
+  function hikeCompanionParts(item){
+    const lib=travelLib();
+    const source=itemForTravelActions(item);
+    const companion=lib?.resolveHikeCompanion?lib.resolveHikeCompanion(source):null;
+    const weatherBlock=hikeWeatherMarkup(item);
+    const hikeHint=/wandern|hike|tour|berg/i.test(`${item.category||""} ${item.title||""}`);
+    if(!companion?.show&&!(weatherBlock&&hikeHint))return {intro:"",route:"",show:false};
+    const stats=companion?.stats||[];
+    const overview=stats.length?`
+      <div class="hike-overview">
+        <h4>Wanderübersicht</h4>
+        <ul class="hike-stats">
+          ${stats.map(stat=>`<li><span class="hike-stat-icon" aria-hidden="true">${escapeHtml(stat.icon)}</span><span class="hike-stat-label">${escapeHtml(stat.label)}</span><span class="hike-stat-value">${escapeHtml(stat.value)}</span></li>`).join("")}
+        </ul>
+      </div>
+    `:"";
+    const mapBlock=companion?.map?.ok?`
+      <div class="hike-map travel-map-preview">
+        <div class="hike-map-frame">
+          <iframe data-map-src="${escapeHtml(companion.map.embedUrl)}" title="Route auf Karte" loading="lazy" referrerpolicy="no-referrer" tabindex="-1"></iframe>
+          ${companion.map.overlaySvg?`<div class="hike-route-overlay">${companion.map.overlaySvg}</div>`:""}
+        </div>
+      </div>
+    `:"";
+    const elevBlock=companion?.elevationProfile?.show?`
+      <div class="hike-elev" aria-label="Hoehenprofil">
+        <h4>Höhenprofil</h4>
+        ${companion.elevationProfile.svg}
+        ${companion.elevationProfile.minElevation!=null&&companion.elevationProfile.maxElevation!=null
+          ?`<p class="hike-elev-meta">${escapeHtml(String(companion.elevationProfile.minElevation))}–${escapeHtml(String(companion.elevationProfile.maxElevation))} m</p>`
+          :""}
+      </div>
+    `:"";
+    const summary=companion?.summary?.length?`
+      <div class="hike-summary">
+        <h4>Kurzinfo</h4>
+        <ul>${companion.summary.map(line=>`<li>${escapeHtml(line)}</li>`).join("")}</ul>
+      </div>
+    `:"";
+    const toolbar=companion?.show?hikeToolbarMarkup(item,companion):"";
+    const intro=`${overview}${weatherBlock}`;
+    const route=`${mapBlock}${elevBlock}${summary}${toolbar}`;
+    return {
+      show:Boolean(intro||route),
+      intro:intro?`<section class="hike-companion hike-companion-intro">${intro}</section>`:"",
+      route:route?`<section class="hike-companion hike-companion-route">${route}</section>`:""
+    };
+  }
+
+  function hikeToolbarMarkup(item,companion){
+    const source=itemForTravelActions(item);
+    const toolbar=companion?.toolbar||{};
+    const buttons=[];
+    const travelPayload=escapeHtml(JSON.stringify({
+      latitude:source.latitude||"",
+      longitude:source.longitude||"",
+      address:source.address||"",
+      locationAddress:source.locationAddress||"",
+      location:source.location||"",
+      googleMapsUrl:source.googleMapsUrl||"",
+      appleMapsUrl:source.appleMapsUrl||"",
+      navigationUrl:source.navigationUrl||"",
+      gpxFile:source.gpxFile||null,
+      kmlFile:source.kmlFile||null
+    }));
+    if(toolbar.maps?.show||toolbar.gpx?.show||toolbar.kml?.show){
+      buttons.push(`<a class="button soft" href="${escapeHtml(toolbar.maps?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${travelPayload}">${escapeHtml(toolbar.mapsLabel||"In Google Maps oeffnen")}</a>`);
+    }
+    if(toolbar.navigation?.show){
+      buttons.push(`<a class="button primary" href="${escapeHtml(toolbar.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(toolbar.navigation.label||"Navigation starten")}</a>`);
+    }
+    if(toolbar.gpx?.show){
+      buttons.push(`<a class="button soft" href="${escapeHtml(toolbar.gpx.url)}" download="${escapeHtml(toolbar.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(toolbar.gpx.label)}${toolbar.gpx.fileSizeLabel?` (${escapeHtml(toolbar.gpx.fileSizeLabel)})`:""}</a>`);
+    }
+    if(toolbar.kml?.show){
+      buttons.push(`<a class="button soft" href="${escapeHtml(toolbar.kml.url)}" download="${escapeHtml(toolbar.kml.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(toolbar.kml.label)}</a>`);
+    }
+    if(!buttons.length)return "";
+    const hint=toolbar.gpx?.show&&companion?.meta?.offlineHint
+      ?`<p class="travel-offline-hint">${escapeHtml(companion.meta.offlineHint)}</p>`
+      :"";
+    return `<div class="hike-toolbar card-actions" aria-label="Kartenleiste">${buttons.join("")}${hint}</div>`;
+  }
+
+  function observeLazyMaps(rootEl){
+    const scope=rootEl||document;
+    const frames=[...scope.querySelectorAll("iframe[data-map-src]")];
+    if(!frames.length)return;
+    const activate=frame=>{
+      const src=frame.getAttribute("data-map-src");
+      if(!src||frame.getAttribute("src"))return;
+      frame.setAttribute("src",src);
+      frame.removeAttribute("data-map-src");
+    };
+    if(!("IntersectionObserver" in window)){
+      frames.forEach(activate);
+      return;
+    }
+    const observer=new IntersectionObserver(entries=>{
+      entries.forEach(entry=>{
+        if(!entry.isIntersecting)return;
+        activate(entry.target);
+        observer.unobserve(entry.target);
+      });
+    },{rootMargin:"160px 0px",threshold:0.01});
+    frames.forEach(frame=>observer.observe(frame));
+  }
+
+  function travelMetaRows(item,{omitTravelStats=false,omitWeather=false}={}){
     const lib=travelLib();
     const actions=lib?.programItemActions?lib.programItemActions(item):null;
     const meta=actions?.meta||{};
@@ -636,16 +745,17 @@
     const weatherText=weather
       ?`${weather.condition||weather.summary||"Wetter"}${tempMin!==null&&tempMax!==null?` · ${tempMin}–${tempMax}°C`:""}`
       :"";
-    return [
+    const rows=[
       ["Adresse",meta.address||item.address||""],
-      ["Schwierigkeit",meta.difficulty||""],
-      ["Distanz",meta.distanceKm||""],
-      ["Gehzeit",meta.walkDuration||""],
-      ["Hoehenmeter",meta.elevationGain||""],
-      ["Abstieg",meta.elevationLoss||""],
-      ["Wetter",weatherText],
+      omitTravelStats?null:["Schwierigkeit",meta.difficulty||""],
+      omitTravelStats?null:["Distanz",meta.distanceKm||""],
+      omitTravelStats?null:["Gehzeit",meta.walkDuration||""],
+      omitTravelStats?null:["Hoehenmeter",meta.elevationGain||""],
+      omitTravelStats?null:["Abstieg",meta.elevationLoss||""],
+      omitWeather?null:["Wetter",weatherText],
       ["Buchungsnummer",meta.bookingNumber||""]
     ];
+    return rows.filter(Boolean);
   }
 
   function whatsappLink(number,message){
@@ -1008,23 +1118,33 @@
 
   function renderProgramDetails(){
     const items=programItems();
-    document.getElementById("programDetails").innerHTML=items.map((item,index)=>{
+    const detailsRoot=document.getElementById("programDetails");
+    detailsRoot.innerHTML=items.map((item,index)=>{
       const previous=items[index-1];
       const next=items[index+1];
       const linked=linkedBookingForItem(item);
       const bookingDocs=(linked?.documents||[]).map(normalizeDocument).filter(doc=>resolveDocumentUrl(doc)&&doc.visible!==false);
+      const companion=travelLib()?.resolveHikeCompanion?.(itemForTravelActions(item));
+      const companionParts=hikeCompanionParts(item);
+      const omitTravelStats=Boolean(companion?.show);
+      const omitWeather=Boolean(companionParts.show);
+      const secondaryActions=omitTravelStats
+        ?travelActionsMarkup(item,{mode:"secondary"})
+        :travelActionsMarkup(item);
       return `
         <article class="program-detail-card" id="${detailId(item)}">
           <span class="tag">${item.category} · ${programStatusLabel(item)}</span>
           <h3>${item.title}</h3>
+          ${companionParts.intro}
           <p>${item.description}</p>
+          ${companionParts.route}
           ${linked?.customerNote?`<p class="booking-customer-note"><strong>Hinweis:</strong> ${escapeHtml(linked.customerNote)}</p>`:""}
           ${definitionList([
             ["Datum",itemDate(item)],
             ["Uhrzeit",`${item.startTime||""}${item.endTime?` - ${item.endTime}`:""}`],
             ["Dauer",item.duration],
             ["Treffpunkt",item.meetingPoint],
-            ...travelMetaRows(item),
+            ...travelMetaRows(item,{omitTravelStats,omitWeather}),
             ["Anbieter",linked?.provider||""],
             ["Kleidung / Ausrüstung",item.outfit],
             ["Hinweise",item.notes],
@@ -1032,19 +1152,19 @@
             ["Telefon",item.phone],
             ["Dokumente",item.documents&&item.documents.length?item.documents.join(", "):""]
           ])}
-          ${travelMapMarkup(item)}
           <div class="card-actions">
             <a class="button soft" href="#calendar">Zurück zum Kalender</a>
             <a class="button soft" href="#overall-timeline">Zurück zur Gesamt-Timeline</a>
             ${previous?`<a class="button soft" href="#${detailId(previous)}">Vorheriger Programmpunkt</a>`:""}
             ${next?`<a class="button soft" href="#${detailId(next)}">Nächster Programmpunkt</a>`:""}
-            ${travelActionsMarkup(item)}
-            ${(!travelLib()?.programItemActions&&(linked?.navigationUrl||itemNavigationUrl(item)))?`<a class="button soft" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}
+            ${secondaryActions}
+            ${(!omitTravelStats&&!travelLib()?.programItemActions&&(linked?.navigationUrl||itemNavigationUrl(item)))?`<a class="button soft" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}
             ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(resolveDocumentUrl(doc))}" target="_blank" rel="noopener noreferrer">Dokument oeffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
           </div>
         </article>
       `;
     }).join("");
+    observeLazyMaps(detailsRoot);
   }
 
   function renderBookings(){

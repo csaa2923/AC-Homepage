@@ -66,12 +66,15 @@
 
   const MAX_ROUTE_POINTS=25;
 
-  function pushValidPoint(points,lat,lng){
+  function pushValidPoint(points,lat,lng,elevation){
     const coords=parseCoords(lat,lng);
     if(!coords.ok)return;
     const prev=points[points.length-1];
     if(prev&&prev.latitude===coords.latitude&&prev.longitude===coords.longitude)return;
-    points.push({latitude:coords.latitude,longitude:coords.longitude});
+    const point={latitude:coords.latitude,longitude:coords.longitude};
+    const elev=parseCoordNumber(elevation);
+    if(elev!==null)point.elevation=elev;
+    points.push(point);
   }
 
   function sampleRoutePoints(points,maxPoints=MAX_ROUTE_POINTS){
@@ -164,11 +167,16 @@
     const points=[];
     value.forEach(entry=>{
       if(Array.isArray(entry)&&entry.length>=2){
-        pushValidPoint(points,entry[0],entry[1]);
+        pushValidPoint(points,entry[0],entry[1],entry[2]);
         return;
       }
       if(entry&&typeof entry==="object"){
-        pushValidPoint(points,entry.latitude??entry.lat,entry.longitude??entry.lng??entry.lon);
+        pushValidPoint(
+          points,
+          entry.latitude??entry.lat,
+          entry.longitude??entry.lng??entry.lon,
+          entry.elevation??entry.ele??entry.altitude
+        );
       }
     });
     return sampleRoutePoints(points,MAX_ROUTE_POINTS);
@@ -879,6 +887,186 @@
     return `${done} von ${all} Programmpunkten abgeschlossen`;
   }
 
+  function formatCoordPair(lat,lng){
+    const coords=parseCoords(lat,lng);
+    if(!coords.ok)return "";
+    return `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`;
+  }
+
+  function routeFileMeta(item){
+    const source=item||{};
+    const gpx=normalizeTravelAttachment(source.gpxFile);
+    const kml=normalizeTravelAttachment(source.kmlFile);
+    if(gpx&&(gpx.routePoints?.length||gpx.startLatitude!=null||gpx.distanceKm!=null))return gpx;
+    if(kml&&(kml.routePoints?.length||kml.startLatitude!=null||kml.distanceKm!=null))return kml;
+    return gpx||kml||null;
+  }
+
+  function elevationSeriesFromPoints(points){
+    const list=Array.isArray(points)?points:[];
+    const series=[];
+    list.forEach(point=>{
+      if(!point||typeof point!=="object")return;
+      const elevation=parseCoordNumber(point.elevation??point.ele??point.altitude);
+      const lat=parseCoordNumber(point.latitude??point.lat);
+      const lng=parseCoordNumber(point.longitude??point.lng??point.lon);
+      if(elevation===null||lat===null||lng===null)return;
+      if(lat===0&&lng===0)return;
+      series.push({latitude:lat,longitude:lng,elevation});
+    });
+    return series.length>=2?series:[];
+  }
+
+  function buildElevationProfileSvg(series,{width=320,height=96}={}){
+    if(!Array.isArray(series)||series.length<2)return {ok:false,svg:""};
+    const elevations=series.map(point=>point.elevation);
+    const min=Math.min(...elevations);
+    const max=Math.max(...elevations);
+    if(!(max>min))return {ok:false,svg:""};
+    const padX=8;
+    const padY=10;
+    const innerW=width-padX*2;
+    const innerH=height-padY*2;
+    const coords=series.map((point,index)=>{
+      const x=padX+(index/(series.length-1))*innerW;
+      const y=padY+innerH-((point.elevation-min)/(max-min))*innerH;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+    const svg=`<svg class="hike-elev-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Hoehenprofil" preserveAspectRatio="none"><polyline fill="none" stroke="#1f6b57" stroke-width="2.5" points="${coords}"/></svg>`;
+    return {ok:true,svg,minElevation:Math.round(min),maxElevation:Math.round(max)};
+  }
+
+  function projectRouteOverlay(points,bounds,{width=320,height=180}={}){
+    const list=normalizeRoutePoints(points);
+    const box=normalizeBounds(bounds)||boundsFromPoints(list);
+    if(list.length<2||!box)return {ok:false};
+    const pad=14;
+    const spanLat=Math.max(0.000001,box.maxLat-box.minLat);
+    const spanLng=Math.max(0.000001,box.maxLng-box.minLng);
+    const project=point=>{
+      const x=pad+((point.longitude-box.minLng)/spanLng)*(width-pad*2);
+      const y=pad+((box.maxLat-point.latitude)/spanLat)*(height-pad*2);
+      return {x,y};
+    };
+    const projected=list.map(project);
+    const polyline=projected.map(point=>`${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+    const start=projected[0];
+    const end=projected[projected.length-1];
+    const svg=`<svg class="hike-route-svg" viewBox="0 0 ${width} ${height}" aria-hidden="true" preserveAspectRatio="none"><polyline fill="none" stroke="#c45c26" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${polyline}"/><circle cx="${start.x.toFixed(1)}" cy="${start.y.toFixed(1)}" r="5" fill="#1f6b57"/><circle cx="${end.x.toFixed(1)}" cy="${end.y.toFixed(1)}" r="5" fill="#8b3d31"/></svg>`;
+    return {ok:true,svg,width,height};
+  }
+
+  function inferRouteShape(start,end,distanceKm){
+    if(!start?.ok||!end?.ok)return "";
+    const gapKm=haversineKm(start,end);
+    const distance=parseCoordNumber(distanceKm);
+    if(distance!==null&&distance>=0.5&&gapKm<=0.15)return "Rundweg";
+    if(distance!==null&&distance>=0.5&&gapKm>0.15)return "Streckenwanderung";
+    if(gapKm<=0.15&&distance===null)return "Rundweg";
+    if(gapKm>0.15)return "Streckenwanderung";
+    return "";
+  }
+
+  /**
+   * Premium hiking companion view-model from persisted attachment/item fields only.
+   * Does not parse GPX/KML and does not fetch route files.
+   */
+  function paddedMapBounds(bounds){
+    const box=normalizeBounds(bounds);
+    if(!box)return null;
+    const latPadding=Math.max(0.005,(box.maxLat-box.minLat)*0.12);
+    const lngPadding=Math.max(0.005,(box.maxLng-box.minLng)*0.12);
+    return {
+      minLat:box.minLat-latPadding,
+      minLng:box.minLng-lngPadding,
+      maxLat:box.maxLat+latPadding,
+      maxLng:box.maxLng+lngPadding
+    };
+  }
+
+  function resolveHikeCompanion(item,userAgent){
+    const source=item||{};
+    const file=routeFileMeta(source);
+    const points=routePointsFromItem(source);
+    let start=routeStartFromItem(source);
+    if(!start.ok){
+      const direct=parseCoords(source.latitude,source.longitude);
+      if(direct.ok)start=direct;
+    }
+    const endCoords=parseCoords(
+      file?.endLatitude??(points.length?points[points.length-1].latitude:null),
+      file?.endLongitude??(points.length?points[points.length-1].longitude:null)
+    );
+    const end=endCoords.ok?endCoords:(points.length?{ok:true,latitude:points[points.length-1].latitude,longitude:points[points.length-1].longitude}:{ok:false});
+    const distanceKm=text(source.distanceKm)||(file?.distanceKm!=null&&file.distanceKm>0?`${file.distanceKm} km`:"");
+    const elevationGain=text(source.elevationGain)||(file?.elevationGainM>0?`${file.elevationGainM} m`:"");
+    const elevationLoss=text(source.elevationLoss)||(file?.elevationLossM>0?`${file.elevationLossM} m`:"");
+    const duration=text(source.walkDuration)||(file?.durationMinutes>0?`ca. ${file.durationMinutes} Min.`:"");
+    const difficulty=text(source.difficulty);
+    const startLabel=start.ok?formatCoordPair(start.latitude,start.longitude):"";
+    const endLabel=end.ok?formatCoordPair(end.latitude,end.longitude):"";
+    const numericDistance=file?.distanceKm??parseCoordNumber(String(source.distanceKm||"").replace(",",".").replace(/[^\d.]/g,""));
+    const routeShape=inferRouteShape(start,end,numericDistance);
+    const map=staticMapPreview(source);
+    const overlay=projectRouteOverlay(points,paddedMapBounds(file?.bounds||map.bounds)||file?.bounds||map.bounds);
+    // Elevation series only from persisted point elevations — never invent a profile from gain/loss scalars.
+    const rawRoutePoints=Array.isArray(source.gpxFile?.routePoints)
+      ?source.gpxFile.routePoints
+      :(Array.isArray(source.kmlFile?.routePoints)?source.kmlFile.routePoints:[]);
+    const elevSeries=elevationSeriesFromPoints(rawRoutePoints.length?rawRoutePoints:(file?.routePoints||[]));
+    const elevationProfile=buildElevationProfileSvg(elevSeries);
+    const actions=programItemActions(source,userAgent);
+    const apple=isAppleDevice(userAgent);
+    const stats=[
+      distanceKm?{key:"distance",icon:"🥾",label:"Distanz",value:distanceKm}:null,
+      elevationGain?{key:"ascent",icon:"⬆️",label:"Aufstieg",value:elevationGain}:null,
+      elevationLoss?{key:"descent",icon:"⬇️",label:"Abstieg",value:elevationLoss}:null,
+      duration?{key:"duration",icon:"⏱",label:"Gehzeit",value:duration}:null,
+      startLabel?{key:"start",icon:"📍",label:"Start",value:startLabel}:null,
+      endLabel?{key:"end",icon:"🏁",label:"Ziel",value:endLabel}:null
+    ].filter(Boolean);
+    const summary=[
+      distanceKm?`Distanz: ${distanceKm}`:null,
+      elevationGain?`Aufstieg: ${elevationGain}`:null,
+      elevationLoss?`Abstieg: ${elevationLoss}`:null,
+      duration?`Gehzeit: ${duration}`:null,
+      difficulty?`Schwierigkeit: ${difficulty}`:null,
+      routeShape?`Charakter: ${routeShape}`:null
+    ].filter(Boolean);
+    const hasCompanion=Boolean(stats.length||map.ok||actions.gpx.show||actions.kml.show);
+    return {
+      show:hasCompanion,
+      stats,
+      summary,
+      routeShape,
+      map:{
+        ok:Boolean(map.ok),
+        embedUrl:map.embedUrl||"",
+        linkUrl:map.linkUrl||"",
+        overlaySvg:overlay.ok?overlay.svg:"",
+        hasRouteLine:Boolean(overlay.ok),
+        latitude:map.latitude,
+        longitude:map.longitude,
+        endLatitude:map.endLatitude,
+        endLongitude:map.endLongitude
+      },
+      elevationProfile:{
+        show:Boolean(elevationProfile.ok),
+        svg:elevationProfile.svg||"",
+        minElevation:elevationProfile.minElevation??null,
+        maxElevation:elevationProfile.maxElevation??null
+      },
+      toolbar:{
+        maps:actions.maps,
+        mapsLabel:apple?"In Apple Karten oeffnen":"In Google Maps oeffnen",
+        navigation:actions.navigation,
+        gpx:actions.gpx,
+        kml:actions.kml
+      },
+      meta:actions.meta
+    };
+  }
+
   window.ACTTravelActionsLibrary={
     DEFAULT_TIMEZONE,
     isHttpsUrl,
@@ -918,6 +1106,12 @@
     buildTripIcs,
     buildItemIcsEvent,
     programItemActions,
+    resolveHikeCompanion,
+    elevationSeriesFromPoints,
+    buildElevationProfileSvg,
+    projectRouteOverlay,
+    inferRouteShape,
+    paddedMapBounds,
     dayProgressKey,
     readDoneSet,
     writeDoneState,

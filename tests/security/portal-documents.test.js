@@ -14,6 +14,7 @@ const {
 
 const root=join(dirname(fileURLToPath(import.meta.url)),"../..");
 const portalJs=readFileSync(join(root,"customer-portal/customer-portal.js"),"utf8");
+const portalCss=readFileSync(join(root,"customer-portal/customer-portal.css"),"utf8");
 const portalHtml=readFileSync(join(root,"customer-portal/index.html"),"utf8");
 const browserRedact=readFileSync(join(root,"customer-portal/redact-allowlist.js"),"utf8");
 const functionsRedact=readFileSync(join(root,"functions/lib/redactAllowlist.js"),"utf8");
@@ -102,13 +103,28 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/function isPdfDocument\(item\)/);
     assert.match(portalJs,/Herunterladen/);
     assert.match(portalJs,/Dieses Dokument ist derzeit nicht verfuegbar\./);
-    assert.match(portalHtml,/customer-portal\.js\?v=38/);
-    assert.match(portalHtml,/redact-allowlist\.js\?v=6/);
-    assert.match(portalHtml,/travel-actions-library\.js\?v=1/);
+    assert.match(portalHtml,/customer-portal\.js\?v=44/);
+    assert.match(portalHtml,/redact-allowlist\.js\?v=9/);
+    assert.match(portalHtml,/travel-actions-library\.js\?v=8/);
     assert.match(portalHtml,/portal-share-library\.js\?v=4/);
     assert.match(portalJs,/data-open-portal-document/);
     assert.match(portalJs,/hydrateShareDocumentUrls/);
     assert.match(portalJs,/fetchPortalDocumentUrl/);
+  });
+
+  it("portal renders hike companion with lazy map and toolbar",()=>{
+    assert.match(portalJs,/function hikeCompanionParts\(/);
+    assert.match(portalJs,/Wanderübersicht|Wanderuebersicht/);
+    assert.match(portalJs,/Kurzinfo/);
+    assert.match(portalJs,/Hoehenprofil|Höhenprofil/);
+    assert.match(portalJs,/data-map-src/);
+    assert.match(portalJs,/function observeLazyMaps\(/);
+    assert.match(portalJs,/IntersectionObserver/);
+    assert.match(portalJs,/Kartenleiste/);
+    assert.match(portalJs,/resolveHikeCompanion/);
+    assert.match(portalCss,/hike-companion/);
+    assert.match(portalCss,/hike-toolbar/);
+    assert.doesNotMatch(portalJs,/extractRouteFromXml/);
   });
 
   it("keeps browser redact-allowlist in sync with functions for document URL aliases",()=>{

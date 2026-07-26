@@ -4698,12 +4698,37 @@
     `;
   }
 
+  function programTravelLinksMarkup(item){
+    const lib=window.ACTTravelActionsLibrary;
+    const actions=lib?.programItemActions?.(item);
+    if(!actions){
+      const location=locationSummary(item)||item.address||"";
+      const mapsUrl=mapSearchUrl(location);
+      const navigationUrl=mapNavigationUrl(location)||safeWebUrl(item.navigationUrl||item.googleMapsUrl||item.appleMapsUrl);
+      return `${mapsUrl?`<a class="v2-button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">In Maps oeffnen</a>`:""}${navigationUrl?`<a class="v2-button soft" href="${escapeHtml(navigationUrl)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}`;
+    }
+    const parts=[];
+    if(actions.navigation.show){
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">In Maps oeffnen</a>`);
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
+    }else if(actions.navigation.hint&&(actions.gpx.show||actions.kml.show||cleanValue(item.latitude)||cleanValue(item.longitude))){
+      parts.push(`<p class="v2-muted travel-nav-missing">${escapeHtml(actions.navigation.hint)}</p>`);
+    }
+    if(actions.gpx.show){
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
+    }
+    if(actions.kml.show){
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.kml.url)}" download="${escapeHtml(actions.kml.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}</a>`);
+    }
+    if(actions.komoot.show)parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.komoot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.komoot.label)}</a>`);
+    if(actions.outdooractive.show)parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.outdooractive.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.outdooractive.label)}</a>`);
+    return parts.join("");
+  }
+
   function programTimelineItem(item,docs=[]){
     const time=programTimeLabel(item);
     const location=locationSummary(item)||item.address||"";
-    const travelNav=window.ACTTravelActionsLibrary?.navigationUrlForDevice?.(item)||"";
-    const mapsUrl=mapSearchUrl(location);
-    const navigationUrl=travelNav||mapNavigationUrl(location)||safeWebUrl(item.navigationUrl||item.googleMapsUrl||item.appleMapsUrl);
+    const travelLinks=programTravelLinksMarkup(item);
     const eventUrl=safeWebUrl(item.eventUrl);
     const websiteUrl=safeWebUrl(item.websiteUrl);
     const showWebsite=websiteUrl&&websiteUrl!==eventUrl;
@@ -4714,6 +4739,7 @@
     const legacy=(!item.endTime&&item.duration)?item.duration:"";
     const ticketInfo=[item.ticketNumber?`Ticket ${item.ticketNumber}`:"",item.voucherNumber?`Voucher ${item.voucherNumber}`:""].filter(Boolean).join(" · ");
     const attachments=docs.filter(doc=>documentMatchesProgramItem(doc,item));
+    const gpxName=cleanValue(item.gpxFile?.fileName||item.gpxFile?.title);
     return `
       <article class="v2-program-item ${time?"":"no-time"}">
         ${time?`<div class="v2-program-time">${escapeHtml(time)}</div>`:""}
@@ -4722,6 +4748,7 @@
           ${imageUrl?`<img class="v2-program-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title||"Programmbild")}" loading="lazy">`:""}
           <h4>${escapeHtml(displayValue(item.title,"Programmpunkt ohne Titel"))}</h4>
           ${location?`<p><strong>Standort:</strong> ${escapeHtml(location)}</p>`:""}
+          ${gpxName&&!location?`<p class="v2-muted">Route: ${escapeHtml(gpxName)}</p>`:""}
           ${item.description?`<p>${escapeHtml(item.description)}</p>`:""}
           ${(item.contactName||item.contactPhone||item.contactEmail||price||ticketInfo)?`
             <div class="v2-program-facts">
@@ -4731,13 +4758,13 @@
             </div>
           `:""}
           ${legacy||item.notes?`<p class="v2-muted">${escapeHtml([legacy,item.notes].filter(Boolean).join(" · "))}</p>`:""}
-          ${mapsUrl||eventUrl?`<div class="v2-program-links">${mapsUrl?`<a class="v2-button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">In Maps oeffnen</a>`:""}${eventUrl?`<a class="v2-button soft" href="${escapeHtml(eventUrl)}" target="_blank" rel="noopener noreferrer">Veranstaltung oeffnen</a>`:""}</div>`:""}
+          ${eventUrl?`<div class="v2-program-links"><a class="v2-button soft" href="${escapeHtml(eventUrl)}" target="_blank" rel="noopener noreferrer">Veranstaltung oeffnen</a></div>`:""}
           ${attachments.length?`<div class="v2-program-attachments"><strong>Anhaenge</strong>${attachments.map(documentAttachmentLink).join("")}</div>`:""}
           ${item.weatherPlaceholder?`<p class="v2-muted">${escapeHtml(item.weatherPlaceholder)}</p>`:""}
           ${item.internalNotes?`<p class="v2-admin-note"><strong>Intern:</strong> ${escapeHtml(item.internalNotes)}</p>`:""}
-          ${navigationUrl||showWebsite||phoneUrl||mailUrl?`
+          ${travelLinks||showWebsite||phoneUrl||mailUrl?`
             <div class="v2-program-links">
-              ${navigationUrl?`<a class="v2-button soft" href="${escapeHtml(navigationUrl)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}
+              ${travelLinks}
               ${showWebsite?`<a class="v2-button soft" href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener noreferrer">Website</a>`:""}
               ${phoneUrl?`<a class="v2-button soft" href="${escapeHtml(phoneUrl)}">Anrufen</a>`:""}
               ${mailUrl?`<a class="v2-button soft" href="${escapeHtml(mailUrl)}">E-Mail schreiben</a>`:""}

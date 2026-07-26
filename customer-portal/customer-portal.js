@@ -568,13 +568,30 @@
       return nav?`<a class="button soft" href="${escapeHtml(nav)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:"";
     }
     const buttons=[];
-    if(actions.maps?.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.maps.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.maps.label||"In Maps oeffnen")}</a>`);
+    const travelPayload=escapeHtml(JSON.stringify({
+      latitude:source.latitude||"",
+      longitude:source.longitude||"",
+      address:source.address||"",
+      locationAddress:source.locationAddress||"",
+      location:source.location||"",
+      googleMapsUrl:source.googleMapsUrl||"",
+      appleMapsUrl:source.appleMapsUrl||"",
+      navigationUrl:source.navigationUrl||"",
+      gpxFile:source.gpxFile||null,
+      kmlFile:source.kmlFile||null
+    }));
+    const hasRouteFile=Boolean(actions.gpx.show||actions.kmlDownload?.show||actions.kml.show);
+    if(actions.maps?.show||hasRouteFile){
+      buttons.push(`<a class="button soft" href="${escapeHtml(actions.maps?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${travelPayload}">${escapeHtml(actions.maps?.label||"In Maps oeffnen")}</a>`);
+    }
     if(actions.navigation.show)buttons.push(`<a class="button ${compact?"soft":"primary"}" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
     else if(actions.navigation.hint)buttons.push(`<p class="travel-nav-missing">${escapeHtml(actions.navigation.hint)}</p>`);
     if(actions.gpx.show){
       buttons.push(`<a class="button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
     }
-    if(actions.kml.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.kml.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}</a>`);
+    if(actions.kml.show||hasRouteFile){
+      buttons.push(`<a class="button soft" href="${escapeHtml(actions.kml?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-earth="1" data-travel-item="${travelPayload}">${escapeHtml(actions.kml?.label||"In Google Earth oeffnen")}</a>`);
+    }
     if(actions.kmlDownload?.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.kmlDownload.url)}" download="${escapeHtml(actions.kmlDownload.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kmlDownload.label)}</a>`);
     if(actions.komoot.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.komoot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.komoot.label)}</a>`);
     if(actions.outdooractive.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.outdooractive.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.outdooractive.label)}</a>`);
@@ -1430,7 +1447,35 @@
       lib?.writeDoneState?.(progressScopeId(),doneToggle.dataset.programDone,doneToggle.checked);
       renderDayTimelines();
     });
-    document.addEventListener("click",event=>{
+    document.addEventListener("click",async event=>{
+      const mapsLink=event.target.closest("[data-travel-open-maps]");
+      if(mapsLink){
+        const lib=travelLib();
+        if(lib?.resolveMapsPlaceUrl){
+          event.preventDefault();
+          let item={};
+          try{item=JSON.parse(mapsLink.getAttribute("data-travel-item")||"{}");}catch(_error){item={};}
+          try{
+            const url=await lib.resolveMapsPlaceUrl(item);
+            if(url)window.open(url,"_blank","noopener,noreferrer");
+          }catch(_error){/* keep silent in guest UI */}
+          return;
+        }
+      }
+      const earthLink=event.target.closest("[data-travel-open-earth]");
+      if(earthLink){
+        const lib=travelLib();
+        if(lib?.resolveGoogleEarthUrl){
+          event.preventDefault();
+          let item={};
+          try{item=JSON.parse(earthLink.getAttribute("data-travel-item")||"{}");}catch(_error){item={};}
+          try{
+            const url=await lib.resolveGoogleEarthUrl(item);
+            if(url)window.open(url,"_blank","noopener,noreferrer");
+          }catch(_error){/* keep silent in guest UI */}
+          return;
+        }
+      }
       const viewButton=event.target.closest("[data-calendar-view]");
       if(viewButton){
         calendarState.view=viewButton.dataset.calendarView;

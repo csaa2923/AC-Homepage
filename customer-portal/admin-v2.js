@@ -4702,6 +4702,21 @@
     `;
   }
 
+  function programTravelItemPayload(item){
+    return JSON.stringify({
+      latitude:item.latitude||"",
+      longitude:item.longitude||"",
+      address:item.address||"",
+      locationAddress:item.locationAddress||"",
+      location:item.location||"",
+      googleMapsUrl:item.googleMapsUrl||"",
+      appleMapsUrl:item.appleMapsUrl||"",
+      navigationUrl:item.navigationUrl||"",
+      gpxFile:item.gpxFile||null,
+      kmlFile:item.kmlFile||null
+    });
+  }
+
   function programTravelLinksMarkup(item){
     const lib=window.ACTTravelActionsLibrary;
     const actions=lib?.programItemActions?.(item);
@@ -4712,8 +4727,12 @@
       return `${mapsUrl?`<a class="v2-button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">In Maps oeffnen</a>`:""}${navigationUrl?`<a class="v2-button soft" href="${escapeHtml(navigationUrl)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}`;
     }
     const parts=[];
-    if(actions.maps?.show){
-      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.maps.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.maps.label||"In Maps oeffnen")}</a>`);
+    const payload=escapeHtml(programTravelItemPayload(item));
+    const hasRouteFile=Boolean(actions.gpx.show||actions.kmlDownload?.show||actions.kml.show);
+    if(actions.maps?.show||hasRouteFile){
+      const mapsHref=actions.maps?.url||"#";
+      // Always resolve via click when a GPX/KML exists so older items without routePoints still load the full track.
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(mapsHref)}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${payload}">${escapeHtml(actions.maps?.label||"In Maps oeffnen")}</a>`);
     }
     if(actions.navigation.show){
       parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
@@ -4723,8 +4742,9 @@
     if(actions.gpx.show){
       parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
     }
-    if(actions.kml.show){
-      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.kml.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}</a>`);
+    if(actions.kml.show||hasRouteFile){
+      const earthHref=actions.kml?.url||"#";
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(earthHref)}" target="_blank" rel="noopener noreferrer" data-travel-open-earth="1" data-travel-item="${payload}">${escapeHtml(actions.kml?.label||"In Google Earth oeffnen")}</a>`);
     }
     if(actions.kmlDownload?.show){
       parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.kmlDownload.url)}" download="${escapeHtml(actions.kmlDownload.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kmlDownload.label)}${actions.kmlDownload.fileSizeLabel?` (${escapeHtml(actions.kmlDownload.fileSizeLabel)})`:""}</a>`);
@@ -4732,6 +4752,48 @@
     if(actions.komoot.show)parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.komoot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.komoot.label)}</a>`);
     if(actions.outdooractive.show)parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.outdooractive.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.outdooractive.label)}</a>`);
     return parts.join("");
+  }
+
+  async function openTravelMapsFromEvent(event){
+    const link=event.target.closest("[data-travel-open-maps]");
+    if(!link)return false;
+    const lib=window.ACTTravelActionsLibrary;
+    if(!lib?.resolveMapsPlaceUrl)return false;
+    event.preventDefault();
+    let item={};
+    try{item=JSON.parse(link.getAttribute("data-travel-item")||"{}");}catch(_error){item={};}
+    try{
+      link.setAttribute("aria-busy","true");
+      const url=await lib.resolveMapsPlaceUrl(item);
+      if(!url)throw new Error("Route konnte nicht ermittelt werden.");
+      window.open(url,"_blank","noopener,noreferrer");
+    }catch(error){
+      setProgramEditMessage(error?.message||"Maps-Route konnte nicht geoeffnet werden.","error");
+    }finally{
+      link.removeAttribute("aria-busy");
+    }
+    return true;
+  }
+
+  async function openTravelEarthFromEvent(event){
+    const link=event.target.closest("[data-travel-open-earth]");
+    if(!link)return false;
+    const lib=window.ACTTravelActionsLibrary;
+    if(!lib?.resolveGoogleEarthUrl)return false;
+    event.preventDefault();
+    let item={};
+    try{item=JSON.parse(link.getAttribute("data-travel-item")||"{}");}catch(_error){item={};}
+    try{
+      link.setAttribute("aria-busy","true");
+      const url=await lib.resolveGoogleEarthUrl(item);
+      if(!url)throw new Error("Google Earth Ziel fehlt.");
+      window.open(url,"_blank","noopener,noreferrer");
+    }catch(error){
+      setProgramEditMessage(error?.message||"Google Earth konnte nicht geoeffnet werden.","error");
+    }finally{
+      link.removeAttribute("aria-busy");
+    }
+    return true;
   }
 
   function programTimelineItem(item,docs=[]){
@@ -6176,6 +6238,14 @@
     byId("resetFiltersButton").addEventListener("click",resetFilters);
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);
     document.addEventListener("click",event=>{
+      if(event.target.closest("[data-travel-open-maps]")){
+        openTravelMapsFromEvent(event);
+        return;
+      }
+      if(event.target.closest("[data-travel-open-earth]")){
+        openTravelEarthFromEvent(event);
+        return;
+      }
       if(window.ACTAdminV2Bookings?.handleClick?.(event))return;
       if(window.ACTAdminV2Communication?.handleClick?.(event))return;
       const wizardAction=event.target.closest("[data-wizard-action]");

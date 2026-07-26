@@ -206,12 +206,19 @@
     return fromGpx.length?fromGpx:fromKml;
   }
 
+  function isFullRouteMapsUrl(url){
+    const value=text(url);
+    if(!value)return false;
+    if(/[?&]origin=/i.test(value))return true;
+    // /maps/dir/lat,lng/lat,lng/...
+    return /\/maps\/dir\/-?\d+(\.\d+)?,-?\d+(\.\d+)?\/-?\d+(\.\d+)?,-?\d+(\.\d+)?/i.test(value);
+  }
+
   function mapsUrlFromRoutePoints(points,provider,mode="place"){
     const list=normalizeRoutePoints(points);
     if(list.length<2)return "";
     const first=list[0];
     const last=list[list.length-1];
-    const middle=list.slice(1,-1);
     if(provider==="apple"){
       // Apple Maps has no multi-waypoint path URL; show start→end of the hike (not device location).
       if(mode==="directions")return `https://maps.apple.com/?daddr=${first.latitude},${first.longitude}`;
@@ -221,12 +228,67 @@
       // Navigation to hike start from the device location.
       return `https://www.google.com/maps/dir/?api=1&destination=${first.latitude},${first.longitude}&travelmode=walking`;
     }
-    // Place/route view: full sampled track, origin = GPX start (never device location).
-    const origin=`${first.latitude},${first.longitude}`;
-    const destination=`${last.latitude},${last.longitude}`;
-    const waypoints=middle.map(point=>`${point.latitude},${point.longitude}`).join("|");
-    const base=`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
-    return waypoints?`${base}&waypoints=${waypoints}`:base;
+    // Full track as explicit path stops — never uses the device location as origin.
+    const path=list.map(point=>`${point.latitude},${point.longitude}`).join("/");
+    return `https://www.google.com/maps/dir/${path}`;
+  }
+
+  function routeFileFromItem(item){
+    const source=item||{};
+    if(source.gpxFile&&attachmentUrl(source.gpxFile)){
+      return {file:source.gpxFile,kind:"gpx",field:"gpxFile"};
+    }
+    if(source.kmlFile&&attachmentUrl(source.kmlFile)){
+      return {file:source.kmlFile,kind:"kml",field:"kmlFile"};
+    }
+    return null;
+  }
+
+  async function ensureRoutePointsOnItem(item){
+    const source=item||{};
+    const existing=routePointsFromItem(source);
+    if(existing.length>=2)return existing;
+    const routeFile=routeFileFromItem(source);
+    if(!routeFile)return existing;
+    const url=attachmentUrl(routeFile.file);
+    if(!url)return existing;
+    const response=await fetch(url);
+    if(!response.ok)throw new Error("Route-Datei konnte nicht geladen werden.");
+    const xml=await response.text();
+    const parsed=extractRouteFromXml(xml,routeFile.kind);
+    if(!parsed.ok||!parsed.routePoints.length)return existing;
+    routeFile.file.routePoints=parsed.routePoints;
+    routeFile.file.startLatitude=parsed.latitude;
+    routeFile.file.startLongitude=parsed.longitude;
+    source[routeFile.field]=normalizeTravelAttachment(routeFile.file)||routeFile.file;
+    return parsed.routePoints;
+  }
+
+  async function resolveMapsPlaceUrl(item,userAgent){
+    const provider=isAppleDevice(userAgent)?"apple":"google";
+    let points=routePointsFromItem(item);
+    if(points.length<2){
+      try{
+        points=await ensureRoutePointsOnItem(item);
+      }catch(_error){
+        points=routePointsFromItem(item);
+      }
+    }
+    if(points.length>=2)return mapsUrlFromRoutePoints(points,provider,"place");
+    return placeUrlForDevice(item,userAgent);
+  }
+
+  async function resolveGoogleEarthUrl(item){
+    let points=routePointsFromItem(item);
+    if(points.length<2){
+      try{
+        points=await ensureRoutePointsOnItem(item);
+      }catch(_error){
+        points=routePointsFromItem(item);
+      }
+    }
+    if(points.length)return googleEarthUrlFromPoints(points);
+    return googleEarthUrlForItem(item);
   }
 
   function googleEarthUrlFromPoints(points){
@@ -774,7 +836,11 @@
     routeStartFromItem,
     routePointsFromItem,
     mapsUrlFromRoutePoints,
+    isFullRouteMapsUrl,
     googleEarthUrlForItem,
+    ensureRoutePointsOnItem,
+    resolveMapsPlaceUrl,
+    resolveGoogleEarthUrl,
     normalizeTravelAttachment,
     formatFileSize,
     isGpxAttachment,

@@ -223,15 +223,39 @@ describe("travel actions navigation destination", () => {
       }
     };
     const place = lib.placeUrlForDevice(item, "Mozilla/5.0 (Windows)");
-    assert.match(place, /maps\/dir/);
-    assert.match(place, /origin=/);
-    assert.match(place, /destination=/);
-    assert.match(place, /travelmode=walking/);
-    assert.doesNotMatch(place, /origin=current/);
+    assert.match(place, /maps\/dir\//);
+    assert.equal(lib.isFullRouteMapsUrl(place), true);
+    assert.doesNotMatch(place, /maps\/search/);
     const first = extracted.routePoints[0];
     const last = extracted.routePoints[extracted.routePoints.length - 1];
     assert.match(place, new RegExp(String(first.latitude).replace(".", "\\.")));
     assert.match(place, new RegExp(String(last.latitude).replace(".", "\\.")));
+  });
+
+  it("parses dense KML LineString tracks into many route points", () => {
+    const lib = loadLibrary();
+    const kml = `<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+      <Placemark><LineString><coordinates>
+        12.231488,47.566057,1292.20 12.231583,47.565957,1292.90 12.231469,47.565897,1291.20
+        12.231080,47.566131,1289.90 12.230456,47.566659,1279.80 12.189577,47.591020,561.90
+      </coordinates></LineString></Placemark></Document></kml>`;
+    const extracted = lib.extractRouteFromXml(kml, "kml");
+    assert.equal(extracted.ok, true);
+    assert.ok(extracted.routePoints.length >= 2);
+    assert.equal(extracted.latitude, 47.566057);
+    assert.equal(extracted.longitude, 12.231488);
+    const place = lib.placeUrlForDevice({
+      latitude: extracted.latitude,
+      longitude: extracted.longitude,
+      kmlFile: {
+        url: "https://example.com/tour.kml",
+        routePoints: extracted.routePoints,
+        startLatitude: extracted.latitude,
+        startLongitude: extracted.longitude
+      }
+    }, "Mozilla/5.0 (Windows)");
+    assert.equal(lib.isFullRouteMapsUrl(place), true);
+    assert.match(place, /47\.59102/);
   });
 
   it("Google Earth opens web viewer instead of raw KML download", () => {

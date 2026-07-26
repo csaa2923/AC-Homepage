@@ -2899,14 +2899,17 @@
     try{logoUrl=new URL("../images/logo/logo.jpg",window.location.href).href;}catch(_error){/* ignore */}
     if(action==="qr-show"||action==="qr-print"){
       const result=api.openPrintView({customerName:name,safeUrl:analysis.url,logoUrl});
-      if(result.blocked)setPublicationMessage("Fenster blockiert — Pop-ups zulassen.","error");
-      else if(!result.ok)setPublicationMessage("QR-Ansicht fehlgeschlagen.","error");
+      if(result.blocked)setPublicationMessage("Pop-up blockiert — bitte Pop-ups zulassen und erneut versuchen.","error");
+      else if(!result.ok)setPublicationMessage("QR-Ansicht fehlgeschlagen. Bitte erneut versuchen.","error");
       else setPublicationMessage(action==="qr-print"?"QR-Druckansicht geoeffnet.":"QR-Vorschau geoeffnet.","success");
       return;
     }
     if(action==="qr-download-png"){
       const result=api.downloadPng(analysis.url,name);
-      setPublicationMessage(result.ok?`PNG gespeichert (${result.filename}).`:"PNG-Download fehlgeschlagen.",result.ok?"success":"error");
+      setPublicationMessage(
+        result.ok?`PNG gespeichert (${result.filename}).`:(result.reason==="no-canvas"?"PNG benoetigt Canvas im Browser.":"PNG-Download fehlgeschlagen."),
+        result.ok?"success":"error"
+      );
       return;
     }
     if(action==="qr-download-svg"){

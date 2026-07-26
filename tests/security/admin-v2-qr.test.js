@@ -14,19 +14,50 @@ const html=fs.readFileSync(path.join(root,"customer-portal/admin-v2.html"),"utf8
 
 const SAFE_URL="https://www.alpineconcierge.info/customer-portal/index.html?share=shareDemo1&token=dummyTokenForTestsOnly";
 
+function makeCanvasMock(){
+  return {
+    width:0,
+    height:0,
+    getContext(){
+      return {
+        fillStyle:"#000",
+        fillRect(){}
+      };
+    },
+    toDataURL(type){
+      if(type==="image/png")return "data:image/png;base64,iVBORw0KGgo=";
+      return "data:image/gif;base64,R0lGODlh";
+    }
+  };
+}
+
 function loadQr(){
+  const opened=[];
   const sandbox={
     window:{
       location:{
         href:"https://www.alpineconcierge.info/customer-portal/admin-v2.html",
         hostname:"www.alpineconcierge.info",
         protocol:"https:"
+      },
+      open(url){
+        const win={opener:{},focus(){},document:{open(){},write(){},close(){}}};
+        opened.push({url,win});
+        return win;
       }
     },
     location:{
       href:"https://www.alpineconcierge.info/customer-portal/admin-v2.html",
       hostname:"www.alpineconcierge.info",
       protocol:"https:"
+    },
+    document:{
+      createElement(tag){
+        if(tag==="canvas")return makeCanvasMock();
+        if(tag==="a")return {click(){},remove(){},href:"",download:"",type:"",rel:""};
+        return {};
+      },
+      body:{appendChild(){}}
     },
     console:{
       log(){throw new Error("console.log must not be used");},
@@ -39,9 +70,26 @@ function loadQr(){
     URLSearchParams,
     Blob:class{
       constructor(parts,opts){this.parts=parts;this.type=opts?.type||"";}
-    }
+    },
+    atob(value){return Buffer.from(String(value),"base64").toString("binary");},
+    Uint8Array,
+    setTimeout(fn){fn();return 0;}
   };
-  sandbox.window=Object.assign(sandbox.window,{URL,URLSearchParams});
+  sandbox.window=Object.assign(sandbox.window,{
+    URL,
+    URLSearchParams,
+    open:sandbox.window.open,
+    document:sandbox.document
+  });
+  const createObjectURL=(blob)=>{
+    opened.push({blob});
+    return "blob:mock-qr-preview";
+  };
+  // Keep the real URL constructor; only stub object-URL helpers for downloads/preview.
+  URL.createObjectURL=createObjectURL;
+  URL.revokeObjectURL=()=>{};
+  sandbox.URL=URL;
+  sandbox.window.URL=URL;
   vm.createContext(sandbox);
   vm.runInContext(shareSource,sandbox);
   vm.runInContext(vendor,sandbox);
@@ -52,7 +100,7 @@ function loadQr(){
     sandbox.window.qrcode=sandbox.qrcode;
   }
   vm.runInContext(qrFacade,sandbox);
-  return sandbox.window.ACTQRCodeLibrary;
+  return {api:sandbox.window.ACTQRCodeLibrary,opened,sandbox};
 }
 
 function loadPdfWithQr(){
@@ -93,14 +141,14 @@ function loadPdfWithQr(){
 describe("admin v2 secure qr integration",()=>{
   it("wires local vendor without CDN",()=>{
     assert.match(html,/vendor\/qrcode-generator\/qrcode\.js\?v=1\.4\.4/);
-    assert.match(html,/admin-v2-qr\.js\?v=2/);
+    assert.match(html,/admin-v2-qr\.js\?v=3/);
     assert.doesNotMatch(html,/cdn\.jsdelivr|api\.qrserver|chart\.googleapis|qrserver\.com/i);
     assert.ok(fs.existsSync(path.join(root,"customer-portal/vendor/qrcode-generator/qrcode.js")));
     assert.ok(fs.existsSync(path.join(root,"customer-portal/vendor/qrcode-generator/LICENSE")));
   });
 
   it("creates svg qr for valid secure share link",()=>{
-    const api=loadQr();
+    const {api}=loadQr();
     const validated=api.validateSecureQrUrl(SAFE_URL);
     assert.equal(validated.ok,true);
     const svg=api.createSvgMarkup(SAFE_URL,{alt:"Test QR"});
@@ -112,8 +160,35 @@ describe("admin v2 secure qr integration",()=>{
     assert.match(data.dataUrl,/^data:image\//);
   });
 
+  it("exports real png data urls and downloads as image/png blob",()=>{
+    const {api,opened}=loadQr();
+    const png=api.createPngDataUrl(SAFE_URL);
+    assert.equal(png.ok,true);
+    assert.match(png.dataUrl,/^data:image\/png/i);
+    const downloaded=api.downloadPng(SAFE_URL,"Anna Test");
+    assert.equal(downloaded.ok,true);
+    assert.equal(downloaded.filename,"ACT_Kundenportal_QR_Test.png");
+    const blobOpen=opened.find(entry=>entry.blob);
+    assert.ok(blobOpen,"PNG download should create an object URL");
+    assert.equal(blobOpen.blob.type,"image/png");
+  });
+
+  it("opens print preview via blob url without noopener feature string",()=>{
+    const {api,opened}=loadQr();
+    const result=api.openPrintView({
+      customerName:"Preview Guest",
+      safeUrl:SAFE_URL,
+      logoUrl:""
+    });
+    assert.equal(result.ok,true);
+    assert.equal(result.blocked,false);
+    const winOpen=opened.find(entry=>entry.url==="blob:mock-qr-preview"&&entry.win);
+    assert.ok(winOpen,"window.open should receive the blob URL");
+    assert.equal(winOpen.win.opener,null);
+  });
+
   it("rejects missing, customer-fallback, http and foreign domains",()=>{
-    const api=loadQr();
+    const {api}=loadQr();
     assert.equal(api.validateSecureQrUrl("").ok,false);
     assert.equal(api.validateSecureQrUrl("https://www.alpineconcierge.info/customer-portal/index.html?customer=cust-1").reason,"customer-fallback");
     assert.equal(api.validateSecureQrUrl("http://www.alpineconcierge.info/customer-portal/index.html?share=a&token=b").ok,false);
@@ -122,7 +197,7 @@ describe("admin v2 secure qr integration",()=>{
   });
 
   it("disables qr when active share has no local token",()=>{
-    const api=loadQr();
+    const {api}=loadQr();
     const analysis=api.analyzePortalQr({
       status:"session-lost",
       url:"",
@@ -136,7 +211,7 @@ describe("admin v2 secure qr integration",()=>{
   });
 
   it("keeps filenames free of ids and tokens",()=>{
-    const api=loadQr();
+    const {api}=loadQr();
     const name=api.buildFilename('Max <script> Müller',"png");
     assert.equal(name,"ACT_Kundenportal_QR_Mueller.png");
     assert.doesNotMatch(name,/token|shareDemo|cust-|script/i);
@@ -187,7 +262,7 @@ describe("admin v2 secure qr integration",()=>{
   });
 
   it("escapes customer names in printable sheet and avoids token field names",()=>{
-    const api=loadQr();
+    const {api}=loadQr();
     const sheet=api.printableQrSheetHtml({
       customerName:'Test <b>QR</b> & Co',
       safeUrl:SAFE_URL,

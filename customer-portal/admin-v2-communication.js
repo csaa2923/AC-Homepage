@@ -576,11 +576,11 @@
     if(action==="qr-show"){
       const result=api.openPrintView({customerName:name,safeUrl:analysis.url,logoUrl:logoAbsoluteUrl()});
       if(result.blocked){
-        setMessage("Vorschaufenster wurde vom Browser blockiert. Bitte Pop-ups zulassen.","error");
+        setMessage("Pop-up blockiert. Bitte Pop-ups fuer Admin V2 zulassen und erneut „QR anzeigen“ nutzen.","error");
         return false;
       }
       if(!result.ok){
-        setMessage("QR-Vorschau konnte nicht geoeffnet werden.","error");
+        setMessage("QR-Vorschau konnte nicht geoeffnet werden. Bitte erneut versuchen.","error");
         return false;
       }
       setMessage("QR-Vorschau geoeffnet.","success");
@@ -589,7 +589,10 @@
     if(action==="qr-download-png"){
       const result=api.downloadPng(analysis.url,name);
       if(!result.ok){
-        setMessage("PNG-Download fehlgeschlagen.","error");
+        const hint=result.reason==="no-canvas"
+          ?"PNG-Export benoetigt Canvas-Unterstuetzung im Browser."
+          :"PNG-Download fehlgeschlagen.";
+        setMessage(hint,"error");
         return false;
       }
       setMessage(`PNG gespeichert (${result.filename}).`,"success");

@@ -208,14 +208,27 @@
     return qr;
   }
 
+  function sanitizeQrSvg(svg){
+    // qrcode-generator emits <description>; valid SVG uses <desc>.
+    return String(svg||"")
+      .replace(/<description\b/gi,"<desc")
+      .replace(/<\/description>/gi,"</desc>");
+  }
+
   function createSvgMarkup(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN,alt="QR-Code zum Kundenportal"}={}){
     const validated=validateSecureQrUrl(safeUrl);
     if(!validated.ok)return {ok:false,reason:validated.reason,svg:"",markup:""};
     try{
       const qr=buildQrInstance(validated.safeUrl);
-      const svg=typeof qr.createSvgTag==="function"
-        ?qr.createSvgTag(cellSize,margin,alt,"Alpine Concierge Tirol")
-        :"";
+      let svg="";
+      if(typeof qr.createSvgTag==="function"){
+        svg=sanitizeQrSvg(qr.createSvgTag({
+          cellSize,
+          margin,
+          scalable:true,
+          alt:String(alt||"QR-Code")
+        }));
+      }
       if(!svg||!/<svg[\s>]/i.test(svg))return {ok:false,reason:"empty-svg",svg:"",markup:""};
       return {
         ok:true,
@@ -256,16 +269,60 @@
   }
 
   function createDataUrl(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN}={}){
+    // Legacy GIF data-URL from vendor — prefer createPngDataUrl in the UI.
     const validated=validateSecureQrUrl(safeUrl);
     if(!validated.ok)return {ok:false,reason:validated.reason,dataUrl:""};
-    const qr=buildQrInstance(validated.safeUrl);
-    const dataUrl=typeof qr.createDataURL==="function"?qr.createDataURL(cellSize,margin):"";
-    if(!dataUrl||!/^data:image\//i.test(dataUrl))return {ok:false,reason:"empty-data-url",dataUrl:""};
-    return {ok:true,reason:"ok",dataUrl};
+    try{
+      const qr=buildQrInstance(validated.safeUrl);
+      const dataUrl=typeof qr.createDataURL==="function"?qr.createDataURL(cellSize,margin):"";
+      if(!dataUrl||!/^data:image\//i.test(dataUrl))return {ok:false,reason:"empty-data-url",dataUrl:""};
+      return {ok:true,reason:"ok",dataUrl};
+    }catch(_error){
+      return {ok:false,reason:"render-failed",dataUrl:""};
+    }
   }
 
-  function createPngDataUrl(safeUrl,options){
-    return createDataUrl(safeUrl,options);
+  function drawQrToCanvas(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN}={}){
+    const validated=validateSecureQrUrl(safeUrl);
+    if(!validated.ok)return {ok:false,reason:validated.reason,canvas:null};
+    if(typeof document==="undefined"||typeof document.createElement!=="function"){
+      return {ok:false,reason:"no-canvas",canvas:null};
+    }
+    try{
+      const qr=buildQrInstance(validated.safeUrl);
+      const count=qr.getModuleCount();
+      const size=count*cellSize+margin*2;
+      const canvas=document.createElement("canvas");
+      canvas.width=size;
+      canvas.height=size;
+      const ctx=canvas.getContext("2d");
+      if(!ctx)return {ok:false,reason:"no-canvas",canvas:null};
+      ctx.fillStyle="#ffffff";
+      ctx.fillRect(0,0,size,size);
+      ctx.fillStyle="#000000";
+      for(let row=0;row<count;row+=1){
+        for(let col=0;col<count;col+=1){
+          if(qr.isDark(row,col)){
+            ctx.fillRect(col*cellSize+margin,row*cellSize+margin,cellSize,cellSize);
+          }
+        }
+      }
+      return {ok:true,reason:"ok",canvas,size};
+    }catch(_error){
+      return {ok:false,reason:"render-failed",canvas:null};
+    }
+  }
+
+  function createPngDataUrl(safeUrl,{cellSize=6,margin=DEFAULT_MARGIN}={}){
+    const drawn=drawQrToCanvas(safeUrl,{cellSize,margin});
+    if(!drawn.ok||!drawn.canvas)return {ok:false,reason:drawn.reason||"no-canvas",dataUrl:""};
+    try{
+      const dataUrl=drawn.canvas.toDataURL("image/png");
+      if(!dataUrl||!/^data:image\/png/i.test(dataUrl))return {ok:false,reason:"empty-data-url",dataUrl:""};
+      return {ok:true,reason:"ok",dataUrl};
+    }catch(_error){
+      return {ok:false,reason:"render-failed",dataUrl:""};
+    }
   }
 
   function accessibleAlt(customerName){
@@ -387,11 +444,24 @@
   }
 
   function downloadPng(safeUrl,customerName){
-    const result=createPngDataUrl(safeUrl,{cellSize:6,margin:4});
+    const result=createPngDataUrl(safeUrl,{cellSize:8,margin:4});
     if(!result.ok)return {ok:false,reason:result.reason};
     const filename=buildFilename(customerName,"png");
-    triggerDownload(filename,result.dataUrl,"image/png");
-    return {ok:true,filename};
+    // Prefer Blob download so the file is a real PNG, not a mislabeled GIF data-URL.
+    try{
+      const raw=result.dataUrl.split(",")[1]||"";
+      const binary=atob(raw);
+      const bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i+=1)bytes[i]=binary.charCodeAt(i);
+      const blob=new Blob([bytes],{type:"image/png"});
+      const objectUrl=URL.createObjectURL(blob);
+      triggerDownload(filename,objectUrl,"image/png");
+      setTimeout(()=>URL.revokeObjectURL(objectUrl),2000);
+      return {ok:true,filename};
+    }catch(_error){
+      triggerDownload(filename,result.dataUrl,"image/png");
+      return {ok:true,filename};
+    }
   }
 
   function openPrintView({customerName,safeUrl,logoUrl}){
@@ -400,13 +470,23 @@
     if(typeof window==="undefined"||typeof window.open!=="function"){
       return {ok:false,blocked:false,reason:"no-window"};
     }
-    const win=window.open("","_blank","noopener,noreferrer");
-    if(!win)return {ok:false,blocked:true,reason:"popup-blocked"};
-    win.document.open();
-    win.document.write(built.html);
-    win.document.close();
-    try{win.focus();}catch(_error){/* ignore */}
-    return {ok:true,blocked:false,filename:built.filename};
+    // Do NOT pass noopener in windowFeatures: Chrome then returns null and document.write fails.
+    // Open via Blob-URL instead, then detach opener manually.
+    try{
+      const blob=new Blob([built.html],{type:"text/html;charset=utf-8"});
+      const objectUrl=URL.createObjectURL(blob);
+      const win=window.open(objectUrl,"_blank");
+      if(!win){
+        URL.revokeObjectURL(objectUrl);
+        return {ok:false,blocked:true,reason:"popup-blocked"};
+      }
+      try{win.opener=null;}catch(_error){/* ignore */}
+      setTimeout(()=>{try{URL.revokeObjectURL(objectUrl);}catch(_error){/* ignore */}},120000);
+      try{win.focus();}catch(_error){/* ignore */}
+      return {ok:true,blocked:false,filename:built.filename};
+    }catch(_error){
+      return {ok:false,blocked:false,reason:"open-failed"};
+    }
   }
 
   function pdfQrBlock(safeUrl,{label="Ihr persönliches Kundenportal",size=132}={}){

@@ -1770,8 +1770,9 @@
           if(!file||typeof file!=="object")continue;
           const url=String(file.url||file.downloadUrl||"").trim();
           if(!url)continue;
+          const storedPoints=lib.normalizeRoutePoints?.(file.routePoints)||[];
           const stored=lib.parseCoords(file.startLatitude,file.startLongitude);
-          if(stored.ok){
+          if(stored.ok&&storedPoints.length>=2){
             const itemCoords=lib.parseCoords(item.latitude,item.longitude);
             if(!itemCoords.ok){
               item.latitude=String(stored.latitude);
@@ -1783,12 +1784,14 @@
             const response=await fetch(url);
             if(!response.ok)continue;
             const xml=await response.text();
-            const parsed=lib.extractRouteStartFromXml(xml,field==="kmlFile"?"kml":"gpx");
+            const parsed=lib.extractRouteFromXml?.(xml,field==="kmlFile"?"kml":"gpx")
+              ||lib.extractRouteStartFromXml(xml,field==="kmlFile"?"kml":"gpx");
             if(!parsed?.ok)continue;
             item[field]=normalizeProgramTravelFile({
               ...file,
               startLatitude:parsed.latitude,
-              startLongitude:parsed.longitude
+              startLongitude:parsed.longitude,
+              routePoints:parsed.routePoints||storedPoints
             });
             const itemCoords=lib.parseCoords(item.latitude,item.longitude);
             if(!itemCoords.ok){
@@ -4721,7 +4724,10 @@
       parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
     }
     if(actions.kml.show){
-      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.kml.url)}" download="${escapeHtml(actions.kml.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}</a>`);
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.kml.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}</a>`);
+    }
+    if(actions.kmlDownload?.show){
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.kmlDownload.url)}" download="${escapeHtml(actions.kmlDownload.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kmlDownload.label)}${actions.kmlDownload.fileSizeLabel?` (${escapeHtml(actions.kmlDownload.fileSizeLabel)})`:""}</a>`);
     }
     if(actions.komoot.show)parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.komoot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.komoot.label)}</a>`);
     if(actions.outdooractive.show)parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.outdooractive.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.outdooractive.label)}</a>`);
@@ -5985,13 +5991,16 @@
       );
       let startLatitude="";
       let startLongitude="";
+      let routePoints=[];
       if(field==="gpxFile"||field==="kmlFile"){
         try{
           const xml=await file.text();
-          const parsed=window.ACTTravelActionsLibrary?.extractRouteStartFromXml?.(xml,field==="kmlFile"?"kml":"gpx");
+          const parsed=window.ACTTravelActionsLibrary?.extractRouteFromXml?.(xml,field==="kmlFile"?"kml":"gpx")
+            ||window.ACTTravelActionsLibrary?.extractRouteStartFromXml?.(xml,field==="kmlFile"?"kml":"gpx");
           if(parsed?.ok){
             startLatitude=parsed.latitude;
             startLongitude=parsed.longitude;
+            routePoints=Array.isArray(parsed.routePoints)?parsed.routePoints:[];
           }
         }catch(_error){/* route start is optional */}
       }
@@ -6009,7 +6018,8 @@
         title:uploaded.title||file.name,
         type:typeMap[field]||"program/file",
         startLatitude,
-        startLongitude
+        startLongitude,
+        routePoints
       });
       if(!attachment)throw new Error("Upload ohne gueltige Datei-URL.");
       item[field]=attachment;
@@ -6022,9 +6032,11 @@
         }
       }
       setProgramEditMessage(
-        attachment.startLatitude!=null
-          ?"Datei hochgeladen (Startpunkt erkannt). Bitte Programmpunkt speichern."
-          :"Datei hochgeladen. Bitte Programmpunkt speichern.",
+        attachment.routePoints?.length>=2
+          ?"Datei hochgeladen (Route erkannt). Bitte Programmpunkt speichern."
+          :attachment.startLatitude!=null
+            ?"Datei hochgeladen (Startpunkt erkannt). Bitte Programmpunkt speichern."
+            :"Datei hochgeladen. Bitte Programmpunkt speichern.",
         "success"
       );
     }catch(error){

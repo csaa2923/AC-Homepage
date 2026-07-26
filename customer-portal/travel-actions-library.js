@@ -64,39 +64,122 @@
     );
   }
 
-  function parseGpxStartPoint(xml){
-    const raw=String(xml||"");
-    if(!raw)return {ok:false,latitude:null,longitude:null};
-    const patterns=[
-      /<trkpt\b[^>]*\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["']/i,
-      /<trkpt\b[^>]*\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["']/i,
-      /<rtept\b[^>]*\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["']/i,
-      /<rtept\b[^>]*\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["']/i,
-      /<wpt\b[^>]*\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["']/i,
-      /<wpt\b[^>]*\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["']/i
-    ];
-    for(let i=0;i<patterns.length;i+=1){
-      const match=raw.match(patterns[i]);
-      if(!match)continue;
-      const latFirst=i%2===0;
-      return parseCoords(latFirst?match[1]:match[2],latFirst?match[2]:match[1]);
+  const MAX_ROUTE_POINTS=25;
+
+  function pushValidPoint(points,lat,lng){
+    const coords=parseCoords(lat,lng);
+    if(!coords.ok)return;
+    const prev=points[points.length-1];
+    if(prev&&prev.latitude===coords.latitude&&prev.longitude===coords.longitude)return;
+    points.push({latitude:coords.latitude,longitude:coords.longitude});
+  }
+
+  function sampleRoutePoints(points,maxPoints=MAX_ROUTE_POINTS){
+    const list=Array.isArray(points)?points:[];
+    if(list.length<=maxPoints)return list.slice();
+    const sampled=[];
+    const last=maxPoints-1;
+    for(let i=0;i<maxPoints;i+=1){
+      const idx=Math.round((i*(list.length-1))/last);
+      const point=list[idx];
+      if(!point)continue;
+      const prev=sampled[sampled.length-1];
+      if(prev&&prev.latitude===point.latitude&&prev.longitude===point.longitude)continue;
+      sampled.push(point);
     }
-    return {ok:false,latitude:null,longitude:null};
+    return sampled;
+  }
+
+  function parseGpxTrackPoints(xml){
+    const raw=String(xml||"");
+    const points=[];
+    if(!raw)return points;
+    const patterns=[
+      /<trkpt\b[^>]*\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["'][^>]*>/gi,
+      /<trkpt\b[^>]*\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["'][^>]*>/gi,
+      /<rtept\b[^>]*\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["'][^>]*>/gi,
+      /<rtept\b[^>]*\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["'][^>]*>/gi
+    ];
+    for(let p=0;p<patterns.length;p+=1){
+      const latFirst=p%2===0;
+      let match;
+      const re=patterns[p];
+      re.lastIndex=0;
+      while((match=re.exec(raw))){
+        pushValidPoint(points,latFirst?match[1]:match[2],latFirst?match[2]:match[1]);
+      }
+      if(points.length)break;
+    }
+    if(!points.length){
+      const wptPatterns=[
+        /<wpt\b[^>]*\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["'][^>]*>/gi,
+        /<wpt\b[^>]*\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["'][^>]*>/gi
+      ];
+      for(let p=0;p<wptPatterns.length;p+=1){
+        const latFirst=p%2===0;
+        let match;
+        const re=wptPatterns[p];
+        re.lastIndex=0;
+        while((match=re.exec(raw))){
+          pushValidPoint(points,latFirst?match[1]:match[2],latFirst?match[2]:match[1]);
+        }
+        if(points.length)break;
+      }
+    }
+    return points;
+  }
+
+  function parseKmlTrackPoints(xml){
+    const raw=String(xml||"");
+    const points=[];
+    if(!raw)return points;
+    const blockRe=/<coordinates\b[^>]*>([\s\S]*?)<\/coordinates>/gi;
+    let block;
+    while((block=blockRe.exec(raw))){
+      const tuples=String(block[1]||"").trim().split(/[\s\n\r]+/).filter(Boolean);
+      tuples.forEach(tuple=>{
+        const parts=tuple.split(",");
+        if(parts.length<2)return;
+        // KML: longitude,latitude[,altitude]
+        pushValidPoint(points,parts[1],parts[0]);
+      });
+    }
+    return points;
+  }
+
+  function parseGpxStartPoint(xml){
+    const points=parseGpxTrackPoints(xml);
+    if(!points.length)return {ok:false,latitude:null,longitude:null};
+    return {ok:true,latitude:points[0].latitude,longitude:points[0].longitude};
   }
 
   function parseKmlStartPoint(xml){
-    const raw=String(xml||"");
-    if(!raw)return {ok:false,latitude:null,longitude:null};
-    const match=raw.match(/<coordinates\b[^>]*>\s*([-\d.+eE]+)[,\s]+([-\d.+eE]+)/i);
-    if(!match)return {ok:false,longitude:null,latitude:null};
-    // KML order is longitude,latitude[,altitude]
-    return parseCoords(match[2],match[1]);
+    const points=parseKmlTrackPoints(xml);
+    if(!points.length)return {ok:false,latitude:null,longitude:null};
+    return {ok:true,latitude:points[0].latitude,longitude:points[0].longitude};
+  }
+
+  function normalizeRoutePoints(value){
+    if(!Array.isArray(value))return [];
+    const points=[];
+    value.forEach(entry=>{
+      if(Array.isArray(entry)&&entry.length>=2){
+        pushValidPoint(points,entry[0],entry[1]);
+        return;
+      }
+      if(entry&&typeof entry==="object"){
+        pushValidPoint(points,entry.latitude??entry.lat,entry.longitude??entry.lng??entry.lon);
+      }
+    });
+    return sampleRoutePoints(points,MAX_ROUTE_POINTS);
   }
 
   function routeStartFromAttachment(file){
     if(!file||typeof file!=="object")return {ok:false,latitude:null,longitude:null};
     const stored=parseCoords(file.startLatitude??file.latitude,file.startLongitude??file.longitude);
     if(stored.ok)return stored;
+    const points=normalizeRoutePoints(file.routePoints);
+    if(points.length)return {ok:true,latitude:points[0].latitude,longitude:points[0].longitude};
     return {ok:false,latitude:null,longitude:null};
   }
 
@@ -107,6 +190,67 @@
     const fromKml=routeStartFromAttachment(source.kmlFile);
     if(fromKml.ok)return fromKml;
     return {ok:false,latitude:null,longitude:null};
+  }
+
+  function routePointsFromAttachment(file){
+    if(!file||typeof file!=="object")return [];
+    return normalizeRoutePoints(file.routePoints);
+  }
+
+  function routePointsFromItem(item){
+    const source=item||{};
+    const fromGpx=routePointsFromAttachment(source.gpxFile);
+    if(fromGpx.length>=2)return fromGpx;
+    const fromKml=routePointsFromAttachment(source.kmlFile);
+    if(fromKml.length>=2)return fromKml;
+    return fromGpx.length?fromGpx:fromKml;
+  }
+
+  function mapsUrlFromRoutePoints(points,provider,mode="place"){
+    const list=normalizeRoutePoints(points);
+    if(list.length<2)return "";
+    const first=list[0];
+    const last=list[list.length-1];
+    const middle=list.slice(1,-1);
+    if(provider==="apple"){
+      // Apple Maps has no multi-waypoint path URL; show start→end of the hike (not device location).
+      if(mode==="directions")return `https://maps.apple.com/?daddr=${first.latitude},${first.longitude}`;
+      return `https://maps.apple.com/?saddr=${first.latitude},${first.longitude}&daddr=${last.latitude},${last.longitude}&dirflg=w`;
+    }
+    if(mode==="directions"){
+      // Navigation to hike start from the device location.
+      return `https://www.google.com/maps/dir/?api=1&destination=${first.latitude},${first.longitude}&travelmode=walking`;
+    }
+    // Place/route view: full sampled track, origin = GPX start (never device location).
+    const origin=`${first.latitude},${first.longitude}`;
+    const destination=`${last.latitude},${last.longitude}`;
+    const waypoints=middle.map(point=>`${point.latitude},${point.longitude}`).join("|");
+    const base=`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
+    return waypoints?`${base}&waypoints=${waypoints}`:base;
+  }
+
+  function googleEarthUrlFromPoints(points){
+    const list=normalizeRoutePoints(points);
+    if(!list.length)return "";
+    let minLat=list[0].latitude;
+    let maxLat=list[0].latitude;
+    let minLng=list[0].longitude;
+    let maxLng=list[0].longitude;
+    list.forEach(point=>{
+      minLat=Math.min(minLat,point.latitude);
+      maxLat=Math.max(maxLat,point.latitude);
+      minLng=Math.min(minLng,point.longitude);
+      maxLng=Math.max(maxLng,point.longitude);
+    });
+    const midLat=(minLat+maxLat)/2;
+    const midLng=(minLng+maxLng)/2;
+    // Rough camera range so the whole track fits (degrees → meters).
+    const spanKm=Math.max(
+      Math.abs(maxLat-minLat)*111,
+      Math.abs(maxLng-minLng)*111*Math.cos((midLat*Math.PI)/180)
+    );
+    const range=Math.max(1200,Math.min(40000,Math.round(spanKm*1000*1.6)||2500));
+    return `https://earth.google.com/web/@${midLat},${midLng},${range}a,35y,0h,0t,0r`;
   }
 
   /**
@@ -212,6 +356,8 @@
       next.startLatitude=start.latitude;
       next.startLongitude=start.longitude;
     }
+    const routePoints=normalizeRoutePoints(fileMeta.routePoints);
+    if(routePoints.length)next.routePoints=routePoints;
     return next;
   }
 
@@ -249,12 +395,12 @@
   }
 
   function googleMapsUrl(item){
-    // Place view only — must not open directions from the device location.
-    return mapsUrlFromDestination(resolveNavigationDestination(item),"google","place");
+    // Place/route view — full GPX when available; never from device location.
+    return placeUrlForDevice(item,"Mozilla/5.0 (Windows)");
   }
 
   function appleMapsUrl(item){
-    return mapsUrlFromDestination(resolveNavigationDestination(item),"apple","place");
+    return placeUrlForDevice(item,"Mozilla/5.0 (iPhone)");
   }
 
   function isAppleDevice(userAgent){
@@ -263,17 +409,45 @@
   }
 
   function placeUrlForDevice(item,userAgent){
+    const provider=isAppleDevice(userAgent)?"apple":"google";
+    const routePoints=routePointsFromItem(item);
+    if(routePoints.length>=2){
+      return mapsUrlFromRoutePoints(routePoints,provider,"place");
+    }
     const destination=resolveNavigationDestination(item);
     if(!destination.ok)return "";
     if(destination.kind==="google-url"||destination.kind==="apple-url")return destination.url;
-    return mapsUrlFromDestination(destination,isAppleDevice(userAgent)?"apple":"google","place");
+    return mapsUrlFromDestination(destination,provider,"place");
   }
 
   function navigationUrlForDevice(item,userAgent){
+    const provider=isAppleDevice(userAgent)?"apple":"google";
+    const routePoints=routePointsFromItem(item);
+    if(routePoints.length>=2){
+      // Walk-nav to the hike start — device location is only used here intentionally.
+      return mapsUrlFromRoutePoints(routePoints,provider,"directions");
+    }
+    if(routePoints.length===1){
+      return mapsUrlFromDestination(
+        {ok:true,kind:"coords",latitude:routePoints[0].latitude,longitude:routePoints[0].longitude},
+        provider,
+        "directions"
+      );
+    }
     const destination=resolveNavigationDestination(item);
     if(!destination.ok)return "";
     if(destination.kind==="google-url"||destination.kind==="apple-url")return destination.url;
-    return mapsUrlFromDestination(destination,isAppleDevice(userAgent)?"apple":"google","directions");
+    return mapsUrlFromDestination(destination,provider,"directions");
+  }
+
+  function googleEarthUrlForItem(item){
+    const routePoints=routePointsFromItem(item);
+    if(routePoints.length)return googleEarthUrlFromPoints(routePoints);
+    const start=routeStartFromItem(item);
+    if(start.ok)return googleEarthUrlFromPoints([start]);
+    const coords=parseCoords(item?.latitude,item?.longitude);
+    if(coords.ok)return googleEarthUrlFromPoints([coords]);
+    return "";
   }
 
   function staticMapPreview(item){
@@ -297,9 +471,21 @@
     return {ok:true,embedUrl,linkUrl,latitude,longitude};
   }
 
+  function extractRouteFromXml(xml,kind){
+    const points=sampleRoutePoints(kind==="kml"?parseKmlTrackPoints(xml):parseGpxTrackPoints(xml));
+    if(!points.length)return {ok:false,latitude:null,longitude:null,routePoints:[]};
+    return {
+      ok:true,
+      latitude:points[0].latitude,
+      longitude:points[0].longitude,
+      routePoints:points
+    };
+  }
+
   function extractRouteStartFromXml(xml,kind){
-    if(kind==="kml")return parseKmlStartPoint(xml);
-    return parseGpxStartPoint(xml);
+    const extracted=extractRouteFromXml(xml,kind);
+    if(!extracted.ok)return {ok:false,latitude:null,longitude:null};
+    return {ok:true,latitude:extracted.latitude,longitude:extracted.longitude};
   }
 
   function icsEscape(value){
@@ -457,6 +643,7 @@
     const destination=resolveNavigationDestination(source);
     const placeUrl=placeUrlForDevice(source,userAgent);
     const navUrl=navigationUrlForDevice(source,userAgent);
+    const earthUrl=googleEarthUrlForItem(source);
     const gpx=normalizeTravelAttachment(source.gpxFile);
     const kml=normalizeTravelAttachment(source.kmlFile);
     const ticketQr=normalizeTravelAttachment(source.ticketQrFile);
@@ -464,17 +651,18 @@
     const ticketPdf=normalizeTravelAttachment(source.ticketPdfFile);
     const map=staticMapPreview(source);
     const calendarOk=source.calendarEnabled!==false&&Boolean(text(source.dateValue||source.date));
+    const hasTarget=Boolean(placeUrl||navUrl||destination.ok);
     return {
       maps:{
-        show:Boolean(placeUrl&&destination.ok),
+        show:Boolean(placeUrl),
         url:placeUrl,
         label:"In Maps oeffnen"
       },
       navigation:{
-        show:Boolean(navUrl&&destination.ok),
+        show:Boolean(navUrl),
         url:navUrl,
         label:"Navigation starten",
-        hint:destination.ok?"":"Startpunkt nicht hinterlegt"
+        hint:hasTarget?"":"Startpunkt nicht hinterlegt"
       },
       gpx:{
         show:Boolean(gpx&&attachmentUrl(gpx)),
@@ -484,11 +672,20 @@
         label:"Route herunterladen"
       },
       kml:{
+        // Open Google Earth Web over the route — never dump raw KML XML in the browser.
+        show:Boolean(earthUrl&&kml&&attachmentUrl(kml)),
+        url:earthUrl,
+        downloadUrl:kml?attachmentUrl(kml):"",
+        fileName:kml?.fileName||"",
+        fileSizeLabel:formatFileSize(kml?.fileSize||kml?.size),
+        label:"In Google Earth oeffnen"
+      },
+      kmlDownload:{
         show:Boolean(kml&&attachmentUrl(kml)),
         url:kml?attachmentUrl(kml):"",
         fileName:kml?.fileName||"",
         fileSizeLabel:formatFileSize(kml?.fileSize||kml?.size),
-        label:"In Google Earth oeffnen"
+        label:"KML herunterladen"
       },
       komoot:{show:isHttpsUrl(source.komootUrl),url:text(source.komootUrl),label:"Komoot oeffnen"},
       outdooractive:{show:isHttpsUrl(source.outdooractiveUrl),url:text(source.outdooractiveUrl),label:"Outdooractive oeffnen"},
@@ -568,8 +765,16 @@
     resolveNavigationDestination,
     parseGpxStartPoint,
     parseKmlStartPoint,
+    parseGpxTrackPoints,
+    parseKmlTrackPoints,
+    sampleRoutePoints,
+    normalizeRoutePoints,
+    extractRouteFromXml,
     extractRouteStartFromXml,
     routeStartFromItem,
+    routePointsFromItem,
+    mapsUrlFromRoutePoints,
+    googleEarthUrlForItem,
     normalizeTravelAttachment,
     formatFileSize,
     isGpxAttachment,

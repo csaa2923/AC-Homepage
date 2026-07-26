@@ -207,6 +207,53 @@ describe("travel actions navigation destination", () => {
     assert.equal(actions.navigation.url, nav);
   });
 
+  it("In Maps oeffnen shows full GPX route from start to end, not device location", () => {
+    const lib = loadLibrary();
+    const extracted = lib.extractRouteFromXml(SAMPLE_GPX, "gpx");
+    assert.equal(extracted.ok, true);
+    assert.ok(extracted.routePoints.length >= 2);
+    const item = {
+      title: "Wanderung",
+      gpxFile: {
+        url: "https://example.com/route.gpx",
+        fileName: "route.gpx",
+        startLatitude: extracted.latitude,
+        startLongitude: extracted.longitude,
+        routePoints: extracted.routePoints
+      }
+    };
+    const place = lib.placeUrlForDevice(item, "Mozilla/5.0 (Windows)");
+    assert.match(place, /maps\/dir/);
+    assert.match(place, /origin=/);
+    assert.match(place, /destination=/);
+    assert.match(place, /travelmode=walking/);
+    assert.doesNotMatch(place, /origin=current/);
+    const first = extracted.routePoints[0];
+    const last = extracted.routePoints[extracted.routePoints.length - 1];
+    assert.match(place, new RegExp(String(first.latitude).replace(".", "\\.")));
+    assert.match(place, new RegExp(String(last.latitude).replace(".", "\\.")));
+  });
+
+  it("Google Earth opens web viewer instead of raw KML download", () => {
+    const lib = loadLibrary();
+    const extracted = lib.extractRouteFromXml(SAMPLE_KML, "kml");
+    const actions = lib.programItemActions({
+      title: "Tour",
+      kmlFile: {
+        url: "https://example.com/route.kml",
+        fileName: "route.kml",
+        startLatitude: extracted.latitude,
+        startLongitude: extracted.longitude,
+        routePoints: extracted.routePoints
+      }
+    });
+    assert.equal(actions.kml.show, true);
+    assert.match(actions.kml.url, /earth\.google\.com\/web/);
+    assert.doesNotMatch(actions.kml.url, /\.kml/);
+    assert.equal(actions.kmlDownload.show, true);
+    assert.equal(actions.kmlDownload.url, "https://example.com/route.kml");
+  });
+
   it("reads a valid first trackpoint from demo seefeld gpx", () => {
     const lib = loadLibrary();
     const xml = readFileSync(join(root, "demo/seefeld-picknick.gpx"), "utf8");

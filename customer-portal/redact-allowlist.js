@@ -160,6 +160,18 @@
       next.startLatitude=startLat;
       next.startLongitude=startLng;
     }
+    if(Array.isArray(file.routePoints)){
+      const points=[];
+      file.routePoints.slice(0,25).forEach(entry=>{
+        const lat=Number(Array.isArray(entry)?entry[0]:entry&&entry.latitude);
+        const lng=Number(Array.isArray(entry)?entry[1]:entry&&(entry.longitude??entry.lng));
+        if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+        if(lat===0&&lng===0)return;
+        if(lat<-90||lat>90||lng<-180||lng>180)return;
+        points.push({latitude:lat,longitude:lng});
+      });
+      if(points.length)next.routePoints=points;
+    }
     return next;
   }
 

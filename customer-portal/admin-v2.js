@@ -2833,6 +2833,82 @@
     return `<ul class="v2-change-list">${changes.map(item=>`<li>${escapeHtml(item.label||item)}</li>`).join("")}</ul>`;
   }
 
+  function publicationQrPanelMarkup(customer,link){
+    const api=window.ACTQRCodeLibrary;
+    const analysis=api?.analyzePortalQr?.(link)||{
+      ok:false,
+      available:false,
+      status:link?.status||"missing",
+      hint:api?"QR nicht verfuegbar.":"QR-Modul nicht geladen.",
+      url:""
+    };
+    const canQr=Boolean(api&&analysis.ok&&analysis.url);
+    let preview="";
+    if(canQr){
+      const svg=api.createSvgMarkup(analysis.url,{
+        cellSize:3,
+        margin:4,
+        alt:api.accessibleAlt(customer?.customerName||"")
+      });
+      if(svg.ok)preview=`<div class="v2-comm-qr-preview v2-pub-qr-preview">${svg.markup}</div>`;
+    }
+    const disable=canQr?"":"disabled";
+    const title=canQr?"":` title="${escapeHtml(analysis.hint||"QR nicht verfuegbar")}"`;
+    return `
+      <article class="v2-panel v2-pub-qr-panel">
+        <div class="v2-panel-head">
+          <div>
+            <p class="v2-eyebrow">QR-Code</p>
+            <h3>Kundenportal scannen</h3>
+          </div>
+          ${badge(canQr?"QR verfuegbar":"Nicht verfuegbar")}
+        </div>
+        <p class="v2-muted">${escapeHtml(analysis.hint||"")}</p>
+        ${preview}
+        <div class="v2-document-actions">
+          <button class="v2-button primary" type="button" data-publication-action="qr-show" ${disable}${title}>Vorschau</button>
+          <button class="v2-button soft" type="button" data-publication-action="qr-download-png" ${disable}${title}>PNG</button>
+          <button class="v2-button soft" type="button" data-publication-action="qr-download-svg" ${disable}${title}>SVG</button>
+          <button class="v2-button soft" type="button" data-publication-action="qr-print" ${disable}${title}>Drucken</button>
+          <button class="v2-button soft" type="button" data-publication-action="open" ${link.canOpen?"":"disabled"}>Portal oeffnen</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function runPublicationQrAction(action,customer){
+    const api=window.ACTQRCodeLibrary;
+    if(!api){
+      setPublicationMessage("QR-Modul nicht geladen.","error");
+      return;
+    }
+    const link=resolvePortalLink(customer);
+    const analysis=api.analyzePortalQr(link);
+    if(!analysis.ok||!analysis.url){
+      setPublicationMessage(analysis.hint||"QR-Code nicht verfuegbar.","warning");
+      return;
+    }
+    const name=String(customer?.customerName||"Kunde").trim()||"Kunde";
+    let logoUrl="../images/logo/logo.jpg";
+    try{logoUrl=new URL("../images/logo/logo.jpg",window.location.href).href;}catch(_error){/* ignore */}
+    if(action==="qr-show"||action==="qr-print"){
+      const result=api.openPrintView({customerName:name,safeUrl:analysis.url,logoUrl});
+      if(result.blocked)setPublicationMessage("Fenster blockiert — Pop-ups zulassen.","error");
+      else if(!result.ok)setPublicationMessage("QR-Ansicht fehlgeschlagen.","error");
+      else setPublicationMessage(action==="qr-print"?"QR-Druckansicht geoeffnet.":"QR-Vorschau geoeffnet.","success");
+      return;
+    }
+    if(action==="qr-download-png"){
+      const result=api.downloadPng(analysis.url,name);
+      setPublicationMessage(result.ok?`PNG gespeichert (${result.filename}).`:"PNG-Download fehlgeschlagen.",result.ok?"success":"error");
+      return;
+    }
+    if(action==="qr-download-svg"){
+      const result=api.downloadSvg(analysis.url,name);
+      setPublicationMessage(result.ok?`SVG gespeichert (${result.filename}).`:"SVG-Download fehlgeschlagen.",result.ok?"success":"error");
+    }
+  }
+
   function portalButton(label,action,{primary=false,disabled=false}={}){
     return `<button class="v2-button ${primary?"primary":"soft"}" type="button" data-publication-action="${escapeHtml(action)}" ${disabled||state.publicationSaving?"disabled":""}>${escapeHtml(label)}</button>`;
   }
@@ -2899,6 +2975,7 @@
             ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
           </div>
         </article>
+        ${publicationQrPanelMarkup(customer,link)}
         <article class="v2-panel">
           <div class="v2-panel-head">
             <div>
@@ -5796,6 +5873,7 @@
       const publicationAction=event.target.closest("[data-publication-action]");
       if(publicationAction){
         const action=publicationAction.dataset.publicationAction;
+        const pubCustomer=customerById(state.selectedCustomerId);
         if(action==="publish")publishCustomerV2();
         if(action==="preview")openPortalPreviewV2();
         if(action==="open")openPortalLinkV2();
@@ -5804,6 +5882,9 @@
         if(action==="create-share")createPortalShareV2();
         if(action==="create-share-new")createPortalShareV2({forceNew:true});
         if(action==="revoke-share")revokePortalShareV2();
+        if(action==="qr-show"||action==="qr-download-png"||action==="qr-download-svg"||action==="qr-print"){
+          if(pubCustomer)runPublicationQrAction(action,pubCustomer);
+        }
         return;
       }
       const uploadRetry=event.target.closest("[data-upload-retry]");

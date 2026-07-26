@@ -444,6 +444,11 @@ p{color:var(--muted);line-height:1.55}
 .v2-comm-email-card{grid-column:1 / -1}
 .v2-comm-whatsapp-card{grid-column:1 / -1}
 .v2-comm-pdf-card{grid-column:1 / -1}
+.v2-comm-qr-card{grid-column:1 / -1}
+.v2-comm-qr-preview,.v2-pub-qr-preview{display:flex;justify-content:flex-start;padding:12px;background:var(--surface-soft);border:1px solid var(--line);border-radius:16px;max-width:100%;overflow:auto}
+.v2-comm-qr-preview .act-qr-frame,.v2-pub-qr-preview .act-qr-frame{background:#fff;padding:10px;border:1px solid var(--line);border-radius:12px}
+.v2-comm-qr-preview svg,.v2-pub-qr-preview svg{width:min(220px,70vw);height:auto;display:block;max-width:100%}
+.v2-pub-qr-panel .v2-comm-qr-preview{margin:8px 0 4px}
 .v2-comm-template-label{display:grid;gap:8px;font-weight:750;color:var(--ink)}
 .v2-comm-template-label select{min-height:44px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;font:inherit}
 .v2-comm-email-preview{display:grid;gap:8px;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--surface-soft);min-width:0}

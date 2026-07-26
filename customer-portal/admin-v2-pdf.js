@@ -1,6 +1,6 @@
 /**
  * Admin V2 PDF-/Druckausgaben — druckoptimiertes HTML + Browser-Print.
- * Keine PDF-Library, keine QR-Library, kein Server-PDF.
+ * Keine PDF-Library, kein Server-PDF. QR via lokale ACTQRCodeLibrary (optional).
  * Anbindung: ACTAdminV2Pdf.bind(host)
  */
 (function(){
@@ -282,7 +282,12 @@
       .act-pdf-info-card h2{margin:0 0 10px;font-size:18px;color:var(--green)}
       .act-pdf-footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
       .act-pdf-footer strong{color:var(--ink)}
-      .act-pdf-qr-slot{margin-top:12px;padding:12px;border:1px dashed var(--line);border-radius:8px;font-size:12px;color:var(--muted)}
+      .act-pdf-qr{margin:16px 0 8px;text-align:left;break-inside:avoid;page-break-inside:avoid}
+      .act-pdf-qr-frame{display:inline-block;padding:10px;background:#fff;border:1px solid var(--line)}
+      .act-pdf-qr-frame svg{width:132px;height:auto;display:block}
+      .act-pdf-qr figcaption{margin:8px 0 0;font-size:12px;color:var(--ink)}
+      .act-pdf-qr-info{text-align:center;margin:18px 0}
+      .act-pdf-qr-info .act-pdf-qr-frame svg{width:160px}
       .act-pdf-warnings{margin:0 0 16px;padding:10px 12px;background:#fff7e8;border:1px solid #efd7a8;font-size:13px}
       .act-pdf-page{counter-increment:page}
       @page{size:A4;margin:14mm 12mm 16mm}
@@ -327,17 +332,27 @@
     `;
   }
 
-  function footerBlock(customer,portal,{includeQrPlaceholder=true}={}){
+  function qrBlockForPortal(portal,{label="Ihr persönliches Kundenportal",prominent=false}={}){
+    if(!portal?.available||!portal.url)return "";
+    const lib=typeof window!=="undefined"?window.ACTQRCodeLibrary:null;
+    if(!lib?.pdfQrBlock)return "";
+    const block=lib.pdfQrBlock(portal.url,{label,size:prominent?160:132});
+    if(!block)return "";
+    return prominent?`<div class="act-pdf-qr-info">${block}</div>`:block;
+  }
+
+  function footerBlock(customer,portal,{includeQr=true,qrLabel="Ihr persönliches Kundenportal",qrProminent=false}={}){
     const portalLine=portal.available
       ?`<p><strong>Kundenportal:</strong> <a href="${escapeHtml(portal.url)}">${escapeHtml(portal.url)}</a></p>`
       :`<p><strong>Kundenportal:</strong> Link derzeit nicht verfügbar.</p>`;
+    const qr=includeQr?qrBlockForPortal(portal,{label:qrLabel,prominent:qrProminent}):"";
     return `
       <footer class="act-pdf-footer">
         <p><strong>${escapeHtml(ACT_CONTACT.brand)}</strong></p>
         <p>Telefon: ${escapeHtml(ACT_CONTACT.phone)} · WhatsApp: ${escapeHtml(ACT_CONTACT.whatsapp)}</p>
         <p>E-Mail: ${escapeHtml(ACT_CONTACT.email)} · Website: ${escapeHtml(ACT_CONTACT.website)}</p>
         ${portalLine}
-        ${includeQrPlaceholder?`<div class="act-pdf-qr-slot">QR-Code-Bereich vorbereitet — Generierung folgt in einem eigenen Auftrag (keine Fake-QR-Darstellung).</div>`:""}
+        ${qr}
         <p>Nur für den persönlichen Concierge-Gebrauch bestimmt. Interne Admin-Daten sind nicht enthalten.</p>
       </footer>
     `;
@@ -371,7 +386,7 @@
       ${warningsBlock(analysis.warnings)}
       <p class="act-pdf-intro">${escapeHtml(intro)}</p>
       ${daysMarkup||`<p class="act-pdf-intro">Keine Programmpunkte.</p>`}
-      ${footerBlock(customer,analysis.portal)}
+      ${footerBlock(customer,analysis.portal,{includeQr:true,qrLabel:"Ihr persönliches Kundenportal"})}
     `;
   }
 
@@ -405,7 +420,7 @@
       ${warningsBlock(analysis.warnings)}
       <p class="act-pdf-intro">Nachstehend die für Sie sichtbaren Buchungen zu Ihrer Reise „${escapeHtml(analysis.stats.tripName)}“.</p>
       ${cards}
-      ${footerBlock(customer,analysis.portal)}
+      ${footerBlock(customer,analysis.portal,{includeQr:Boolean(analysis.portal?.available),qrLabel:"Ihr persönliches Kundenportal"})}
     `;
   }
 
@@ -440,9 +455,10 @@
         <section class="act-pdf-info-card">
           <h2>Unterstützung während der Reise</h2>
           <p style="margin:0;font-size:14.5px">${escapeHtml(support)}</p>
+          ${analysis.portal.available?`<p style="margin:12px 0 0;font-size:13px;color:#5f6f68">Scannen Sie den QR-Code für Ihr persönliches Reiseportal.</p>${qrBlockForPortal(analysis.portal,{label:"Ihr persönliches Kundenportal",prominent:true})}`:""}
         </section>
       </div>
-      ${footerBlock(customer,analysis.portal,{includeQrPlaceholder:true})}
+      ${footerBlock(customer,analysis.portal,{includeQr:false})}
     `;
   }
 

@@ -2,6 +2,7 @@
  * Admin V2 Kommunikationszentrale — buendelt bestehende Kanaele (Portal, mailto, WhatsApp, PDF-Druck).
  * E-Mail: produktiv ueber mailto + Vorlagen (kein Server-Mail).
  * WhatsApp: Deep-Links. PDF: druckoptimiertes HTML + Browser-Print (ACTAdminV2Pdf).
+ * QR: lokale ACTQRCodeLibrary (nur sichere Share-Links).
  * Anbindung: ACTAdminV2Communication.bind(host)
  */
 (function(){
@@ -488,9 +489,138 @@
           ${actionButton("Vorschau oeffnen","pdf-preview",{disabled:!canOpen,title:disableReason})}
           ${actionButton("Als PDF speichern / Drucken","pdf-print",{disabled:!canOpen,title:disableReason||"Oeffnet die Vorschau; Drucken starten Sie dort manuell"})}
         </div>
-        ${preparedNote("Ausgabe als druckoptimiertes HTML im Browser (A4). Keine PDF-Library, keine Server-PDF-API. QR-Code nur als Platzhalter vorbereitet.")}
+        ${preparedNote("Ausgabe als druckoptimiertes HTML im Browser (A4). Keine PDF-Library, keine Server-PDF-API. QR-Codes nutzen denselben sicheren Share-Link.")}
       </article>
     `;
+  }
+
+  function qrApi(){
+    return window.ACTQRCodeLibrary||null;
+  }
+
+  function logoAbsoluteUrl(){
+    try{
+      return new URL("../images/logo/logo.jpg",window.location.href).href;
+    }catch(_error){
+      return "../images/logo/logo.jpg";
+    }
+  }
+
+  function qrCardMarkup(customer){
+    const api=qrApi();
+    const link=portalLinkInfo(customer);
+    const analysis=api?.analyzePortalQr?.(link)||{
+      ok:false,
+      available:false,
+      status:link?.status||"missing",
+      reason:"no-library",
+      hint:api?"QR nicht verfuegbar.":"QR-Modul nicht geladen.",
+      url:""
+    };
+    const published=h().isPublished(customer);
+    const canQr=Boolean(api&&analysis.ok&&analysis.url);
+    const disableReason=canQr?"":(analysis.hint||"QR-Code nicht verfuegbar.");
+    let preview="";
+    if(canQr){
+      const svg=api.createSvgMarkup(analysis.url,{
+        cellSize:4,
+        margin:4,
+        alt:api.accessibleAlt(customerLabel(customer))
+      });
+      if(svg.ok)preview=svg.markup;
+    }
+
+    return `
+      <article class="v2-comm-card v2-comm-qr-card">
+        <div class="v2-comm-card-head">
+          <span class="v2-comm-icon" aria-hidden="true">QR</span>
+          <div>
+            <p class="v2-eyebrow">QR-Code</p>
+            <h3>Kundenportal-Zugang</h3>
+          </div>
+          ${badge(canQr?"QR verfuegbar":(analysis.status==="session-lost"?"Token fehlt":"Nicht verfuegbar"))}
+        </div>
+        <div class="v2-comm-facts">
+          ${summaryItem("Kunde",displayValue(customerLabel(customer)))}
+          ${summaryItem("Portalstatus",published?"Veroeffentlicht":"Nicht veroeffentlicht")}
+          ${summaryItem("Share-Link",h().portalLinkBadgeLabel(link.status))}
+          ${summaryItem("QR-Code verfuegbar?",canQr?"Ja":"Nein")}
+          ${summaryItem("Ziel",canQr?"Persoenliches Kundenportal":"—")}
+        </div>
+        <p class="v2-muted">${escapeHtml(analysis.hint||"")}</p>
+        ${preview?`<div class="v2-comm-qr-preview">${preview}</div>`:""}
+        <div class="v2-document-actions">
+          ${actionButton("QR-Code anzeigen","qr-show",{disabled:!canQr,primary:true,title:disableReason})}
+          ${actionButton("Als PNG speichern","qr-download-png",{disabled:!canQr,title:disableReason})}
+          ${actionButton("Als SVG speichern","qr-download-svg",{disabled:!canQr,title:disableReason})}
+          ${actionButton("QR drucken","qr-print",{disabled:!canQr,title:disableReason})}
+          ${actionButton("Portal oeffnen","open-portal",{disabled:!link.canOpen,title:link.canOpen?"":"Portal-Link nicht oeffnenbar"})}
+          ${actionButton("Link kopieren","copy-link",{disabled:!link.canCopy,title:link.canCopy?"":"Kein kopierbarer Link in dieser Sitzung"})}
+          ${actionButton("Zur Veroeffentlichung","goto-publish")}
+        </div>
+        ${preparedNote("QR-Codes enthalten ausschliesslich sichere Share-Links. Keine externe QR-API, keine CDN-Nachladung.")}
+      </article>
+    `;
+  }
+
+  function runQrAction(action,customer){
+    const api=qrApi();
+    if(!api){
+      setMessage("QR-Modul nicht geladen.","error");
+      return false;
+    }
+    const link=portalLinkInfo(customer);
+    const analysis=api.analyzePortalQr(link);
+    if(!analysis.ok||!analysis.url){
+      setMessage(analysis.hint||"QR-Code nicht verfuegbar.","warning");
+      return false;
+    }
+    const name=customerLabel(customer);
+    if(action==="qr-show"){
+      const result=api.openPrintView({customerName:name,safeUrl:analysis.url,logoUrl:logoAbsoluteUrl()});
+      if(result.blocked){
+        setMessage("Vorschaufenster wurde vom Browser blockiert. Bitte Pop-ups zulassen.","error");
+        return false;
+      }
+      if(!result.ok){
+        setMessage("QR-Vorschau konnte nicht geoeffnet werden.","error");
+        return false;
+      }
+      setMessage("QR-Vorschau geoeffnet.","success");
+      return true;
+    }
+    if(action==="qr-download-png"){
+      const result=api.downloadPng(analysis.url,name);
+      if(!result.ok){
+        setMessage("PNG-Download fehlgeschlagen.","error");
+        return false;
+      }
+      setMessage(`PNG gespeichert (${result.filename}).`,"success");
+      return true;
+    }
+    if(action==="qr-download-svg"){
+      const result=api.downloadSvg(analysis.url,name);
+      if(!result.ok){
+        setMessage("SVG-Download fehlgeschlagen.","error");
+        return false;
+      }
+      setMessage(`SVG gespeichert (${result.filename}).`,"success");
+      return true;
+    }
+    if(action==="qr-print"){
+      const result=api.openPrintView({customerName:name,safeUrl:analysis.url,logoUrl:logoAbsoluteUrl()});
+      if(result.blocked){
+        setMessage("Druckfenster wurde vom Browser blockiert. Bitte Pop-ups zulassen.","error");
+        return false;
+      }
+      if(!result.ok){
+        setMessage("QR-Druckansicht konnte nicht geoeffnet werden.","error");
+        return false;
+      }
+      setMessage("QR-Druckansicht geoeffnet. Drucken Sie dort manuell.","success");
+      return true;
+    }
+    return false;
   }
 
   function openPdfDocument(docType,customer){
@@ -636,6 +766,8 @@
 
           ${pdfCardMarkup(customer)}
 
+          ${qrCardMarkup(customer)}
+
           <article class="v2-comm-card">
             <div class="v2-comm-card-head">
               <span class="v2-comm-icon" aria-hidden="true">D</span>
@@ -738,6 +870,12 @@
         else if(typeof h().render==="function")h().render();
         return true;
       }
+      if(action==="qr-show"||action==="qr-download-png"||action==="qr-download-svg"||action==="qr-print"){
+        runQrAction(action,customer);
+        if(state().route==="communication")renderCommunicationView();
+        else if(typeof h().render==="function")h().render();
+        return true;
+      }
       if(action==="pdf-pack"||action==="pdf-download"||action==="email-docs"){
         setMessage("Diese Funktion ist vorbereitet und noch nicht angebunden.","warning");
         return true;
@@ -816,6 +954,8 @@
     selectedPdfDocumentId,
     pdfDocumentDefs,
     openPdfDocument,
-    PDF_DOC_IDS
+    PDF_DOC_IDS,
+    qrCardMarkup,
+    runQrAction
   };
 })();

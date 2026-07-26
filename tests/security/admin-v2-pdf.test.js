@@ -173,7 +173,7 @@ describe("admin v2 pdf travel documents",()=>{
     assert.match(withPortal.html,/Concierge-Infoblatt/);
     assert.match(withPortal.html,/Anna Concierge/);
     assert.match(withPortal.html,/alpineconcierge\.tirol@gmail\.com/);
-    assert.match(withPortal.html,/QR-Code-Bereich vorbereitet/);
+    assert.match(withPortal.html,/Kundenportal/);
     assert.match(withPortal.html,/safeToken/);
 
     const without=sampleCustomer({_portalUrl:""});

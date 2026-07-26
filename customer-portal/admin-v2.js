@@ -1791,8 +1791,19 @@
               ...file,
               startLatitude:parsed.latitude,
               startLongitude:parsed.longitude,
-              routePoints:parsed.routePoints||storedPoints
+              endLatitude:parsed.endLatitude,
+              endLongitude:parsed.endLongitude,
+              routePoints:parsed.routePoints||storedPoints,
+              bounds:parsed.bounds,
+              distanceKm:parsed.distanceKm,
+              elevationGainM:parsed.elevationGainM,
+              elevationLossM:parsed.elevationLossM,
+              durationMinutes:parsed.durationMinutes,
+              pointCount:parsed.pointCount
             });
+            if(!cleanValue(item.distanceKm)&&parsed.distanceKm)item.distanceKm=String(parsed.distanceKm);
+            if(!cleanValue(item.elevationGain)&&parsed.elevationGainM)item.elevationGain=String(parsed.elevationGainM);
+            if(!cleanValue(item.walkDuration)&&parsed.durationMinutes)item.walkDuration=`${parsed.durationMinutes} Minuten`;
             const itemCoords=lib.parseCoords(item.latitude,item.longitude);
             if(!itemCoords.ok){
               item.latitude=String(parsed.latitude);
@@ -4728,7 +4739,7 @@
     }
     const parts=[];
     const payload=escapeHtml(programTravelItemPayload(item));
-    const hasRouteFile=Boolean(actions.gpx.show||actions.kmlDownload?.show||actions.kml.show);
+    const hasRouteFile=Boolean(actions.gpx.show||actions.kml.show);
     if(actions.maps?.show||hasRouteFile){
       const mapsHref=actions.maps?.url||"#";
       // Always resolve via click when a GPX/KML exists so older items without routePoints still load the full track.
@@ -4736,18 +4747,14 @@
     }
     if(actions.navigation.show){
       parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
-    }else if(actions.navigation.hint&&(actions.gpx.show||actions.kml.show||cleanValue(item.latitude)||cleanValue(item.longitude))){
+    }else if(actions.navigation.hint){
       parts.push(`<p class="v2-muted travel-nav-missing">${escapeHtml(actions.navigation.hint)}</p>`);
     }
     if(actions.gpx.show){
       parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
     }
-    if(actions.kml.show||hasRouteFile){
-      const earthHref=actions.kml?.url||"#";
-      parts.push(`<a class="v2-button soft" href="${escapeHtml(earthHref)}" target="_blank" rel="noopener noreferrer" data-travel-open-earth="1" data-travel-item="${payload}">${escapeHtml(actions.kml?.label||"In Google Earth oeffnen")}</a>`);
-    }
-    if(actions.kmlDownload?.show){
-      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.kmlDownload.url)}" download="${escapeHtml(actions.kmlDownload.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kmlDownload.label)}${actions.kmlDownload.fileSizeLabel?` (${escapeHtml(actions.kmlDownload.fileSizeLabel)})`:""}</a>`);
+    if(actions.kml.show){
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.kml.url)}" download="${escapeHtml(actions.kml.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}${actions.kml.fileSizeLabel?` (${escapeHtml(actions.kml.fileSizeLabel)})`:""}</a>`);
     }
     if(actions.komoot.show)parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.komoot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.komoot.label)}</a>`);
     if(actions.outdooractive.show)parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.outdooractive.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.outdooractive.label)}</a>`);
@@ -4769,27 +4776,6 @@
       window.open(url,"_blank","noopener,noreferrer");
     }catch(error){
       setProgramEditMessage(error?.message||"Maps-Route konnte nicht geoeffnet werden.","error");
-    }finally{
-      link.removeAttribute("aria-busy");
-    }
-    return true;
-  }
-
-  async function openTravelEarthFromEvent(event){
-    const link=event.target.closest("[data-travel-open-earth]");
-    if(!link)return false;
-    const lib=window.ACTTravelActionsLibrary;
-    if(!lib?.resolveGoogleEarthUrl)return false;
-    event.preventDefault();
-    let item={};
-    try{item=JSON.parse(link.getAttribute("data-travel-item")||"{}");}catch(_error){item={};}
-    try{
-      link.setAttribute("aria-busy","true");
-      const url=await lib.resolveGoogleEarthUrl(item);
-      if(!url)throw new Error("Google Earth Ziel fehlt.");
-      window.open(url,"_blank","noopener,noreferrer");
-    }catch(error){
-      setProgramEditMessage(error?.message||"Google Earth konnte nicht geoeffnet werden.","error");
     }finally{
       link.removeAttribute("aria-busy");
     }
@@ -6054,6 +6040,7 @@
       let startLatitude="";
       let startLongitude="";
       let routePoints=[];
+      let analysis={};
       if(field==="gpxFile"||field==="kmlFile"){
         try{
           const xml=await file.text();
@@ -6063,6 +6050,7 @@
             startLatitude=parsed.latitude;
             startLongitude=parsed.longitude;
             routePoints=Array.isArray(parsed.routePoints)?parsed.routePoints:[];
+            analysis=parsed;
           }
         }catch(_error){/* route start is optional */}
       }
@@ -6081,10 +6069,21 @@
         type:typeMap[field]||"program/file",
         startLatitude,
         startLongitude,
-        routePoints
+        endLatitude:analysis.endLatitude,
+        endLongitude:analysis.endLongitude,
+        routePoints,
+        bounds:analysis.bounds,
+        distanceKm:analysis.distanceKm,
+        elevationGainM:analysis.elevationGainM,
+        elevationLossM:analysis.elevationLossM,
+        durationMinutes:analysis.durationMinutes,
+        pointCount:analysis.pointCount
       });
       if(!attachment)throw new Error("Upload ohne gueltige Datei-URL.");
       item[field]=attachment;
+      if(!cleanValue(item.distanceKm)&&analysis.distanceKm)item.distanceKm=String(analysis.distanceKm);
+      if(!cleanValue(item.elevationGain)&&analysis.elevationGainM)item.elevationGain=String(analysis.elevationGainM);
+      if(!cleanValue(item.walkDuration)&&analysis.durationMinutes)item.walkDuration=`${analysis.durationMinutes} Minuten`;
       const travelLib=window.ACTTravelActionsLibrary;
       if(attachment.startLatitude!=null&&attachment.startLongitude!=null&&travelLib?.parseCoords){
         const itemCoords=travelLib.parseCoords(item.latitude,item.longitude);
@@ -6240,10 +6239,6 @@
     document.addEventListener("click",event=>{
       if(event.target.closest("[data-travel-open-maps]")){
         openTravelMapsFromEvent(event);
-        return;
-      }
-      if(event.target.closest("[data-travel-open-earth]")){
-        openTravelEarthFromEvent(event);
         return;
       }
       if(window.ACTAdminV2Bookings?.handleClick?.(event))return;

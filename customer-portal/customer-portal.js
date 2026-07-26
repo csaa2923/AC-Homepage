@@ -580,7 +580,7 @@
       gpxFile:source.gpxFile||null,
       kmlFile:source.kmlFile||null
     }));
-    const hasRouteFile=Boolean(actions.gpx.show||actions.kmlDownload?.show||actions.kml.show);
+    const hasRouteFile=Boolean(actions.gpx.show||actions.kml.show);
     if(actions.maps?.show||hasRouteFile){
       buttons.push(`<a class="button soft" href="${escapeHtml(actions.maps?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${travelPayload}">${escapeHtml(actions.maps?.label||"In Maps oeffnen")}</a>`);
     }
@@ -589,10 +589,7 @@
     if(actions.gpx.show){
       buttons.push(`<a class="button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
     }
-    if(actions.kml.show||hasRouteFile){
-      buttons.push(`<a class="button soft" href="${escapeHtml(actions.kml?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-earth="1" data-travel-item="${travelPayload}">${escapeHtml(actions.kml?.label||"In Google Earth oeffnen")}</a>`);
-    }
-    if(actions.kmlDownload?.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.kmlDownload.url)}" download="${escapeHtml(actions.kmlDownload.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kmlDownload.label)}</a>`);
+    if(actions.kml.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.kml.url)}" download="${escapeHtml(actions.kml.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}</a>`);
     if(actions.komoot.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.komoot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.komoot.label)}</a>`);
     if(actions.outdooractive.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.outdooractive.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.outdooractive.label)}</a>`);
     if(actions.calendar.show)buttons.push(`<button class="button soft" type="button" data-calendar-id="${escapeHtml(item.id)}">${escapeHtml(actions.calendar.label)}</button>`);
@@ -605,12 +602,26 @@
 
   function travelMapMarkup(item){
     const lib=travelLib();
-    const map=lib?.staticMapPreview?lib.staticMapPreview(itemForTravelActions(item)):null;
+    const source=itemForTravelActions(item);
+    const map=lib?.staticMapPreview?lib.staticMapPreview(source):null;
     if(!map?.ok)return "";
+    const actions=lib?.programItemActions?lib.programItemActions(source):null;
+    const mapsUrl=actions?.maps?.show?actions.maps.url:"";
+    const navUrl=actions?.navigation?.show?actions.navigation.url:"";
+    const endLabel=map.endLatitude!=null&&map.endLongitude!=null
+      &&!(map.endLatitude===map.latitude&&map.endLongitude===map.longitude)
+      ?`<p class="travel-map-meta">Ziel: ${escapeHtml(String(map.endLatitude))}, ${escapeHtml(String(map.endLongitude))}</p>`
+      :"";
     return `
       <div class="travel-map-preview">
-        <iframe src="${escapeHtml(map.embedUrl)}" title="Kartenvorschau" loading="lazy" referrerpolicy="no-referrer" tabindex="-1"></iframe>
-        <a class="button soft travel-map-link" href="${escapeHtml(map.linkUrl)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>
+        <iframe src="${escapeHtml(map.embedUrl)}" title="Route auf Karte" loading="lazy" referrerpolicy="no-referrer" tabindex="-1"></iframe>
+        <div class="travel-map-actions card-actions">
+          ${mapsUrl?`<a class="button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${escapeHtml(JSON.stringify({
+            latitude:source.latitude||"",longitude:source.longitude||"",address:source.address||"",locationAddress:source.locationAddress||"",location:source.location||"",googleMapsUrl:source.googleMapsUrl||"",appleMapsUrl:source.appleMapsUrl||"",navigationUrl:source.navigationUrl||"",gpxFile:source.gpxFile||null,kmlFile:source.kmlFile||null
+          }))}">Route auf Karte</a>`:""}
+          ${navUrl?`<a class="button soft travel-map-link" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}
+        </div>
+        ${endLabel}
       </div>
     `;
   }
@@ -619,6 +630,12 @@
     const lib=travelLib();
     const actions=lib?.programItemActions?lib.programItemActions(item):null;
     const meta=actions?.meta||{};
+    const weather=weatherForDate(item.dateValue||"");
+    const tempMin=Number.isFinite(Number(weather?.tempMin))?Math.round(Number(weather.tempMin)):null;
+    const tempMax=Number.isFinite(Number(weather?.tempMax))?Math.round(Number(weather.tempMax)):null;
+    const weatherText=weather
+      ?`${weather.condition||weather.summary||"Wetter"}${tempMin!==null&&tempMax!==null?` · ${tempMin}–${tempMax}°C`:""}`
+      :"";
     return [
       ["Adresse",meta.address||item.address||""],
       ["Schwierigkeit",meta.difficulty||""],
@@ -626,6 +643,7 @@
       ["Gehzeit",meta.walkDuration||""],
       ["Hoehenmeter",meta.elevationGain||""],
       ["Abstieg",meta.elevationLoss||""],
+      ["Wetter",weatherText],
       ["Buchungsnummer",meta.bookingNumber||""]
     ];
   }
@@ -845,7 +863,7 @@
       </div>
       <div class="card-actions compact-actions">
         <a class="button primary" href="#${detailId(next)}">Details anzeigen</a>
-        ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>`:`<p class="travel-nav-missing">Startpunkt nicht hinterlegt</p>`}
+        ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>`:`<p class="travel-nav-missing">Kein Startpunkt vorhanden</p>`}
       </div>
     `;
   }
@@ -1457,20 +1475,6 @@
           try{item=JSON.parse(mapsLink.getAttribute("data-travel-item")||"{}");}catch(_error){item={};}
           try{
             const url=await lib.resolveMapsPlaceUrl(item);
-            if(url)window.open(url,"_blank","noopener,noreferrer");
-          }catch(_error){/* keep silent in guest UI */}
-          return;
-        }
-      }
-      const earthLink=event.target.closest("[data-travel-open-earth]");
-      if(earthLink){
-        const lib=travelLib();
-        if(lib?.resolveGoogleEarthUrl){
-          event.preventDefault();
-          let item={};
-          try{item=JSON.parse(earthLink.getAttribute("data-travel-item")||"{}");}catch(_error){item={};}
-          try{
-            const url=await lib.resolveGoogleEarthUrl(item);
             if(url)window.open(url,"_blank","noopener,noreferrer");
           }catch(_error){/* keep silent in guest UI */}
           return;

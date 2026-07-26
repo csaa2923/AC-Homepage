@@ -163,8 +163,10 @@
     if(Array.isArray(file.routePoints)){
       const points=[];
       file.routePoints.slice(0,25).forEach(entry=>{
-        const lat=Number(Array.isArray(entry)?entry[0]:entry&&entry.latitude);
-        const lng=Number(Array.isArray(entry)?entry[1]:entry&&(entry.longitude??entry.lng));
+        const latRaw=String(Array.isArray(entry)?entry[0]:((entry&&entry.latitude)??"")).trim();
+        const lngRaw=String(Array.isArray(entry)?entry[1]:((entry&&(entry.longitude??entry.lng))??"")).trim();
+        const lat=latRaw===""?NaN:Number(latRaw);
+        const lng=lngRaw===""?NaN:Number(lngRaw);
         if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
         if(lat===0&&lng===0)return;
         if(lat<-90||lat>90||lng<-180||lng>180)return;
@@ -172,6 +174,28 @@
       });
       if(points.length)next.routePoints=points;
     }
+    const endLatRaw=String(file.endLatitude??"").trim();
+    const endLngRaw=String(file.endLongitude??"").trim();
+    const endLat=endLatRaw===""?NaN:Number(endLatRaw);
+    const endLng=endLngRaw===""?NaN:Number(endLngRaw);
+    if(Number.isFinite(endLat)&&Number.isFinite(endLng)&&!(endLat===0&&endLng===0)&&endLat>=-90&&endLat<=90&&endLng>=-180&&endLng<=180){
+      next.endLatitude=endLat;
+      next.endLongitude=endLng;
+    }
+    const bounds=file.bounds;
+    if(bounds&&typeof bounds==="object"){
+      const minLat=String(bounds.minLat??"").trim()===""?NaN:Number(bounds.minLat);
+      const minLng=String(bounds.minLng??"").trim()===""?NaN:Number(bounds.minLng);
+      const maxLat=String(bounds.maxLat??"").trim()===""?NaN:Number(bounds.maxLat);
+      const maxLng=String(bounds.maxLng??"").trim()===""?NaN:Number(bounds.maxLng);
+      if([minLat,minLng,maxLat,maxLng].every(Number.isFinite)&&minLat>=-90&&maxLat<=90&&minLng>=-180&&maxLng<=180&&minLat<=maxLat&&minLng<=maxLng&&!(minLat===0&&minLng===0&&maxLat===0&&maxLng===0)){
+        next.bounds={minLat,minLng,maxLat,maxLng};
+      }
+    }
+    ["distanceKm","elevationGainM","elevationLossM","durationMinutes","pointCount"].forEach(field=>{
+      const value=Number(file[field]);
+      if(Number.isFinite(value)&&value>=0)next[field]=field==="durationMinutes"||field==="pointCount"?Math.round(value):value;
+    });
     return next;
   }
 

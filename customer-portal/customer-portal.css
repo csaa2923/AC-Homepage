@@ -507,7 +507,27 @@ h3{font-size:24px;color:var(--green)}
   display:block;
   pointer-events:none;
 }
-.travel-map-link{margin:0 12px 12px;justify-self:stretch;text-align:center}
+.travel-map-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:0 12px 12px;
+}
+.travel-map-link{margin:0;justify-self:stretch;text-align:center}
+.travel-map-meta{
+  margin:0 12px 12px;
+  color:#415a53;
+  font-size:13px;
+  font-weight:700;
+}
+.day-item-actions{
+  flex-wrap:wrap;
+  max-width:100%;
+}
+.day-item-actions .button{
+  max-width:100%;
+  white-space:normal;
+}
 .travel-offline-hint{
   flex-basis:100%;
   margin:0;

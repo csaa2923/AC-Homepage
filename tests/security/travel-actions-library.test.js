@@ -44,7 +44,7 @@ describe("travel actions navigation destination", () => {
     assert.equal(lib.resolveNavigationDestination({latitude: "", longitude: ""}).ok, false);
     const actions = lib.programItemActions({latitude: "", longitude: "", title: "Test"});
     assert.equal(actions.navigation.show, false);
-    assert.match(actions.navigation.hint, /Startpunkt nicht hinterlegt/i);
+    assert.equal(actions.navigation.hint, "Kein Startpunkt vorhanden");
   });
 
   it("rejects 0,0 coordinates", () => {
@@ -100,6 +100,13 @@ describe("travel actions navigation destination", () => {
       title: "Bahnhof"
     });
     assert.match(url, /Bahnhofplatz/);
+  });
+
+  it("uses address fields in declared fallback order", () => {
+    const lib = loadLibrary();
+    assert.equal(lib.resolveNavigationDestination({address: "Adresse", locationAddress: "Nebenadresse"}).address, "Adresse");
+    assert.equal(lib.resolveNavigationDestination({locationAddress: "Nebenadresse", location: "Ort"}).address, "Nebenadresse");
+    assert.equal(lib.resolveNavigationDestination({location: "Ort"}).address, "Ort");
   });
 
   it("prefers google maps url over coordinates and address", () => {
@@ -258,7 +265,7 @@ describe("travel actions navigation destination", () => {
     assert.match(place, /47\.59102/);
   });
 
-  it("Google Earth opens web viewer instead of raw KML download", () => {
+  it("keeps KML as a download only", () => {
     const lib = loadLibrary();
     const extracted = lib.extractRouteFromXml(SAMPLE_KML, "kml");
     const actions = lib.programItemActions({
@@ -272,10 +279,39 @@ describe("travel actions navigation destination", () => {
       }
     });
     assert.equal(actions.kml.show, true);
-    assert.match(actions.kml.url, /earth\.google\.com\/web/);
-    assert.doesNotMatch(actions.kml.url, /\.kml/);
-    assert.equal(actions.kmlDownload.show, true);
-    assert.equal(actions.kmlDownload.url, "https://example.com/route.kml");
+    assert.equal(actions.kml.url, "https://example.com/route.kml");
+    assert.equal(actions.kml.label, "KML herunterladen");
+    assert.doesNotMatch(source, /earth[.]google[.]com/i);
+  });
+
+  it("returns persisted route analysis including bounds and distance", () => {
+    const lib = loadLibrary();
+    const gpx = lib.extractRouteFromXml(SAMPLE_GPX, "gpx");
+    const kml = lib.extractRouteFromXml(`<kml><LineString><coordinates>11,47,100 11.01,47.01,120</coordinates></LineString></kml>`, "kml");
+    assert.equal(gpx.ok, true);
+    assert.equal(gpx.startLatitude, 47.33012);
+    assert.equal(gpx.endLongitude, 11.186);
+    assert.ok(gpx.distanceKm > 0);
+    assert.ok(gpx.bounds.minLat < gpx.bounds.maxLat);
+    assert.equal(gpx.elevationGainM, 10);
+    assert.equal(gpx.pointCount, 2);
+    assert.equal(kml.ok, true);
+    assert.ok(kml.distanceKm > 0);
+    assert.equal(kml.bounds.minLng, 11);
+  });
+
+  it("uses route bounds for a non-empty OSM preview", () => {
+    const lib = loadLibrary();
+    const analysis = lib.extractRouteFromXml(SAMPLE_GPX, "gpx");
+    const map = lib.staticMapPreview({
+      gpxFile: {
+        url: "https://example.com/route.gpx",
+        ...analysis
+      }
+    });
+    assert.equal(map.ok, true);
+    assert.match(map.embedUrl, /openstreetmap\.org/);
+    assert.equal(map.endLatitude, analysis.endLatitude);
   });
 
   it("reads a valid first trackpoint from demo seefeld gpx", () => {

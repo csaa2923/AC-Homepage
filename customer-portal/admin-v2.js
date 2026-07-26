@@ -1351,8 +1351,14 @@
       voucherNumber:firstValue(item.voucherNumber,item.voucher,item.voucherNo,item.voucherId),
       weatherPlaceholder:firstValue(item.weatherPlaceholder,item.weather,item.weatherHint),
       address:firstValue(item.address,item.locationAddress,item.location,item.place),
-      latitude:firstValue(item.latitude,item.lat),
-      longitude:firstValue(item.longitude,item.lng,item.lon),
+      ...(()=>{
+        const coords=window.ACTTravelActionsLibrary?.parseCoords?.(
+          firstValue(item.latitude,item.lat),
+          firstValue(item.longitude,item.lng,item.lon)
+        );
+        if(coords?.ok)return {latitude:String(coords.latitude),longitude:String(coords.longitude)};
+        return {latitude:"",longitude:""};
+      })(),
       plusCode:firstValue(item.plusCode,item.pluscode),
       googleMapsUrl:safeWebUrl(firstValue(item.googleMapsUrl,item.googleMaps,item.mapsUrl)),
       appleMapsUrl:safeWebUrl(firstValue(item.appleMapsUrl,item.appleMaps)),
@@ -1664,7 +1670,7 @@
         });
         const coords=window.ACTTravelActionsLibrary?.parseCoords?.(item.latitude,item.longitude);
         if((cleanValue(item.latitude)||cleanValue(item.longitude))&&coords&&!coords.ok){
-          errors[`program-${dayIndex}-${itemIndex}-latitude`]="Koordinaten ungueltig (Breite -90..90, Laenge -180..180).";
+          errors[`program-${dayIndex}-${itemIndex}-latitude`]="Koordinaten ungueltig (keine leeren Werte, nicht 0/0, Breite -90..90, Laenge -180..180).";
         }
       });
     });
@@ -1703,8 +1709,12 @@
         voucherNumber:item.voucherNumber,
         weatherPlaceholder:item.weatherPlaceholder,
         address:item.address||item.locationAddress||item.location||"",
-        latitude:item.latitude||"",
-        longitude:item.longitude||"",
+        ...(()=>{
+          const coords=window.ACTTravelActionsLibrary?.parseCoords?.(item.latitude,item.longitude);
+          if(coords?.ok)return {latitude:String(coords.latitude),longitude:String(coords.longitude)};
+          // Drop empty / 0,0 / out-of-range so Number("") never persists as navigation target.
+          return {latitude:"",longitude:""};
+        })(),
         plusCode:item.plusCode||"",
         googleMapsUrl:safeWebUrl(item.googleMapsUrl),
         appleMapsUrl:safeWebUrl(item.appleMapsUrl),
@@ -1749,6 +1759,48 @@
     return compactObject(next);
   }
 
+  async function ensureRouteStartsOnProgramDraft(values){
+    const lib=window.ACTTravelActionsLibrary;
+    if(!lib?.extractRouteStartFromXml||!values?.days)return values;
+    for(const day of values.days){
+      for(const item of arrayValue(day.items)){
+        for(const field of ["gpxFile","kmlFile"]){
+          const file=item[field];
+          if(!file||typeof file!=="object")continue;
+          const url=String(file.url||file.downloadUrl||"").trim();
+          if(!url)continue;
+          const stored=lib.parseCoords(file.startLatitude,file.startLongitude);
+          if(stored.ok){
+            const itemCoords=lib.parseCoords(item.latitude,item.longitude);
+            if(!itemCoords.ok){
+              item.latitude=String(stored.latitude);
+              item.longitude=String(stored.longitude);
+            }
+            continue;
+          }
+          try{
+            const response=await fetch(url);
+            if(!response.ok)continue;
+            const xml=await response.text();
+            const parsed=lib.extractRouteStartFromXml(xml,field==="kmlFile"?"kml":"gpx");
+            if(!parsed?.ok)continue;
+            item[field]=normalizeProgramTravelFile({
+              ...file,
+              startLatitude:parsed.latitude,
+              startLongitude:parsed.longitude
+            });
+            const itemCoords=lib.parseCoords(item.latitude,item.longitude);
+            if(!itemCoords.ok){
+              item.latitude=String(parsed.latitude);
+              item.longitude=String(parsed.longitude);
+            }
+          }catch(_error){/* optional start-point backfill */}
+        }
+      }
+    }
+    return values;
+  }
+
   async function saveProgramEdit(){
     if(state.programEditSaving||programSavePromise)return programSavePromise;
     const customer=customerById(state.selectedCustomerId);
@@ -1760,6 +1812,7 @@
       renderCustomerDetail();
       return null;
     }
+    await ensureRouteStartsOnProgramDraft(validation.values);
     const fullCustomer=mergeProgramEdit(customer,validation.values);
     state.programEditSaving=true;
     setProgramEditMessage("Programm wird gespeichert ...","saving");
@@ -5883,6 +5936,18 @@
         {title:file.name,type:typeMap[field]||"program/file"},
         ()=>{}
       );
+      let startLatitude="";
+      let startLongitude="";
+      if(field==="gpxFile"||field==="kmlFile"){
+        try{
+          const xml=await file.text();
+          const parsed=window.ACTTravelActionsLibrary?.extractRouteStartFromXml?.(xml,field==="kmlFile"?"kml":"gpx");
+          if(parsed?.ok){
+            startLatitude=parsed.latitude;
+            startLongitude=parsed.longitude;
+          }
+        }catch(_error){/* route start is optional */}
+      }
       const attachment=normalizeProgramTravelFile({
         id:uploaded.documentId||uploaded.id,
         documentId:uploaded.documentId||uploaded.id,
@@ -5895,11 +5960,26 @@
         uploadedAt:uploaded.uploadedAt||new Date().toISOString(),
         storagePath:uploaded.storagePath||"",
         title:uploaded.title||file.name,
-        type:typeMap[field]||"program/file"
+        type:typeMap[field]||"program/file",
+        startLatitude,
+        startLongitude
       });
       if(!attachment)throw new Error("Upload ohne gueltige Datei-URL.");
       item[field]=attachment;
-      setProgramEditMessage("Datei hochgeladen. Bitte Programmpunkt speichern.","success");
+      const travelLib=window.ACTTravelActionsLibrary;
+      if(attachment.startLatitude!=null&&attachment.startLongitude!=null&&travelLib?.parseCoords){
+        const itemCoords=travelLib.parseCoords(item.latitude,item.longitude);
+        if(!itemCoords.ok){
+          item.latitude=String(attachment.startLatitude);
+          item.longitude=String(attachment.startLongitude);
+        }
+      }
+      setProgramEditMessage(
+        attachment.startLatitude!=null
+          ?"Datei hochgeladen (Startpunkt erkannt). Bitte Programmpunkt speichern."
+          :"Datei hochgeladen. Bitte Programmpunkt speichern.",
+        "success"
+      );
     }catch(error){
       setProgramEditMessage(error?.message||"Travel-Upload fehlgeschlagen.","error");
     }finally{

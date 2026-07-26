@@ -516,6 +516,14 @@ h3{font-size:24px;color:var(--green)}
   line-height:1.45;
   font-weight:700;
 }
+.travel-nav-missing{
+  flex-basis:100%;
+  margin:0;
+  color:#8b3d31;
+  font-size:14px;
+  line-height:1.4;
+  font-weight:800;
+}
 .program-detail-card{
   padding:20px;
 }

@@ -533,10 +533,11 @@
   function itemNavigationUrl(item){
     const lib=travelLib();
     if(lib?.navigationUrlForDevice){
-      const url=lib.navigationUrlForDevice(item);
-      if(url)return url;
+      // Library owns priority and validity (incl. rejecting 0,0 / empty Number("") traps).
+      // Do not fall back to meetingPoint/title — that produced false navigation targets.
+      return lib.navigationUrlForDevice(item)||"";
     }
-    return item.navigationUrl||resolveNavigationUrl("",item.address,item.meetingPoint,item.title);
+    return item.navigationUrl||resolveNavigationUrl("",item.address,item.locationAddress,item.location)||"";
   }
 
   function progressScopeId(){
@@ -568,6 +569,7 @@
     }
     const buttons=[];
     if(actions.navigation.show)buttons.push(`<a class="button ${compact?"soft":"primary"}" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
+    else if(actions.navigation.hint)buttons.push(`<p class="travel-nav-missing">${escapeHtml(actions.navigation.hint)}</p>`);
     if(actions.gpx.show){
       buttons.push(`<a class="button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
     }
@@ -815,6 +817,7 @@
   function renderNextEvent(){
     const next=programItems()[0];
     if(!next)return;
+    const navUrl=itemNavigationUrl(itemForTravelActions(next));
     document.getElementById("nextEventCard").innerHTML=`
       <div>
         <p class="eyebrow">Nächster Programmpunkt</p>
@@ -823,7 +826,7 @@
       </div>
       <div class="card-actions compact-actions">
         <a class="button primary" href="#${detailId(next)}">Details anzeigen</a>
-        <a class="button soft" href="${itemNavigationUrl(next)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>
+        ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>`:`<p class="travel-nav-missing">Startpunkt nicht hinterlegt</p>`}
       </div>
     `;
   }

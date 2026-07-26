@@ -137,7 +137,7 @@ function redactProgramAttachment(file,index){
   if(!file||typeof file!=="object")return null;
   const redacted=redactDocument(file,index);
   if(!stringValue(redacted.url))return null;
-  return {
+  const next={
     id:redacted.id,
     documentId:redacted.documentId,
     url:redacted.url,
@@ -150,6 +150,16 @@ function redactProgramAttachment(file,index){
     title:redacted.title,
     type:redacted.type
   };
+  // Avoid Number("") === 0; only pass through finite, in-range, non-(0,0) starts.
+  const startLatRaw=String(file.startLatitude??"").trim();
+  const startLngRaw=String(file.startLongitude??"").trim();
+  const startLat=startLatRaw===""?NaN:Number(startLatRaw);
+  const startLng=startLngRaw===""?NaN:Number(startLngRaw);
+  if(Number.isFinite(startLat)&&Number.isFinite(startLng)&&!(startLat===0&&startLng===0)&&startLat>=-90&&startLat<=90&&startLng>=-180&&startLng<=180){
+    next.startLatitude=startLat;
+    next.startLongitude=startLng;
+  }
+  return next;
 }
 
 function redactProgramItem(item){

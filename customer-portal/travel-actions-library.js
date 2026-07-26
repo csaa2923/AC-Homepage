@@ -20,11 +20,25 @@
     return /^https?:\/\//i.test(text(url));
   }
 
+  function parseCoordNumber(value){
+    // Never use Number("") — that becomes 0 and produced false 0,0 navigation targets.
+    if(value===undefined||value===null)return null;
+    if(typeof value==="number"){
+      return Number.isFinite(value)?value:null;
+    }
+    const raw=text(value);
+    if(!raw)return null;
+    if(!/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(raw))return null;
+    const next=Number(raw);
+    return Number.isFinite(next)?next:null;
+  }
+
   function parseCoords(lat,lng){
-    const latitude=Number(lat);
-    const longitude=Number(lng);
-    if(!Number.isFinite(latitude)||!Number.isFinite(longitude))return {ok:false,latitude:null,longitude:null};
+    const latitude=parseCoordNumber(lat);
+    const longitude=parseCoordNumber(lng);
+    if(latitude===null||longitude===null)return {ok:false,latitude:null,longitude:null};
     if(latitude<-90||latitude>90||longitude<-180||longitude>180)return {ok:false,latitude:null,longitude:null};
+    if(latitude===0&&longitude===0)return {ok:false,latitude:null,longitude:null};
     return {ok:true,latitude,longitude};
   }
 
@@ -38,6 +52,114 @@
       source.meetingPoint||
       ""
     );
+  }
+
+  function resolveNavAddress(item){
+    const source=item||{};
+    return text(
+      source.address||
+      source.locationAddress||
+      source.location||
+      ""
+    );
+  }
+
+  function parseGpxStartPoint(xml){
+    const raw=String(xml||"");
+    if(!raw)return {ok:false,latitude:null,longitude:null};
+    const patterns=[
+      /<trkpt\b[^>]*\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["']/i,
+      /<trkpt\b[^>]*\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["']/i,
+      /<rtept\b[^>]*\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["']/i,
+      /<rtept\b[^>]*\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["']/i,
+      /<wpt\b[^>]*\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["']/i,
+      /<wpt\b[^>]*\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["']/i
+    ];
+    for(let i=0;i<patterns.length;i+=1){
+      const match=raw.match(patterns[i]);
+      if(!match)continue;
+      const latFirst=i%2===0;
+      return parseCoords(latFirst?match[1]:match[2],latFirst?match[2]:match[1]);
+    }
+    return {ok:false,latitude:null,longitude:null};
+  }
+
+  function parseKmlStartPoint(xml){
+    const raw=String(xml||"");
+    if(!raw)return {ok:false,latitude:null,longitude:null};
+    const match=raw.match(/<coordinates\b[^>]*>\s*([-\d.+eE]+)[,\s]+([-\d.+eE]+)/i);
+    if(!match)return {ok:false,longitude:null,latitude:null};
+    // KML order is longitude,latitude[,altitude]
+    return parseCoords(match[2],match[1]);
+  }
+
+  function routeStartFromAttachment(file){
+    if(!file||typeof file!=="object")return {ok:false,latitude:null,longitude:null};
+    const stored=parseCoords(file.startLatitude??file.latitude,file.startLongitude??file.longitude);
+    if(stored.ok)return stored;
+    return {ok:false,latitude:null,longitude:null};
+  }
+
+  function routeStartFromItem(item){
+    const source=item||{};
+    const fromGpx=routeStartFromAttachment(source.gpxFile);
+    if(fromGpx.ok)return fromGpx;
+    const fromKml=routeStartFromAttachment(source.kmlFile);
+    if(fromKml.ok)return fromKml;
+    return {ok:false,latitude:null,longitude:null};
+  }
+
+  /**
+   * Priority:
+   * 1) explicit Google Maps URL
+   * 2) explicit Apple Maps URL
+   * 3) valid latitude + longitude
+   * 4) address / locationAddress / location
+   * 5) start point from GPX/KML metadata
+   */
+  function resolveNavigationDestination(item){
+    const source=item||{};
+    if(isHttpsUrl(source.googleMapsUrl)){
+      return {ok:true,kind:"google-url",url:text(source.googleMapsUrl),latitude:null,longitude:null,address:""};
+    }
+    if(isHttpsUrl(source.appleMapsUrl)){
+      return {ok:true,kind:"apple-url",url:text(source.appleMapsUrl),latitude:null,longitude:null,address:""};
+    }
+    const coords=parseCoords(source.latitude,source.longitude);
+    if(coords.ok){
+      return {ok:true,kind:"coords",url:"",latitude:coords.latitude,longitude:coords.longitude,address:""};
+    }
+    const address=resolveNavAddress(source);
+    if(address){
+      return {ok:true,kind:"address",url:"",latitude:null,longitude:null,address};
+    }
+    const route=routeStartFromItem(source);
+    if(route.ok){
+      return {ok:true,kind:"route",url:"",latitude:route.latitude,longitude:route.longitude,address:""};
+    }
+    // Legacy/booking deep link — only after structured destination fields failed.
+    if(isHttpsUrl(source.navigationUrl)){
+      return {ok:true,kind:"google-url",url:text(source.navigationUrl),latitude:null,longitude:null,address:""};
+    }
+    return {ok:false,kind:"none",url:"",latitude:null,longitude:null,address:"",hint:"Startpunkt nicht hinterlegt"};
+  }
+
+  function mapsUrlFromDestination(destination,provider){
+    if(!destination?.ok)return "";
+    if(destination.kind==="google-url"||destination.kind==="apple-url")return destination.url;
+    if(destination.kind==="coords"||destination.kind==="route"){
+      if(provider==="apple"){
+        return `https://maps.apple.com/?daddr=${destination.latitude},${destination.longitude}`;
+      }
+      return `https://www.google.com/maps/dir/?api=1&destination=${destination.latitude},${destination.longitude}`;
+    }
+    if(destination.kind==="address"){
+      if(provider==="apple"){
+        return `https://maps.apple.com/?q=${encodeURIComponent(destination.address)}`;
+      }
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination.address)}`;
+    }
+    return "";
   }
 
   function attachmentUrl(file){
@@ -70,6 +192,11 @@
       type:text(fileMeta.type||fileMeta.category)||"Sonstiges"
     };
     if(fileMeta.storagePath)next.storagePath=text(fileMeta.storagePath);
+    const start=parseCoords(fileMeta.startLatitude??fileMeta.latitude,fileMeta.startLongitude??fileMeta.longitude);
+    if(start.ok){
+      next.startLatitude=start.latitude;
+      next.startLongitude=start.longitude;
+    }
     return next;
   }
 
@@ -107,35 +234,11 @@
   }
 
   function googleMapsUrl(item){
-    const source=item||{};
-    if(isHttpsUrl(source.googleMapsUrl))return text(source.googleMapsUrl);
-    if(isHttpsUrl(source.navigationUrl)&&/google\.[^/]*\/maps|maps\.google\./i.test(source.navigationUrl)){
-      return text(source.navigationUrl);
-    }
-    const coords=parseCoords(source.latitude,source.longitude);
-    if(coords.ok){
-      return `https://www.google.com/maps/dir/?api=1&destination=${coords.latitude},${coords.longitude}`;
-    }
-    const plus=text(source.plusCode);
-    if(plus)return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(plus)}`;
-    const address=resolveAddress(source);
-    if(address)return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-    if(isHttpUrl(source.navigationUrl))return text(source.navigationUrl);
-    return "";
+    return mapsUrlFromDestination(resolveNavigationDestination(item),"google");
   }
 
   function appleMapsUrl(item){
-    const source=item||{};
-    if(isHttpsUrl(source.appleMapsUrl))return text(source.appleMapsUrl);
-    const coords=parseCoords(source.latitude,source.longitude);
-    if(coords.ok){
-      return `https://maps.apple.com/?daddr=${coords.latitude},${coords.longitude}`;
-    }
-    const plus=text(source.plusCode);
-    if(plus)return `https://maps.apple.com/?q=${encodeURIComponent(plus)}`;
-    const address=resolveAddress(source);
-    if(address)return `https://maps.apple.com/?q=${encodeURIComponent(address)}`;
-    return "";
+    return mapsUrlFromDestination(resolveNavigationDestination(item),"apple");
   }
 
   function isAppleDevice(userAgent){
@@ -144,21 +247,36 @@
   }
 
   function navigationUrlForDevice(item,userAgent){
-    const apple=appleMapsUrl(item);
-    const google=googleMapsUrl(item);
-    if(isAppleDevice(userAgent)&&apple)return apple;
-    return google||apple||"";
+    const destination=resolveNavigationDestination(item);
+    if(!destination.ok)return "";
+    if(destination.kind==="google-url"||destination.kind==="apple-url")return destination.url;
+    return mapsUrlFromDestination(destination,isAppleDevice(userAgent)?"apple":"google");
   }
 
   function staticMapPreview(item){
-    const coords=parseCoords(item?.latitude,item?.longitude);
-    if(!coords.ok)return {ok:false,embedUrl:"",linkUrl:""};
-    const {latitude,longitude}=coords;
+    const destination=resolveNavigationDestination(item);
+    let latitude=null;
+    let longitude=null;
+    if(destination.kind==="coords"||destination.kind==="route"){
+      latitude=destination.latitude;
+      longitude=destination.longitude;
+    }else{
+      const direct=parseCoords(item?.latitude,item?.longitude);
+      const route=routeStartFromItem(item);
+      if(direct.ok){latitude=direct.latitude;longitude=direct.longitude;}
+      else if(route.ok){latitude=route.latitude;longitude=route.longitude;}
+    }
+    if(latitude===null||longitude===null)return {ok:false,embedUrl:"",linkUrl:""};
     const delta=0.01;
     const bbox=[longitude-delta,latitude-delta,longitude+delta,latitude+delta].join("%2C");
     const embedUrl=`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${latitude}%2C${longitude}`;
     const linkUrl=navigationUrlForDevice(item)||`https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`;
     return {ok:true,embedUrl,linkUrl,latitude,longitude};
+  }
+
+  function extractRouteStartFromXml(xml,kind){
+    if(kind==="kml")return parseKmlStartPoint(xml);
+    return parseGpxStartPoint(xml);
   }
 
   function icsEscape(value){
@@ -313,6 +431,7 @@
 
   function programItemActions(item,userAgent){
     const source=item||{};
+    const destination=resolveNavigationDestination(source);
     const navUrl=navigationUrlForDevice(source,userAgent);
     const gpx=normalizeTravelAttachment(source.gpxFile);
     const kml=normalizeTravelAttachment(source.kmlFile);
@@ -322,7 +441,12 @@
     const map=staticMapPreview(source);
     const calendarOk=source.calendarEnabled!==false&&Boolean(text(source.dateValue||source.date));
     return {
-      navigation:{show:Boolean(navUrl),url:navUrl,label:"Navigation starten"},
+      navigation:{
+        show:Boolean(navUrl&&destination.ok),
+        url:navUrl,
+        label:"Navigation starten",
+        hint:destination.ok?"":"Startpunkt nicht hinterlegt"
+      },
       gpx:{
         show:Boolean(gpx&&attachmentUrl(gpx)),
         url:gpx?attachmentUrl(gpx):"",
@@ -364,7 +488,8 @@
         elevationGain:text(source.elevationGain),
         elevationLoss:text(source.elevationLoss),
         bookingNumber:text(source.bookingNumber||source.ticketNumber),
-        offlineHint:"GPX-Datei speichern, damit die Route auch offline in Ihrer App verfuegbar ist."
+        offlineHint:"GPX-Datei speichern, damit die Route auch offline in Ihrer App verfuegbar ist.",
+        navigationHint:destination.ok?"":"Startpunkt nicht hinterlegt"
       }
     };
   }
@@ -407,8 +532,15 @@
     DEFAULT_TIMEZONE,
     isHttpsUrl,
     isHttpUrl,
+    parseCoordNumber,
     parseCoords,
     resolveAddress,
+    resolveNavAddress,
+    resolveNavigationDestination,
+    parseGpxStartPoint,
+    parseKmlStartPoint,
+    extractRouteStartFromXml,
+    routeStartFromItem,
     normalizeTravelAttachment,
     formatFileSize,
     isGpxAttachment,

@@ -33,8 +33,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=9/);
-    assert.match(html,/admin-v2\.css\?v=39/);
-    assert.match(html,/admin-v2\.js\?v=48/);
+    assert.match(html,/admin-v2\.css\?v=40/);
+    assert.match(html,/admin-v2\.js\?v=49/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
@@ -371,11 +371,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=39/);
+    assert.match(html,/admin-v2\.css\?v=40/);
     assert.match(html,/portal-share-library\.js\?v=3/);
-    assert.match(html,/publish-workflow\.js\?v=8/);
+    assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=48/);
+    assert.match(html,/firebase-service\.js\?v=24/);
+    assert.match(html,/admin-v2\.js\?v=49/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -485,13 +486,13 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/redact-allowlist\.js\?v=5/);
+    assert.match(html,/redact-allowlist\.js\?v=6/);
     assert.match(html,/redact-public-snapshot\.js\?v=2/);
     assert.match(html,/portal-share-library\.js\?v=3/);
-    assert.match(html,/publish-workflow\.js\?v=8/);
-    assert.match(html,/firebase-service\.js\?v=23/);
+    assert.match(html,/publish-workflow\.js\?v=9/);
+    assert.match(html,/firebase-service\.js\?v=24/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=48/);
+    assert.match(html,/admin-v2\.js\?v=49/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -603,8 +604,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=39/);
-    assert.match(html,/admin-v2\.js\?v=48/);
+    assert.match(html,/admin-v2\.css\?v=40/);
+    assert.match(html,/admin-v2\.js\?v=49/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -820,8 +821,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=48/);
-    assert.match(html,/admin-v2\.css\?v=39/);
+    assert.match(html,/admin-v2\.js\?v=49/);
+    assert.match(html,/admin-v2\.css\?v=40/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);
     assert.match(js,/ACTAdminV2Communication\?\.bind/);

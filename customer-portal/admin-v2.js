@@ -38,6 +38,7 @@
     programEditSaving:false,
     programEditMessage:"",
     programEditMessageKind:"",
+    programTravelUploadBusy:{},
     documentEditMode:false,
     documentEditDraft:null,
     documentEditOriginal:"",
@@ -1346,12 +1347,66 @@
       currency:firstValue(item.currency,item.waehrung,item.currencyCode,"EUR"),
       priority:firstValue(item.priority,item.importance,item.prioritaet),
       imageUrl:safeWebUrl(firstValue(item.imageUrl,item.image,item.photoUrl,item.pictureUrl)),
-      ticketNumber:firstValue(item.ticketNumber,item.ticket,item.ticketNo,item.ticketId),
+      ticketNumber:firstValue(item.ticketNumber,item.ticket,item.ticketNo,item.ticketId,item.bookingNumber),
       voucherNumber:firstValue(item.voucherNumber,item.voucher,item.voucherNo,item.voucherId),
       weatherPlaceholder:firstValue(item.weatherPlaceholder,item.weather,item.weatherHint),
+      address:firstValue(item.address,item.locationAddress,item.location,item.place),
+      latitude:firstValue(item.latitude,item.lat),
+      longitude:firstValue(item.longitude,item.lng,item.lon),
+      plusCode:firstValue(item.plusCode,item.pluscode),
+      googleMapsUrl:safeWebUrl(firstValue(item.googleMapsUrl,item.googleMaps,item.mapsUrl)),
+      appleMapsUrl:safeWebUrl(firstValue(item.appleMapsUrl,item.appleMaps)),
+      navigationUrl:safeWebUrl(firstValue(item.navigationUrl,item.navUrl)),
+      gpxFile:normalizeProgramTravelFile(item.gpxFile),
+      kmlFile:normalizeProgramTravelFile(item.kmlFile),
+      komootUrl:safeWebUrl(firstValue(item.komootUrl,item.komoot)),
+      outdooractiveUrl:safeWebUrl(firstValue(item.outdooractiveUrl,item.outdoorActiveUrl,item.outdooractive)),
+      difficulty:firstValue(item.difficulty,item.schwierigkeit),
+      distanceKm:firstValue(item.distanceKm,item.distance,item.distanz),
+      walkDuration:firstValue(item.walkDuration,item.durationWalk,item.gehzeit),
+      elevationGain:firstValue(item.elevationGain,item.ascent,item.hoehenmeter),
+      elevationLoss:firstValue(item.elevationLoss,item.descent,item.abstieg),
+      ticketQrFile:normalizeProgramTravelFile(item.ticketQrFile||item.ticketQr),
+      voucherFile:normalizeProgramTravelFile(item.voucherFile),
+      ticketPdfFile:normalizeProgramTravelFile(item.ticketPdfFile||item.ticketPdf),
+      bookingNumber:firstValue(item.bookingNumber,item.ticketNumber,item.confirmationNumber),
+      calendarEnabled:item.calendarEnabled!==false&&item.calendarEnabled!=="false",
+      timeZone:firstValue(item.timeZone,item.timezone,"Europe/Vienna"),
       internalNotes:firstValue(item.internalNotes,item.adminNotes,item.privateNotes,item.internalNote),
       notes:firstValue(item.notes,item.note,item.hint,item.remark,item.internalNote),
       order:Number.isFinite(Number(item.order))?Number(item.order):index
+    };
+  }
+
+  function normalizeProgramTravelFile(value){
+    const lib=window.ACTTravelActionsLibrary;
+    if(lib?.normalizeTravelAttachment)return lib.normalizeTravelAttachment(value);
+    if(!value||typeof value!=="object")return null;
+    const url=String(value.url||value.downloadUrl||value.downloadURL||"").trim();
+    if(!/^https?:\/\//i.test(url))return null;
+    return {
+      id:String(value.id||value.documentId||"").trim(),
+      url,
+      downloadUrl:url,
+      fileName:String(value.fileName||value.filename||value.originalName||"Datei").trim(),
+      fileSize:Number(value.fileSize||value.size||0)||0,
+      size:Number(value.fileSize||value.size||0)||0,
+      mimeType:String(value.mimeType||value.contentType||"").trim(),
+      contentType:String(value.contentType||value.mimeType||"").trim(),
+      uploadedAt:String(value.uploadedAt||"").trim(),
+      storagePath:String(value.storagePath||"").trim(),
+      title:String(value.title||value.fileName||"Datei").trim(),
+      type:String(value.type||"Sonstiges").trim()
+    };
+  }
+
+  function emptyProgramTravelFields(){
+    return {
+      address:"",latitude:"",longitude:"",plusCode:"",googleMapsUrl:"",appleMapsUrl:"",navigationUrl:"",
+      gpxFile:null,kmlFile:null,komootUrl:"",outdooractiveUrl:"",
+      difficulty:"",distanceKm:"",walkDuration:"",elevationGain:"",elevationLoss:"",
+      ticketQrFile:null,voucherFile:null,ticketPdfFile:null,bookingNumber:"",
+      calendarEnabled:true,timeZone:"Europe/Vienna"
     };
   }
 
@@ -1434,9 +1489,31 @@
         currency:firstValue(item.currency,"EUR"),
         priority:cleanValue(item.priority),
         imageUrl:cleanValue(item.imageUrl),
-        ticketNumber:cleanValue(item.ticketNumber),
+        ticketNumber:cleanValue(item.ticketNumber||item.bookingNumber),
         voucherNumber:cleanValue(item.voucherNumber),
         weatherPlaceholder:cleanValue(item.weatherPlaceholder),
+        address:cleanValue(item.address||item.locationAddress||item.location),
+        latitude:cleanValue(item.latitude),
+        longitude:cleanValue(item.longitude),
+        plusCode:cleanValue(item.plusCode),
+        googleMapsUrl:cleanValue(item.googleMapsUrl),
+        appleMapsUrl:cleanValue(item.appleMapsUrl),
+        navigationUrl:cleanValue(item.navigationUrl),
+        gpxFile:normalizeProgramTravelFile(item.gpxFile),
+        kmlFile:normalizeProgramTravelFile(item.kmlFile),
+        komootUrl:cleanValue(item.komootUrl),
+        outdooractiveUrl:cleanValue(item.outdooractiveUrl),
+        difficulty:cleanValue(item.difficulty),
+        distanceKm:cleanValue(item.distanceKm),
+        walkDuration:cleanValue(item.walkDuration),
+        elevationGain:cleanValue(item.elevationGain),
+        elevationLoss:cleanValue(item.elevationLoss),
+        ticketQrFile:normalizeProgramTravelFile(item.ticketQrFile),
+        voucherFile:normalizeProgramTravelFile(item.voucherFile),
+        ticketPdfFile:normalizeProgramTravelFile(item.ticketPdfFile),
+        bookingNumber:cleanValue(item.bookingNumber||item.ticketNumber),
+        calendarEnabled:item.calendarEnabled!==false,
+        timeZone:firstValue(item.timeZone,"Europe/Vienna"),
         internalNotes:cleanValue(item.internalNotes),
         notes:cleanValue(item.notes),
         order:itemIndex
@@ -1505,7 +1582,7 @@
   function addProgramItem(dayIndex){
     const day=state.programEditDraft?.days?.[dayIndex];
     if(!day)return;
-    day.items.push({time:"",startTime:"",endTime:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",venueName:"",locationAddress:"",locationCity:"",locationCountry:"",eventUrl:"",websiteUrl:"",contactName:"",contactPhone:"",contactEmail:"",meetingPoint:"",price:"",currency:"EUR",priority:"",imageUrl:"",ticketNumber:"",voucherNumber:"",weatherPlaceholder:"",notes:"",internalNotes:""});
+    day.items.push({time:"",startTime:"",endTime:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",venueName:"",locationAddress:"",locationCity:"",locationCountry:"",eventUrl:"",websiteUrl:"",contactName:"",contactPhone:"",contactEmail:"",meetingPoint:"",price:"",currency:"EUR",priority:"",imageUrl:"",ticketNumber:"",voucherNumber:"",weatherPlaceholder:"",notes:"",internalNotes:"",...emptyProgramTravelFields()});
     setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
     renderCustomerDetail();
   }
@@ -1582,6 +1659,13 @@
         if(cleanValue(item.websiteUrl)&&!safeWebUrl(item.websiteUrl))errors[`program-${dayIndex}-${itemIndex}-websiteUrl`]="Bitte gib eine gueltige Webadresse ein.";
         if(cleanValue(item.imageUrl)&&!safeWebUrl(item.imageUrl))errors[`program-${dayIndex}-${itemIndex}-imageUrl`]="Bitte gib eine gueltige Bildadresse ein.";
         if(cleanValue(item.contactEmail)&&!emailLink(item.contactEmail))errors[`program-${dayIndex}-${itemIndex}-contactEmail`]="Bitte gib eine gueltige E-Mail-Adresse ein.";
+        ["googleMapsUrl","appleMapsUrl","komootUrl","outdooractiveUrl","navigationUrl"].forEach(field=>{
+          if(cleanValue(item[field])&&!safeWebUrl(item[field]))errors[`program-${dayIndex}-${itemIndex}-${field}`]="Bitte eine gueltige https-Adresse eingeben.";
+        });
+        const coords=window.ACTTravelActionsLibrary?.parseCoords?.(item.latitude,item.longitude);
+        if((cleanValue(item.latitude)||cleanValue(item.longitude))&&coords&&!coords.ok){
+          errors[`program-${dayIndex}-${itemIndex}-latitude`]="Koordinaten ungueltig (Breite -90..90, Laenge -180..180).";
+        }
       });
     });
     return {valid:!Object.keys(errors).length,errors,values};
@@ -1615,9 +1699,31 @@
         currency:item.currency,
         priority:item.priority,
         imageUrl:safeWebUrl(item.imageUrl),
-        ticketNumber:item.ticketNumber,
+        ticketNumber:item.ticketNumber||item.bookingNumber||"",
         voucherNumber:item.voucherNumber,
         weatherPlaceholder:item.weatherPlaceholder,
+        address:item.address||item.locationAddress||item.location||"",
+        latitude:item.latitude||"",
+        longitude:item.longitude||"",
+        plusCode:item.plusCode||"",
+        googleMapsUrl:safeWebUrl(item.googleMapsUrl),
+        appleMapsUrl:safeWebUrl(item.appleMapsUrl),
+        navigationUrl:safeWebUrl(item.navigationUrl),
+        gpxFile:normalizeProgramTravelFile(item.gpxFile),
+        kmlFile:normalizeProgramTravelFile(item.kmlFile),
+        komootUrl:safeWebUrl(item.komootUrl),
+        outdooractiveUrl:safeWebUrl(item.outdooractiveUrl),
+        difficulty:item.difficulty||"",
+        distanceKm:item.distanceKm||"",
+        walkDuration:item.walkDuration||"",
+        elevationGain:item.elevationGain||"",
+        elevationLoss:item.elevationLoss||"",
+        ticketQrFile:normalizeProgramTravelFile(item.ticketQrFile),
+        voucherFile:normalizeProgramTravelFile(item.voucherFile),
+        ticketPdfFile:normalizeProgramTravelFile(item.ticketPdfFile),
+        bookingNumber:item.bookingNumber||item.ticketNumber||"",
+        calendarEnabled:item.calendarEnabled!==false,
+        timeZone:item.timeZone||"Europe/Vienna",
         internalNotes:item.internalNotes,
         notes:item.notes,
         order:itemIndex
@@ -4541,9 +4647,10 @@
 
   function programTimelineItem(item,docs=[]){
     const time=programTimeLabel(item);
-    const location=locationSummary(item);
+    const location=locationSummary(item)||item.address||"";
+    const travelNav=window.ACTTravelActionsLibrary?.navigationUrlForDevice?.(item)||"";
     const mapsUrl=mapSearchUrl(location);
-    const navigationUrl=mapNavigationUrl(location);
+    const navigationUrl=travelNav||mapNavigationUrl(location)||safeWebUrl(item.navigationUrl||item.googleMapsUrl||item.appleMapsUrl);
     const eventUrl=safeWebUrl(item.eventUrl);
     const websiteUrl=safeWebUrl(item.websiteUrl);
     const showWebsite=websiteUrl&&websiteUrl!==eventUrl;
@@ -4640,6 +4747,25 @@
     `;
   }
 
+  function programTravelFileMarkup(item,field,label,accept,dayIndex,itemIndex){
+    const file=normalizeProgramTravelFile(item[field]);
+    const sizeLabel=window.ACTTravelActionsLibrary?.formatFileSize?.(file?.fileSize||file?.size)||"";
+    const uploading=Boolean(state.programTravelUploadBusy?.[`${dayIndex}-${itemIndex}-${field}`]);
+    return `
+      <div class="v2-edit-field full v2-program-travel-file" data-travel-field="${escapeHtml(field)}">
+        <span>${escapeHtml(label)}</span>
+        ${file?`<p class="v2-muted">${escapeHtml(file.fileName||"Datei")}${sizeLabel?` · ${escapeHtml(sizeLabel)}`:""}</p>`:`<p class="v2-muted">Keine Datei</p>`}
+        <div class="v2-program-travel-file-actions">
+          <label class="v2-button soft v2-file-label">
+            ${uploading?"Upload laeuft …":"Datei waehlen"}
+            <input class="v2-file-input" type="file" accept="${escapeHtml(accept)}" data-program-travel-upload="${escapeHtml(field)}" data-day-index="${dayIndex}" data-item-index="${itemIndex}" ${uploading||state.programEditSaving?"disabled":""}>
+          </label>
+          ${file?`<button class="v2-button soft" type="button" data-program-edit-action="clear-travel-file" data-travel-field="${escapeHtml(field)}" data-day-index="${dayIndex}" data-item-index="${itemIndex}" ${uploading||state.programEditSaving?"disabled":""}>Entfernen</button>`:""}
+        </div>
+      </div>
+    `;
+  }
+
   function programEditItemMarkup(item,dayIndex,itemIndex){
     const prefix=`program-${dayIndex}-${itemIndex}`;
     const error=state.programEditErrors?.[`${prefix}-title`]||"";
@@ -4648,6 +4774,11 @@
     const websiteUrlError=state.programEditErrors?.[`${prefix}-websiteUrl`]||"";
     const imageUrlError=state.programEditErrors?.[`${prefix}-imageUrl`]||"";
     const contactEmailError=state.programEditErrors?.[`${prefix}-contactEmail`]||"";
+    const latError=state.programEditErrors?.[`${prefix}-latitude`]||"";
+    const mapsError=state.programEditErrors?.[`${prefix}-googleMapsUrl`]||"";
+    const appleError=state.programEditErrors?.[`${prefix}-appleMapsUrl`]||"";
+    const komootError=state.programEditErrors?.[`${prefix}-komootUrl`]||"";
+    const outdoorError=state.programEditErrors?.[`${prefix}-outdooractiveUrl`]||"";
     return `
       <article class="v2-program-edit-item" data-program-item="${itemIndex}">
         <div class="v2-program-item-toolbar">
@@ -4679,8 +4810,6 @@
           ${programInput(prefix,"price","Preis",item.price,{dayIndex,itemIndex})}
           ${programSelect(prefix,"currency","Waehrung",item.currency||"EUR",PROGRAM_CURRENCIES,{dayIndex,itemIndex})}
           ${programInput(prefix,"imageUrl","Bild-URL",item.imageUrl,{type:"url",error:imageUrlError,dayIndex,itemIndex})}
-          ${programInput(prefix,"ticketNumber","Ticketnummer",item.ticketNumber,{dayIndex,itemIndex})}
-          ${programInput(prefix,"voucherNumber","Vouchernummer",item.voucherNumber,{dayIndex,itemIndex})}
           ${programInput(prefix,"weatherPlaceholder","Wetter-Platzhalter",item.weatherPlaceholder,{dayIndex,itemIndex})}
           ${programMoveSelect(prefix,dayIndex,itemIndex)}
           ${item.duration&&!item.endTime?`<div class="v2-edit-field full v2-legacy-note"><span>Legacy-Dauer</span><strong>${escapeHtml(item.duration)}</strong></div>`:""}
@@ -4688,6 +4817,50 @@
           ${programTextarea(prefix,"notes","Hinweise",item.notes,{dayIndex,itemIndex})}
           ${programTextarea(prefix,"internalNotes","Interne Notizen (nur Admin)",item.internalNotes,{dayIndex,itemIndex})}
         </div>
+        <details class="v2-program-travel-section" open>
+          <summary>Navigation</summary>
+          <div class="v2-edit-grid">
+            ${programInput(prefix,"address","Adresse fuer Navigation",item.address||item.locationAddress||item.location,{dayIndex,itemIndex})}
+            ${programInput(prefix,"latitude","Breitengrad",item.latitude,{dayIndex,itemIndex,error:latError})}
+            ${programInput(prefix,"longitude","Laengengrad",item.longitude,{dayIndex,itemIndex})}
+            ${programInput(prefix,"plusCode","Plus Code",item.plusCode,{dayIndex,itemIndex})}
+            ${programInput(prefix,"googleMapsUrl","Google Maps Link",item.googleMapsUrl,{type:"url",error:mapsError,dayIndex,itemIndex})}
+            ${programInput(prefix,"appleMapsUrl","Apple Karten Link",item.appleMapsUrl,{type:"url",error:appleError,dayIndex,itemIndex})}
+          </div>
+        </details>
+        <details class="v2-program-travel-section">
+          <summary>Wanderung</summary>
+          <div class="v2-edit-grid">
+            ${programTravelFileMarkup(item,"gpxFile","GPX-Datei",".gpx,application/gpx+xml,application/xml",dayIndex,itemIndex)}
+            ${programTravelFileMarkup(item,"kmlFile","KML-Datei",".kml,application/vnd.google-earth.kml+xml,application/xml",dayIndex,itemIndex)}
+            ${programInput(prefix,"komootUrl","Komoot-Link",item.komootUrl,{type:"url",error:komootError,dayIndex,itemIndex})}
+            ${programInput(prefix,"outdooractiveUrl","Outdooractive-Link",item.outdooractiveUrl,{type:"url",error:outdoorError,dayIndex,itemIndex})}
+            ${programInput(prefix,"difficulty","Schwierigkeit",item.difficulty,{dayIndex,itemIndex})}
+            ${programInput(prefix,"distanceKm","Distanz",item.distanceKm,{dayIndex,itemIndex})}
+            ${programInput(prefix,"walkDuration","Gehzeit",item.walkDuration,{dayIndex,itemIndex})}
+            ${programInput(prefix,"elevationGain","Hoehenmeter",item.elevationGain,{dayIndex,itemIndex})}
+            ${programInput(prefix,"elevationLoss","Abstieg",item.elevationLoss,{dayIndex,itemIndex})}
+          </div>
+        </details>
+        <details class="v2-program-travel-section">
+          <summary>Kalender</summary>
+          <div class="v2-edit-grid">
+            ${programCheckbox(prefix,"calendarEnabled","Im Kalender exportierbar",item.calendarEnabled!==false,{dayIndex,itemIndex})}
+            ${programInput(prefix,"timeZone","Zeitzone",item.timeZone||"Europe/Vienna",{dayIndex,itemIndex})}
+            <p class="v2-muted full">Start/Ende kommen aus Datum sowie Uhrzeit von/bis bzw. Ganztagig.</p>
+          </div>
+        </details>
+        <details class="v2-program-travel-section">
+          <summary>Tickets</summary>
+          <div class="v2-edit-grid">
+            ${programInput(prefix,"bookingNumber","Buchungsnummer",item.bookingNumber||item.ticketNumber,{dayIndex,itemIndex})}
+            ${programInput(prefix,"ticketNumber","Ticketnummer",item.ticketNumber,{dayIndex,itemIndex})}
+            ${programInput(prefix,"voucherNumber","Vouchernummer",item.voucherNumber,{dayIndex,itemIndex})}
+            ${programTravelFileMarkup(item,"ticketQrFile","Ticket-QR (Bild/PDF)",".pdf,image/*,.jpg,.jpeg,.png,.webp",dayIndex,itemIndex)}
+            ${programTravelFileMarkup(item,"ticketPdfFile","Ticket-PDF",".pdf,application/pdf",dayIndex,itemIndex)}
+            ${programTravelFileMarkup(item,"voucherFile","Voucher (PDF/Bild)",".pdf,image/*,.jpg,.jpeg,.png,.webp",dayIndex,itemIndex)}
+          </div>
+        </details>
       </article>
     `;
   }
@@ -5686,6 +5859,57 @@
     if(field.name==="children")renderCustomerDetail();
   }
 
+  async function handleProgramTravelUpload(input){
+    if(!input||!state.programEditDraft)return;
+    const file=input.files&&input.files[0];
+    const field=input.dataset.programTravelUpload;
+    const dayIndex=Number(input.dataset.dayIndex);
+    const itemIndex=Number(input.dataset.itemIndex);
+    const item=state.programEditDraft.days?.[dayIndex]?.items?.[itemIndex];
+    const customer=customerById(state.selectedCustomerId);
+    input.value="";
+    if(!file||!field||!item||!customer)return;
+    const busyKey=`${dayIndex}-${itemIndex}-${field}`;
+    try{
+      state.programTravelUploadBusy={...state.programTravelUploadBusy,[busyKey]:true};
+      renderCustomerDetail();
+      if(!documentUploadReady())throw new Error(documentUploadUnavailableMessage());
+      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      const typeMap={gpxFile:"program/gpx",kmlFile:"program/kml",ticketQrFile:"program/ticket-qr",ticketPdfFile:"program/ticket-pdf",voucherFile:"program/voucher"};
+      const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(
+        customer.customerId,
+        file,
+        {title:file.name,type:typeMap[field]||"program/file"},
+        ()=>{}
+      );
+      const attachment=normalizeProgramTravelFile({
+        id:uploaded.documentId||uploaded.id,
+        documentId:uploaded.documentId||uploaded.id,
+        url:uploaded.url||uploaded.downloadUrl,
+        downloadUrl:uploaded.downloadUrl||uploaded.url,
+        fileName:uploaded.fileName||file.name,
+        fileSize:uploaded.fileSize||uploaded.size||file.size,
+        mimeType:uploaded.mimeType||uploaded.contentType||file.type,
+        contentType:uploaded.contentType||uploaded.mimeType||file.type,
+        uploadedAt:uploaded.uploadedAt||new Date().toISOString(),
+        storagePath:uploaded.storagePath||"",
+        title:uploaded.title||file.name,
+        type:typeMap[field]||"program/file"
+      });
+      if(!attachment)throw new Error("Upload ohne gueltige Datei-URL.");
+      item[field]=attachment;
+      setProgramEditMessage("Datei hochgeladen. Bitte Programmpunkt speichern.","success");
+    }catch(error){
+      setProgramEditMessage(error?.message||"Travel-Upload fehlgeschlagen.","error");
+    }finally{
+      const nextBusy={...state.programTravelUploadBusy};
+      delete nextBusy[busyKey];
+      state.programTravelUploadBusy=nextBusy;
+      renderCustomerDetail();
+    }
+  }
+
   function handleProgramEditInput(event){
     const field=event.target.closest("#programEditForm input,#programEditForm textarea,#programEditForm select");
     if(!field||!state.programEditDraft)return;
@@ -5862,6 +6086,15 @@
         if(action==="move-up")moveProgramItem(dayIndex,itemIndex,-1);
         if(action==="move-down")moveProgramItem(dayIndex,itemIndex,1);
         if(action==="duplicate-item")duplicateProgramItem(dayIndex,itemIndex);
+        if(action==="clear-travel-file"){
+          const field=programAction.dataset.travelField;
+          const item=state.programEditDraft?.days?.[dayIndex]?.items?.[itemIndex];
+          if(item&&field){
+            item[field]=null;
+            setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+            renderCustomerDetail();
+          }
+        }
         return;
       }
       const documentAction=event.target.closest("[data-document-edit-action]");
@@ -5937,6 +6170,10 @@
     document.addEventListener("change",event=>{
       if(window.ACTAdminV2Bookings?.handleChange?.(event))return;
       if(window.ACTAdminV2Communication?.handleChange?.(event))return;
+      if(event.target.matches("[data-program-travel-upload]")){
+        handleProgramTravelUpload(event.target);
+        return;
+      }
       handleWizardInput(event);
       handleTripEditInput(event);
       handleProgramEditInput(event);

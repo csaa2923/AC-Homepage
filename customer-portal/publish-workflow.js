@@ -48,6 +48,13 @@
           if(dateValue&&!String(next.date||"").trim())next.date=dateValue;
           if(!String(next.id||"").trim())next.id=`day-${index+1}-item-${itemIndex+1}`;
           if(!String(next.title||"").trim())next.title=`${dayTitle} · Punkt ${itemIndex+1}`;
+          if(!String(next.address||"").trim()){
+            next.address=String(next.locationAddress||next.location||next.meetingPoint||"").trim();
+          }
+          if(next.calendarEnabled===undefined||next.calendarEnabled===null||next.calendarEnabled===""){
+            next.calendarEnabled=true;
+          }
+          if(!String(next.timeZone||"").trim())next.timeZone="Europe/Vienna";
           flat.push(next);
         });
         return;
@@ -56,6 +63,13 @@
       const dateValue=String(next.dateValue||next.date||next.dayDate||"").trim();
       next.dateValue=dateValue;
       if(dateValue&&!String(next.date||"").trim())next.date=dateValue;
+      if(!String(next.address||"").trim()){
+        next.address=String(next.locationAddress||next.location||next.meetingPoint||"").trim();
+      }
+      if(next.calendarEnabled===undefined||next.calendarEnabled===null||next.calendarEnabled===""){
+        next.calendarEnabled=true;
+      }
+      if(!String(next.timeZone||"").trim())next.timeZone="Europe/Vienna";
       flat.push(next);
     });
     return flat;

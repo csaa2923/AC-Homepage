@@ -41,7 +41,7 @@ service firebase.storage {
       return request.resource == null
         || (
           request.resource.size < 25 * 1024 * 1024
-          && request.resource.contentType.matches('image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|application/vnd.ms-excel|text/.*')
+          && request.resource.contentType.matches('image/.*|application/pdf|application/msword|application/vnd.openxmlformats-officedocument.*|application/vnd.ms-excel|application/gpx\\+xml|application/vnd.google-earth.kml\\+xml|application/xml|text/.*')
         );
     }
 

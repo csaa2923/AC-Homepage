@@ -21,9 +21,21 @@
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/gpx+xml",
+    "application/vnd.google-earth.kml+xml",
+    "application/xml",
+    "text/xml"
   ]);
-  const DOCUMENT_EXTENSIONS=new Set(["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx"]);
+  const DOCUMENT_EXTENSIONS=new Set(["pdf","jpg","jpeg","png","webp","doc","docx","xls","xlsx","gpx","kml"]);
+  const TRAVEL_ROUTE_EXTENSIONS=new Set(["gpx","kml"]);
+  const TRAVEL_ROUTE_MIME_TYPES=new Set([
+    "application/gpx+xml",
+    "application/vnd.google-earth.kml+xml",
+    "application/xml",
+    "text/xml",
+    ""
+  ]);
 
   function configRoot(){
     return window.ACTFirebaseConfig||{};
@@ -498,10 +510,22 @@
     if(file.size>MAX_UPLOAD_BYTES)throw new Error(`${kind} ist zu groÃŸ. Maximal erlaubt sind 24 MB.`);
     const extension=fileExtension(file.name);
     const mime=String(file.type||"").toLowerCase();
-    const mimeAllowed=options&&options.kind==="image"?/^image\/(jpeg|png|webp)$/.test(mime):DOCUMENT_MIME_TYPES.has(mime);
-    const extensionAllowed=options&&options.kind==="image"?["jpg","jpeg","png","webp"].includes(extension):DOCUMENT_EXTENSIONS.has(extension);
+    if(options&&options.kind==="image"){
+      if(!(/^image\/(jpeg|png|webp)$/.test(mime)&&["jpg","jpeg","png","webp"].includes(extension))){
+        throw new Error(`${kind} wird nicht unterstÃ¼tzt. Bitte JPG, PNG oder WEBP verwenden.`);
+      }
+      return;
+    }
+    if(options&&options.kind==="travel-route"){
+      if(!(TRAVEL_ROUTE_EXTENSIONS.has(extension)&&TRAVEL_ROUTE_MIME_TYPES.has(mime))){
+        throw new Error(`${kind} wird nicht unterstÃ¼tzt. Bitte GPX oder KML verwenden.`);
+      }
+      return;
+    }
+    const mimeAllowed=DOCUMENT_MIME_TYPES.has(mime)||(TRAVEL_ROUTE_EXTENSIONS.has(extension)&&TRAVEL_ROUTE_MIME_TYPES.has(mime));
+    const extensionAllowed=DOCUMENT_EXTENSIONS.has(extension);
     if(!mimeAllowed||!extensionAllowed){
-      throw new Error(`${kind} wird nicht unterstÃ¼tzt. Bitte PDF, JPG, PNG, WEBP oder vorgesehene Office-Dateien verwenden.`);
+      throw new Error(`${kind} wird nicht unterstÃ¼tzt. Bitte PDF, JPG, PNG, WEBP, GPX, KML oder vorgesehene Office-Dateien verwenden.`);
     }
   }
 

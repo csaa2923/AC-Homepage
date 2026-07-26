@@ -124,6 +124,34 @@ describe("redaction allowlist",()=>{
       assert.equal(paths.some(path=>path===key||path.endsWith(`.${key}`)),false,`blocked key present: ${key}`);
     });
   });
+
+  it("keeps secure travel fields on program items without storagePath",()=>{
+    const redacted=redactPublicSnapshot({
+      customerId:"travel",
+      program:[{
+        id:"t1",
+        title:"Route",
+        dateValue:"2027-07-24",
+        address:"Seefeld",
+        latitude:47.33,
+        longitude:11.18,
+        gpxFile:{
+          id:"g1",
+          url:"https://storage.example/route.gpx",
+          fileName:"route.gpx",
+          storagePath:"customers/x/route.gpx",
+          mimeType:"application/gpx+xml",
+          fileSize:500
+        },
+        calendarEnabled:true,
+        internalNotes:"secret"
+      }]
+    },{customerId:"travel"});
+    assert.equal(redacted.program[0].gpxFile.url,"https://storage.example/route.gpx");
+    assert.equal(redacted.program[0].gpxFile.storagePath,undefined);
+    assert.equal(redacted.program[0].address,"Seefeld");
+    assert.equal(redacted.program[0].internalNotes,undefined);
+  });
 });
 
 describe("token security",()=>{

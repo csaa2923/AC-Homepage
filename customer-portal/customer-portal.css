@@ -444,6 +444,78 @@ h3{font-size:24px;color:var(--green)}
 .day-item strong{display:block;color:var(--green);line-height:1.3}
 .day-item small{display:block;margin-top:4px;color:#415a53;line-height:1.35}
 .day-item .tag{grid-column:1/-1}
+.day-progress{margin:8px 0 0;color:var(--green);font-weight:850;font-size:15px}
+.day-weather-line{margin:6px 0 0;color:#415a53;font-weight:700;font-size:14px;line-height:1.4}
+.day-item-travel{
+  grid-template-columns:48px minmax(0,1fr);
+  gap:12px;
+  align-items:start;
+}
+.day-item-travel .day-item-main{
+  display:grid;
+  grid-template-columns:68px minmax(0,1fr);
+  gap:10px;
+  align-items:start;
+  text-decoration:none;
+  color:inherit;
+  min-width:0;
+}
+.day-item-travel .day-item-actions{
+  grid-column:1/-1;
+  margin-top:4px;
+}
+.day-item-travel.is-done{
+  opacity:.72;
+  background:linear-gradient(180deg,#f4f8f4,#fffaf0);
+}
+.day-item-done{
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  min-height:48px;
+  padding-top:10px;
+}
+.day-item-done input{
+  width:24px;
+  height:24px;
+  accent-color:var(--green);
+}
+.sr-only{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+.travel-map-preview{
+  margin-top:16px;
+  display:grid;
+  gap:10px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+  background:#f7faf6;
+}
+.travel-map-preview iframe{
+  width:100%;
+  min-height:180px;
+  border:0;
+  display:block;
+  pointer-events:none;
+}
+.travel-map-link{margin:0 12px 12px;justify-self:stretch;text-align:center}
+.travel-offline-hint{
+  flex-basis:100%;
+  margin:0;
+  color:#415a53;
+  font-size:13px;
+  line-height:1.45;
+  font-weight:700;
+}
 .program-detail-card{
   padding:20px;
 }
@@ -587,6 +659,10 @@ h3{font-size:24px;color:var(--green)}
   .timeline-link{grid-template-columns:150px 82px minmax(0,1fr) minmax(180px,.8fr) auto;align-items:center}
   .day-item{grid-template-columns:80px minmax(0,1fr) auto;align-items:center}
   .day-item .tag{grid-column:auto}
+  .day-item-travel{grid-template-columns:48px minmax(0,1fr)}
+  .day-item-travel .day-item-main{grid-template-columns:80px minmax(0,1fr) auto;align-items:center}
+  .day-item-travel .day-item-main .tag{grid-column:auto}
+  .day-item-travel .day-item-actions{grid-column:2/-1}
   .detail-card-grid{grid-template-columns:repeat(2,1fr)}
 }
 

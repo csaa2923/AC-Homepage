@@ -13,7 +13,9 @@
   const isShareAccess=Boolean(portalParams.shareId&&portalParams.rawToken);
   let customer=null;
   let dataSource="demo";
+  let liveWeatherByDate={};
   const root=document.getElementById("portalRoot");
+  const travelLib=()=>window.ACTTravelActionsLibrary||null;
   const calendarState={
     view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
     dayIndex:0
@@ -529,7 +531,82 @@
   }
 
   function itemNavigationUrl(item){
+    const lib=travelLib();
+    if(lib?.navigationUrlForDevice){
+      const url=lib.navigationUrlForDevice(item);
+      if(url)return url;
+    }
     return item.navigationUrl||resolveNavigationUrl("",item.address,item.meetingPoint,item.title);
+  }
+
+  function progressScopeId(){
+    return portalParams.shareId||customerId||customer?.customerId||"demo";
+  }
+
+  function weatherForDate(dateValue){
+    const key=String(dateValue||"").trim();
+    if(!key)return null;
+    if(liveWeatherByDate[key])return liveWeatherByDate[key];
+    const days=Array.isArray(customer?.weather?.days)?customer.weather.days:[];
+    return days.find(day=>String(day.date||"").trim()===key)||null;
+  }
+
+  function itemForTravelActions(item){
+    const linked=linkedBookingForItem(item);
+    if(!linked?.navigationUrl)return item;
+    if(item.navigationUrl||item.googleMapsUrl||item.appleMapsUrl||item.latitude||item.longitude||item.address)return item;
+    return {...item,navigationUrl:linked.navigationUrl};
+  }
+
+  function travelActionsMarkup(item,{compact=false}={}){
+    const lib=travelLib();
+    const source=itemForTravelActions(item);
+    const actions=lib?.programItemActions?lib.programItemActions(source):null;
+    if(!actions){
+      const nav=itemNavigationUrl(source);
+      return nav?`<a class="button soft" href="${escapeHtml(nav)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:"";
+    }
+    const buttons=[];
+    if(actions.navigation.show)buttons.push(`<a class="button ${compact?"soft":"primary"}" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
+    if(actions.gpx.show){
+      buttons.push(`<a class="button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
+    }
+    if(actions.kml.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.kml.url)}" download="${escapeHtml(actions.kml.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.kml.label)}</a>`);
+    if(actions.komoot.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.komoot.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.komoot.label)}</a>`);
+    if(actions.outdooractive.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.outdooractive.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.outdooractive.label)}</a>`);
+    if(actions.calendar.show)buttons.push(`<button class="button soft" type="button" data-calendar-id="${escapeHtml(item.id)}">${escapeHtml(actions.calendar.label)}</button>`);
+    if(actions.ticketQr.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.ticketQr.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.ticketQr.label)}</a>`);
+    if(actions.ticketPdf.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.ticketPdf.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.ticketPdf.label)}</a>`);
+    if(actions.voucher.show)buttons.push(`<a class="button soft" href="${escapeHtml(actions.voucher.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.voucher.label)}</a>`);
+    const hint=actions.gpx.show&&!compact?`<p class="travel-offline-hint">${escapeHtml(actions.meta.offlineHint)}</p>`:"";
+    return `${buttons.join("")}${hint}`;
+  }
+
+  function travelMapMarkup(item){
+    const lib=travelLib();
+    const map=lib?.staticMapPreview?lib.staticMapPreview(itemForTravelActions(item)):null;
+    if(!map?.ok)return "";
+    return `
+      <div class="travel-map-preview">
+        <iframe src="${escapeHtml(map.embedUrl)}" title="Kartenvorschau" loading="lazy" referrerpolicy="no-referrer" tabindex="-1"></iframe>
+        <a class="button soft travel-map-link" href="${escapeHtml(map.linkUrl)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>
+      </div>
+    `;
+  }
+
+  function travelMetaRows(item){
+    const lib=travelLib();
+    const actions=lib?.programItemActions?lib.programItemActions(item):null;
+    const meta=actions?.meta||{};
+    return [
+      ["Adresse",meta.address||item.address||""],
+      ["Schwierigkeit",meta.difficulty||""],
+      ["Distanz",meta.distanceKm||""],
+      ["Gehzeit",meta.walkDuration||""],
+      ["Hoehenmeter",meta.elevationGain||""],
+      ["Abstieg",meta.elevationLoss||""],
+      ["Buchungsnummer",meta.bookingNumber||""]
+    ];
   }
 
   function whatsappLink(number,message){
@@ -834,27 +911,55 @@
   }
 
   function renderDayTimelines(){
-    document.getElementById("dayTimelines").innerHTML=groupedProgram().map((day,index)=>`
+    const lib=travelLib();
+    const scope=progressScopeId();
+    document.getElementById("dayTimelines").innerHTML=groupedProgram().map((day,index)=>{
+      const itemIds=day.items.map(item=>item.id);
+      const doneSet=lib?.readDoneSet?lib.readDoneSet(scope,itemIds):new Set();
+      const doneCount=day.items.filter(item=>doneSet.has(String(item.id))).length;
+      const progress=lib?.progressLabel?lib.progressLabel(doneCount,day.items.length):`${doneCount} von ${day.items.length} Programmpunkten abgeschlossen`;
+      const weather=weatherForDate(day.dateValue||day.items[0]?.dateValue||"");
+      const tempMin=Number.isFinite(Number(weather?.tempMin))?Math.round(Number(weather.tempMin)):null;
+      const tempMax=Number.isFinite(Number(weather?.tempMax))?Math.round(Number(weather.tempMax)):null;
+      const weatherLine=weather
+        ?`<p class="day-weather-line">${escapeHtml(weather.symbol||weather.icon||"")} ${escapeHtml(weather.condition||weather.summary||"Wetter")}${tempMin!==null&&tempMax!==null?` · ${tempMin}–${tempMax}°C`:""}</p>`
+        :"";
+      return `
       <article class="day-card">
         <div class="day-head">
-          <p class="eyebrow">${day.date}</p>
+          <p class="eyebrow">${escapeHtml(day.date)}</p>
           <h3>Tag ${index+1}</h3>
+          <p class="day-progress" data-day-progress>${escapeHtml(progress)}</p>
+          ${weatherLine}
         </div>
         <div class="day-items">
-          ${day.items.map(item=>`
-            <a class="day-item" href="#${detailId(item)}">
-              <span class="timeline-time">${item.startTime}</span>
-              <span>
-                <strong>${item.title}</strong>
-                <small>${item.shortDescription}</small>
-                <small>${item.meetingPoint}</small>
-              </span>
-              <span class="tag">${programStatusLabel(item)}</span>
-            </a>
-          `).join("")}
+          ${day.items.map(item=>{
+            const done=doneSet.has(String(item.id));
+            return `
+            <div class="day-item day-item-travel ${done?"is-done":""}">
+              <label class="day-item-done">
+                <input type="checkbox" data-program-done="${escapeHtml(item.id)}" ${done?"checked":""}>
+                <span class="sr-only">Erledigt</span>
+              </label>
+              <a class="day-item-main" href="#${detailId(item)}">
+                <span class="timeline-time">${escapeHtml(item.startTime||"")}</span>
+                <span>
+                  <strong>${escapeHtml(item.title||"")}</strong>
+                  <small>${escapeHtml(item.shortDescription||"")}</small>
+                  <small>${escapeHtml(item.meetingPoint||item.address||"")}</small>
+                </span>
+                <span class="tag">${escapeHtml(programStatusLabel(item))}</span>
+              </a>
+              <div class="day-item-actions card-actions">
+                ${travelActionsMarkup(item,{compact:true})}
+              </div>
+            </div>
+          `;
+          }).join("")}
         </div>
       </article>
-    `).join("");
+    `;
+    }).join("");
   }
 
   function linkedBookingForItem(item){
@@ -876,10 +981,10 @@
           ${linked?.customerNote?`<p class="booking-customer-note"><strong>Hinweis:</strong> ${escapeHtml(linked.customerNote)}</p>`:""}
           ${definitionList([
             ["Datum",itemDate(item)],
-            ["Uhrzeit",`${item.startTime} - ${item.endTime}`],
+            ["Uhrzeit",`${item.startTime||""}${item.endTime?` - ${item.endTime}`:""}`],
             ["Dauer",item.duration],
             ["Treffpunkt",item.meetingPoint],
-            ["Adresse",item.address],
+            ...travelMetaRows(item),
             ["Anbieter",linked?.provider||""],
             ["Kleidung / Ausrüstung",item.outfit],
             ["Hinweise",item.notes],
@@ -887,14 +992,15 @@
             ["Telefon",item.phone],
             ["Dokumente",item.documents&&item.documents.length?item.documents.join(", "):""]
           ])}
+          ${travelMapMarkup(item)}
           <div class="card-actions">
             <a class="button soft" href="#calendar">Zurück zum Kalender</a>
             <a class="button soft" href="#overall-timeline">Zurück zur Gesamt-Timeline</a>
             ${previous?`<a class="button soft" href="#${detailId(previous)}">Vorheriger Programmpunkt</a>`:""}
             ${next?`<a class="button soft" href="#${detailId(next)}">Nächster Programmpunkt</a>`:""}
-            ${(linked?.navigationUrl||itemNavigationUrl(item))?`<a class="button soft" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>`:""}
+            ${travelActionsMarkup(item)}
+            ${(!travelLib()?.programItemActions&&(linked?.navigationUrl||itemNavigationUrl(item)))?`<a class="button soft" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}
             ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(resolveDocumentUrl(doc))}" target="_blank" rel="noopener noreferrer">Dokument oeffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
-            <button class="button soft" type="button" data-calendar-id="${item.id}" ${item.calendarEnabled?"":"disabled"}>In Kalender speichern</button>
           </div>
         </article>
       `;
@@ -991,10 +1097,27 @@
       const result=await loadOpenMeteoWeather();
       const days=result.days||[];
       if(!days.length)throw new Error("Keine Wettertage erhalten.");
+      liveWeatherByDate={};
+      days.forEach(day=>{
+        const key=String(day.date||"").trim();
+        if(key)liveWeatherByDate[key]=day;
+      });
+      if(customer){
+        customer.weather=customer.weather&&typeof customer.weather==="object"?customer.weather:{};
+        customer.weather.days=days.map(day=>({
+          date:day.date,
+          label:day.label,
+          tempMin:day.tempMin,
+          tempMax:day.tempMax,
+          icon:day.symbol||day.icon||"",
+          summary:day.condition||day.summary||""
+        }));
+      }
       const heading=document.getElementById("weatherLocationLabel");
       if(heading)heading.innerHTML=`<strong>Wetter für:</strong> ${escapeHtml(result.location.name)}`;
       target.innerHTML=days.map(weatherDayMarkup).join("");
       if(meta)meta.innerHTML=weatherMetaMarkup(result,result.range);
+      renderDayTimelines();
     }catch(error){
       console.warn("[ACT Portal] Open-Meteo nicht verfügbar:",error&&error.message?error.message:"Fehler");
       const message=error&&error.message?error.message:"Wetterdaten konnten nicht geladen werden.";
@@ -1200,6 +1323,10 @@
   }
 
   function icsEventLines(item){
+    const lib=travelLib();
+    if(lib?.buildItemIcsEvent){
+      return lib.buildItemIcsEvent(item,{uidDomain:`${customerId||"guest"}@alpineconcierge.info`});
+    }
     if(!item.dateValue)return [];
     const startTime=parseIcsTime(item.startTime);
     const endTime=parseIcsTime(item.endTime)||startTime;
@@ -1227,6 +1354,13 @@
   }
 
   function buildIcsContent(items){
+    const lib=travelLib();
+    if(lib?.buildTripIcs){
+      return lib.buildTripIcs(items,{
+        tripTitle:customer.tripName||"Reiseprogramm",
+        uidDomain:`${customerId||"guest"}@alpineconcierge.info`
+      });
+    }
     const events=(items||[]).filter(item=>item.calendarEnabled!==false&&item.dateValue);
     if(!events.length)throw new Error("Keine exportierbaren Kalendertermine vorhanden.");
     const lines=[
@@ -1284,6 +1418,13 @@
   }
 
   function bindActions(){
+    document.addEventListener("change",event=>{
+      const doneToggle=event.target.closest("input[data-program-done]");
+      if(!doneToggle)return;
+      const lib=travelLib();
+      lib?.writeDoneState?.(progressScopeId(),doneToggle.dataset.programDone,doneToggle.checked);
+      renderDayTimelines();
+    });
     document.addEventListener("click",event=>{
       const viewButton=event.target.closest("[data-calendar-view]");
       if(viewButton){

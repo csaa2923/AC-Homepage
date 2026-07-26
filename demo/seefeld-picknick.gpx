@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Alpine Concierge Tirol" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Seefeld Picknick Demo</name>
+    <desc>Demo-Route fuer Operations Ready 3.6 – lokaler Kundenportal-Test</desc>
+  </metadata>
+  <trk>
+    <name>Seefeld Picknick</name>
+    <trkseg>
+      <trkpt lat="47.33020" lon="11.18750"><ele>1180</ele><name>Seekirchl</name></trkpt>
+      <trkpt lat="47.33140" lon="11.18910"><ele>1210</ele></trkpt>
+      <trkpt lat="47.33260" lon="11.19100"><ele>1245</ele></trkpt>
+      <trkpt lat="47.33110" lon="11.19240"><ele>1220</ele></trkpt>
+      <trkpt lat="47.33020" lon="11.18750"><ele>1180</ele><name>Seekirchl</name></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

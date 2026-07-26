@@ -15,11 +15,19 @@ const ALLOWED_ROOT_FIELDS=new Set([
 ]);
 
 const PROGRAM_ITEM_FIELDS=new Set([
-  "id","day","date","dateValue","title","time","startTime","endTime",
+  "id","day","date","dateValue","endDateValue","title","time","startTime","endTime",
   "location","description","notes","type","category","status",
   "documents","documentsText","visible","visibleForCustomer","customerVisible",
-  "bookingId","icon","sortOrder"
+  "bookingId","icon","sortOrder",
+  "address","meetingPoint","navigationUrl","latitude","longitude","plusCode",
+  "googleMapsUrl","appleMapsUrl",
+  "gpxFile","kmlFile","komootUrl","outdooractiveUrl",
+  "difficulty","distanceKm","walkDuration","elevationGain","elevationLoss",
+  "ticketQrFile","voucherFile","ticketPdfFile","ticketNumber","voucherNumber","bookingNumber",
+  "calendarEnabled","timeZone","allDay"
 ]);
+
+const PROGRAM_ATTACHMENT_FIELDS=["gpxFile","kmlFile","ticketQrFile","voucherFile","ticketPdfFile"];
 
 const ACCOMMODATION_FIELDS=new Set([
   "id","name","hotel","address","checkIn","checkOut","room","category",
@@ -125,8 +133,43 @@ function redactDocument(item,index){
   };
 }
 
+function redactProgramAttachment(file,index){
+  if(!file||typeof file!=="object")return null;
+  const redacted=redactDocument(file,index);
+  if(!stringValue(redacted.url))return null;
+  return {
+    id:redacted.id,
+    documentId:redacted.documentId,
+    url:redacted.url,
+    fileName:redacted.fileName,
+    fileSize:redacted.fileSize,
+    size:redacted.size,
+    mimeType:redacted.mimeType,
+    contentType:redacted.contentType,
+    uploadedAt:redacted.uploadedAt,
+    title:redacted.title,
+    type:redacted.type
+  };
+}
+
 function redactProgramItem(item){
-  return pickFields(item||{},PROGRAM_ITEM_FIELDS);
+  const next=pickFields(item||{},PROGRAM_ITEM_FIELDS);
+  PROGRAM_ATTACHMENT_FIELDS.forEach((field,index)=>{
+    if(item&&item[field]){
+      const attachment=redactProgramAttachment(item[field],index);
+      if(attachment)next[field]=attachment;
+      else delete next[field];
+    }
+  });
+  if(!stringValue(next.address)){
+    next.address=stringValue(item&&(item.address||item.locationAddress||item.location||item.meetingPoint));
+    if(!next.address)delete next.address;
+  }
+  if(next.calendarEnabled===undefined&&item){
+    next.calendarEnabled=item.calendarEnabled!==false;
+  }
+  if(!stringValue(next.timeZone))next.timeZone="Europe/Vienna";
+  return next;
 }
 
 function redactAccommodation(item){

@@ -34,8 +34,12 @@
     "application/vnd.google-earth.kml+xml",
     "application/xml",
     "text/xml",
+    "text/plain",
     ""
   ]);
+  const GPX_CONTENT_TYPE="application/gpx+xml";
+  const KML_CONTENT_TYPE="application/vnd.google-earth.kml+xml";
+  const XML_FALLBACK_TYPES=new Set(["application/xml","text/xml"]);
 
   function configRoot(){
     return window.ACTFirebaseConfig||{};
@@ -504,16 +508,22 @@
 
   /**
    * Browsers (esp. Windows) often leave File.type empty for .gpx/.kml.
-   * Never use application/octet-stream for those — Storage rules reject it.
-   * Use text/xml for GPX/KML so uploads work with current production rules
-   * (text/.*) even before the dedicated GPX/KML MIME rules are deployed.
+   * Prefer canonical route MIME types that match storage.rules.
+   * Controlled fallback: application/xml or text/xml when the browser already
+   * reports those; never application/octet-stream for route files.
    */
   function resolvedContentType(file){
     const mime=String(file?.type||"").trim().toLowerCase();
     const extension=fileExtension(file?.name);
-    if(extension==="gpx"||extension==="kml"){
-      if(mime.startsWith("text/"))return mime;
-      return "text/xml";
+    if(extension==="gpx"){
+      if(mime===GPX_CONTENT_TYPE)return mime;
+      if(XML_FALLBACK_TYPES.has(mime))return mime;
+      return GPX_CONTENT_TYPE;
+    }
+    if(extension==="kml"){
+      if(mime===KML_CONTENT_TYPE)return mime;
+      if(XML_FALLBACK_TYPES.has(mime))return mime;
+      return KML_CONTENT_TYPE;
     }
     if(mime&&mime!=="application/octet-stream")return mime;
     const byExt={
@@ -528,6 +538,55 @@
       xlsx:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     };
     return byExt[extension]||mime||"application/octet-stream";
+  }
+
+  function classifyStorageUploadError(error,context={}){
+    const code=String(error&&error.code||"");
+    const message=String(error&&error.message||error||"");
+    const extension=String(context.extension||"").toLowerCase();
+    const isRoute=extension==="gpx"||extension==="kml";
+    if(code==="auth/login-required"){
+      return {kind:"login-required",message:"Bitte mit einem Admin-Konto anmelden."};
+    }
+    if(code==="auth/missing-admin-claim"||code==="auth/missing-admin-role"||/Login-Token enthalten|neu anmelden/i.test(message)){
+      return {
+        kind:"missing-admin-claim",
+        message:"Ihre Admin-Berechtigung ist noch nicht im aktuellen Login-Token enthalten. Bitte neu anmelden."
+      };
+    }
+    if(/keine Admin-Berechtigung/i.test(message)){
+      return {
+        kind:"missing-admin-claim",
+        message:"Ihre Admin-Berechtigung ist noch nicht im aktuellen Login-Token enthalten. Bitte neu anmelden."
+      };
+    }
+    if(code==="storage/unauthorized"||/unauthorized|permission|Storage abgelehnt/i.test(message)){
+      if(context.storageRoleOk&&isRoute){
+        return {
+          kind:"storage-filetype",
+          message:"Dieser GPX/KML-Dateityp wird von den aktuellen Storage-Regeln nicht akzeptiert."
+        };
+      }
+      return {
+        kind:"storage-rules",
+        message:"Firebase Storage hat den Upload abgelehnt. Bitte Storage Rules prüfen oder deployen."
+      };
+    }
+    if(/zu groß|Maximal erlaubt/i.test(message)){
+      return {kind:"file-too-large",message:message};
+    }
+    if(/nicht unterstützt|nicht vorgesehen|GPX oder KML/i.test(message)){
+      return {
+        kind:"filetype",
+        message:isRoute
+          ?"Dateityp nicht erkannt. Bitte eine .gpx- oder .kml-Datei wählen."
+          :message
+      };
+    }
+    return {
+      kind:"upload-failed",
+      message:message||"Upload fehlgeschlagen. Bitte erneut versuchen."
+    };
   }
 
   function validateUploadFile(file,options){
@@ -570,13 +629,48 @@
     return Promise.race([promise,timeout]).finally(()=>window.clearTimeout(timer));
   }
 
+  async function ensureStorageAdminForUpload(){
+    const auth=window.ACTFirebaseAuth;
+    if(!auth||typeof auth.requireStorageAdminRole!=="function"){
+      if(!state.auth||!state.auth.currentUser){
+        const error=new Error("Firebase Upload abgebrochen: Kein angemeldeter Benutzer vorhanden.");
+        error.code="auth/login-required";
+        throw error;
+      }
+      return {allowed:true,role:"",storageRoleOk:false};
+    }
+    const check=await auth.requireStorageAdminRole();
+    if(!check.allowed){
+      const error=new Error(check.message||"Keine Admin-Berechtigung für Storage-Upload.");
+      error.code=check.code||"auth/missing-admin-claim";
+      throw error;
+    }
+    return {allowed:true,role:check.role||"",storageRoleOk:true};
+  }
+
   async function uploadCustomerDocument(customerId,file,meta,onProgress){
     const ready=await ensureDb();
     const {storageModule}=ready.modules;
     if(!customerId)throw new Error("Kunden-ID fehlt.");
-    validateUploadFile(file,{kind:"document"});
+    const uploadKind=meta&&meta.kind==="travel-route"?"travel-route":"document";
+    validateUploadFile(file,{kind:uploadKind});
+    const extension=fileExtension(file.name);
+    const contentType=resolvedContentType(file);
+    let storageRoleOk=false;
+    try{
+      const gate=await ensureStorageAdminForUpload();
+      storageRoleOk=Boolean(gate.storageRoleOk);
+    }catch(error){
+      const classified=classifyStorageUploadError(error,{extension,contentType,storageRoleOk:false});
+      const wrapped=new Error(classified.message);
+      wrapped.code=error&&error.code?error.code:classified.kind;
+      wrapped.uploadErrorKind=classified.kind;
+      throw wrapped;
+    }
     if(!ready.auth.currentUser){
-      throw new Error("Firebase Upload abgebrochen: Kein angemeldeter Benutzer vorhanden.");
+      const error=new Error("Firebase Upload abgebrochen: Kein angemeldeter Benutzer vorhanden.");
+      error.code="auth/login-required";
+      throw error;
     }
     const category=safeSegment(meta&&meta.type||"dokument");
     const filename=safeSegment(file.name);
@@ -584,7 +678,6 @@
     const path=`customers/${safeSegment(customerId)}/documents/${category}/${Date.now()}-${documentId}-${filename}`;
     const fileRef=storageModule.ref(ready.storage,path);
     console.log("[ACT Firebase] Upload vorbereitet.");
-    const contentType=resolvedContentType(file);
     const metadata={
       contentType,
       customMetadata:{
@@ -612,13 +705,13 @@
     });
     let snapshot;
     try{
-      snapshot=await withTimeout(uploadPromise,25000,"Firebase Storage nimmt keine Daten an. Bitte prüfen: Anonymous Authentication aktiv, Storage Rules erlauben Uploads für angemeldete Nutzer, Storage Bucket korrekt.");
+      snapshot=await withTimeout(uploadPromise,25000,"Firebase Storage nimmt keine Daten an. Bitte Storage Rules und Admin-Login prüfen.");
     }catch(error){
-      const code=String(error&&error.code||"");
-      if(code==="storage/unauthorized"||/unauthorized|permission/i.test(String(error&&error.message||""))){
-        throw new Error("Upload von Storage abgelehnt (Berechtigung/Dateityp). Für GPX/KML müssen die Storage Rules deployed sein.");
-      }
-      throw error;
+      const classified=classifyStorageUploadError(error,{extension,contentType,storageRoleOk});
+      const wrapped=new Error(classified.message);
+      wrapped.code=error&&error.code?error.code:classified.kind;
+      wrapped.uploadErrorKind=classified.kind;
+      throw wrapped;
     }
     const url=await storageModule.getDownloadURL(snapshot.ref);
     return {
@@ -776,6 +869,15 @@
     const {storageModule}=ready.modules;
     if(!customerId)throw new Error("Kunden-ID fehlt.");
     validateUploadFile(file,{kind:"image"});
+    try{
+      await ensureStorageAdminForUpload();
+    }catch(error){
+      const classified=classifyStorageUploadError(error,{extension:fileExtension(file.name),contentType:file.type||"image/jpeg",storageRoleOk:false});
+      const wrapped=new Error(classified.message);
+      wrapped.code=error&&error.code?error.code:classified.kind;
+      wrapped.uploadErrorKind=classified.kind;
+      throw wrapped;
+    }
     if(!ready.auth.currentUser)throw new Error("Firebase Upload abgebrochen: Kein angemeldeter Benutzer vorhanden.");
     const filename=safeSegment(file.name);
     const imageId=uniqueUploadId();
@@ -1219,6 +1321,10 @@
     fetchPortalShareData,
     fetchPortalDocumentUrl,
     denormalizeFromFirestore,
-    normalizeForFirestore
+    normalizeForFirestore,
+    resolvedContentType,
+    classifyStorageUploadError,
+    validateUploadFile,
+    fileExtension
   };
 })();

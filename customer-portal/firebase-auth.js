@@ -290,6 +290,77 @@
     return denyAdmin(finalState);
   }
 
+  /**
+   * Storage Rules (storage.rules) allow write only when
+   * request.auth.token.role ∈ {owner, admin}.
+   * Soft UI sessions without a role claim must not start uploads.
+   */
+  async function requireStorageAdminRole(){
+    const MISSING_TOKEN_ROLE="Ihre Admin-Berechtigung ist noch nicht im aktuellen Login-Token enthalten. Bitte neu anmelden.";
+    try{
+      await ensureObserver();
+    }catch(error){
+      authAvailable=false;
+      authError=neutralError(error);
+      return {allowed:false,code:"auth/service-missing",message:CLAIMS_CHECK_ERROR,state:getState(),role:""};
+    }
+    if(!currentUser){
+      authError="";
+      sessionAdminGranted=false;
+      return {allowed:false,code:"auth/login-required",message:LOGIN_REQUIRED_ERROR,state:getState(),role:""};
+    }
+    await refreshClaims(false);
+    let currentRole=String(role()||"").trim();
+    let forcedRefresh=false;
+    if(!isAllowedRole(currentRole)){
+      forcedRefresh=true;
+      await refreshClaims(true);
+      currentRole=String(role()||"").trim();
+    }
+    if(isAllowedRole(currentRole)){
+      return {allowed:true,code:"ok",message:"",state:getState(),role:currentRole.toLowerCase(),forcedRefresh};
+    }
+    if(currentRole&&!isAllowedRole(currentRole)){
+      return {
+        allowed:false,
+        code:"auth/missing-admin-role",
+        message:MISSING_ADMIN_ROLE_ERROR,
+        state:getState(),
+        role:currentRole,
+        forcedRefresh
+      };
+    }
+    return {
+      allowed:false,
+      code:"auth/missing-admin-claim",
+      message:MISSING_TOKEN_ROLE,
+      state:getState(),
+      role:"",
+      forcedRefresh
+    };
+  }
+
+  function getAuthDiagnostics(){
+    const claims=tokenResult&&tokenResult.claims&&typeof tokenResult.claims==="object"?tokenResult.claims:{};
+    const currentRole=String(role()||"").trim();
+    const adminFlag=claims.admin===true||claims.admin==="true"||claims.isAdmin===true||claims.isAdmin==="true";
+    return {
+      currentUserPresent:Boolean(currentUser),
+      uidPresent:Boolean(currentUser&&currentUser.uid),
+      emailPresent:Boolean(currentUser&&currentUser.email),
+      email:currentUser&&currentUser.email?String(currentUser.email):"",
+      roleClaim:claims.role!=null&&claims.role!==""?String(claims.role):currentRole,
+      adminClaim:Boolean(adminFlag),
+      adminRoleClaim:claims.adminRole!=null&&claims.adminRole!==""?String(claims.adminRole):"",
+      tokenIssuedAt:tokenResult&&tokenResult.issuedAtTime?String(tokenResult.issuedAtTime):"",
+      tokenExpirationTime:tokenResult&&tokenResult.expirationTime?String(tokenResult.expirationTime):"",
+      storageRulesRoleOk:isAllowedRole(currentRole),
+      uiSessionAllowed:Boolean(getState().allowed),
+      sessionAdminGranted:Boolean(sessionAdminGranted),
+      storageAlignedRoles:ALLOWED_ROLES.slice()
+    };
+  }
+
   function subscribe(callback){
     if(typeof callback!=="function")return function(){};
     subscribers.push(callback);
@@ -305,7 +376,11 @@
     signIn,
     signOut:signOutAdmin,
     requireAdmin,
+    requireStorageAdminRole,
+    getAuthDiagnostics,
     hasAdminAccess:()=>getState().allowed,
+    hasStorageAdminRole:()=>isAllowedRole(role()),
+    storageAdminRoles:()=>ALLOWED_ROLES.slice(),
     getState,
     subscribe,
     messageForError:neutralError

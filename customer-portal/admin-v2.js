@@ -3159,7 +3159,9 @@
               ?portalButton(link.status==="session-lost"?"Link ersetzen (macht alten ungueltig)":"Link ersetzen (macht alten ungueltig)","create-share-new",{disabled:!published,primary:false})
               :portalButton("Sicheren Kundenlink erzeugen","create-share",{primary:true,disabled:!published})}
             ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
+            ${portalButton("Auth-Diagnose (Storage)","auth-diag")}
           </div>
+          <pre id="authStorageDiag" class="v2-muted" hidden style="white-space:pre-wrap;margin-top:12px;padding:12px;border:1px solid var(--line,#d7e0d8);border-radius:8px;background:#f7faf6;"></pre>
         </article>
         ${publicationQrPanelMarkup(customer,link)}
         <article class="v2-panel">
@@ -5999,15 +6001,69 @@
     if(field.name==="children")renderCustomerDetail();
   }
 
-  function travelUploadErrorMessage(error){
-    const raw=String(error?.message||error||"Travel-Upload fehlgeschlagen.");
-    if(/unauthorized|permission|Storage abgelehnt/i.test(raw)){
-      return "GPX/KML-Upload von Storage abgelehnt. Bitte erneut versuchen (Hard-Refresh). Wenn es weiter scheitert: Storage Rules deployen.";
+  function travelUploadErrorMessage(error,fileName=""){
+    if(error?.uploadErrorKind&&error?.message)return String(error.message);
+    const service=window.ACTFirebaseService;
+    if(service?.classifyStorageUploadError){
+      return service.classifyStorageUploadError(error,{
+        extension:service.fileExtension?.(fileName||error?.fileName||"")||"",
+        contentType:"",
+        storageRoleOk:Boolean(error?.storageRoleOk)
+      }).message;
     }
-    if(/nicht unterst/i.test(raw)||/nicht vorgesehen/i.test(raw)){
+    const raw=String(error?.message||error||"Travel-Upload fehlgeschlagen.");
+    const code=String(error?.code||"");
+    if(code==="auth/missing-admin-claim"||code==="auth/missing-admin-role"||/Login-Token enthalten|neu anmelden/i.test(raw)){
+      return "Ihre Admin-Berechtigung ist noch nicht im aktuellen Login-Token enthalten. Bitte neu anmelden.";
+    }
+    if(code==="storage/unauthorized"||/unauthorized|permission|Storage abgelehnt|Storage Rules/i.test(raw)){
+      if(/Dateityp|GPX\/KML-Dateityp/i.test(raw)){
+        return "Dieser GPX/KML-Dateityp wird von den aktuellen Storage-Regeln nicht akzeptiert.";
+      }
+      return "Firebase Storage hat den Upload abgelehnt. Bitte Storage Rules prüfen oder deployen.";
+    }
+    if(/nicht unterst/i.test(raw)||/nicht vorgesehen/i.test(raw)||/nicht erkannt/i.test(raw)){
       return "Dateityp nicht erkannt. Bitte eine .gpx- oder .kml-Datei waehlen.";
     }
     return raw;
+  }
+
+  async function runAuthStorageDiagnostics(){
+    const auth=window.ACTFirebaseAuth;
+    if(!auth?.getAuthDiagnostics){
+      setPublicationMessage("Auth-Diagnose nicht verfuegbar.","error");
+      return null;
+    }
+    try{
+      if(auth.requireStorageAdminRole)await withTimeout(auth.requireStorageAdminRole(),AUTH_TIMEOUT_MS,"requireStorageAdminRole");
+      else if(auth.requireAdmin)await withTimeout(auth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+    }catch(_error){/* diagnostics still reads current token state */}
+    const diag=auth.getAuthDiagnostics();
+    const target=byId("authStorageDiag");
+    if(target){
+      target.hidden=false;
+      target.textContent=[
+        `currentUser: ${diag.currentUserPresent?"ja":"nein"}`,
+        `uid: ${diag.uidPresent?"ja":"nein"}`,
+        `email: ${diag.emailPresent?"ja":"nein"}${diag.email?` (${diag.email})`:""}`,
+        `role-Claim: ${diag.roleClaim||"(leer)"}`,
+        `admin-Claim: ${diag.adminClaim?"ja":"nein"}`,
+        `adminRole-Claim: ${diag.adminRoleClaim||"(leer)"}`,
+        `Token ausgestellt: ${diag.tokenIssuedAt||"(unbekannt)"}`,
+        `Token Ablauf: ${diag.tokenExpirationTime||"(unbekannt)"}`,
+        `Storage-role ok (owner|admin): ${diag.storageRulesRoleOk?"ja":"nein"}`,
+        `UI-Session allowed: ${diag.uiSessionAllowed?"ja":"nein"}`,
+        `sessionAdminGranted: ${diag.sessionAdminGranted?"ja":"nein"}`
+      ].join("\n");
+    }
+    console.info("[ACT Admin V2] Auth-/Storage-Diagnose",diag);
+    setPublicationMessage(
+      diag.storageRulesRoleOk
+        ?"Auth-Diagnose: Storage-role vorhanden (owner/admin)."
+        :"Auth-Diagnose: Storage-role fehlt im Token — bitte neu anmelden.",
+      diag.storageRulesRoleOk?"success":"warning"
+    );
+    return diag;
   }
 
   async function handleProgramTravelUpload(input){
@@ -6028,13 +6084,20 @@
       state.programTravelUploadErrors=nextErrors;
       renderCustomerDetail();
       if(!documentUploadReady())throw new Error(documentUploadUnavailableMessage());
-      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
-      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      const storageAuth=window.ACTFirebaseAuth?.requireStorageAdminRole
+        ?await withTimeout(window.ACTFirebaseAuth.requireStorageAdminRole(),AUTH_TIMEOUT_MS,"requireStorageAdminRole")
+        :await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!storageAuth.allowed){
+        const error=new Error(storageAuth.message||"Keine Admin-Berechtigung.");
+        error.code=storageAuth.code||"auth/missing-admin-claim";
+        throw error;
+      }
       const typeMap={gpxFile:"program/gpx",kmlFile:"program/kml",ticketQrFile:"program/ticket-qr",ticketPdfFile:"program/ticket-pdf",voucherFile:"program/voucher"};
+      const isRouteFile=field==="gpxFile"||field==="kmlFile";
       const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(
         customer.customerId,
         file,
-        {title:file.name,type:typeMap[field]||"program/file"},
+        {title:file.name,type:typeMap[field]||"program/file",kind:isRouteFile?"travel-route":"document"},
         ()=>{}
       );
       let startLatitude="";
@@ -6101,7 +6164,7 @@
         "success"
       );
     }catch(error){
-      const message=travelUploadErrorMessage(error);
+      const message=travelUploadErrorMessage(error,file?.name||"");
       state.programTravelUploadErrors={...state.programTravelUploadErrors,[busyKey]:message};
       setProgramEditMessage(message,"error");
     }finally{
@@ -6333,6 +6396,7 @@
         if(action==="create-share")createPortalShareV2();
         if(action==="create-share-new")createPortalShareV2({forceNew:true});
         if(action==="revoke-share")revokePortalShareV2();
+        if(action==="auth-diag")runAuthStorageDiagnostics();
         if(action==="qr-show"||action==="qr-download-png"||action==="qr-download-svg"||action==="qr-print"){
           if(pubCustomer)runPublicationQrAction(action,pubCustomer);
         }

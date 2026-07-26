@@ -37,6 +37,9 @@ service firebase.storage {
         );
     }
 
+    // Writes require request.auth.token.role in {owner, admin} via isAdmin().
+    // GPX/KML: application/gpx+xml, application/vnd.google-earth.kml+xml,
+    // plus application/xml and text/* (includes text/xml, text/plain).
     function safeFile() {
       return request.resource == null
         || (

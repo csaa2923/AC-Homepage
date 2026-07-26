@@ -39,6 +39,7 @@
     programEditMessage:"",
     programEditMessageKind:"",
     programTravelUploadBusy:{},
+    programTravelUploadErrors:{},
     documentEditMode:false,
     documentEditDraft:null,
     documentEditOriginal:"",
@@ -4830,11 +4831,13 @@
   function programTravelFileMarkup(item,field,label,accept,dayIndex,itemIndex){
     const file=normalizeProgramTravelFile(item[field]);
     const sizeLabel=window.ACTTravelActionsLibrary?.formatFileSize?.(file?.fileSize||file?.size)||"";
-    const uploading=Boolean(state.programTravelUploadBusy?.[`${dayIndex}-${itemIndex}-${field}`]);
+    const busyKey=`${dayIndex}-${itemIndex}-${field}`;
+    const uploading=Boolean(state.programTravelUploadBusy?.[busyKey]);
+    const uploadError=cleanValue(state.programTravelUploadErrors?.[busyKey]);
     return `
       <div class="v2-edit-field full v2-program-travel-file" data-travel-field="${escapeHtml(field)}">
         <span>${escapeHtml(label)}</span>
-        ${file?`<p class="v2-muted">${escapeHtml(file.fileName||"Datei")}${sizeLabel?` · ${escapeHtml(sizeLabel)}`:""}</p>`:`<p class="v2-muted">Keine Datei</p>`}
+        ${file?`<p class="v2-muted"><strong>${escapeHtml(file.fileName||"Datei")}</strong>${sizeLabel?` · ${escapeHtml(sizeLabel)}`:""}${file.url?` · <a href="${escapeHtml(file.url)}" target="_blank" rel="noopener noreferrer">oeffnen</a>`:""}</p>`:`<p class="v2-muted">Keine Datei</p>`}
         <div class="v2-program-travel-file-actions">
           <label class="v2-button soft v2-file-label">
             ${uploading?"Upload laeuft …":"Datei waehlen"}
@@ -4842,6 +4845,7 @@
           </label>
           ${file?`<button class="v2-button soft" type="button" data-program-edit-action="clear-travel-file" data-travel-field="${escapeHtml(field)}" data-day-index="${dayIndex}" data-item-index="${itemIndex}" ${uploading||state.programEditSaving?"disabled":""}>Entfernen</button>`:""}
         </div>
+        ${uploadError?`<small class="v2-field-error">${escapeHtml(uploadError)}</small>`:""}
       </div>
     `;
   }
@@ -4911,8 +4915,8 @@
         <details class="v2-program-travel-section">
           <summary>Wanderung</summary>
           <div class="v2-edit-grid">
-            ${programTravelFileMarkup(item,"gpxFile","GPX-Datei",".gpx,application/gpx+xml,application/xml",dayIndex,itemIndex)}
-            ${programTravelFileMarkup(item,"kmlFile","KML-Datei",".kml,application/vnd.google-earth.kml+xml,application/xml",dayIndex,itemIndex)}
+            ${programTravelFileMarkup(item,"gpxFile","GPX-Datei",".gpx,.xml,application/gpx+xml,application/xml,text/xml,text/plain",dayIndex,itemIndex)}
+            ${programTravelFileMarkup(item,"kmlFile","KML-Datei",".kml,.xml,application/vnd.google-earth.kml+xml,application/xml,text/xml,text/plain",dayIndex,itemIndex)}
             ${programInput(prefix,"komootUrl","Komoot-Link",item.komootUrl,{type:"url",error:komootError,dayIndex,itemIndex})}
             ${programInput(prefix,"outdooractiveUrl","Outdooractive-Link",item.outdooractiveUrl,{type:"url",error:outdoorError,dayIndex,itemIndex})}
             ${programInput(prefix,"difficulty","Schwierigkeit",item.difficulty,{dayIndex,itemIndex})}
@@ -5939,6 +5943,17 @@
     if(field.name==="children")renderCustomerDetail();
   }
 
+  function travelUploadErrorMessage(error){
+    const raw=String(error?.message||error||"Travel-Upload fehlgeschlagen.");
+    if(/unauthorized|permission|Storage abgelehnt/i.test(raw)){
+      return "GPX/KML-Upload von Storage abgelehnt. Bitte erneut versuchen (Hard-Refresh). Wenn es weiter scheitert: Storage Rules deployen.";
+    }
+    if(/nicht unterst/i.test(raw)||/nicht vorgesehen/i.test(raw)){
+      return "Dateityp nicht erkannt. Bitte eine .gpx- oder .kml-Datei waehlen.";
+    }
+    return raw;
+  }
+
   async function handleProgramTravelUpload(input){
     if(!input||!state.programEditDraft)return;
     const file=input.files&&input.files[0];
@@ -5952,6 +5967,9 @@
     const busyKey=`${dayIndex}-${itemIndex}-${field}`;
     try{
       state.programTravelUploadBusy={...state.programTravelUploadBusy,[busyKey]:true};
+      const nextErrors={...state.programTravelUploadErrors};
+      delete nextErrors[busyKey];
+      state.programTravelUploadErrors=nextErrors;
       renderCustomerDetail();
       if(!documentUploadReady())throw new Error(documentUploadUnavailableMessage());
       const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
@@ -6008,7 +6026,9 @@
         "success"
       );
     }catch(error){
-      setProgramEditMessage(error?.message||"Travel-Upload fehlgeschlagen.","error");
+      const message=travelUploadErrorMessage(error);
+      state.programTravelUploadErrors={...state.programTravelUploadErrors,[busyKey]:message};
+      setProgramEditMessage(message,"error");
     }finally{
       const nextBusy={...state.programTravelUploadBusy};
       delete nextBusy[busyKey];

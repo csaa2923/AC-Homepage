@@ -502,30 +502,58 @@
     return match?match[1]:"";
   }
 
+  /**
+   * Browsers (esp. Windows) often leave File.type empty for .gpx/.kml.
+   * Never use application/octet-stream for those — Storage rules reject it.
+   * Use text/xml for GPX/KML so uploads work with current production rules
+   * (text/.*) even before the dedicated GPX/KML MIME rules are deployed.
+   */
+  function resolvedContentType(file){
+    const mime=String(file?.type||"").trim().toLowerCase();
+    const extension=fileExtension(file?.name);
+    if(extension==="gpx"||extension==="kml"){
+      if(mime.startsWith("text/"))return mime;
+      return "text/xml";
+    }
+    if(mime&&mime!=="application/octet-stream")return mime;
+    const byExt={
+      pdf:"application/pdf",
+      jpg:"image/jpeg",
+      jpeg:"image/jpeg",
+      png:"image/png",
+      webp:"image/webp",
+      doc:"application/msword",
+      docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls:"application/vnd.ms-excel",
+      xlsx:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    };
+    return byExt[extension]||mime||"application/octet-stream";
+  }
+
   function validateUploadFile(file,options){
     if(!file)throw new Error("Datei fehlt.");
     const kind=options&&options.kind==="image"?"Bild":"Datei";
-    if(!String(file.name||"").trim())throw new Error(`${kind} hat keinen gÃ¼ltigen Dateinamen.`);
+    if(!String(file.name||"").trim())throw new Error(`${kind} hat keinen gültigen Dateinamen.`);
     if(!Number.isFinite(file.size)||file.size<=0)throw new Error(`${kind} ist leer und wurde nicht hochgeladen.`);
-    if(file.size>MAX_UPLOAD_BYTES)throw new Error(`${kind} ist zu groÃŸ. Maximal erlaubt sind 24 MB.`);
+    if(file.size>MAX_UPLOAD_BYTES)throw new Error(`${kind} ist zu groß. Maximal erlaubt sind 24 MB.`);
     const extension=fileExtension(file.name);
     const mime=String(file.type||"").toLowerCase();
     if(options&&options.kind==="image"){
       if(!(/^image\/(jpeg|png|webp)$/.test(mime)&&["jpg","jpeg","png","webp"].includes(extension))){
-        throw new Error(`${kind} wird nicht unterstÃ¼tzt. Bitte JPG, PNG oder WEBP verwenden.`);
+        throw new Error(`${kind} wird nicht unterstützt. Bitte JPG, PNG oder WEBP verwenden.`);
       }
       return;
     }
     if(options&&options.kind==="travel-route"){
-      if(!(TRAVEL_ROUTE_EXTENSIONS.has(extension)&&TRAVEL_ROUTE_MIME_TYPES.has(mime))){
-        throw new Error(`${kind} wird nicht unterstÃ¼tzt. Bitte GPX oder KML verwenden.`);
+      if(!(TRAVEL_ROUTE_EXTENSIONS.has(extension)&&(TRAVEL_ROUTE_MIME_TYPES.has(mime)||!mime))){
+        throw new Error(`${kind} wird nicht unterstützt. Bitte GPX oder KML verwenden.`);
       }
       return;
     }
-    const mimeAllowed=DOCUMENT_MIME_TYPES.has(mime)||(TRAVEL_ROUTE_EXTENSIONS.has(extension)&&TRAVEL_ROUTE_MIME_TYPES.has(mime));
+    const mimeAllowed=DOCUMENT_MIME_TYPES.has(mime)||(TRAVEL_ROUTE_EXTENSIONS.has(extension)&&(TRAVEL_ROUTE_MIME_TYPES.has(mime)||!mime));
     const extensionAllowed=DOCUMENT_EXTENSIONS.has(extension);
     if(!mimeAllowed||!extensionAllowed){
-      throw new Error(`${kind} wird nicht unterstÃ¼tzt. Bitte PDF, JPG, PNG, WEBP, GPX, KML oder vorgesehene Office-Dateien verwenden.`);
+      throw new Error(`${kind} wird nicht unterstützt. Bitte PDF, JPG, PNG, WEBP, GPX, KML oder vorgesehene Office-Dateien verwenden.`);
     }
   }
 
@@ -556,8 +584,9 @@
     const path=`customers/${safeSegment(customerId)}/documents/${category}/${Date.now()}-${documentId}-${filename}`;
     const fileRef=storageModule.ref(ready.storage,path);
     console.log("[ACT Firebase] Upload vorbereitet.");
+    const contentType=resolvedContentType(file);
     const metadata={
-      contentType:file.type||"application/octet-stream",
+      contentType,
       customMetadata:{
         customerId:String(customerId),
         documentId,
@@ -581,7 +610,16 @@
         resolve(task.snapshot);
       });
     });
-    const snapshot=await withTimeout(uploadPromise,25000,"Firebase Storage nimmt keine Daten an. Bitte prüfen: Anonymous Authentication aktiv, Storage Rules erlauben Uploads für angemeldete Nutzer, Storage Bucket korrekt.");
+    let snapshot;
+    try{
+      snapshot=await withTimeout(uploadPromise,25000,"Firebase Storage nimmt keine Daten an. Bitte prüfen: Anonymous Authentication aktiv, Storage Rules erlauben Uploads für angemeldete Nutzer, Storage Bucket korrekt.");
+    }catch(error){
+      const code=String(error&&error.code||"");
+      if(code==="storage/unauthorized"||/unauthorized|permission/i.test(String(error&&error.message||""))){
+        throw new Error("Upload von Storage abgelehnt (Berechtigung/Dateityp). Für GPX/KML müssen die Storage Rules deployed sein.");
+      }
+      throw error;
+    }
     const url=await storageModule.getDownloadURL(snapshot.ref);
     return {
       id:documentId,
@@ -595,8 +633,8 @@
       originalName:file.name,
       fileSize:file.size,
       size:file.size,
-      mimeType:file.type||"",
-      contentType:file.type||"",
+      mimeType:contentType,
+      contentType,
       uploadedAt:new Date().toISOString(),
       status:"Hochgeladen",
       visible:true

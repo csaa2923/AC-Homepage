@@ -103,10 +103,11 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/function isPdfDocument\(item\)/);
     assert.match(portalJs,/Herunterladen/);
     assert.match(portalJs,/Dieses Dokument ist derzeit nicht verfuegbar\./);
-    assert.match(portalHtml,/customer-portal\.js\?v=45/);
-    assert.match(portalHtml,/redact-allowlist\.js\?v=10/);
-    assert.match(portalHtml,/travel-actions-library\.js\?v=10/);
+    assert.match(portalHtml,/customer-portal\.js\?v=46/);
+    assert.match(portalHtml,/redact-allowlist\.js\?v=11/);
+    assert.match(portalHtml,/travel-actions-library\.js\?v=11/);
     assert.match(portalHtml,/leaflet@1\.9\.4/);
+    assert.match(portalHtml,/leaflet\.markercluster@1\.5\.3/);
     assert.match(portalHtml,/portal-share-library\.js\?v=4/);
     assert.match(portalJs,/data-open-portal-document/);
     assert.match(portalJs,/hydrateShareDocumentUrls/);
@@ -125,9 +126,17 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/L\.polyline|polyline\(/);
     assert.match(portalJs,/Kartenleiste/);
     assert.match(portalJs,/resolveHikeCompanion/);
+    assert.match(portalJs,/function addHikeMarkersToMap\(/);
+    assert.match(portalJs,/function bindHikeElevationInteractions\(/);
+    assert.match(portalJs,/data-hike-live-location/);
+    assert.match(portalJs,/In Google Maps oeffnen/);
+    assert.match(portalJs,/GPX-Datei jetzt herunterladen und in Ihrer bevorzugten Navigations-App offline nutzen\./);
+    assert.match(portalJs,/markerClusterGroup|L\.layerGroup/);
     assert.match(portalCss,/hike-companion/);
     assert.match(portalCss,/hike-toolbar/);
     assert.match(portalCss,/hike-leaflet-map/);
+    assert.match(portalCss,/hike-marker-icon/);
+    assert.match(portalCss,/hike-elev-interactive|hike-elev-readout/);
     assert.doesNotMatch(portalJs,/extractRouteFromXml/);
   });
 

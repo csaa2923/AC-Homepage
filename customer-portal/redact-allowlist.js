@@ -29,6 +29,7 @@
     "gpxFile","kmlFile","komootUrl","outdooractiveUrl",
     "difficulty","distanceKm","walkDuration","elevationGain","elevationLoss",
     "elevationGainM","elevationLossM","durationMinutes","pointCount",
+    "routeMarkers","hikeMarkers",
     "ticketQrFile","voucherFile","ticketPdfFile","ticketNumber","voucherNumber","bookingNumber",
     "calendarEnabled","timeZone","allDay"
   ]);
@@ -316,6 +317,27 @@
     });
   }
 
+  function redactRouteMarkers(value){
+    if(!Array.isArray(value))return [];
+    const markers=[];
+    value.slice(0,80).forEach((entry,index)=>{
+      if(!entry||typeof entry!=="object")return;
+      const coords=parsePublicCoords(entry.latitude??entry.lat,entry.longitude??entry.lng??entry.lon);
+      if(!coords)return;
+      const category=stringValue(entry.category||entry.kind||entry.type)||"tip";
+      markers.push({
+        id:stringValue(entry.id)||`marker-${index+1}`,
+        category,
+        name:stringValue(entry.name||entry.title)||category,
+        description:stringValue(entry.description||entry.note||entry.text),
+        latitude:coords.latitude,
+        longitude:coords.longitude,
+        source:stringValue(entry.source)==="osm"?"osm":"admin"
+      });
+    });
+    return markers;
+  }
+
   function redactProgramItem(item){
     const source=item||{};
     const next=pickFields(source,PROGRAM_ITEM_FIELDS);
@@ -326,6 +348,12 @@
         else delete next[field];
       }
     });
+    const markers=redactRouteMarkers(source.routeMarkers||source.hikeMarkers);
+    if(markers.length)next.routeMarkers=markers;
+    else{
+      delete next.routeMarkers;
+      delete next.hikeMarkers;
+    }
     promoteTravelCoordsOnItem(source,next);
     if(!stringValue(next.address)){
       next.address=stringValue(source.address||source.locationAddress||source.location||source.meetingPoint);

@@ -643,10 +643,14 @@
         </ul>
       </div>
     `:"";
+    const mapId=`hike-map-${String(item.id||Math.random()).replace(/[^\w-]/g,"")}`;
     const mapPayload=companion?.map?.ok?escapeHtml(JSON.stringify({
+      mapId,
       embedUrl:companion.map.embedUrl||"",
       points:Array.isArray(companion.map.routePoints)?companion.map.routePoints:[],
       bounds:companion.map.bounds||null,
+      markers:Array.isArray(companion.map.markers)?companion.map.markers:[],
+      loadOsmHighlights:true,
       start:Number.isFinite(Number(companion.map.latitude))&&Number.isFinite(Number(companion.map.longitude))
         ?{latitude:Number(companion.map.latitude),longitude:Number(companion.map.longitude)}
         :null,
@@ -654,17 +658,25 @@
         ?{latitude:Number(companion.map.endLatitude),longitude:Number(companion.map.endLongitude)}
         :null
     })):"";
+    const elevPayload=companion?.elevationProfile?.track?.length
+      ?escapeHtml(JSON.stringify({mapId,track:companion.elevationProfile.track}))
+      :"";
     const mapBlock=companion?.map?.ok?`
-      <div class="hike-map travel-map-preview">
+      <div class="hike-map travel-map-preview" data-hike-map-shell="${escapeHtml(mapId)}">
         <div class="hike-map-frame">
-          <div class="hike-leaflet-map" data-hike-map="${mapPayload}" role="region" aria-label="Interaktive Routenkarte"></div>
+          <div class="hike-leaflet-map" id="${escapeHtml(mapId)}" data-hike-map="${mapPayload}" role="region" aria-label="Interaktive Routenkarte"></div>
+        </div>
+        <div class="hike-map-live">
+          <button class="button soft" type="button" data-hike-live-location="${escapeHtml(mapId)}">Meinen Standort zeigen</button>
+          <p class="hike-live-status" data-hike-live-status="${escapeHtml(mapId)}" hidden></p>
         </div>
       </div>
     `:"";
     const elevBlock=companion?.elevationProfile?.show?`
-      <div class="hike-elev" aria-label="Hoehenprofil">
+      <div class="hike-elev" aria-label="Interaktives Hoehenprofil" data-hike-elev-for="${escapeHtml(mapId)}" data-hike-elev="${elevPayload}">
         <h4>Höhenprofil</h4>
         ${companion.elevationProfile.svg}
+        <p class="hike-elev-readout" data-hike-elev-readout hidden></p>
         ${companion.elevationProfile.minElevation!=null&&companion.elevationProfile.maxElevation!=null
           ?`<p class="hike-elev-meta">${escapeHtml(String(companion.elevationProfile.minElevation))}–${escapeHtml(String(companion.elevationProfile.maxElevation))} m</p>`
           :""}
@@ -715,17 +727,135 @@
       buttons.push(`<a class="button soft" href="${escapeHtml(toolbar.kml.url)}" download="${escapeHtml(toolbar.kml.fileName||"route.kml")}" target="_blank" rel="noopener noreferrer">${escapeHtml(toolbar.kml.label)}</a>`);
     }
     if(!buttons.length)return "";
-    const hint=toolbar.gpx?.show&&companion?.meta?.offlineHint
-      ?`<p class="travel-offline-hint">${escapeHtml(companion.meta.offlineHint)}</p>`
+    const hint=toolbar.gpx?.show
+      ?`<p class="travel-offline-hint">${escapeHtml(companion?.meta?.offlineHint||"GPX-Datei jetzt herunterladen und in Ihrer bevorzugten Navigations-App offline nutzen.")}</p>`
       :"";
     return `<div class="hike-toolbar card-actions" aria-label="Kartenleiste">${buttons.join("")}${hint}</div>`;
   }
 
-  function mountHikeLeafletMap(el){
+  const hikeMapRegistry=new Map();
+
+  function hikeMarkerPopupHtml(marker){
+    const mapsUrl=travelLib()?.markerMapsUrl?.(marker)||`https://www.google.com/maps/search/?api=1&query=${marker.latitude},${marker.longitude}`;
+    return `
+      <div class="hike-marker-popup">
+        <strong>${escapeHtml(marker.icon||"📌")} ${escapeHtml(marker.name||"Hinweis")}</strong>
+        <p>${escapeHtml(marker.label||marker.category||"")}</p>
+        ${marker.description?`<p>${escapeHtml(marker.description)}</p>`:""}
+        ${marker.distanceLabel?`<p class="hike-marker-distance">${escapeHtml(marker.distanceLabel)}</p>`:""}
+        <a class="button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">In Google Maps oeffnen</a>
+      </div>
+    `;
+  }
+
+  function addHikeMarkersToMap(map,markers,routePoints,mapId){
+    const L=window.L;
+    const lib=travelLib();
+    const enriched=lib?.enrichMarkersWithDistance
+      ?lib.enrichMarkersWithDistance(markers,routePoints)
+      :(Array.isArray(markers)?markers:[]);
+    if(!enriched.length)return null;
+    if(mapId){
+      const entry=hikeMapRegistry.get(mapId)||{};
+      entry.markers=[...(Array.isArray(entry.markers)?entry.markers:[]),...enriched];
+      hikeMapRegistry.set(mapId,entry);
+    }
+    const cluster=L.markerClusterGroup
+      ?L.markerClusterGroup({showCoverageOnHover:false,maxClusterRadius:42,spiderfyOnMaxZoom:true,disableClusteringAtZoom:16})
+      :L.layerGroup();
+    enriched.forEach(marker=>{
+      const icon=L.divIcon({
+        className:"hike-marker-icon",
+        html:`<span aria-hidden="true">${escapeHtml(marker.icon||"📌")}</span>`,
+        iconSize:[28,28],
+        iconAnchor:[14,14]
+      });
+      const pin=L.marker([marker.latitude,marker.longitude],{icon,keyboard:true,title:marker.name||marker.label||"Marker"});
+      pin.bindPopup(hikeMarkerPopupHtml(marker),{maxWidth:260});
+      cluster.addLayer(pin);
+    });
+    map.addLayer(cluster);
+    return cluster;
+  }
+
+  function bindHikeElevationInteractions(mapId){
+    const elev=document.querySelector(`[data-hike-elev-for="${mapId}"]`);
+    if(!elev||elev.dataset.elevReady==="1")return;
+    let payload={};
+    try{payload=JSON.parse(elev.getAttribute("data-hike-elev")||"{}");}catch(_error){payload={};}
+    if(payload.mapId&&payload.mapId!==mapId)return;
+    const track=Array.isArray(payload.track)?payload.track:[];
+    if(track.length<2)return;
+    elev.dataset.elevReady="1";
+    const svg=elev.querySelector("svg.hike-elev-interactive");
+    const cursor=elev.querySelector(".hike-elev-cursor");
+    const readout=elev.querySelector("[data-hike-elev-readout]");
+    if(!svg)return;
+    const highlight=point=>{
+      const entry=hikeMapRegistry.get(mapId);
+      if(!entry?.map||!window.L)return;
+      if(!entry.profileMarker){
+        entry.profileMarker=window.L.circleMarker([point.latitude,point.longitude],{
+          radius:8,
+          color:"#c45c26",
+          fillColor:"#c45c26",
+          fillOpacity:0.95,
+          weight:2
+        }).addTo(entry.map);
+      }else{
+        entry.profileMarker.setLatLng([point.latitude,point.longitude]);
+      }
+      if(readout){
+        const elevText=point.elevation!=null?`${Math.round(point.elevation)} m`:"—";
+        const distText=point.distanceKm!=null?`${Number(point.distanceKm).toFixed(1)} km`:"—";
+        readout.hidden=false;
+        readout.textContent=`Höhe ${elevText} · Distanz ${distText}`;
+      }
+      if(cursor){
+        const width=Number(svg.viewBox.baseVal.width||320);
+        const padX=8;
+        const innerW=width-padX*2;
+        const index=Math.max(0,track.indexOf(point));
+        const x=padX+(index/Math.max(1,track.length-1))*innerW;
+        cursor.setAttribute("cx",String(x));
+        const elevations=track.map(item=>item.elevation).filter(value=>Number.isFinite(Number(value)));
+        if(elevations.length&&Number.isFinite(Number(point.elevation))){
+          const min=Math.min(...elevations);
+          const max=Math.max(...elevations);
+          const height=Number(svg.viewBox.baseVal.height||96);
+          const padY=10;
+          const innerH=height-padY*2;
+          const y=padY+innerH-((Number(point.elevation)-min)/Math.max(0.001,max-min))*innerH;
+          cursor.setAttribute("cy",String(y));
+        }
+      }
+    };
+    const pointFromEvent=event=>{
+      const rect=svg.getBoundingClientRect();
+      const ratio=rect.width?((event.clientX-rect.left)/rect.width):0;
+      const index=Math.round(Math.min(1,Math.max(0,ratio))*(track.length-1));
+      return track[index]||null;
+    };
+    svg.addEventListener("mousemove",event=>{
+      const point=pointFromEvent(event);
+      if(point)highlight(point);
+    });
+    svg.addEventListener("click",event=>{
+      const point=pointFromEvent(event);
+      const entry=hikeMapRegistry.get(mapId);
+      if(point&&entry?.map){
+        highlight(point);
+        entry.map.panTo([point.latitude,point.longitude],{animate:true});
+      }
+    });
+  }
+
+  async function mountHikeLeafletMap(el){
     if(!el||el.dataset.hikeReady==="1")return;
     el.dataset.hikeReady="1";
     let payload={};
     try{payload=JSON.parse(el.getAttribute("data-hike-map")||"{}");}catch(_error){payload={};}
+    const mapId=payload.mapId||el.id||`hike-${Date.now()}`;
     const points=Array.isArray(payload.points)?payload.points:[];
     const latLngs=points
       .map(point=>[Number(point.latitude??point.lat),Number(point.longitude??point.lng??point.lon)])
@@ -734,7 +864,6 @@
     const L=window.L;
 
     if(!L){
-      // Fallback without Leaflet: interactive OSM embed (no synced route overlay).
       if(payload.embedUrl){
         const frame=document.createElement("iframe");
         frame.src=String(payload.embedUrl);
@@ -790,6 +919,11 @@
       }).addTo(map).bindTooltip("Ziel",{direction:"top",offset:[0,-6]});
     }
 
+    hikeMapRegistry.set(mapId,{map,points,bounds,end:payload.end||null,markers:[]});
+
+    const adminMarkers=Array.isArray(payload.markers)?payload.markers:[];
+    addHikeMarkersToMap(map,adminMarkers,points,mapId);
+
     const fitPairs=[];
     if(bounds
       &&Number.isFinite(Number(bounds.minLat))
@@ -807,11 +941,75 @@
       map.setView(fitPairs[0],14,{animate:false});
     }
 
-    // Layout may still be settling when the card first becomes visible.
+    bindHikeElevationInteractions(mapId);
+
     requestAnimationFrame(()=>{
       map.invalidateSize({animate:false});
       setTimeout(()=>map.invalidateSize({animate:false}),120);
     });
+
+    if(payload.loadOsmHighlights!==false&&bounds&&travelLib()?.fetchOsmRouteHighlights){
+      const controller=typeof AbortController==="function"?new AbortController():null;
+      try{
+        const osmMarkers=await travelLib().fetchOsmRouteHighlights(bounds,{limit:36,signal:controller?.signal});
+        if(Array.isArray(osmMarkers)&&osmMarkers.length){
+          addHikeMarkersToMap(map,osmMarkers,points,mapId);
+        }
+      }catch(_error){
+        // Optional enrichment — keep map usable without OSM POIs.
+      }
+    }
+  }
+
+  function handleHikeLiveLocation(mapId){
+    const entry=hikeMapRegistry.get(mapId);
+    const status=document.querySelector(`[data-hike-live-status="${mapId}"]`);
+    if(!entry?.map){
+      if(status){status.hidden=false;status.textContent="Karte ist noch nicht geladen.";}
+      return;
+    }
+    if(!navigator.geolocation){
+      if(status){status.hidden=false;status.textContent="Standort wird von diesem Gerät nicht unterstützt.";}
+      return;
+    }
+    if(status){status.hidden=false;status.textContent="Standort wird ermittelt …";}
+    navigator.geolocation.getCurrentPosition(position=>{
+      const lat=position.coords.latitude;
+      const lng=position.coords.longitude;
+      const L=window.L;
+      if(!entry.liveMarker){
+        entry.liveMarker=L.circleMarker([lat,lng],{
+          radius:8,
+          color:"#1d4ed8",
+          fillColor:"#3b82f6",
+          fillOpacity:0.9,
+          weight:2
+        }).addTo(entry.map).bindTooltip("Ihr Standort",{direction:"top"});
+      }else{
+        entry.liveMarker.setLatLng([lat,lng]);
+      }
+      entry.map.panTo([lat,lng],{animate:true});
+      const lib=travelLib();
+      const origin={latitude:lat,longitude:lng};
+      const parts=["Standort aktiv (nur lokal, nicht gespeichert)"];
+      const end=entry.end&&lib?.parseCoords?.(entry.end.latitude,entry.end.longitude);
+      if(end?.ok&&lib?.haversineKm){
+        const gap=lib.haversineKm(origin,end);
+        if(Number.isFinite(gap))parts.push(`${gap.toFixed(1)} km bis Ziel`);
+      }
+      if(lib?.nearestMarkerDistanceKm){
+        const hutKm=lib.nearestMarkerDistanceKm(origin,entry.markers||[],["hut"]);
+        const parkingKm=lib.nearestMarkerDistanceKm(origin,entry.markers||[],["parking"]);
+        if(hutKm!=null)parts.push(`${hutKm.toFixed(1)} km bis naechste Huette`);
+        if(parkingKm!=null)parts.push(`${parkingKm.toFixed(1)} km bis Parkplatz`);
+      }
+      if(status){
+        status.hidden=false;
+        status.textContent=parts.join(" · ");
+      }
+    },()=>{
+      if(status){status.hidden=false;status.textContent="Standort konnte nicht ermittelt werden. Bitte Berechtigung prüfen.";}
+    },{enableHighAccuracy:true,timeout:10000,maximumAge:0});
   }
 
   function observeLazyMaps(rootEl){
@@ -1694,6 +1892,12 @@
       renderDayTimelines();
     });
     document.addEventListener("click",async event=>{
+      const liveButton=event.target.closest("[data-hike-live-location]");
+      if(liveButton){
+        event.preventDefault();
+        handleHikeLiveLocation(liveButton.getAttribute("data-hike-live-location")||"");
+        return;
+      }
       const mapsLink=event.target.closest("[data-travel-open-maps]");
       if(mapsLink){
         const lib=travelLib();

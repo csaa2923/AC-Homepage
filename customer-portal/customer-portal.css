@@ -621,6 +621,50 @@ h3{font-size:24px;color:var(--green)}
   font-size:18px;
   text-decoration:none;
 }
+.hike-map-live{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+  padding:0 12px 12px;
+}
+.hike-live-status{
+  margin:0;
+  color:#415a53;
+  font-size:13px;
+  font-weight:700;
+}
+.hike-marker-icon{
+  display:grid;
+  place-items:center;
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  background:#fffaf0;
+  border:1px solid rgba(31,107,87,.35);
+  box-shadow:0 1px 4px rgba(0,0,0,.18);
+  font-size:15px;
+  line-height:1;
+}
+.hike-marker-popup{
+  display:grid;
+  gap:6px;
+  min-width:160px;
+}
+.hike-marker-popup p{margin:0;color:#415a53;font-size:13px;line-height:1.35}
+.hike-marker-distance{font-weight:700}
+.hike-elev-interactive{cursor:crosshair;touch-action:none}
+.hike-elev-readout{
+  margin:8px 0 0;
+  color:var(--green);
+  font-size:13px;
+  font-weight:800;
+}
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large{
+  background-clip:padding-box;
+}
 /* Legacy SVG overlay kept only as non-interactive fallback asset — not used over Leaflet. */
 .hike-route-overlay,
 .hike-route-svg{

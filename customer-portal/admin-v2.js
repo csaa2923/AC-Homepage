@@ -1373,6 +1373,7 @@
       walkDuration:firstValue(item.walkDuration,item.durationWalk,item.gehzeit),
       elevationGain:firstValue(item.elevationGain,item.ascent,item.hoehenmeter),
       elevationLoss:firstValue(item.elevationLoss,item.descent,item.abstieg),
+      routeMarkers:normalizeProgramRouteMarkers(item.routeMarkers||item.hikeMarkers),
       ticketQrFile:normalizeProgramTravelFile(item.ticketQrFile||item.ticketQr),
       voucherFile:normalizeProgramTravelFile(item.voucherFile),
       ticketPdfFile:normalizeProgramTravelFile(item.ticketPdfFile||item.ticketPdf),
@@ -1383,6 +1384,13 @@
       notes:firstValue(item.notes,item.note,item.hint,item.remark,item.internalNote),
       order:Number.isFinite(Number(item.order))?Number(item.order):index
     };
+  }
+
+  function normalizeProgramRouteMarkers(value){
+    const lib=window.ACTTravelActionsLibrary;
+    if(lib?.normalizeRouteMarkers)return lib.normalizeRouteMarkers(value,{max:80});
+    if(!Array.isArray(value))return [];
+    return value.filter(item=>item&&typeof item==="object").slice(0,80);
   }
 
   function normalizeProgramTravelFile(value){
@@ -1412,6 +1420,7 @@
       address:"",latitude:"",longitude:"",plusCode:"",googleMapsUrl:"",appleMapsUrl:"",navigationUrl:"",
       gpxFile:null,kmlFile:null,komootUrl:"",outdooractiveUrl:"",
       difficulty:"",distanceKm:"",walkDuration:"",elevationGain:"",elevationLoss:"",
+      routeMarkers:[],
       ticketQrFile:null,voucherFile:null,ticketPdfFile:null,bookingNumber:"",
       calendarEnabled:true,timeZone:"Europe/Vienna"
     };
@@ -1745,6 +1754,7 @@
         walkDuration:item.walkDuration||"",
         elevationGain:item.elevationGain||"",
         elevationLoss:item.elevationLoss||"",
+        routeMarkers:normalizeProgramRouteMarkers(item.routeMarkers),
         ticketQrFile:normalizeProgramTravelFile(item.ticketQrFile),
         voucherFile:normalizeProgramTravelFile(item.voucherFile),
         ticketPdfFile:normalizeProgramTravelFile(item.ticketPdfFile),
@@ -4902,6 +4912,51 @@
     `;
   }
 
+  function programRouteMarkersMarkup(item,dayIndex,itemIndex){
+    const markers=normalizeProgramRouteMarkers(item.routeMarkers);
+    const categories=window.ACTTravelActionsLibrary?.ROUTE_MARKER_CATEGORIES||{};
+    const adminCategories=["meetup","photospot","food","tip","caution","recommendation"];
+    const options=adminCategories.map(key=>{
+      const meta=categories[key]||{label:key};
+      return `<option value="${escapeHtml(key)}">${escapeHtml(`${meta.icon?`${meta.icon} `:""}${meta.label||key}`)}</option>`;
+    }).join("");
+    const rows=markers.length
+      ?`<ul class="v2-route-marker-list">${markers.map((marker,markerIndex)=>`
+          <li>
+            <strong>${escapeHtml(marker.icon||"📌")} ${escapeHtml(marker.name||marker.label||"Marker")}</strong>
+            <span class="v2-muted">${escapeHtml(marker.label||marker.category)} · ${escapeHtml(String(marker.latitude))}, ${escapeHtml(String(marker.longitude))}</span>
+            ${marker.description?`<span class="v2-muted">${escapeHtml(marker.description)}</span>`:""}
+            <button class="v2-button soft small" type="button" data-program-edit-action="delete-route-marker" data-day-index="${dayIndex}" data-item-index="${itemIndex}" data-marker-index="${markerIndex}">Entfernen</button>
+          </li>`).join("")}</ul>`
+      :`<p class="v2-muted">Noch keine Etappenpunkte. Diese erscheinen nur bei diesem Kunden.</p>`;
+    return `
+      <div class="v2-edit-field full v2-route-markers" data-route-markers="1">
+        <span>Eigene Etappenpunkte (nur dieser Kunde)</span>
+        ${rows}
+        <div class="v2-edit-grid v2-route-marker-form">
+          <label class="v2-edit-field"><span>Kategorie</span>
+            <select data-route-marker-field="category" data-day-index="${dayIndex}" data-item-index="${itemIndex}">${options}</select>
+          </label>
+          <label class="v2-edit-field"><span>Name</span>
+            <input type="text" data-route-marker-field="name" data-day-index="${dayIndex}" data-item-index="${itemIndex}" placeholder="z. B. Geheimtipp Aussicht">
+          </label>
+          <label class="v2-edit-field"><span>Breitengrad</span>
+            <input type="text" data-route-marker-field="latitude" data-day-index="${dayIndex}" data-item-index="${itemIndex}" placeholder="47.33">
+          </label>
+          <label class="v2-edit-field"><span>Laengengrad</span>
+            <input type="text" data-route-marker-field="longitude" data-day-index="${dayIndex}" data-item-index="${itemIndex}" placeholder="11.18">
+          </label>
+          <label class="v2-edit-field full"><span>Kurzbeschreibung</span>
+            <input type="text" data-route-marker-field="description" data-day-index="${dayIndex}" data-item-index="${itemIndex}" placeholder="Optionaler Hinweis fuer den Gast">
+          </label>
+          <div class="v2-edit-field full">
+            <button class="v2-button soft" type="button" data-program-edit-action="add-route-marker" data-day-index="${dayIndex}" data-item-index="${itemIndex}">Etappenpunkt hinzufuegen</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function programTravelFileMarkup(item,field,label,accept,dayIndex,itemIndex){
     const file=normalizeProgramTravelFile(item[field]);
     const sizeLabel=window.ACTTravelActionsLibrary?.formatFileSize?.(file?.fileSize||file?.size)||"";
@@ -4998,6 +5053,7 @@
             ${programInput(prefix,"walkDuration","Gehzeit",item.walkDuration,{dayIndex,itemIndex})}
             ${programInput(prefix,"elevationGain","Hoehenmeter",item.elevationGain,{dayIndex,itemIndex})}
             ${programInput(prefix,"elevationLoss","Abstieg",item.elevationLoss,{dayIndex,itemIndex})}
+            ${programRouteMarkersMarkup(item,dayIndex,itemIndex)}
           </div>
         </details>
         <details class="v2-program-travel-section">
@@ -6376,6 +6432,46 @@
           const item=state.programEditDraft?.days?.[dayIndex]?.items?.[itemIndex];
           if(item&&field){
             item[field]=null;
+            setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+            renderCustomerDetail();
+          }
+        }
+        if(action==="add-route-marker"){
+          const item=state.programEditDraft?.days?.[dayIndex]?.items?.[itemIndex];
+          const scope=programAction.closest(".v2-route-markers")||programAction.closest(".v2-program-edit-item");
+          if(item&&scope){
+            const read=name=>cleanValue(scope.querySelector(`[data-route-marker-field="${name}"]`)?.value);
+            const lib=window.ACTTravelActionsLibrary;
+            const coords=lib?.parseCoords?.(read("latitude"),read("longitude"));
+            if(!coords?.ok){
+              setProgramEditMessage("Bitte gueltige Koordinaten fuer den Etappenpunkt angeben.","error");
+              return;
+            }
+            const category=read("category")||"tip";
+            const meta=lib?.routeMarkerCategoryMeta?.(category)||{icon:"📌",label:category};
+            item.routeMarkers=normalizeProgramRouteMarkers([
+              ...arrayValue(item.routeMarkers),
+              {
+                id:`admin-${Date.now().toString(36)}`,
+                category,
+                name:read("name")||meta.label,
+                description:read("description"),
+                latitude:coords.latitude,
+                longitude:coords.longitude,
+                source:"admin"
+              }
+            ]);
+            setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
+            renderCustomerDetail();
+          }
+        }
+        if(action==="delete-route-marker"){
+          const item=state.programEditDraft?.days?.[dayIndex]?.items?.[itemIndex];
+          const markerIndex=Number(programAction.dataset.markerIndex);
+          if(item&&Number.isFinite(markerIndex)){
+            const next=arrayValue(item.routeMarkers).slice();
+            next.splice(markerIndex,1);
+            item.routeMarkers=normalizeProgramRouteMarkers(next);
             setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
             renderCustomerDetail();
           }

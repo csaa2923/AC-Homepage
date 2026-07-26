@@ -211,6 +211,26 @@ describe("redaction allowlist",()=>{
     assert.equal(redacted.program[0].latitude,47.11);
     assert.equal(redacted.program[0].longitude,11.22);
   });
+
+  it("keeps customer-specific route markers in public program items",()=>{
+    const redacted=redactPublicSnapshot({
+      customerId:"markers",
+      program:[{
+        id:"hike-m",
+        title:"Etappe",
+        routeMarkers:[
+          {id:"m1",category:"meetup",name:"Treffpunkt",description:"Beim Brunnen",latitude:47.33,longitude:11.18,internalNotes:"secret"},
+          {category:"tip",name:"Geheimtipp",lat:47.331,lng:11.185},
+          {category:"food",name:"broken",latitude:"x",longitude:11.2}
+        ]
+      }]
+    },{customerId:"markers"});
+    assert.equal(redacted.program[0].routeMarkers.length,2);
+    assert.equal(redacted.program[0].routeMarkers[0].name,"Treffpunkt");
+    assert.equal(redacted.program[0].routeMarkers[0].category,"meetup");
+    assert.equal(redacted.program[0].routeMarkers[0].internalNotes,undefined);
+    assert.equal(redacted.program[0].routeMarkers[1].name,"Geheimtipp");
+  });
 });
 
 describe("token security",()=>{

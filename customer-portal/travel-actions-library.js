@@ -874,10 +874,184 @@
         elevationGain:text(source.elevationGain)||(gpx?.elevationGainM||kml?.elevationGainM?`${gpx?.elevationGainM||kml?.elevationGainM} m`:""),
         elevationLoss:text(source.elevationLoss)||(gpx?.elevationLossM||kml?.elevationLossM?`${gpx?.elevationLossM||kml?.elevationLossM} m`:""),
         bookingNumber:text(source.bookingNumber||source.ticketNumber),
-        offlineHint:"GPX-/KML-Datei speichern, damit die Route offline in Ihrer Navigations-App verfuegbar ist.",
+        offlineHint:"GPX-Datei jetzt herunterladen und in Ihrer bevorzugten Navigations-App offline nutzen.",
         navigationHint:destination.ok?"":"Kein Startpunkt vorhanden"
       }
     };
+  }
+
+  const ROUTE_MARKER_CATEGORIES={
+    summit:{icon:"🏔",label:"Gipfel",group:"poi"},
+    hut:{icon:"🛖",label:"Huette",group:"poi"},
+    water:{icon:"💧",label:"Brunnen / Wasserstelle",group:"poi"},
+    viewpoint:{icon:"📷",label:"Aussichtspunkt",group:"poi"},
+    toilet:{icon:"🚻",label:"Toilette",group:"poi"},
+    bus:{icon:"🚏",label:"Bushaltestelle",group:"poi"},
+    parking:{icon:"🚗",label:"Parkplatz",group:"poi"},
+    hazard:{icon:"⚠",label:"Gefahrenstelle",group:"poi"},
+    meetup:{icon:"📍",label:"Treffpunkt",group:"admin"},
+    photospot:{icon:"📸",label:"Fotospot",group:"admin"},
+    food:{icon:"🍽",label:"Einkehr",group:"admin"},
+    tip:{icon:"✨",label:"Geheimtipp",group:"admin"},
+    caution:{icon:"⚠",label:"Achtung",group:"admin"},
+    recommendation:{icon:"⭐",label:"Empfehlung",group:"admin"}
+  };
+
+  function routeMarkerCategoryMeta(category){
+    return ROUTE_MARKER_CATEGORIES[String(category||"").trim()]||{icon:"📌",label:String(category||"Hinweis"),group:"admin"};
+  }
+
+  function normalizeRouteMarkers(value,{max=80}={}){
+    if(!Array.isArray(value))return [];
+    const markers=[];
+    value.forEach((entry,index)=>{
+      if(!entry||typeof entry!=="object")return;
+      const coords=parseCoords(entry.latitude??entry.lat,entry.longitude??entry.lng??entry.lon);
+      if(!coords.ok)return;
+      const category=text(entry.category||entry.kind||entry.type)||"tip";
+      const meta=routeMarkerCategoryMeta(category);
+      markers.push({
+        id:text(entry.id)||`marker-${index+1}`,
+        category,
+        name:text(entry.name||entry.title)||meta.label,
+        description:text(entry.description||entry.note||entry.text),
+        latitude:coords.latitude,
+        longitude:coords.longitude,
+        source:text(entry.source)==="osm"?"osm":"admin",
+        icon:meta.icon,
+        label:meta.label
+      });
+    });
+    return markers.slice(0,max);
+  }
+
+  function distanceFromRouteStartKm(marker,routePoints){
+    const points=normalizeRoutePoints(routePoints);
+    const target=parseCoords(marker?.latitude,marker?.longitude);
+    if(!target.ok)return null;
+    if(!points.length)return null;
+    let best=Infinity;
+    let along=0;
+    let at=0;
+    for(let i=0;i<points.length;i+=1){
+      if(i>0)along+=haversineKm(points[i-1],points[i]);
+      const gap=haversineKm(points[i],target);
+      if(gap<best){
+        best=gap;
+        at=along;
+      }
+    }
+    return Number((at+best).toFixed(2));
+  }
+
+  function enrichMarkersWithDistance(markers,routePoints){
+    return normalizeRouteMarkers(markers).map(marker=>{
+      const distanceKm=distanceFromRouteStartKm(marker,routePoints);
+      return {
+        ...marker,
+        distanceKm,
+        distanceLabel:distanceKm==null?"":`${distanceKm.toFixed(1)} km vom Etappenstart`
+      };
+    });
+  }
+
+  function markerMapsUrl(marker){
+    const coords=parseCoords(marker?.latitude,marker?.longitude);
+    if(!coords.ok)return "";
+    return `https://www.google.com/maps/search/?api=1&query=${coords.latitude},${coords.longitude}`;
+  }
+
+  function nearestMarkerDistanceKm(origin,markers,categories){
+    const from=parseCoords(origin?.latitude,origin?.longitude);
+    if(!from.ok)return null;
+    const allowed=Array.isArray(categories)&&categories.length
+      ?new Set(categories.map(value=>String(value)))
+      :null;
+    let best=null;
+    normalizeRouteMarkers(markers).forEach(marker=>{
+      if(allowed&&!allowed.has(marker.category))return;
+      const gap=haversineKm(from,marker);
+      if(!Number.isFinite(gap))return;
+      if(best==null||gap<best)best=gap;
+    });
+    return best==null?null:Number(best.toFixed(2));
+  }
+
+  function buildElevationTrack(points){
+    const series=elevationSeriesFromPoints(points);
+    if(series.length<2){
+      // Fallback: distance track without elevation for map scrubbing only.
+      const route=normalizeRoutePoints(points);
+      if(route.length<2)return [];
+      let dist=0;
+      return route.map((point,index)=>{
+        if(index>0)dist+=haversineKm(route[index-1],point);
+        return {latitude:point.latitude,longitude:point.longitude,elevation:null,distanceKm:Number(dist.toFixed(3))};
+      });
+    }
+    let dist=0;
+    return series.map((point,index)=>{
+      if(index>0)dist+=haversineKm(series[index-1],point);
+      return {
+        latitude:point.latitude,
+        longitude:point.longitude,
+        elevation:point.elevation,
+        distanceKm:Number(dist.toFixed(3))
+      };
+    });
+  }
+
+  async function fetchOsmRouteHighlights(bounds,{limit=36,signal}={}){
+    const box=normalizeBounds(bounds);
+    if(!box)return [];
+    const south=box.minLat.toFixed(5);
+    const west=box.minLng.toFixed(5);
+    const north=box.maxLat.toFixed(5);
+    const east=box.maxLng.toFixed(5);
+    const query=`[out:json][timeout:12];(
+node["natural"="peak"](${south},${west},${north},${east});
+node["tourism"="alpine_hut"](${south},${west},${north},${east});
+node["tourism"="wilderness_hut"](${south},${west},${north},${east});
+node["amenity"="drinking_water"](${south},${west},${north},${east});
+node["natural"="spring"](${south},${west},${north},${east});
+node["tourism"="viewpoint"](${south},${west},${north},${east});
+node["amenity"="toilets"](${south},${west},${north},${east});
+node["highway"="bus_stop"](${south},${west},${north},${east});
+node["amenity"="parking"](${south},${west},${north},${east});
+node["hazard"](${south},${west},${north},${east});
+);out body ${Math.max(8,Math.min(60,limit))};`;
+    const response=await fetch("https://overpass-api.de/api/interpreter",{
+      method:"POST",
+      headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},
+      body:`data=${encodeURIComponent(query)}`,
+      signal
+    });
+    if(!response.ok)throw new Error("OSM-Highlights konnten nicht geladen werden.");
+    const payload=await response.json();
+    const elements=Array.isArray(payload?.elements)?payload.elements:[];
+    const mapped=elements.map((node,index)=>{
+      const tags=node.tags||{};
+      let category="tip";
+      if(tags.natural==="peak")category="summit";
+      else if(tags.tourism==="alpine_hut"||tags.tourism==="wilderness_hut")category="hut";
+      else if(tags.amenity==="drinking_water"||tags.natural==="spring")category="water";
+      else if(tags.tourism==="viewpoint")category="viewpoint";
+      else if(tags.amenity==="toilets")category="toilet";
+      else if(tags.highway==="bus_stop")category="bus";
+      else if(tags.amenity==="parking")category="parking";
+      else if(tags.hazard)category="hazard";
+      const meta=routeMarkerCategoryMeta(category);
+      return {
+        id:`osm-${node.id||index}`,
+        category,
+        name:text(tags.name||tags["name:de"]||meta.label),
+        description:text(tags.description||tags.ele?`Höhe: ${tags.ele} m`:""),
+        latitude:node.lat,
+        longitude:node.lon,
+        source:"osm"
+      };
+    });
+    return normalizeRouteMarkers(mapped,{max:limit});
   }
 
   function dayProgressKey(scopeId,itemId){
@@ -946,7 +1120,8 @@
 
   function buildElevationProfileSvg(series,{width=320,height=96}={}){
     if(!Array.isArray(series)||series.length<2)return {ok:false,svg:""};
-    const elevations=series.map(point=>point.elevation);
+    const elevations=series.map(point=>point.elevation).filter(value=>value!=null&&Number.isFinite(Number(value)));
+    if(elevations.length<2)return {ok:false,svg:""};
     const min=Math.min(...elevations);
     const max=Math.max(...elevations);
     if(!(max>min))return {ok:false,svg:""};
@@ -955,12 +1130,14 @@
     const innerW=width-padX*2;
     const innerH=height-padY*2;
     const coords=series.map((point,index)=>{
+      const elevation=Number(point.elevation);
+      if(!Number.isFinite(elevation))return null;
       const x=padX+(index/(series.length-1))*innerW;
-      const y=padY+innerH-((point.elevation-min)/(max-min))*innerH;
+      const y=padY+innerH-((elevation-min)/(max-min))*innerH;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-    const svg=`<svg class="hike-elev-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Hoehenprofil" preserveAspectRatio="none"><polyline fill="none" stroke="#1f6b57" stroke-width="2.5" points="${coords}"/></svg>`;
-    return {ok:true,svg,minElevation:Math.round(min),maxElevation:Math.round(max)};
+    }).filter(Boolean).join(" ");
+    const svg=`<svg class="hike-elev-svg hike-elev-interactive" viewBox="0 0 ${width} ${height}" role="img" aria-label="Interaktives Hoehenprofil" preserveAspectRatio="none"><rect class="hike-elev-hit" x="0" y="0" width="${width}" height="${height}" fill="transparent"/><polyline fill="none" stroke="#1f6b57" stroke-width="2.5" points="${coords}"/><circle class="hike-elev-cursor" cx="-20" cy="-20" r="4" fill="#c45c26"></circle></svg>`;
+    return {ok:true,svg,minElevation:Math.round(min),maxElevation:Math.round(max),width,height,padX,padY};
   }
 
   function projectRouteOverlay(points,bounds,{width=320,height=180}={}){
@@ -1041,8 +1218,11 @@
     const rawRoutePoints=Array.isArray(source.gpxFile?.routePoints)
       ?source.gpxFile.routePoints
       :(Array.isArray(source.kmlFile?.routePoints)?source.kmlFile.routePoints:[]);
-    const elevSeries=elevationSeriesFromPoints(rawRoutePoints.length?rawRoutePoints:(file?.routePoints||[]));
-    const elevationProfile=buildElevationProfileSvg(elevSeries);
+    const elevSource=rawRoutePoints.length?rawRoutePoints:(file?.routePoints||points);
+    const elevSeries=elevationSeriesFromPoints(elevSource);
+    const elevationTrack=buildElevationTrack(elevSource);
+    const elevationProfile=buildElevationProfileSvg(elevSeries.length?elevSeries:elevationTrack);
+    const adminMarkers=enrichMarkersWithDistance(source.routeMarkers||source.hikeMarkers||[],points);
     const actions=programItemActions(source,userAgent);
     const apple=isAppleDevice(userAgent);
     const stats=[
@@ -1075,6 +1255,7 @@
         hasRouteLine:Boolean(overlay.ok||points.length>=2),
         routePoints:points,
         bounds:mapBounds,
+        markers:adminMarkers,
         latitude:map.latitude,
         longitude:map.longitude,
         endLatitude:map.endLatitude,
@@ -1084,7 +1265,8 @@
         show:Boolean(elevationProfile.ok),
         svg:elevationProfile.svg||"",
         minElevation:elevationProfile.minElevation??null,
-        maxElevation:elevationProfile.maxElevation??null
+        maxElevation:elevationProfile.maxElevation??null,
+        track:elevationTrack
       },
       toolbar:{
         maps:actions.maps,
@@ -1139,6 +1321,7 @@
     resolveHikeCompanion,
     elevationSeriesFromPoints,
     buildElevationProfileSvg,
+    buildElevationTrack,
     projectRouteOverlay,
     inferRouteShape,
     paddedMapBounds,
@@ -1146,6 +1329,15 @@
     readDoneSet,
     writeDoneState,
     progressLabel,
-    attachmentUrl
+    attachmentUrl,
+    ROUTE_MARKER_CATEGORIES,
+    routeMarkerCategoryMeta,
+    normalizeRouteMarkers,
+    enrichMarkersWithDistance,
+    distanceFromRouteStartKm,
+    markerMapsUrl,
+    nearestMarkerDistanceKm,
+    haversineKm,
+    fetchOsmRouteHighlights
   };
 })();

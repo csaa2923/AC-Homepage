@@ -229,6 +229,10 @@ p{color:var(--muted);line-height:1.55}
 .v2-program-travel-file{display:grid;gap:8px}
 .v2-program-travel-file-actions{display:flex;flex-wrap:wrap;gap:8px}
 .v2-program-travel-file-actions .v2-button,.v2-file-label{min-height:48px}
+.v2-route-markers{display:grid;gap:10px}
+.v2-route-marker-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.v2-route-marker-list li{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.v2-route-marker-form{margin-top:4px}
 .v2-file-label{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;cursor:pointer}
 .v2-edit-grid .full{grid-column:1/-1}
 .v2-program-item-toolbar>div{display:flex;gap:8px;flex-wrap:wrap}

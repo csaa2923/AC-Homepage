@@ -431,8 +431,51 @@ describe("travel actions navigation destination", () => {
     });
     assert.equal(companion.elevationProfile.show, true);
     assert.match(companion.elevationProfile.svg, /polyline/i);
+    assert.match(companion.elevationProfile.svg, /hike-elev-interactive/);
     assert.equal(companion.elevationProfile.minElevation, 1180);
     assert.equal(companion.elevationProfile.maxElevation, 1220);
+    assert.ok(Array.isArray(companion.elevationProfile.track));
+    assert.ok(companion.elevationProfile.track.length >= 2);
+  });
+
+  it("normalizes admin route markers and enriches distance from stage start", () => {
+    const lib = loadLibrary();
+    const markers = lib.normalizeRouteMarkers([
+      {category: "meetup", name: "Treffpunkt Parkplatz", latitude: 47.33, longitude: 11.18, description: "15 Minuten vor Start"},
+      {category: "tip", name: "Geheimtipp", latitude: 47.331, longitude: 11.185},
+      {category: "food", latitude: "bad", longitude: 11.19}
+    ]);
+    assert.equal(markers.length, 2);
+    assert.equal(markers[0].icon, "📍");
+    assert.equal(markers[0].label, "Treffpunkt");
+    assert.equal(markers[1].category, "tip");
+    const enriched = lib.enrichMarkersWithDistance(markers, [
+      {latitude: 47.33, longitude: 11.18},
+      {latitude: 47.332, longitude: 11.19}
+    ]);
+    assert.equal(enriched[0].distanceKm, 0);
+    assert.match(enriched[0].distanceLabel, /Etappenstart/);
+    assert.ok(enriched[1].distanceKm > 0);
+    assert.match(lib.markerMapsUrl(enriched[0]), /google\.com\/maps/);
+    const companion = lib.resolveHikeCompanion({
+      routeMarkers: markers,
+      gpxFile: {
+        url: "https://example.com/route.gpx",
+        routePoints: [
+          {latitude: 47.33, longitude: 11.18},
+          {latitude: 47.332, longitude: 11.19}
+        ]
+      }
+    });
+    assert.ok(companion.map.markers.length >= 2);
+    assert.match(companion.meta.offlineHint, /offline nutzen/);
+    assert.equal(
+      lib.nearestMarkerDistanceKm({latitude: 47.33, longitude: 11.18}, [
+        {category: "hut", latitude: 47.331, longitude: 11.185},
+        {category: "parking", latitude: 47.4, longitude: 11.3}
+      ], ["hut"]) < 1,
+      true
+    );
   });
 
   it("infers Rundweg vs Streckenwanderung from start/end gap", () => {

@@ -109,12 +109,49 @@ describe("travel actions navigation destination", () => {
     assert.equal(lib.resolveNavigationDestination({location: "Ort"}).address, "Ort");
   });
 
-  it("prefers google maps url over coordinates and address", () => {
+  it("prefers startLatitude over latitude and maps urls", () => {
+    const lib = loadLibrary();
+    const dest = lib.resolveNavigationDestination({
+      startLatitude: 47.4,
+      startLongitude: 11.2,
+      latitude: 47.3,
+      longitude: 11.1,
+      googleMapsUrl: "https://maps.google.com/?q=Seefeld",
+      title: "X"
+    });
+    assert.equal(dest.kind, "coords");
+    assert.equal(dest.latitude, 47.4);
+    assert.equal(dest.longitude, 11.2);
+  });
+
+  it("accepts startLatitude as numeric strings and rejects 0,0", () => {
+    const lib = loadLibrary();
+    const dest = lib.resolveNavigationDestination({
+      startLatitude: "47.33012",
+      startLongitude: "11.18544"
+    });
+    assert.equal(dest.ok, true);
+    assert.equal(dest.latitude, 47.33012);
+    assert.equal(lib.resolveNavigationDestination({startLatitude: 0, startLongitude: 0}).ok, false);
+    assert.equal(lib.resolveNavigationDestination({latitude: "", longitude: ""}).ok, false);
+  });
+
+  it("falls back to first routePoints entry before maps urls", () => {
+    const lib = loadLibrary();
+    const dest = lib.resolveNavigationDestination({
+      routePoints: [{lat: 47.5, lng: 11.3}, {latitude: 47.6, longitude: 11.4}],
+      googleMapsUrl: "https://maps.google.com/?q=Seefeld"
+    });
+    assert.equal(dest.ok, true);
+    assert.equal(dest.kind, "route");
+    assert.equal(dest.latitude, 47.5);
+    assert.equal(dest.longitude, 11.3);
+  });
+
+  it("uses google maps url when no coordinates or route points exist", () => {
     const lib = loadLibrary();
     const dest = lib.resolveNavigationDestination({
       googleMapsUrl: "https://maps.google.com/?q=Seefeld",
-      latitude: 47.3,
-      longitude: 11.1,
       locationAddress: "Irgendwo",
       title: "X"
     });
@@ -122,12 +159,10 @@ describe("travel actions navigation destination", () => {
     assert.equal(dest.url, "https://maps.google.com/?q=Seefeld");
   });
 
-  it("prefers apple maps url over coordinates when google is missing", () => {
+  it("uses apple maps url when google and coordinates are missing", () => {
     const lib = loadLibrary();
     const dest = lib.resolveNavigationDestination({
-      appleMapsUrl: "https://maps.apple.com/?q=Seefeld",
-      latitude: 47.3,
-      longitude: 11.1
+      appleMapsUrl: "https://maps.apple.com/?q=Seefeld"
     });
     assert.equal(dest.kind, "apple-url");
   });

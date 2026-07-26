@@ -19,13 +19,16 @@
 
   const PROGRAM_ITEM_FIELDS=new Set([
     "id","day","date","dateValue","endDateValue","title","time","startTime","endTime",
-    "location","description","notes","type","category","status",
+    "location","locationAddress","description","notes","type","category","status",
     "documents","documentsText","visible","visibleForCustomer","customerVisible",
     "bookingId","icon","sortOrder",
     "address","meetingPoint","navigationUrl","latitude","longitude","plusCode",
+    "startLatitude","startLongitude","endLatitude","endLongitude",
+    "routePoints","bounds",
     "googleMapsUrl","appleMapsUrl",
     "gpxFile","kmlFile","komootUrl","outdooractiveUrl",
     "difficulty","distanceKm","walkDuration","elevationGain","elevationLoss",
+    "elevationGainM","elevationLossM","durationMinutes","pointCount",
     "ticketQrFile","voucherFile","ticketPdfFile","ticketNumber","voucherNumber","bookingNumber",
     "calendarEnabled","timeZone","allDay"
   ]);
@@ -134,14 +137,108 @@
     };
   }
 
+  function parsePublicCoordNumber(value){
+    if(value===undefined||value===null)return NaN;
+    if(typeof value==="number")return Number.isFinite(value)?value:NaN;
+    if(typeof value==="object")return NaN;
+    const raw=String(value).trim();
+    if(!raw)return NaN;
+    const next=Number(raw);
+    return Number.isFinite(next)?next:NaN;
+  }
+
+  function parsePublicCoords(lat,lng){
+    const latitude=parsePublicCoordNumber(lat);
+    const longitude=parsePublicCoordNumber(lng);
+    if(!Number.isFinite(latitude)||!Number.isFinite(longitude))return null;
+    if(latitude===0&&longitude===0)return null;
+    if(latitude<-90||latitude>90||longitude<-180||longitude>180)return null;
+    return {latitude,longitude};
+  }
+
+  function coordsFromUnknown(value){
+    if(Array.isArray(value)&&value.length>=2)return parsePublicCoords(value[0],value[1]);
+    if(value&&typeof value==="object"){
+      return parsePublicCoords(
+        value.latitude??value.lat??value.startLatitude,
+        value.longitude??value.lng??value.lon??value.startLongitude
+      );
+    }
+    return null;
+  }
+
+  function normalizePublicRoutePoints(value){
+    if(!Array.isArray(value))return [];
+    const points=[];
+    value.slice(0,25).forEach(entry=>{
+      let pair=null;
+      if(Array.isArray(entry)&&entry.length>=2)pair=parsePublicCoords(entry[0],entry[1]);
+      else if(entry&&typeof entry==="object"){
+        pair=parsePublicCoords(entry.latitude??entry.lat,entry.longitude??entry.lng??entry.lon);
+      }
+      if(pair)points.push(pair);
+    });
+    return points;
+  }
+
+  function normalizePublicBounds(bounds){
+    if(!bounds||typeof bounds!=="object")return null;
+    const minLat=parsePublicCoordNumber(bounds.minLat);
+    const minLng=parsePublicCoordNumber(bounds.minLng);
+    const maxLat=parsePublicCoordNumber(bounds.maxLat);
+    const maxLng=parsePublicCoordNumber(bounds.maxLng);
+    if(![minLat,minLng,maxLat,maxLng].every(Number.isFinite))return null;
+    if(minLat<-90||maxLat>90||minLng<-180||maxLng>180||minLat>maxLat||minLng>maxLng)return null;
+    if(minLat===0&&minLng===0&&maxLat===0&&maxLng===0)return null;
+    return {minLat,minLng,maxLat,maxLng};
+  }
+
+  function attachmentStartCoords(file){
+    if(!file||typeof file!=="object")return null;
+    const direct=parsePublicCoords(file.startLatitude??file.latitude,file.startLongitude??file.longitude);
+    if(direct)return direct;
+    const points=normalizePublicRoutePoints(file.routePoints);
+    return points[0]||null;
+  }
+
+  function flattenProgramEntries(program){
+    const list=Array.isArray(program)?program:[];
+    const flat=[];
+    list.forEach((entry,index)=>{
+      if(entry&&typeof entry==="object"&&!Array.isArray(entry)&&Array.isArray(entry.items)){
+        const dayDate=stringValue(entry.date||entry.dateValue||entry.dayDate);
+        const dayTitle=stringValue(entry.title)||`Tag ${index+1}`;
+        entry.items.forEach((item,itemIndex)=>{
+          const next={...(item||{})};
+          const dateValue=stringValue(next.dateValue||next.date||next.dayDate||dayDate);
+          if(dateValue){
+            next.dateValue=dateValue;
+            if(!stringValue(next.date))next.date=dateValue;
+          }
+          if(!stringValue(next.id))next.id=`day-${index+1}-item-${itemIndex+1}`;
+          if(!stringValue(next.title))next.title=`${dayTitle} · Punkt ${itemIndex+1}`;
+          flat.push(next);
+        });
+        return;
+      }
+      flat.push(entry&&typeof entry==="object"?{...entry}:{});
+    });
+    return flat;
+  }
+
   function redactProgramAttachment(file,index){
     if(!file||typeof file!=="object")return null;
     const redacted=redactDocument(file,index);
-    if(!stringValue(redacted.url))return null;
+    const url=stringValue(redacted.url);
+    const start=attachmentStartCoords(file);
+    const points=normalizePublicRoutePoints(file.routePoints);
+    const end=parsePublicCoords(file.endLatitude,file.endLongitude);
+    const bounds=normalizePublicBounds(file.bounds);
+    if(!url&&!start&&!points.length&&!end&&!bounds)return null;
     const next={
       id:redacted.id,
       documentId:redacted.documentId,
-      url:redacted.url,
+      url,
       fileName:redacted.fileName,
       fileSize:redacted.fileSize,
       size:redacted.size,
@@ -151,47 +248,16 @@
       title:redacted.title,
       type:redacted.type
     };
-    // Avoid Number("") === 0; only pass through finite, in-range, non-(0,0) starts.
-    const startLatRaw=String(file.startLatitude??"").trim();
-    const startLngRaw=String(file.startLongitude??"").trim();
-    const startLat=startLatRaw===""?NaN:Number(startLatRaw);
-    const startLng=startLngRaw===""?NaN:Number(startLngRaw);
-    if(Number.isFinite(startLat)&&Number.isFinite(startLng)&&!(startLat===0&&startLng===0)&&startLat>=-90&&startLat<=90&&startLng>=-180&&startLng<=180){
-      next.startLatitude=startLat;
-      next.startLongitude=startLng;
+    if(start){
+      next.startLatitude=start.latitude;
+      next.startLongitude=start.longitude;
     }
-    if(Array.isArray(file.routePoints)){
-      const points=[];
-      file.routePoints.slice(0,25).forEach(entry=>{
-        const latRaw=String(Array.isArray(entry)?entry[0]:((entry&&entry.latitude)??"")).trim();
-        const lngRaw=String(Array.isArray(entry)?entry[1]:((entry&&(entry.longitude??entry.lng))??"")).trim();
-        const lat=latRaw===""?NaN:Number(latRaw);
-        const lng=lngRaw===""?NaN:Number(lngRaw);
-        if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
-        if(lat===0&&lng===0)return;
-        if(lat<-90||lat>90||lng<-180||lng>180)return;
-        points.push({latitude:lat,longitude:lng});
-      });
-      if(points.length)next.routePoints=points;
+    if(points.length)next.routePoints=points;
+    if(end){
+      next.endLatitude=end.latitude;
+      next.endLongitude=end.longitude;
     }
-    const endLatRaw=String(file.endLatitude??"").trim();
-    const endLngRaw=String(file.endLongitude??"").trim();
-    const endLat=endLatRaw===""?NaN:Number(endLatRaw);
-    const endLng=endLngRaw===""?NaN:Number(endLngRaw);
-    if(Number.isFinite(endLat)&&Number.isFinite(endLng)&&!(endLat===0&&endLng===0)&&endLat>=-90&&endLat<=90&&endLng>=-180&&endLng<=180){
-      next.endLatitude=endLat;
-      next.endLongitude=endLng;
-    }
-    const bounds=file.bounds;
-    if(bounds&&typeof bounds==="object"){
-      const minLat=String(bounds.minLat??"").trim()===""?NaN:Number(bounds.minLat);
-      const minLng=String(bounds.minLng??"").trim()===""?NaN:Number(bounds.minLng);
-      const maxLat=String(bounds.maxLat??"").trim()===""?NaN:Number(bounds.maxLat);
-      const maxLng=String(bounds.maxLng??"").trim()===""?NaN:Number(bounds.maxLng);
-      if([minLat,minLng,maxLat,maxLng].every(Number.isFinite)&&minLat>=-90&&maxLat<=90&&minLng>=-180&&maxLng<=180&&minLat<=maxLat&&minLng<=maxLng&&!(minLat===0&&minLng===0&&maxLat===0&&maxLng===0)){
-        next.bounds={minLat,minLng,maxLat,maxLng};
-      }
-    }
+    if(bounds)next.bounds=bounds;
     ["distanceKm","elevationGainM","elevationLossM","durationMinutes","pointCount"].forEach(field=>{
       const value=Number(file[field]);
       if(Number.isFinite(value)&&value>=0)next[field]=field==="durationMinutes"||field==="pointCount"?Math.round(value):value;
@@ -199,21 +265,78 @@
     return next;
   }
 
+  function promoteTravelCoordsOnItem(source,next){
+    const itemPoints=normalizePublicRoutePoints(source.routePoints||next.routePoints);
+    if(itemPoints.length)next.routePoints=itemPoints;
+    const bounds=normalizePublicBounds(source.bounds||next.bounds);
+    if(bounds)next.bounds=bounds;
+
+    let start=parsePublicCoords(source.startLatitude,source.startLongitude)
+      ||parsePublicCoords(next.startLatitude,next.startLongitude)
+      ||coordsFromUnknown(source.start||source.startPoint||source.coordinates)
+      ||parsePublicCoords(source.latitude,source.longitude)
+      ||parsePublicCoords(next.latitude,next.longitude)
+      ||coordsFromUnknown(source.latitude)
+      ||attachmentStartCoords(next.gpxFile||source.gpxFile)
+      ||attachmentStartCoords(next.kmlFile||source.kmlFile)
+      ||(itemPoints[0]||null);
+
+    if(start){
+      next.startLatitude=start.latitude;
+      next.startLongitude=start.longitude;
+      if(!parsePublicCoords(next.latitude,next.longitude)){
+        next.latitude=start.latitude;
+        next.longitude=start.longitude;
+      }
+    }
+
+    const end=parsePublicCoords(source.endLatitude,source.endLongitude)
+      ||parsePublicCoords(next.endLatitude,next.endLongitude)
+      ||parsePublicCoords(
+        (next.gpxFile||source.gpxFile||{}).endLatitude??(next.kmlFile||source.kmlFile||{}).endLatitude,
+        (next.gpxFile||source.gpxFile||{}).endLongitude??(next.kmlFile||source.kmlFile||{}).endLongitude
+      );
+    if(end){
+      next.endLatitude=end.latitude;
+      next.endLongitude=end.longitude;
+    }
+
+    ["distanceKm","elevationGainM","elevationLossM","durationMinutes","pointCount"].forEach(field=>{
+      if(next[field]!==undefined)return;
+      const fromItem=Number(source[field]);
+      if(Number.isFinite(fromItem)&&fromItem>=0){
+        next[field]=field==="durationMinutes"||field==="pointCount"?Math.round(fromItem):fromItem;
+        return;
+      }
+      const file=next.gpxFile||source.gpxFile||next.kmlFile||source.kmlFile||{};
+      const fromFile=Number(file[field]);
+      if(Number.isFinite(fromFile)&&fromFile>=0){
+        next[field]=field==="durationMinutes"||field==="pointCount"?Math.round(fromFile):fromFile;
+      }
+    });
+  }
+
   function redactProgramItem(item){
-    const next=pickFields(item||{},PROGRAM_ITEM_FIELDS);
+    const source=item||{};
+    const next=pickFields(source,PROGRAM_ITEM_FIELDS);
     PROGRAM_ATTACHMENT_FIELDS.forEach((field,index)=>{
-      if(item&&item[field]){
-        const attachment=redactProgramAttachment(item[field],index);
+      if(source[field]){
+        const attachment=redactProgramAttachment(source[field],index);
         if(attachment)next[field]=attachment;
         else delete next[field];
       }
     });
+    promoteTravelCoordsOnItem(source,next);
     if(!stringValue(next.address)){
-      next.address=stringValue(item&&(item.address||item.locationAddress||item.location||item.meetingPoint));
+      next.address=stringValue(source.address||source.locationAddress||source.location||source.meetingPoint);
       if(!next.address)delete next.address;
     }
-    if(next.calendarEnabled===undefined&&item){
-      next.calendarEnabled=item.calendarEnabled!==false;
+    if(!stringValue(next.locationAddress)){
+      const locationAddress=stringValue(source.locationAddress);
+      if(locationAddress)next.locationAddress=locationAddress;
+    }
+    if(next.calendarEnabled===undefined){
+      next.calendarEnabled=source.calendarEnabled!==false;
     }
     if(!stringValue(next.timeZone))next.timeZone="Europe/Vienna";
     return next;
@@ -247,7 +370,10 @@
       next.internalNumber=stringValue(source.internalNumber||source.customerNumber||(source.crm&&source.crm.internalNumber));
     }
     if(!stringValue(next.internalNumber))delete next.internalNumber;
-    next.program=Array.isArray(source.program)?source.program.map(redactProgramItem):Array.isArray(source.programItems)?source.programItems.map(redactProgramItem):[];
+    const programSource=Array.isArray(source.program)?source.program:Array.isArray(source.programItems)?source.programItems:[];
+    // Draft/Admin store day buckets `{items:[...]}`. Without flattening, pickFields drops `items`
+    // and the portal loses every travel field (coords, gpxFile, routePoints).
+    next.program=flattenProgramEntries(programSource).map(redactProgramItem);
     next.programItems=next.program;
     next.accommodations=Array.isArray(source.accommodations)?source.accommodations.map(redactAccommodation):[];
     if(!next.accommodations.length){

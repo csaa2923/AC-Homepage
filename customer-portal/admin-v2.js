@@ -1711,8 +1711,24 @@
         weatherPlaceholder:item.weatherPlaceholder,
         address:item.address||item.locationAddress||item.location||"",
         ...(()=>{
-          const coords=window.ACTTravelActionsLibrary?.parseCoords?.(item.latitude,item.longitude);
-          if(coords?.ok)return {latitude:String(coords.latitude),longitude:String(coords.longitude)};
+          const lib=window.ACTTravelActionsLibrary;
+          const gpx=normalizeProgramTravelFile(item.gpxFile);
+          const kml=normalizeProgramTravelFile(item.kmlFile);
+          const candidates=[
+            lib?.parseCoords?.(item.startLatitude,item.startLongitude),
+            lib?.parseCoords?.(item.latitude,item.longitude),
+            lib?.parseCoords?.(gpx?.startLatitude,gpx?.startLongitude),
+            lib?.parseCoords?.(kml?.startLatitude,kml?.startLongitude)
+          ];
+          const start=candidates.find(entry=>entry&&entry.ok);
+          if(start){
+            return {
+              latitude:String(start.latitude),
+              longitude:String(start.longitude),
+              startLatitude:start.latitude,
+              startLongitude:start.longitude
+            };
+          }
           // Drop empty / 0,0 / out-of-range so Number("") never persists as navigation target.
           return {latitude:"",longitude:""};
         })(),
@@ -3272,12 +3288,12 @@
               refreshNote=` Kundenportal aktualisiert (${sync.refreshedCount} Link${sync.refreshedCount===1?"":"s"}) — derselbe Link bleibt gueltig.`;
             }else{
               refreshKind="warning";
-              refreshNote=" Veroeffentlicht, aber Kundenportal-Inhalt nicht aktualisiert. Bitte „Kundenportal-Inhalt aktualisieren“ klicken.";
+              refreshNote=" Veröffentlicht, aber Kundenportal konnte nicht aktualisiert werden. Bitte „Kundenportal-Inhalt aktualisieren“ erneut klicken.";
             }
           }catch(refreshError){
             console.warn("[ACT Admin V2] Share-Refresh:",refreshError&&refreshError.message?refreshError.message:"Fehler");
             refreshKind="warning";
-            refreshNote=" Veroeffentlicht, aber Kundenportal-Inhalt nicht aktualisiert. Bitte „Kundenportal-Inhalt aktualisieren“ klicken.";
+            refreshNote=" Veröffentlicht, aber Kundenportal konnte nicht aktualisiert werden. Bitte „Kundenportal-Inhalt aktualisieren“ erneut klicken.";
           }
         }
         updateLocalCustomer(compactObject(publishCandidate));
@@ -3374,7 +3390,7 @@
         if(sync.ok){
           setPublicationMessage(`Kundenportal aktualisiert (Version ${sync.publishedVersionId}). Derselbe Link bleibt gueltig — Kundenportal neu laden.`,"success");
         }else{
-          setPublicationMessage("Kundenportal-Inhalt konnte nicht aktualisiert werden. Bitte erneut versuchen oder Functions-Deployment pruefen.","error");
+          setPublicationMessage("Veröffentlicht, aber Kundenportal konnte nicht aktualisiert werden. Bitte „Kundenportal-Inhalt aktualisieren“ erneut klicken.","error");
         }
         render();
         return sync.ok?sync.customer:null;

@@ -61,5 +61,49 @@ describe("portal share sync on publish",()=>{
     assert.match(adminV2,/Sicheren Kundenlink erzeugen/);
     assert.match(adminV2,/Link ersetzen/);
     assert.match(adminV2,/derselbe Link bleibt gueltig|denselben Link|Kundenportal aktualisiert/);
+    assert.match(adminV2,/Veröffentlicht, aber Kundenportal konnte nicht aktualisiert werden/);
+  });
+
+  it("share snapshot keeps travel start fields from nested published program days",()=>{
+    const payload=buildPortalSnapshotPayload({
+      publishMeta:{version:"4.0"},
+      publishedData:{
+        customerId:"kunde-travel",
+        customerName:"Test",
+        tripName:"Reise",
+        version:"4.0",
+        program:[{
+          date:"2026-07-01",
+          title:"Tag 1",
+          items:[{
+            id:"hike",
+            title:"Wanderung",
+            startLatitude:47.33,
+            startLongitude:11.18,
+            gpxFile:{
+              url:"https://storage.example/route.gpx",
+              fileName:"route.gpx",
+              startLatitude:47.33,
+              startLongitude:11.18,
+              routePoints:[{latitude:47.33,longitude:11.18},{latitude:47.34,longitude:11.19}]
+            }
+          }]
+        }]
+      },
+      draftData:{}
+    },"kunde-travel");
+    assert.equal(payload.publishedVersionId,"4.0");
+    assert.equal(payload.redacted.program.length,1);
+    assert.equal(payload.redacted.program[0].startLatitude,47.33);
+    assert.equal(payload.redacted.program[0].gpxFile.url,"https://storage.example/route.gpx");
+    assert.ok(payload.redacted.program[0].gpxFile.routePoints.length>=2);
+  });
+
+  it("refresh keeps existing share identity fields in write path",()=>{
+    assert.match(impl,/async function writeRefreshedShareSnapshot/);
+    assert.match(impl,/collection\("publicPortalSnapshots"\)\.doc\(publicSnapshotId\)\.set/);
+    assert.match(impl,/updatedAt:now/);
+    assert.match(impl,/data:payload\.redacted/);
+    assert.match(impl,/\{merge:true\}/);
   });
 });

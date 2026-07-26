@@ -135,13 +135,18 @@ describe("redaction allowlist",()=>{
         address:"Seefeld",
         latitude:47.33,
         longitude:11.18,
+        startLatitude:47.33,
+        startLongitude:11.18,
         gpxFile:{
           id:"g1",
           url:"https://storage.example/route.gpx",
           fileName:"route.gpx",
           storagePath:"customers/x/route.gpx",
           mimeType:"application/gpx+xml",
-          fileSize:500
+          fileSize:500,
+          startLatitude:47.33,
+          startLongitude:11.18,
+          routePoints:[{latitude:47.33,longitude:11.18},{latitude:47.34,longitude:11.19}]
         },
         calendarEnabled:true,
         internalNotes:"secret"
@@ -151,6 +156,60 @@ describe("redaction allowlist",()=>{
     assert.equal(redacted.program[0].gpxFile.storagePath,undefined);
     assert.equal(redacted.program[0].address,"Seefeld");
     assert.equal(redacted.program[0].internalNotes,undefined);
+    assert.equal(redacted.program[0].startLatitude,47.33);
+    assert.equal(redacted.program[0].startLongitude,11.18);
+    assert.equal(redacted.program[0].gpxFile.startLatitude,47.33);
+    assert.equal(redacted.program[0].gpxFile.routePoints.length,2);
+  });
+
+  it("flattens nested day buckets so travel fields survive publish/share redaction",()=>{
+    const redacted=redactPublicSnapshot({
+      customerId:"nested",
+      program:[{
+        date:"2026-07-01",
+        title:"Tag 1",
+        items:[{
+          id:"hike-1",
+          title:"Wanderung",
+          latitude:"47.3",
+          longitude:"11.4",
+          gpxFile:{
+            url:"https://storage.example/a.gpx",
+            fileName:"a.gpx",
+            startLatitude:"47.3",
+            startLongitude:"11.4",
+            routePoints:[{lat:47.3,lng:11.4},{lat:47.31,lng:11.41}]
+          }
+        }]
+      }]
+    },{customerId:"nested"});
+    assert.equal(redacted.program.length,1);
+    assert.equal(redacted.program[0].title,"Wanderung");
+    assert.equal(Number(redacted.program[0].latitude),47.3);
+    assert.equal(Number(redacted.program[0].startLatitude),47.3);
+    assert.equal(redacted.program[0].gpxFile.url,"https://storage.example/a.gpx");
+    assert.equal(redacted.program[0].gpxFile.routePoints.length,2);
+    assert.equal(redacted.program[0].items,undefined);
+  });
+
+  it("promotes gpx start onto item when item lat/lng are missing",()=>{
+    const redacted=redactPublicSnapshot({
+      customerId:"promote",
+      program:[{
+        id:"p1",
+        title:"Track",
+        gpxFile:{
+          url:"https://storage.example/b.gpx",
+          fileName:"b.gpx",
+          startLatitude:47.11,
+          startLongitude:11.22,
+          routePoints:[{latitude:47.11,longitude:11.22}]
+        }
+      }]
+    },{customerId:"promote"});
+    assert.equal(redacted.program[0].startLatitude,47.11);
+    assert.equal(redacted.program[0].latitude,47.11);
+    assert.equal(redacted.program[0].longitude,11.22);
   });
 });
 

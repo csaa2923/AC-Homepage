@@ -104,8 +104,8 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/Herunterladen/);
     assert.match(portalJs,/Dieses Dokument ist derzeit nicht verfuegbar\./);
     assert.match(portalHtml,/customer-portal\.js\?v=44/);
-    assert.match(portalHtml,/redact-allowlist\.js\?v=9/);
-    assert.match(portalHtml,/travel-actions-library\.js\?v=8/);
+    assert.match(portalHtml,/redact-allowlist\.js\?v=10/);
+    assert.match(portalHtml,/travel-actions-library\.js\?v=9/);
     assert.match(portalHtml,/portal-share-library\.js\?v=4/);
     assert.match(portalJs,/data-open-portal-document/);
     assert.match(portalJs,/hydrateShareDocumentUrls/);

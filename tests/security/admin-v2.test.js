@@ -486,13 +486,13 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/redact-allowlist\.js\?v=6/);
+    assert.match(html,/redact-allowlist\.js\?v=10/);
     assert.match(html,/redact-public-snapshot\.js\?v=2/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
-    assert.match(html,/firebase-service\.js\?v=24/);
+    assert.match(html,/firebase-service\.js\?v=26/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=49/);
+    assert.match(html,/admin-v2\.js\?v=59/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);

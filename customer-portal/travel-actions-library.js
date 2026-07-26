@@ -286,35 +286,50 @@
     return placeUrlForDevice(item,userAgent);
   }
 
+  function coordsFromObject(value){
+    if(Array.isArray(value)&&value.length>=2)return parseCoords(value[0],value[1]);
+    if(value&&typeof value==="object"){
+      return parseCoords(
+        value.latitude??value.lat??value.startLatitude,
+        value.longitude??value.lng??value.lon??value.startLongitude
+      );
+    }
+    return {ok:false,latitude:null,longitude:null};
+  }
+
   /**
    * Priority:
-   * 1) Google Maps Link
-   * 2) Apple Maps Link
-   * 3) valid latitude + longitude
-   * 4) address
-   * 5) locationAddress
-   * 6) location
-   * 7) GPX start
-   * 8) KML start
+   * 1) startLatitude + startLongitude
+   * 2) latitude + longitude
+   * 3) first valid routePoints entry (item / gpx / kml)
+   * 4) Google Maps Link
+   * 5) Apple Maps Link
+   * 6) address
+   * 7) locationAddress
+   * 8) location
    */
   function resolveNavigationDestination(item){
     const source=item||{};
-    if(isHttpsUrl(source.googleMapsUrl)){
-      return {ok:true,kind:"google-url",url:text(source.googleMapsUrl),latitude:null,longitude:null,address:""};
+    const startCoords=parseCoords(source.startLatitude,source.startLongitude);
+    if(startCoords.ok){
+      return {ok:true,kind:"coords",url:"",latitude:startCoords.latitude,longitude:startCoords.longitude,address:""};
     }
-    if(isHttpsUrl(source.appleMapsUrl)){
-      return {ok:true,kind:"apple-url",url:text(source.appleMapsUrl),latitude:null,longitude:null,address:""};
+    const startObject=coordsFromObject(source.start||source.startPoint||source.coordinates);
+    if(startObject.ok){
+      return {ok:true,kind:"coords",url:"",latitude:startObject.latitude,longitude:startObject.longitude,address:""};
     }
     const coords=parseCoords(source.latitude,source.longitude);
     if(coords.ok){
       return {ok:true,kind:"coords",url:"",latitude:coords.latitude,longitude:coords.longitude,address:""};
     }
-    const address=text(source.address);
-    if(address)return {ok:true,kind:"address",url:"",latitude:null,longitude:null,address};
-    const locationAddress=text(source.locationAddress);
-    if(locationAddress)return {ok:true,kind:"address",url:"",latitude:null,longitude:null,address:locationAddress};
-    const location=text(source.location);
-    if(location)return {ok:true,kind:"address",url:"",latitude:null,longitude:null,address:location};
+    const latObject=coordsFromObject(source.latitude);
+    if(latObject.ok){
+      return {ok:true,kind:"coords",url:"",latitude:latObject.latitude,longitude:latObject.longitude,address:""};
+    }
+    const itemPoints=normalizeRoutePoints(source.routePoints);
+    if(itemPoints.length){
+      return {ok:true,kind:"route",url:"",latitude:itemPoints[0].latitude,longitude:itemPoints[0].longitude,address:"",routeSource:"routePoints"};
+    }
     const gpxStart=routeStartFromAttachment(source.gpxFile);
     if(gpxStart.ok){
       return {ok:true,kind:"route",url:"",latitude:gpxStart.latitude,longitude:gpxStart.longitude,address:"",routeSource:"gpx"};
@@ -323,6 +338,18 @@
     if(kmlStart.ok){
       return {ok:true,kind:"route",url:"",latitude:kmlStart.latitude,longitude:kmlStart.longitude,address:"",routeSource:"kml"};
     }
+    if(isHttpsUrl(source.googleMapsUrl)){
+      return {ok:true,kind:"google-url",url:text(source.googleMapsUrl),latitude:null,longitude:null,address:""};
+    }
+    if(isHttpsUrl(source.appleMapsUrl)){
+      return {ok:true,kind:"apple-url",url:text(source.appleMapsUrl),latitude:null,longitude:null,address:""};
+    }
+    const address=text(source.address);
+    if(address)return {ok:true,kind:"address",url:"",latitude:null,longitude:null,address};
+    const locationAddress=text(source.locationAddress);
+    if(locationAddress)return {ok:true,kind:"address",url:"",latitude:null,longitude:null,address:locationAddress};
+    const location=text(source.location);
+    if(location)return {ok:true,kind:"address",url:"",latitude:null,longitude:null,address:location};
     // Legacy/booking deep link — only after structured destination fields failed.
     if(isHttpsUrl(source.navigationUrl)){
       return {ok:true,kind:"google-url",url:text(source.navigationUrl),latitude:null,longitude:null,address:""};

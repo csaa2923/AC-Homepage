@@ -14,7 +14,15 @@
     "image","imageUrl","heroImage","coverImage",
     "program","programItems","accommodations","restaurants","activities",
     "documents","bookings","contact","weather","hotel","history",
-    "accommodationName","hotelName","internalNumber","customerNumber"
+    "accommodationName","hotelName","internalNumber","customerNumber",
+    "travelProfile","portalLanguage","language","occasion","companions",
+    "adults","children","conciergeRecommendations"
+  ]);
+
+  const CONCIERGE_RECOMMENDATION_FIELDS=new Set([
+    "id","text","category","priority","language","visibility","season",
+    "weatherDependent","validFrom","validTo","timeFrom","timeTo",
+    "programItemId","profiles"
   ]);
 
   const PROGRAM_ITEM_FIELDS=new Set([
@@ -31,7 +39,8 @@
     "elevationGainM","elevationLossM","durationMinutes","pointCount",
     "routeMarkers","hikeMarkers",
     "ticketQrFile","voucherFile","ticketPdfFile","ticketNumber","voucherNumber","bookingNumber",
-    "calendarEnabled","timeZone","allDay"
+    "calendarEnabled","timeZone","allDay",
+    "conciergeHint","conciergePriority","conciergeReminderMinutes","conciergeReminderActive"
   ]);
 
   const PROGRAM_ATTACHMENT_FIELDS=["gpxFile","kmlFile","ticketQrFile","voucherFile","ticketPdfFile"];
@@ -390,6 +399,29 @@
     return next;
   }
 
+  function redactConciergeRecommendation(entry){
+    if(!entry||typeof entry!=="object")return null;
+    const next=pickFields(entry,CONCIERGE_RECOMMENDATION_FIELDS);
+    next.text=stringValue(next.text||entry.title||entry.note||entry.hint);
+    if(!next.text)return null;
+    if(stringValue(next.visibility)==="hidden")return null;
+    next.visibility="public";
+    next.priority=Math.max(1,Math.min(5,Math.round(Number(next.priority)||3)));
+    if(Array.isArray(entry.profiles)){
+      next.profiles=entry.profiles.map(value=>stringValue(value)).filter(Boolean);
+    }else if(stringValue(entry.profile)){
+      next.profiles=[stringValue(entry.profile)];
+    }else{
+      delete next.profiles;
+    }
+    return next;
+  }
+
+  function redactConciergeRecommendations(value){
+    if(!Array.isArray(value))return [];
+    return value.map(redactConciergeRecommendation).filter(Boolean).slice(0,80);
+  }
+
   function redactPublicSnapshot(customer,options){
     const source=clone(customer||{});
     const next=pickFields(source,ALLOWED_ROOT_FIELDS);
@@ -439,6 +471,18 @@
     next.contact=redactContact(source.contact,source);
     next.weather=redactWeather(source.weather);
     next.history=Array.isArray(source.history)?source.history.map(entry=>pickFields(entry,HISTORY_FIELDS)):[];
+    const recommendations=redactConciergeRecommendations(source.conciergeRecommendations);
+    if(recommendations.length)next.conciergeRecommendations=recommendations;
+    else delete next.conciergeRecommendations;
+    if(!stringValue(next.travelProfile))delete next.travelProfile;
+    if(!stringValue(next.portalLanguage)&&!stringValue(next.language)){
+      delete next.portalLanguage;
+      delete next.language;
+    }
+    if(!stringValue(next.occasion))delete next.occasion;
+    if(!stringValue(next.companions))delete next.companions;
+    if(next.adults==null||next.adults==="")delete next.adults;
+    if(next.children==null||next.children==="")delete next.children;
     delete next.phone;
     delete next.email;
     delete next.whatsapp;

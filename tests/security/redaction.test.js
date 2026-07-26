@@ -231,6 +231,48 @@ describe("redaction allowlist",()=>{
     assert.equal(redacted.program[0].routeMarkers[0].internalNotes,undefined);
     assert.equal(redacted.program[0].routeMarkers[1].name,"Geheimtipp");
   });
+
+  it("keeps public concierge recommendations and travel profile",()=>{
+    const redacted=redactPublicSnapshot({
+      customerId:"concierge",
+      customerName:"Familie Smith",
+      travelProfile:"family",
+      portalLanguage:"de",
+      adults:2,
+      children:1,
+      occasion:"Familienurlaub",
+      conciergeRecommendations:[
+        {id:"r1",text:"Unbedingt Kaiserschmarrn probieren.",category:"food",priority:5,language:"de",visibility:"public",season:"summer",weatherDependent:"any",internalNotes:"secret"},
+        {id:"r2",text:"Hidden tip",category:"tip",visibility:"hidden",language:"de"},
+        {id:"r3",text:"",category:"tip",language:"de"}
+      ],
+      program:[{
+        id:"p1",
+        title:"Transfer",
+        startTime:"09:00",
+        conciergeHint:"15 Minuten frueher am Treffpunkt",
+        conciergePriority:5,
+        conciergeReminderMinutes:15,
+        conciergeReminderActive:true,
+        internalNotes:"secret item"
+      }],
+      crm:{promptHints:"should not leak"}
+    },{customerId:"concierge"});
+    assert.equal(redacted.travelProfile,"family");
+    assert.equal(redacted.portalLanguage,"de");
+    assert.equal(redacted.adults,2);
+    assert.equal(redacted.children,1);
+    assert.equal(redacted.occasion,"Familienurlaub");
+    assert.equal(redacted.conciergeRecommendations.length,1);
+    assert.equal(redacted.conciergeRecommendations[0].text,"Unbedingt Kaiserschmarrn probieren.");
+    assert.equal(redacted.conciergeRecommendations[0].internalNotes,undefined);
+    assert.equal(redacted.program[0].conciergeHint,"15 Minuten frueher am Treffpunkt");
+    assert.equal(redacted.program[0].conciergePriority,5);
+    assert.equal(redacted.program[0].conciergeReminderMinutes,15);
+    assert.equal(redacted.program[0].conciergeReminderActive,true);
+    assert.equal(redacted.program[0].internalNotes,undefined);
+    assert.equal(redacted.crm,undefined);
+  });
 });
 
 describe("token security",()=>{

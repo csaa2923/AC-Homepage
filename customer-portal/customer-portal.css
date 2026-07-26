@@ -542,6 +542,213 @@ h3{font-size:24px;color:var(--green)}
   max-width:100%;
   box-sizing:border-box;
 }
+.concierge-section{scroll-margin-top:88px}
+.concierge-stack{display:grid;gap:14px}
+.concierge-card{
+  padding:18px 18px 16px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:linear-gradient(165deg,#fbf8ef 0%,#f3f7f2 100%);
+  box-shadow:var(--shadow);
+}
+.concierge-card-eyebrow{
+  margin:0 0 6px;
+  color:var(--green);
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.concierge-card h3{
+  margin:0 0 10px;
+  color:var(--ink);
+  font-size:22px;
+  font-weight:750;
+  line-height:1.25;
+}
+.concierge-narrative{
+  margin:0;
+  display:grid;
+  gap:8px;
+  color:#314842;
+  font-size:15px;
+  line-height:1.55;
+}
+.concierge-narrative p{margin:0}
+.concierge-hints,
+.concierge-optimizations,
+.concierge-admin-tips,
+.concierge-evening-list,
+.concierge-alt-list{
+  list-style:none;
+  margin:12px 0 0;
+  padding:0;
+  display:grid;
+  gap:6px;
+}
+.concierge-hints li,
+.concierge-optimizations li,
+.concierge-admin-tips li,
+.concierge-evening-list li,
+.concierge-alt-list li{
+  display:grid;
+  grid-template-columns:22px minmax(0,1fr);
+  gap:8px;
+  align-items:start;
+  color:#314842;
+  font-size:14px;
+  line-height:1.4;
+}
+.concierge-hint-icon{color:var(--green);font-weight:800}
+.concierge-status{
+  display:grid;
+  gap:8px;
+  grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+.concierge-status li{
+  display:grid;
+  gap:4px;
+  padding:10px 12px;
+  border:1px solid rgba(31,107,87,.16);
+  border-radius:10px;
+  background:rgba(255,255,255,.55);
+}
+.concierge-status-label{
+  color:#415a53;
+  font-size:12px;
+  font-weight:750;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+}
+.concierge-status-value{
+  color:var(--green);
+  font-size:14px;
+  font-weight:800;
+}
+.concierge-profile{
+  margin:10px 0 0;
+  color:#5a6f67;
+  font-size:12px;
+  font-weight:700;
+}
+.day-concierge-hints{
+  list-style:none;
+  margin:8px 0 0;
+  padding:0;
+  display:grid;
+  gap:4px;
+}
+.day-concierge-hints li{
+  color:#415a53;
+  font-size:13px;
+  font-weight:650;
+}
+.concierge-timed-hints{
+  list-style:none;
+  margin:12px 0 0;
+  padding:10px 12px;
+  display:grid;
+  gap:6px;
+  border:1px solid rgba(31,107,87,.18);
+  border-radius:10px;
+  background:rgba(255,255,255,.55);
+}
+.concierge-timed-hints li{
+  display:grid;
+  grid-template-columns:22px minmax(0,1fr);
+  gap:8px;
+  color:#314842;
+  font-size:14px;
+  font-weight:700;
+  line-height:1.4;
+}
+.concierge-timeline-card{
+  padding:0;
+  overflow:hidden;
+}
+.concierge-timeline-summary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:16px 18px 12px;
+  cursor:pointer;
+}
+.concierge-timeline-summary::-webkit-details-marker{display:none}
+.concierge-timeline-summary .concierge-card-eyebrow{margin:0}
+.concierge-timeline-toggle::before{
+  content:"Einklappen";
+  color:#5a6f67;
+  font-size:12px;
+  font-weight:750;
+}
+.concierge-timeline-card:not([open]) .concierge-timeline-toggle::before{content:"Anzeigen"}
+.concierge-timeline{
+  list-style:none;
+  margin:0;
+  padding:0 18px 16px;
+  display:grid;
+  gap:0;
+}
+.concierge-timeline-item{
+  display:grid;
+  grid-template-columns:28px minmax(0,1fr);
+  gap:10px;
+  align-items:start;
+  padding:10px 0;
+  border-top:1px solid rgba(31,107,87,.12);
+}
+.concierge-timeline-icon{
+  width:28px;
+  height:28px;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  background:#fff6da;
+  border:1px solid rgba(196,146,42,.35);
+  font-size:15px;
+  line-height:1;
+}
+.concierge-timeline-body{min-width:0}
+.concierge-timeline-topline{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:baseline;
+  margin-bottom:2px;
+}
+.concierge-timeline-topline time{
+  color:var(--green);
+  font-size:13px;
+  font-weight:800;
+}
+.concierge-timeline-label{
+  color:#5a6f67;
+  font-size:12px;
+  font-weight:750;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+}
+.concierge-timeline-body strong{
+  display:block;
+  color:var(--ink);
+  font-size:15px;
+  font-weight:750;
+}
+.concierge-timeline-body p{
+  margin:4px 0 0;
+  color:#415a53;
+  font-size:13px;
+  line-height:1.4;
+}
+@media (min-width:900px){
+  .concierge-timeline-summary{cursor:default;pointer-events:none}
+  .concierge-timeline-toggle{display:none}
+}
 .hike-stats{
   list-style:none;
   margin:0;

@@ -40,6 +40,13 @@
     programEditMessageKind:"",
     programTravelUploadBusy:{},
     programTravelUploadErrors:{},
+    conciergeEditMode:false,
+    conciergeEditDraft:null,
+    conciergeEditOriginal:"",
+    conciergeEditErrors:{},
+    conciergeEditSaving:false,
+    conciergeEditMessage:"",
+    conciergeEditMessageKind:"",
     documentEditMode:false,
     documentEditDraft:null,
     documentEditOriginal:"",
@@ -115,6 +122,7 @@
     ["kunde","Kunde"],
     ["reise","Reise"],
     ["programm","Programm"],
+    ["concierge","Concierge"],
     ["buchungen","Buchungen"],
     ["dokumente","Dokumente"],
     ["kommunikation","Kommunikation"],
@@ -124,6 +132,7 @@
   let customerSavePromise=null;
   let tripSavePromise=null;
   let programSavePromise=null;
+  let conciergeSavePromise=null;
   let documentSavePromise=null;
   let publicationPromise=null;
   let uploadSequence=0;
@@ -307,6 +316,7 @@
       resetCustomerEditState();
       resetTripEditState();
       resetProgramEditState();
+      resetConciergeEditState();
       resetDocumentEditState();
       state.selectedCustomerId="";
       state.detailFlashMessage="";
@@ -632,7 +642,7 @@
   }
 
   function hasDirtyEdits(){
-    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit()||hasDirtyDocumentEdit()||state.wizardOpen||Boolean(window.ACTAdminV2Bookings?.isDirty?.());
+    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit()||hasDirtyConciergeEdit()||hasDirtyDocumentEdit()||state.wizardOpen||Boolean(window.ACTAdminV2Bookings?.isDirty?.());
   }
 
   function setCustomerEditMessage(message,kind=""){
@@ -1351,6 +1361,16 @@
       ticketNumber:firstValue(item.ticketNumber,item.ticket,item.ticketNo,item.ticketId,item.bookingNumber),
       voucherNumber:firstValue(item.voucherNumber,item.voucher,item.voucherNo,item.voucherId),
       weatherPlaceholder:firstValue(item.weatherPlaceholder,item.weather,item.weatherHint),
+      conciergeHint:firstValue(item.conciergeHint,item.conciergeNote,item.reminderHint),
+      conciergePriority:(()=>{
+        const value=Number(firstValue(item.conciergePriority,item.reminderPriority));
+        return Number.isFinite(value)?String(Math.max(1,Math.min(5,Math.round(value)))):"3";
+      })(),
+      conciergeReminderMinutes:(()=>{
+        const value=Number(firstValue(item.conciergeReminderMinutes,item.reminderMinutes));
+        return Number.isFinite(value)&&value>=0?String(Math.round(value)):"";
+      })(),
+      conciergeReminderActive:!(item.conciergeReminderActive===false||item.conciergeReminderActive==="false"||item.conciergeReminderActive===0||item.conciergeReminderActive==="0"),
       address:firstValue(item.address,item.locationAddress,item.location,item.place),
       ...(()=>{
         const coords=window.ACTTravelActionsLibrary?.parseCoords?.(
@@ -1422,7 +1442,8 @@
       difficulty:"",distanceKm:"",walkDuration:"",elevationGain:"",elevationLoss:"",
       routeMarkers:[],
       ticketQrFile:null,voucherFile:null,ticketPdfFile:null,bookingNumber:"",
-      calendarEnabled:true,timeZone:"Europe/Vienna"
+      calendarEnabled:true,timeZone:"Europe/Vienna",
+      conciergeHint:"",conciergePriority:"3",conciergeReminderMinutes:"",conciergeReminderActive:true
     };
   }
 
@@ -1598,7 +1619,7 @@
   function addProgramItem(dayIndex){
     const day=state.programEditDraft?.days?.[dayIndex];
     if(!day)return;
-    day.items.push({time:"",startTime:"",endTime:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",venueName:"",locationAddress:"",locationCity:"",locationCountry:"",eventUrl:"",websiteUrl:"",contactName:"",contactPhone:"",contactEmail:"",meetingPoint:"",price:"",currency:"EUR",priority:"",imageUrl:"",ticketNumber:"",voucherNumber:"",weatherPlaceholder:"",notes:"",internalNotes:"",...emptyProgramTravelFields()});
+    day.items.push({time:"",startTime:"",endTime:"",allDay:false,title:"",description:"",category:"Sonstiges",location:"",venueName:"",locationAddress:"",locationCity:"",locationCountry:"",eventUrl:"",websiteUrl:"",contactName:"",contactPhone:"",contactEmail:"",meetingPoint:"",price:"",currency:"EUR",priority:"",imageUrl:"",ticketNumber:"",voucherNumber:"",weatherPlaceholder:"",notes:"",internalNotes:"",conciergeHint:"",conciergePriority:"3",conciergeReminderMinutes:"",conciergeReminderActive:true,...emptyProgramTravelFields()});
     setProgramEditMessage("Ungespeicherte Aenderungen","dirty");
     renderCustomerDetail();
   }
@@ -1718,6 +1739,16 @@
         ticketNumber:item.ticketNumber||item.bookingNumber||"",
         voucherNumber:item.voucherNumber,
         weatherPlaceholder:item.weatherPlaceholder,
+        conciergeHint:cleanValue(item.conciergeHint),
+        conciergePriority:(()=>{
+          const value=Number(item.conciergePriority);
+          return Number.isFinite(value)?Math.max(1,Math.min(5,Math.round(value))):3;
+        })(),
+        conciergeReminderMinutes:(()=>{
+          const value=Number(item.conciergeReminderMinutes);
+          return Number.isFinite(value)&&value>=0?Math.round(value):"";
+        })(),
+        conciergeReminderActive:item.conciergeReminderActive!==false&&item.conciergeReminderActive!=="false",
         address:item.address||item.locationAddress||item.location||"",
         ...(()=>{
           const lib=window.ACTTravelActionsLibrary;
@@ -4303,7 +4334,7 @@
         `).join("")}
       </div>
       <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
+        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
       </section>
     `;
   }
@@ -4425,6 +4456,311 @@
     const content=items.filter(Boolean).join("");
     if(!content)return "";
     return `<article class="v2-read-card v2-trip-card"><h3>${escapeHtml(title)}</h3><div class="v2-read-fields">${content}</div></article>`;
+  }
+
+  function setConciergeEditMessage(message,kind=""){
+    state.conciergeEditMessage=message||"";
+    state.conciergeEditMessageKind=kind||"";
+  }
+
+  function resetConciergeEditState({keepMessage=false}={}){
+    state.conciergeEditMode=false;
+    state.conciergeEditDraft=null;
+    state.conciergeEditOriginal="";
+    state.conciergeEditErrors={};
+    state.conciergeEditSaving=false;
+    if(!keepMessage)setConciergeEditMessage("","");
+  }
+
+  function normalizeConciergeDraft(customer){
+    const lib=window.ACTConciergeAssistantLibrary;
+    const recommendations=lib?.normalizeRecommendations
+      ?lib.normalizeRecommendations(customer?.conciergeRecommendations||[])
+      :arrayValue(customer?.conciergeRecommendations);
+    return {
+      travelProfile:cleanValue(customer?.travelProfile||""),
+      portalLanguage:cleanValue(customer?.portalLanguage||customer?.language||"de")||"de",
+      recommendations
+    };
+  }
+
+  function conciergeEditFingerprint(draft){
+    return JSON.stringify({
+      travelProfile:cleanValue(draft?.travelProfile),
+      portalLanguage:cleanValue(draft?.portalLanguage||"de"),
+      recommendations:arrayValue(draft?.recommendations).map(item=>({
+        id:cleanValue(item.id),
+        text:cleanValue(item.text),
+        category:cleanValue(item.category),
+        priority:Number(item.priority)||3,
+        language:cleanValue(item.language||"de"),
+        visibility:cleanValue(item.visibility||"public"),
+        season:cleanValue(item.season||"all"),
+        weatherDependent:cleanValue(item.weatherDependent||"any"),
+        validFrom:cleanValue(item.validFrom),
+        validTo:cleanValue(item.validTo),
+        timeFrom:cleanValue(item.timeFrom),
+        timeTo:cleanValue(item.timeTo),
+        programItemId:cleanValue(item.programItemId),
+        profiles:arrayValue(item.profiles)
+      }))
+    });
+  }
+
+  function hasDirtyConciergeEdit(){
+    return state.conciergeEditMode&&conciergeEditFingerprint(state.conciergeEditDraft||{})!==state.conciergeEditOriginal;
+  }
+
+  function startConciergeEdit(customer){
+    const draft=normalizeConciergeDraft(customer);
+    state.conciergeEditMode=true;
+    state.conciergeEditDraft=clone(draft);
+    state.conciergeEditOriginal=conciergeEditFingerprint(draft);
+    state.conciergeEditErrors={};
+    setConciergeEditMessage("","");
+    renderCustomerDetail();
+  }
+
+  function cancelConciergeEdit(){
+    if(hasDirtyConciergeEdit()&&!window.confirm("Ungespeicherte Concierge-Aenderungen verwerfen?"))return;
+    resetConciergeEditState();
+    renderCustomerDetail();
+  }
+
+  function emptyConciergeRecommendation(){
+    return {
+      id:`rec-${Date.now().toString(36)}`,
+      text:"",
+      category:"tip",
+      priority:3,
+      language:"de",
+      visibility:"public",
+      season:"all",
+      weatherDependent:"any",
+      validFrom:"",
+      validTo:"",
+      timeFrom:"",
+      timeTo:"",
+      programItemId:"",
+      profiles:[]
+    };
+  }
+
+  function handleConciergeEditInput(event){
+    if(!state.conciergeEditMode||!state.conciergeEditDraft)return;
+    const field=event.target.closest("[data-concierge-field],[data-concierge-rec-field]");
+    if(!field)return;
+    if(field.matches("[data-concierge-field]")){
+      const key=field.dataset.conciergeField;
+      state.conciergeEditDraft[key]=field.type==="checkbox"?field.checked:field.value;
+      setConciergeEditMessage(hasDirtyConciergeEdit()?"Ungespeicherte Aenderungen":"","dirty");
+      return;
+    }
+    const index=Number(field.dataset.recIndex);
+    const key=field.dataset.conciergeRecField;
+    const item=state.conciergeEditDraft.recommendations?.[index];
+    if(!item||!key)return;
+    if(key==="profiles"){
+      item.profiles=arrayValue(field.value.split(",").map(value=>cleanValue(value))).filter(Boolean);
+    }else if(key==="priority"){
+      item.priority=Number(field.value)||3;
+    }else{
+      item[key]=field.value;
+    }
+    setConciergeEditMessage(hasDirtyConciergeEdit()?"Ungespeicherte Aenderungen":"","dirty");
+  }
+
+  function validateConciergeEdit(draft){
+    const errors={};
+    arrayValue(draft?.recommendations).forEach((item,index)=>{
+      if(!cleanValue(item.text))errors[`rec-${index}-text`]="Bitte einen Hinweistext eingeben.";
+      if(cleanValue(item.validFrom)&&cleanValue(item.validTo)&&cleanValue(item.validFrom)>cleanValue(item.validTo)){
+        errors[`rec-${index}-valid`]="Gueltig-bis darf nicht vor Gueltig-von liegen.";
+      }
+    });
+    return {ok:!Object.keys(errors).length,errors};
+  }
+
+  async function saveConciergeEdit(){
+    if(conciergeSavePromise)return conciergeSavePromise;
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer||!state.conciergeEditDraft)return null;
+    const validation=validateConciergeEdit(state.conciergeEditDraft);
+    state.conciergeEditErrors=validation.errors;
+    if(!validation.ok){
+      setConciergeEditMessage("Bitte pruefen Sie die markierten Felder.","error");
+      renderCustomerDetail();
+      return null;
+    }
+    state.conciergeEditSaving=true;
+    setConciergeEditMessage("Concierge wird gespeichert …","saving");
+    renderCustomerDetail();
+    conciergeSavePromise=(async()=>{
+      try{
+        const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+        if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+        const lib=window.ACTConciergeAssistantLibrary;
+        const fullCustomer=clone(customer);
+        fullCustomer.travelProfile=cleanValue(state.conciergeEditDraft.travelProfile);
+        fullCustomer.portalLanguage=cleanValue(state.conciergeEditDraft.portalLanguage)||"de";
+        fullCustomer.language=fullCustomer.portalLanguage;
+        fullCustomer.conciergeRecommendations=lib?.normalizeRecommendations
+          ?lib.normalizeRecommendations(state.conciergeEditDraft.recommendations||[])
+          :arrayValue(state.conciergeEditDraft.recommendations);
+        fullCustomer.updatedAt=new Date().toLocaleDateString("de-DE");
+        fullCustomer._lastSavedAt=new Date().toISOString();
+        await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+        updateLocalCustomer(compactObject(fullCustomer));
+        resetConciergeEditState({keepMessage:true});
+        setConciergeEditMessage("Concierge-Empfehlungen gespeichert.","success");
+        renderCustomerDetail();
+        setTimeout(()=>{
+          if(!state.conciergeEditMode&&state.conciergeEditMessageKind==="success")setConciergeEditMessage("","");
+        },2500);
+      }catch(error){
+        setConciergeEditMessage(error&&error.message?error.message:"Speichern fehlgeschlagen.","error");
+        state.conciergeEditSaving=false;
+        renderCustomerDetail();
+      }finally{
+        conciergeSavePromise=null;
+      }
+    })();
+    return conciergeSavePromise;
+  }
+
+  function conciergeTabMarkup(customer){
+    if(state.conciergeEditMode)return conciergeEditFormMarkup(customer);
+    const lib=window.ACTConciergeAssistantLibrary;
+    const draft=normalizeConciergeDraft(customer);
+    const profileLabel=lib?.TRAVEL_PROFILES?.[draft.travelProfile]?.label||draft.travelProfile||"Automatisch";
+    const rows=draft.recommendations.length
+      ?`<ul class="v2-concierge-list">${draft.recommendations.map(item=>`
+          <li>
+            <strong>${escapeHtml(item.text)}</strong>
+            <span class="v2-muted">${escapeHtml(item.category)} · Prio ${escapeHtml(String(item.priority))} · ${escapeHtml(item.season)} · ${escapeHtml(item.weatherDependent)} · ${escapeHtml(item.language)} · ${escapeHtml(item.visibility)}</span>
+          </li>
+        `).join("")}</ul>`
+      :`<p class="v2-muted">Noch keine eigenen Concierge-Empfehlungen. Automatische Hinweise erscheinen trotzdem im Portal.</p>`;
+    return `
+      <section class="v2-concierge-overview">
+        <div class="v2-tab-actions">
+          <button class="v2-button primary" type="button" data-concierge-edit-action="edit">Concierge bearbeiten</button>
+          <span class="v2-edit-status ${state.conciergeEditMessageKind}" aria-live="polite">${escapeHtml(state.conciergeEditMessage)}</span>
+        </div>
+        <article class="v2-read-card">
+          <h3>Concierge Empfehlungen</h3>
+          <div class="v2-read-grid">
+            ${fieldItem("Reiseprofil",profileLabel)}
+            ${fieldItem("Sprache",draft.portalLanguage||"de")}
+            ${fieldItem("Anzahl Hinweise",String(draft.recommendations.length))}
+          </div>
+          ${rows}
+        </article>
+      </section>
+    `;
+  }
+
+  function conciergeEditFormMarkup(customer){
+    const draft=state.conciergeEditDraft||normalizeConciergeDraft(customer);
+    const lib=window.ACTConciergeAssistantLibrary;
+    const profiles=Object.entries(lib?.TRAVEL_PROFILES||{family:{label:"Familie"},couple:{label:"Paar"},nature:{label:"Natur"}});
+    const categories=arrayValue(lib?.CATEGORIES||["tip","food","viewpoint","evening","indoor","warning","general"]);
+    const seasons=arrayValue(lib?.SEASONS||["all","summer","winter"]);
+    const weatherModes=arrayValue(lib?.WEATHER_MODES||["any","good","bad","rain"]);
+    const languages=arrayValue(lib?.LANGUAGES||["de","en"]);
+    const profileOptions=`<option value="">Automatisch</option>${profiles.map(([key,meta])=>`<option value="${escapeHtml(key)}" ${draft.travelProfile===key?"selected":""}>${escapeHtml(meta.label||key)}</option>`).join("")}`;
+    const recCards=arrayValue(draft.recommendations).map((item,index)=>{
+      const prefix=`rec-${index}`;
+      const textError=state.conciergeEditErrors?.[`${prefix}-text`]||"";
+      const validError=state.conciergeEditErrors?.[`${prefix}-valid`]||"";
+      return `
+        <article class="v2-concierge-rec-card" data-concierge-rec="${index}">
+          <div class="v2-program-item-toolbar">
+            <strong>Empfehlung ${index+1}</strong>
+            <button class="v2-icon-button" type="button" title="Loeschen" data-concierge-edit-action="delete-rec" data-rec-index="${index}">×</button>
+          </div>
+          <div class="v2-edit-grid">
+            <label class="v2-edit-field full"><span>Hinweis</span>
+              <input type="text" data-concierge-rec-field="text" data-rec-index="${index}" value="${escapeHtml(item.text||"")}" placeholder="z. B. Unbedingt Kaiserschmarrn probieren.">
+              ${textError?`<small class="v2-field-error">${escapeHtml(textError)}</small>`:""}
+            </label>
+            <label class="v2-edit-field"><span>Kategorie</span>
+              <select data-concierge-rec-field="category" data-rec-index="${index}">
+                ${categories.map(value=>`<option value="${escapeHtml(value)}" ${item.category===value?"selected":""}>${escapeHtml(value)}</option>`).join("")}
+              </select>
+            </label>
+            <label class="v2-edit-field"><span>Prioritaet</span>
+              <select data-concierge-rec-field="priority" data-rec-index="${index}">
+                ${[1,2,3,4,5].map(value=>`<option value="${value}" ${Number(item.priority)===value?"selected":""}>${value}</option>`).join("")}
+              </select>
+            </label>
+            <label class="v2-edit-field"><span>Sprache</span>
+              <select data-concierge-rec-field="language" data-rec-index="${index}">
+                ${languages.map(value=>`<option value="${escapeHtml(value)}" ${item.language===value?"selected":""}>${escapeHtml(value)}</option>`).join("")}
+              </select>
+            </label>
+            <label class="v2-edit-field"><span>Sichtbarkeit</span>
+              <select data-concierge-rec-field="visibility" data-rec-index="${index}">
+                <option value="public" ${item.visibility!=="hidden"?"selected":""}>Sichtbar</option>
+                <option value="hidden" ${item.visibility==="hidden"?"selected":""}>Verborgen</option>
+              </select>
+            </label>
+            <label class="v2-edit-field"><span>Saison</span>
+              <select data-concierge-rec-field="season" data-rec-index="${index}">
+                ${seasons.map(value=>`<option value="${escapeHtml(value)}" ${item.season===value?"selected":""}>${escapeHtml(value)}</option>`).join("")}
+              </select>
+            </label>
+            <label class="v2-edit-field"><span>Wetterabhaengig</span>
+              <select data-concierge-rec-field="weatherDependent" data-rec-index="${index}">
+                ${weatherModes.map(value=>`<option value="${escapeHtml(value)}" ${item.weatherDependent===value?"selected":""}>${escapeHtml(value)}</option>`).join("")}
+              </select>
+            </label>
+            <label class="v2-edit-field"><span>Gueltig von</span>
+              <input type="date" data-concierge-rec-field="validFrom" data-rec-index="${index}" value="${escapeHtml(item.validFrom||"")}">
+            </label>
+            <label class="v2-edit-field"><span>Gueltig bis</span>
+              <input type="date" data-concierge-rec-field="validTo" data-rec-index="${index}" value="${escapeHtml(item.validTo||"")}">
+              ${validError?`<small class="v2-field-error">${escapeHtml(validError)}</small>`:""}
+            </label>
+            <label class="v2-edit-field"><span>Zeit von</span>
+              <input type="time" data-concierge-rec-field="timeFrom" data-rec-index="${index}" value="${escapeHtml(item.timeFrom||"")}">
+            </label>
+            <label class="v2-edit-field"><span>Zeit bis</span>
+              <input type="time" data-concierge-rec-field="timeTo" data-rec-index="${index}" value="${escapeHtml(item.timeTo||"")}">
+            </label>
+            <label class="v2-edit-field"><span>Programmpunkt-ID</span>
+              <input type="text" data-concierge-rec-field="programItemId" data-rec-index="${index}" value="${escapeHtml(item.programItemId||"")}" placeholder="optional">
+            </label>
+            <label class="v2-edit-field full"><span>Profile (kommagetrennt)</span>
+              <input type="text" data-concierge-rec-field="profiles" data-rec-index="${index}" value="${escapeHtml(arrayValue(item.profiles).join(", "))}" placeholder="family, couple, nature">
+            </label>
+          </div>
+        </article>
+      `;
+    }).join("");
+    return `
+      <form class="v2-edit-form v2-concierge-edit-form" id="conciergeEditForm" novalidate>
+        <div class="v2-tab-actions">
+          <button class="v2-button soft" type="button" data-concierge-edit-action="add-rec">+ Empfehlung</button>
+          <button class="v2-button primary" type="submit" data-concierge-edit-action="save" ${state.conciergeEditSaving?"disabled aria-busy=\"true\"":""}>Speichern</button>
+          <button class="v2-button soft" type="button" data-concierge-edit-action="cancel" ${state.conciergeEditSaving?"disabled":""}>Abbrechen</button>
+          <span class="v2-edit-status ${state.conciergeEditMessageKind}" aria-live="polite">${escapeHtml(state.conciergeEditMessage)}</span>
+        </div>
+        <div class="v2-edit-grid">
+          <label class="v2-edit-field"><span>Reiseprofil</span>
+            <select data-concierge-field="travelProfile">${profileOptions}</select>
+          </label>
+          <label class="v2-edit-field"><span>Portal-Sprache</span>
+            <select data-concierge-field="portalLanguage">
+              ${languages.map(value=>`<option value="${escapeHtml(value)}" ${(draft.portalLanguage||"de")===value?"selected":""}>${escapeHtml(value)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="v2-concierge-rec-list">
+          ${recCards||`<p class="v2-muted">Noch keine Empfehlungen. Mit „+ Empfehlung“ starten.</p>`}
+        </div>
+      </form>
+    `;
   }
 
   function tripTabMarkup(customer){
@@ -4846,6 +5182,7 @@
           ${eventUrl?`<div class="v2-program-links"><a class="v2-button soft" href="${escapeHtml(eventUrl)}" target="_blank" rel="noopener noreferrer">Veranstaltung oeffnen</a></div>`:""}
           ${attachments.length?`<div class="v2-program-attachments"><strong>Anhaenge</strong>${attachments.map(documentAttachmentLink).join("")}</div>`:""}
           ${item.weatherPlaceholder?`<p class="v2-muted">${escapeHtml(item.weatherPlaceholder)}</p>`:""}
+          ${item.conciergeHint||item.conciergeReminderMinutes||item.conciergeReminderActive===false?`<p class="v2-muted">Concierge: ${escapeHtml(item.conciergeHint||"Standard-Erinnerung")}${item.conciergeReminderMinutes?` · ${escapeHtml(String(item.conciergeReminderMinutes))} Min.`:""}${item.conciergeReminderActive===false?" · inaktiv":""}</p>`:""}
           ${item.internalNotes?`<p class="v2-admin-note"><strong>Intern:</strong> ${escapeHtml(item.internalNotes)}</p>`:""}
           ${travelLinks||showWebsite||phoneUrl||mailUrl?`
             <div class="v2-program-links">
@@ -5030,6 +5367,16 @@
           ${programTextarea(prefix,"notes","Hinweise",item.notes,{dayIndex,itemIndex})}
           ${programTextarea(prefix,"internalNotes","Interne Notizen (nur Admin)",item.internalNotes,{dayIndex,itemIndex})}
         </div>
+        <details class="v2-program-travel-section">
+          <summary>Concierge Timeline</summary>
+          <div class="v2-edit-grid">
+            ${programCheckbox(prefix,"conciergeReminderActive","Erinnerung aktiv",item.conciergeReminderActive!==false,{dayIndex,itemIndex})}
+            ${programInput(prefix,"conciergeReminderMinutes","Erinnerungszeit (Minuten vorher)",item.conciergeReminderMinutes,{type:"number",dayIndex,itemIndex})}
+            ${programSelect(prefix,"conciergePriority","Concierge-Prioritaet",item.conciergePriority||"3",["1","2","3","4","5"],{dayIndex,itemIndex})}
+            ${programInput(prefix,"conciergeHint","Concierge-Hinweistext",item.conciergeHint,{dayIndex,itemIndex})}
+            <p class="v2-muted full">Leer = Standard (Transfer 15, Restaurant 60, sonst 30 Minuten). Maximal drei aktuelle Hinweise im Portal.</p>
+          </div>
+        </details>
         <details class="v2-program-travel-section" open>
           <summary>Navigation</summary>
           <div class="v2-edit-grid">
@@ -5141,6 +5488,7 @@
       resetCustomerEditState();
       resetTripEditState();
       resetProgramEditState();
+      resetConciergeEditState();
       resetDocumentEditState();
       window.ACTAdminV2Bookings?.closeEditor?.();
     }
@@ -6412,6 +6760,30 @@
         if(action==="cancel")cancelTripEdit();
         return;
       }
+      const conciergeAction=event.target.closest("[data-concierge-edit-action]");
+      if(conciergeAction){
+        const action=conciergeAction.dataset.conciergeEditAction;
+        const customer=customerById(state.selectedCustomerId);
+        if(action==="edit"&&customer)startConciergeEdit(customer);
+        if(action==="cancel")cancelConciergeEdit();
+        if(action==="add-rec"&&state.conciergeEditDraft){
+          state.conciergeEditDraft.recommendations=arrayValue(state.conciergeEditDraft.recommendations);
+          state.conciergeEditDraft.recommendations.push(emptyConciergeRecommendation());
+          setConciergeEditMessage("Ungespeicherte Aenderungen","dirty");
+          renderCustomerDetail();
+        }
+        if(action==="delete-rec"&&state.conciergeEditDraft){
+          const index=Number(conciergeAction.dataset.recIndex);
+          if(Number.isFinite(index)){
+            const next=arrayValue(state.conciergeEditDraft.recommendations).slice();
+            next.splice(index,1);
+            state.conciergeEditDraft.recommendations=next;
+            setConciergeEditMessage("Ungespeicherte Aenderungen","dirty");
+            renderCustomerDetail();
+          }
+        }
+        return;
+      }
       const programAction=event.target.closest("[data-program-edit-action]");
       if(programAction){
         const action=programAction.dataset.programEditAction;
@@ -6545,6 +6917,7 @@
       handleWizardInput(event);
       handleCustomerEditInput(event);
       handleTripEditInput(event);
+      handleConciergeEditInput(event);
       handleProgramEditInput(event);
       handleDocumentEditInput(event);
       if(event.target.id==="documentSearchInput"){state.documentQuery=event.target.value;renderDocuments();}
@@ -6558,6 +6931,7 @@
       }
       handleWizardInput(event);
       handleTripEditInput(event);
+      handleConciergeEditInput(event);
       handleProgramEditInput(event);
       handleDocumentEditInput(event);
       if(event.target.id==="documentCategoryFilter"){state.documentCategory=event.target.value;renderDocuments();}
@@ -6612,6 +6986,10 @@
       if(event.target.id==="programEditForm"){
         event.preventDefault();
         saveProgramEdit();
+      }
+      if(event.target.id==="conciergeEditForm"){
+        event.preventDefault();
+        saveConciergeEdit();
       }
       if(event.target.id==="documentEditForm"){
         event.preventDefault();

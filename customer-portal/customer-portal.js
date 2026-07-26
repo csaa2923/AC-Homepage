@@ -16,6 +16,7 @@
   let liveWeatherByDate={};
   const root=document.getElementById("portalRoot");
   const travelLib=()=>window.ACTTravelActionsLibrary||null;
+  const conciergeLib=()=>window.ACTConciergeAssistantLibrary||null;
   const calendarState={
     view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
     dayIndex:0
@@ -1366,6 +1367,113 @@
     `).join("");
   }
 
+  function renderConciergeAssistant(){
+    const target=document.getElementById("conciergeRoot");
+    const section=document.getElementById("concierge");
+    if(!target)return;
+    const lib=conciergeLib();
+    if(!lib?.resolveConciergeForPortal){
+      target.innerHTML="";
+      if(section)section.hidden=true;
+      return;
+    }
+    const model=lib.resolveConciergeForPortal({
+      customer,
+      days:groupedProgram(),
+      weatherForDate,
+      now:new Date()
+    });
+    if(!model?.show){
+      target.innerHTML="";
+      if(section)section.hidden=true;
+      return;
+    }
+    if(section)section.hidden=false;
+    const narrative=Array.isArray(model.narrative)?model.narrative:[];
+    const hints=Array.isArray(model.dayHints)?model.dayHints:[];
+    const status=Array.isArray(model.status)?model.status:[];
+    const optimizations=Array.isArray(model.optimizations)?model.optimizations:[];
+    const adminTips=Array.isArray(model.adminTips)?model.adminTips:[];
+    const timedHints=Array.isArray(model.timedHints)?model.timedHints:[];
+    const timelineEvents=Array.isArray(model.timeline?.events)?model.timeline.events:[];
+    const evening=model.evening||{};
+    const badWeather=model.badWeather||{};
+    target.innerHTML=`
+      <div class="concierge-stack">
+        <article class="concierge-card" aria-label="Persoenlicher Concierge">
+          <p class="concierge-card-eyebrow">🌿 Ihr persönlicher Concierge</p>
+          <h3>${escapeHtml(model.greeting||"Willkommen")}</h3>
+          ${narrative.length?`<div class="concierge-narrative">${narrative.map(line=>`<p>${escapeHtml(line)}</p>`).join("")}</div>`:""}
+          ${timedHints.length?`
+            <ul class="concierge-timed-hints" aria-label="Aktuelle Hinweise">
+              ${timedHints.map(hint=>`<li><span class="concierge-hint-icon" aria-hidden="true">${escapeHtml(hint.icon||"⚠")}</span><span>${escapeHtml(hint.text||"")}</span></li>`).join("")}
+            </ul>
+          `:""}
+          ${hints.length?`<ul class="concierge-hints">${hints.map(hint=>`<li><span class="concierge-hint-icon" aria-hidden="true">${escapeHtml(hint.icon||"✓")}</span><span>${escapeHtml(hint.text||"")}</span></li>`).join("")}</ul>`:""}
+          ${adminTips.length?`<ul class="concierge-admin-tips">${adminTips.map(tip=>`<li><span class="concierge-hint-icon" aria-hidden="true">✦</span><span>${escapeHtml(tip.text||"")}</span></li>`).join("")}</ul>`:""}
+          ${optimizations.length?`<ul class="concierge-optimizations">${optimizations.map(tip=>`<li><span class="concierge-hint-icon" aria-hidden="true">→</span><span>${escapeHtml(tip)}</span></li>`).join("")}</ul>`:""}
+          ${model.profileLabel?`<p class="concierge-profile">Reiseprofil: ${escapeHtml(model.profileLabel)}</p>`:""}
+        </article>
+        ${timelineEvents.length?`
+          <details class="concierge-card concierge-timeline-card" open>
+            <summary class="concierge-timeline-summary">
+              <span class="concierge-card-eyebrow">Concierge Timeline</span>
+              <span class="concierge-timeline-toggle" aria-hidden="true"></span>
+            </summary>
+            <ol class="concierge-timeline" aria-label="Tages-Timeline">
+              ${timelineEvents.map(event=>`
+                <li class="concierge-timeline-item" data-kind="${escapeHtml(event.kind||"")}">
+                  <span class="concierge-timeline-icon" aria-hidden="true">${escapeHtml(event.icon||"📍")}</span>
+                  <div class="concierge-timeline-body">
+                    <div class="concierge-timeline-topline">
+                      ${event.time?`<time>${escapeHtml(event.time)}</time>`:""}
+                      <span class="concierge-timeline-label">${escapeHtml(event.label||"")}</span>
+                    </div>
+                    <strong>${escapeHtml(event.title||"")}</strong>
+                    ${event.text?`<p>${escapeHtml(event.text)}</p>`:""}
+                  </div>
+                </li>
+              `).join("")}
+            </ol>
+          </details>
+        `:""}
+        ${status.length?`
+          <article class="concierge-card" aria-label="Live Reisestatus">
+            <p class="concierge-card-eyebrow">Live Reisestatus</p>
+            <ul class="concierge-status">
+              ${status.map(item=>`
+                <li>
+                  <span class="concierge-status-label">${escapeHtml(item.icon||"")} ${escapeHtml(item.label||"")}</span>
+                  <span class="concierge-status-value">${escapeHtml(item.value||"")}</span>
+                </li>
+              `).join("")}
+            </ul>
+          </article>
+        `:""}
+        ${badWeather.show?`
+          <article class="concierge-card" aria-label="Schlechtwetter Alternativen">
+            <p class="concierge-card-eyebrow">${escapeHtml(badWeather.title||"Schlechtwetter-Alternativen")}</p>
+            <ul class="concierge-alt-list">
+              ${(badWeather.alternatives||[]).map(item=>`<li><span class="concierge-hint-icon" aria-hidden="true">•</span><span>${escapeHtml(item.label||"")}</span></li>`).join("")}
+            </ul>
+          </article>
+        `:""}
+        ${evening.show?`
+          <article class="concierge-card" aria-label="Abendempfehlung">
+            <p class="concierge-card-eyebrow">${escapeHtml(evening.title||"Heute Abend empfehlen wir…")}</p>
+            <ul class="concierge-evening-list">
+              ${(evening.items||[]).map(item=>`<li><span class="concierge-hint-icon" aria-hidden="true">•</span><span>${escapeHtml(item.label||"")}</span></li>`).join("")}
+            </ul>
+          </article>
+        `:""}
+      </div>
+    `;
+    const timelineCard=target.querySelector(".concierge-timeline-card");
+    if(timelineCard&&window.matchMedia&&window.matchMedia("(min-width:900px)").matches){
+      timelineCard.open=true;
+    }
+  }
+
   function renderDayTimelines(){
     const lib=travelLib();
     const scope=progressScopeId();
@@ -1380,6 +1488,18 @@
       const weatherLine=weather
         ?`<p class="day-weather-line">${escapeHtml(weather.symbol||weather.icon||"")} ${escapeHtml(weather.condition||weather.summary||"Wetter")}${tempMin!==null&&tempMax!==null?` · ${tempMin}–${tempMax}°C`:""}</p>`
         :"";
+      const dayModel=conciergeLib()?.resolveConciergeDay?.({
+        customer,
+        day,
+        items:day.items,
+        weather,
+        now:new Date(),
+        recommendations:customer?.conciergeRecommendations
+      });
+      const dayHints=Array.isArray(dayModel?.dayHints)?dayModel.dayHints.slice(0,3):[];
+      const dayHintList=dayHints.length
+        ?`<ul class="day-concierge-hints">${dayHints.map(hint=>`<li>${escapeHtml(hint.icon||"✓")} ${escapeHtml(hint.text||"")}</li>`).join("")}</ul>`
+        :"";
       return `
       <article class="day-card">
         <div class="day-head">
@@ -1387,6 +1507,7 @@
           <h3>Tag ${index+1}</h3>
           <p class="day-progress" data-day-progress>${escapeHtml(progress)}</p>
           ${weatherLine}
+          ${dayHintList}
         </div>
         <div class="day-items">
           ${day.items.map(item=>{
@@ -1583,6 +1704,7 @@
       if(heading)heading.innerHTML=`<strong>Wetter für:</strong> ${escapeHtml(result.location.name)}`;
       target.innerHTML=days.map(weatherDayMarkup).join("");
       if(meta)meta.innerHTML=weatherMetaMarkup(result,result.range);
+      renderConciergeAssistant();
       renderDayTimelines();
     }catch(error){
       console.warn("[ACT Portal] Open-Meteo nicht verfügbar:",error&&error.message?error.message:"Fehler");
@@ -1973,6 +2095,7 @@
     renderStatus();
     renderCalendar();
     renderOverallTimeline();
+    renderConciergeAssistant();
     renderDayTimelines();
     renderProgramDetails();
     renderBookings();

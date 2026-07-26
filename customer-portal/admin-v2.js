@@ -4709,8 +4709,10 @@
       return `${mapsUrl?`<a class="v2-button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">In Maps oeffnen</a>`:""}${navigationUrl?`<a class="v2-button soft" href="${escapeHtml(navigationUrl)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}`;
     }
     const parts=[];
+    if(actions.maps?.show){
+      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.maps.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.maps.label||"In Maps oeffnen")}</a>`);
+    }
     if(actions.navigation.show){
-      parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">In Maps oeffnen</a>`);
       parts.push(`<a class="v2-button soft" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
     }else if(actions.navigation.hint&&(actions.gpx.show||actions.kml.show||cleanValue(item.latitude)||cleanValue(item.longitude))){
       parts.push(`<p class="v2-muted travel-nav-missing">${escapeHtml(actions.navigation.hint)}</p>`);

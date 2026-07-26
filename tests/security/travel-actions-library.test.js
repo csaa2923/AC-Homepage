@@ -192,6 +192,21 @@ describe("travel actions navigation destination", () => {
     assert.match(lib.googleMapsUrl({latitude: 47.3, longitude: 11.2}), /47\.3/);
   });
 
+  it("In Maps oeffnen is place view, Navigation starten is directions", () => {
+    const lib = loadLibrary();
+    const item = {latitude: 47.33012, longitude: 11.18544, title: "Wanderung"};
+    const place = lib.placeUrlForDevice(item, "Mozilla/5.0 (Windows)");
+    const nav = lib.navigationUrlForDevice(item, "Mozilla/5.0 (Windows)");
+    assert.match(place, /maps\/search/);
+    assert.doesNotMatch(place, /maps\/dir/);
+    assert.match(nav, /maps\/dir/);
+    const actions = lib.programItemActions(item, "Mozilla/5.0 (Windows)");
+    assert.equal(actions.maps.show, true);
+    assert.equal(actions.navigation.show, true);
+    assert.equal(actions.maps.url, place);
+    assert.equal(actions.navigation.url, nav);
+  });
+
   it("reads a valid first trackpoint from demo seefeld gpx", () => {
     const lib = loadLibrary();
     const xml = readFileSync(join(root, "demo/seefeld-picknick.gpx"), "utf8");

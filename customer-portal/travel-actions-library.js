@@ -144,18 +144,33 @@
     return {ok:false,kind:"none",url:"",latitude:null,longitude:null,address:"",hint:"Startpunkt nicht hinterlegt"};
   }
 
-  function mapsUrlFromDestination(destination,provider){
+  /**
+   * mode "place" = show destination only (In Maps oeffnen) — never route from current location
+   * mode "directions" = turn-by-turn navigation (Navigation starten)
+   */
+  function mapsUrlFromDestination(destination,provider,mode="place"){
     if(!destination?.ok)return "";
     if(destination.kind==="google-url"||destination.kind==="apple-url")return destination.url;
+    const wantDirections=mode==="directions";
     if(destination.kind==="coords"||destination.kind==="route"){
+      const lat=destination.latitude;
+      const lng=destination.longitude;
       if(provider==="apple"){
-        return `https://maps.apple.com/?daddr=${destination.latitude},${destination.longitude}`;
+        if(wantDirections)return `https://maps.apple.com/?daddr=${lat},${lng}`;
+        return `https://maps.apple.com/?ll=${lat},${lng}&q=${lat},${lng}`;
       }
-      return `https://www.google.com/maps/dir/?api=1&destination=${destination.latitude},${destination.longitude}`;
+      if(wantDirections){
+        return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+      }
+      return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     }
     if(destination.kind==="address"){
       if(provider==="apple"){
+        if(wantDirections)return `https://maps.apple.com/?daddr=${encodeURIComponent(destination.address)}`;
         return `https://maps.apple.com/?q=${encodeURIComponent(destination.address)}`;
+      }
+      if(wantDirections){
+        return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination.address)}`;
       }
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination.address)}`;
     }
@@ -234,11 +249,12 @@
   }
 
   function googleMapsUrl(item){
-    return mapsUrlFromDestination(resolveNavigationDestination(item),"google");
+    // Place view only — must not open directions from the device location.
+    return mapsUrlFromDestination(resolveNavigationDestination(item),"google","place");
   }
 
   function appleMapsUrl(item){
-    return mapsUrlFromDestination(resolveNavigationDestination(item),"apple");
+    return mapsUrlFromDestination(resolveNavigationDestination(item),"apple","place");
   }
 
   function isAppleDevice(userAgent){
@@ -246,11 +262,18 @@
     return /iPhone|iPad|iPod|Macintosh/i.test(ua);
   }
 
+  function placeUrlForDevice(item,userAgent){
+    const destination=resolveNavigationDestination(item);
+    if(!destination.ok)return "";
+    if(destination.kind==="google-url"||destination.kind==="apple-url")return destination.url;
+    return mapsUrlFromDestination(destination,isAppleDevice(userAgent)?"apple":"google","place");
+  }
+
   function navigationUrlForDevice(item,userAgent){
     const destination=resolveNavigationDestination(item);
     if(!destination.ok)return "";
     if(destination.kind==="google-url"||destination.kind==="apple-url")return destination.url;
-    return mapsUrlFromDestination(destination,isAppleDevice(userAgent)?"apple":"google");
+    return mapsUrlFromDestination(destination,isAppleDevice(userAgent)?"apple":"google","directions");
   }
 
   function staticMapPreview(item){
@@ -432,6 +455,7 @@
   function programItemActions(item,userAgent){
     const source=item||{};
     const destination=resolveNavigationDestination(source);
+    const placeUrl=placeUrlForDevice(source,userAgent);
     const navUrl=navigationUrlForDevice(source,userAgent);
     const gpx=normalizeTravelAttachment(source.gpxFile);
     const kml=normalizeTravelAttachment(source.kmlFile);
@@ -441,6 +465,11 @@
     const map=staticMapPreview(source);
     const calendarOk=source.calendarEnabled!==false&&Boolean(text(source.dateValue||source.date));
     return {
+      maps:{
+        show:Boolean(placeUrl&&destination.ok),
+        url:placeUrl,
+        label:"In Maps oeffnen"
+      },
       navigation:{
         show:Boolean(navUrl&&destination.ok),
         url:navUrl,
@@ -549,6 +578,7 @@
     googleMapsUrl,
     appleMapsUrl,
     isAppleDevice,
+    placeUrlForDevice,
     navigationUrlForDevice,
     staticMapPreview,
     buildItemIcs,

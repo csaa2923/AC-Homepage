@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=23">
+<link rel="stylesheet" href="customer-portal.css?v=24">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -169,55 +169,61 @@
     </section>
   </section>
 
-  <section class="portal-section calendar-section" id="calendar" data-app-view="itinerary" aria-labelledby="calendarTitle">
-    <div class="section-head">
-      <p class="eyebrow">Kalender</p>
-      <h2 id="calendarTitle">Ihre Reise als Kalender</h2>
-    </div>
-    <div class="calendar-panel">
-      <div class="calendar-toolbar" aria-label="Kalendersteuerung">
-        <div class="segmented-control" role="group" aria-label="Kalenderansicht">
-          <button class="active" type="button" data-calendar-view="trip">Gesamtreise</button>
-          <button type="button" data-calendar-view="day">Tagesansicht</button>
-        </div>
-        <div class="day-selector" id="calendarDaySelector" aria-label="Tagesauswahl"></div>
-        <button class="button soft" type="button" id="downloadTripCalendarButton">Gesamtreise in Kalender speichern</button>
+  <section id="viewItinerary" class="app-view itinerary-view" data-app-view="itinerary" data-view="itinerary" aria-label="Reiseplan" hidden>
+    <header class="itinerary-hero portal-section">
+      <div class="section-head">
+        <p class="eyebrow">Reiseplan</p>
+        <h2 id="dayTimelineTitle">Ihr Aufenthalt</h2>
+        <p class="itinerary-hero-copy">Alle Programmpunkte chronologisch – Tag für Tag.</p>
       </div>
-      <div class="calendar-view" id="tripCalendar"></div>
-      <div class="calendar-view" id="dayCalendar" hidden></div>
-    </div>
-  </section>
+    </header>
 
-  <section class="portal-section" id="overall-timeline" data-app-view="itinerary" aria-labelledby="overallTimelineTitle">
-    <div class="section-head">
-      <p class="eyebrow">Gesamt-Timeline</p>
-      <h2 id="overallTimelineTitle">Alle Programmpunkte chronologisch</h2>
-    </div>
-    <div class="overall-timeline" id="overallTimeline"></div>
-  </section>
+    <section class="portal-section itinerary-timeline-section" id="day-timeline" aria-labelledby="dayTimelineTitle">
+      <div class="day-timelines itinerary-day-timelines" id="dayTimelines"></div>
+    </section>
 
-  <section class="portal-section" id="day-timeline" data-app-view="itinerary" aria-labelledby="dayTimelineTitle">
-    <div class="section-head">
-      <p class="eyebrow">Tagesprogramm</p>
-      <h2 id="dayTimelineTitle">Ihre Reise nach Tagen</h2>
-    </div>
-    <div class="day-timelines" id="dayTimelines"></div>
-  </section>
+    <section class="portal-section calendar-section itinerary-secondary" id="calendar" aria-labelledby="calendarTitle">
+      <div class="section-head">
+        <p class="eyebrow">Kalender</p>
+        <h2 id="calendarTitle">Ihre Reise als Kalender</h2>
+      </div>
+      <div class="calendar-panel">
+        <div class="calendar-toolbar" aria-label="Kalendersteuerung">
+          <div class="segmented-control" role="group" aria-label="Kalenderansicht">
+            <button class="active" type="button" data-calendar-view="trip">Gesamtreise</button>
+            <button type="button" data-calendar-view="day">Tagesansicht</button>
+          </div>
+          <div class="day-selector" id="calendarDaySelector" aria-label="Tagesauswahl"></div>
+          <button class="button soft" type="button" id="downloadTripCalendarButton">Gesamtreise in Kalender speichern</button>
+        </div>
+        <div class="calendar-view" id="tripCalendar"></div>
+        <div class="calendar-view" id="dayCalendar" hidden></div>
+      </div>
+    </section>
 
-  <section class="portal-section" id="program-details" data-app-view="itinerary" aria-labelledby="programDetailsTitle">
-    <div class="section-head">
-      <p class="eyebrow">Details</p>
-      <h2 id="programDetailsTitle">Detailinformationen je Programmpunkt</h2>
-    </div>
-    <div class="detail-card-grid" id="programDetails"></div>
-  </section>
+    <section class="portal-section itinerary-secondary" id="overall-timeline" aria-labelledby="overallTimelineTitle">
+      <div class="section-head">
+        <p class="eyebrow">Gesamt-Timeline</p>
+        <h2 id="overallTimelineTitle">Alle Programmpunkte chronologisch</h2>
+      </div>
+      <div class="overall-timeline" id="overallTimeline"></div>
+    </section>
 
-  <section class="portal-section" id="bookings" data-app-view="itinerary" aria-labelledby="bookingsTitle">
-    <div class="section-head">
-      <p class="eyebrow">Buchungen</p>
-      <h2 id="bookingsTitle">Ihre bestätigten Leistungen</h2>
-    </div>
-    <div class="booking-grid" id="bookingGrid"></div>
+    <section class="portal-section" id="program-details" aria-labelledby="programDetailsTitle">
+      <div class="section-head">
+        <p class="eyebrow">Details</p>
+        <h2 id="programDetailsTitle">Detailinformationen je Programmpunkt</h2>
+      </div>
+      <div class="detail-card-grid" id="programDetails"></div>
+    </section>
+
+    <section class="portal-section" id="bookings" aria-labelledby="bookingsTitle">
+      <div class="section-head">
+        <p class="eyebrow">Buchungen</p>
+        <h2 id="bookingsTitle">Ihre bestätigten Leistungen</h2>
+      </div>
+      <div class="booking-grid" id="bookingGrid"></div>
+    </section>
   </section>
 
   <section class="portal-section app-view-placeholder" id="discover" data-app-view="discover" aria-labelledby="discoverTitle" hidden>
@@ -298,6 +304,6 @@
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=51"></script>
+<script src="customer-portal.js?v=52"></script>
 </body>
 </html>

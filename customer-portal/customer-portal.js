@@ -1700,69 +1700,269 @@
     }
   }
 
+  function todayDateValue(){
+    const now=new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  }
+
+  function weekdayLabel(dateValue){
+    if(!dateValue||!String(dateValue).includes("-"))return "";
+    const [year,month,day]=String(dateValue).split("-").map(Number);
+    if(!year||!month||!day)return "";
+    return new Date(year,month-1,day).toLocaleDateString("de-DE",{weekday:"long"});
+  }
+
+  function dayTemporalState(dateValue){
+    const today=todayDateValue();
+    const value=String(dateValue||"");
+    if(!value)return "upcoming";
+    if(value<today)return "past";
+    if(value===today)return "today";
+    return "upcoming";
+  }
+
+  function resolveNextProgramItemId(now=new Date()){
+    const today=todayDateValue();
+    const nowMins=now.getHours()*60+now.getMinutes();
+    for(const item of programItems()){
+      const dateValue=String(item.dateValue||"");
+      if(!dateValue)continue;
+      if(dateValue>today)return item.id;
+      if(dateValue===today){
+        const end=eventEndMinutes(item);
+        if(!Number.isFinite(end)||end>nowMins)return item.id;
+      }
+    }
+    return "";
+  }
+
+  function itemTemporalState(item,dayDateValue,nextId,now=new Date()){
+    const today=todayDateValue();
+    const dateValue=String(item._calendarDate||item.dateValue||dayDateValue||"");
+    if(dateValue&&dateValue<today)return "past";
+    if(dateValue&&dateValue>today)return String(item.id)===String(nextId)?"next":"upcoming";
+    const nowMins=now.getHours()*60+now.getMinutes();
+    const start=timeToMinutes(item.startTime);
+    const end=eventEndMinutes(item);
+    if(Number.isFinite(start)&&Number.isFinite(end)){
+      if(nowMins>=start&&nowMins<end)return "current";
+      if(nowMins>=end)return "past";
+    }
+    if(String(item.id)===String(nextId))return "next";
+    return "upcoming";
+  }
+
+  function isHikeProgramItem(item){
+    return /wandern|hike|tour|berg/i.test(`${item?.category||""} ${item?.title||""}`)
+      ||Boolean(item?.gpxFile||item?.kmlFile)
+      ||Boolean(travelLib()?.resolveHikeCompanion?.(itemForTravelActions(item))?.show);
+  }
+
+  function itineraryFilledFields(item,linked){
+    const timeRange=[item.startTime,item.endTime].filter(hasDisplayValue).join(" – ");
+    return [
+      ["Uhrzeit",timeRange],
+      ["Kategorie",item.category],
+      ["Ort",item.location||item.address||item.locationAddress||""],
+      ["Dauer",item.duration],
+      ["Treffpunkt",item.meetingPoint],
+      ["Hinweise",item.notes||linked?.customerNote||""],
+      ["Ansprechpartner",item.contactPerson],
+      ["Telefon",item.phone],
+      ["Status",programStatusLabel(item)],
+      ["Anbieter",linked?.provider||""]
+    ].filter(([,value])=>hasDisplayValue(value));
+  }
+
+  function itineraryDescriptionMarkup(item){
+    const textValue=String(item.description||item.shortDescription||"").trim();
+    if(!textValue)return "";
+    if(textValue.length<=180)return `<p class="itinerary-card-desc">${escapeHtml(textValue)}</p>`;
+    return `
+      <details class="itinerary-desc">
+        <summary>Beschreibung lesen</summary>
+        <p>${escapeHtml(textValue)}</p>
+      </details>
+    `;
+  }
+
+  function itineraryMapsButtons(item){
+    const lib=travelLib();
+    const source=itemForTravelActions(item);
+    const google=lib?.googleMapsUrl?.(source)||"";
+    const apple=lib?.appleMapsUrl?.(source)||"";
+    const buttons=[];
+    if(google)buttons.push(`<a class="button soft" href="${escapeHtml(google)}" target="_blank" rel="noopener noreferrer">Google Maps</a>`);
+    if(apple)buttons.push(`<a class="button soft" href="${escapeHtml(apple)}" target="_blank" rel="noopener noreferrer">Apple Karten</a>`);
+    if(!buttons.length){
+      const nav=itemNavigationUrl(source);
+      if(nav)buttons.push(`<a class="button soft" href="${escapeHtml(nav)}" target="_blank" rel="noopener noreferrer">Navigation</a>`);
+    }
+    return buttons.length?`<div class="itinerary-maps card-actions">${buttons.join("")}</div>`:"";
+  }
+
+  function itineraryDocumentStrip(item,linked){
+    const docs=[];
+    (linked?.documents||[]).map(normalizeDocument).forEach(doc=>{
+      const url=resolveDocumentUrl(doc);
+      if(url&&doc.visible!==false)docs.push({title:doc.title||doc.fileName||"Dokument",url});
+    });
+    if(Array.isArray(item.documents)){
+      item.documents.forEach(entry=>{
+        if(typeof entry==="string"&&/^https?:\/\//i.test(entry))docs.push({title:"Dokument",url:entry});
+        else if(entry&&typeof entry==="object"){
+          const doc=normalizeDocument(entry);
+          const url=resolveDocumentUrl(doc);
+          if(url)docs.push({title:doc.title||doc.fileName||"Dokument",url});
+        }
+      });
+    }
+    const lib=travelLib();
+    const actions=lib?.programItemActions?lib.programItemActions(itemForTravelActions(item)):null;
+    if(actions?.ticketQr?.show)docs.push({title:actions.ticketQr.label||"Ticket",url:actions.ticketQr.url});
+    if(actions?.ticketPdf?.show)docs.push({title:actions.ticketPdf.label||"Ticket PDF",url:actions.ticketPdf.url});
+    if(actions?.voucher?.show)docs.push({title:actions.voucher.label||"Voucher",url:actions.voucher.url});
+    if(!docs.length)return "";
+    return `
+      <div class="itinerary-docs" aria-label="Dokumente">
+        ${docs.map(doc=>`<a class="itinerary-doc-chip" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(doc.title)}</a>`).join("")}
+      </div>
+    `;
+  }
+
+  function itineraryHotelCard(dateValue){
+    const hotel=customer?.hotel;
+    if(!hotel||!hasDisplayValue(hotel.name))return "";
+    const start=String(customer.startDatePlain||"");
+    const end=String(customer.endDatePlain||"");
+    const day=String(dateValue||"");
+    if(!day||(day!==start&&day!==end))return "";
+    const navUrl=resolveNavigationUrl(hotel.navigation,hotel.address,hotel.name);
+    const phase=day===end?"Check-out":"Check-in";
+    return `
+      <aside class="itinerary-hotel-card" aria-label="Unterkunft">
+        <p class="eyebrow">${escapeHtml(phase)} · Unterkunft</p>
+        <strong>${escapeHtml(hotel.name)}</strong>
+        ${hasDisplayValue(hotel.address)?`<p>${escapeHtml(hotel.address)}</p>`:""}
+        ${day===start&&hasDisplayValue(hotel.checkIn)?`<p>Check-in: ${escapeHtml(hotel.checkIn)}</p>`:""}
+        ${day===end&&hasDisplayValue(hotel.checkOut)?`<p>Check-out: ${escapeHtml(hotel.checkOut)}</p>`:""}
+        ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation</a>`:""}
+      </aside>
+    `;
+  }
+
+  function itineraryWeatherBadge(dateValue){
+    const weather=weatherForDate(dateValue||"");
+    if(!weather)return "";
+    const tempMin=Number.isFinite(Number(weather.tempMin))?Math.round(Number(weather.tempMin)):null;
+    const tempMax=Number.isFinite(Number(weather.tempMax))?Math.round(Number(weather.tempMax)):null;
+    const temp=tempMin!==null&&tempMax!==null?`${tempMin}–${tempMax}°C`:"";
+    const label=[weather.symbol||weather.icon||"",weather.condition||weather.summary||"",temp].filter(Boolean).join(" ");
+    if(!label.trim())return "";
+    return `<span class="itinerary-weather-badge" aria-label="Wetter">${escapeHtml(label.trim())}</span>`;
+  }
+
+  function itineraryHikeCompactMarkup(item){
+    if(!isHikeProgramItem(item))return "";
+    const companion=travelLib()?.resolveHikeCompanion?.(itemForTravelActions(item));
+    const mapId=`itinerary-hike-${String(item.id||"").replace(/[^\w-]/g,"")}`;
+    const mapPayload=companion?.map?.ok?escapeHtml(JSON.stringify({
+      mapId,
+      embedUrl:companion.map.embedUrl||"",
+      points:Array.isArray(companion.map.routePoints)?companion.map.routePoints:[],
+      bounds:companion.map.bounds||null,
+      markers:Array.isArray(companion.map.markers)?companion.map.markers:[],
+      loadOsmHighlights:false,
+      start:Number.isFinite(Number(companion.map.latitude))&&Number.isFinite(Number(companion.map.longitude))
+        ?{latitude:Number(companion.map.latitude),longitude:Number(companion.map.longitude)}
+        :null,
+      end:Number.isFinite(Number(companion.map.endLatitude))&&Number.isFinite(Number(companion.map.endLongitude))
+        ?{latitude:Number(companion.map.endLatitude),longitude:Number(companion.map.endLongitude)}
+        :null
+    })):"";
+    const mapBlock=companion?.map?.ok?`
+      <div class="itinerary-hike-map travel-map-preview" data-hike-map-shell="${escapeHtml(mapId)}">
+        <div class="hike-map-frame itinerary-hike-frame">
+          <div class="hike-leaflet-map" id="${escapeHtml(mapId)}" data-hike-map="${mapPayload}" role="region" aria-label="Kompakte Wanderkarte"></div>
+        </div>
+      </div>
+    `:"";
+    return `
+      <div class="itinerary-hike-compact">
+        ${mapBlock}
+        <a class="button soft" href="#${detailId(item)}">Wanderdetails</a>
+      </div>
+    `;
+  }
+
   function renderDayTimelines(){
+    const rootEl=document.getElementById("dayTimelines");
+    if(!rootEl)return;
     const lib=travelLib();
     const scope=progressScopeId();
-    document.getElementById("dayTimelines").innerHTML=groupedProgram().map((day,index)=>{
+    const nextId=resolveNextProgramItemId();
+    const now=new Date();
+    rootEl.innerHTML=groupedProgram().map((day,index)=>{
       const itemIds=day.items.map(item=>item.id);
       const doneSet=lib?.readDoneSet?lib.readDoneSet(scope,itemIds):new Set();
       const doneCount=day.items.filter(item=>doneSet.has(String(item.id))).length;
       const progress=lib?.progressLabel?lib.progressLabel(doneCount,day.items.length):`${doneCount} von ${day.items.length} Programmpunkten abgeschlossen`;
-      const weather=weatherForDate(day.dateValue||day.items[0]?.dateValue||"");
-      const tempMin=Number.isFinite(Number(weather?.tempMin))?Math.round(Number(weather.tempMin)):null;
-      const tempMax=Number.isFinite(Number(weather?.tempMax))?Math.round(Number(weather.tempMax)):null;
-      const weatherLine=weather
-        ?`<p class="day-weather-line">${escapeHtml(weather.symbol||weather.icon||"")} ${escapeHtml(weather.condition||weather.summary||"Wetter")}${tempMin!==null&&tempMax!==null?` · ${tempMin}–${tempMax}°C`:""}</p>`
-        :"";
-      const dayModel=conciergeLib()?.resolveConciergeDay?.({
-        customer,
-        day,
-        items:day.items,
-        weather,
-        now:new Date(),
-        recommendations:customer?.conciergeRecommendations
-      });
-      const dayHints=Array.isArray(dayModel?.dayHints)?dayModel.dayHints.slice(0,3):[];
-      const dayHintList=dayHints.length
-        ?`<ul class="day-concierge-hints">${dayHints.map(hint=>`<li>${escapeHtml(hint.icon||"✓")} ${escapeHtml(hint.text||"")}</li>`).join("")}</ul>`
-        :"";
+      const dayState=dayTemporalState(day.dateValue);
+      const weekday=weekdayLabel(day.dateValue);
+      const weatherBadge=itineraryWeatherBadge(day.dateValue||day.items[0]?.dateValue||"");
+      const hotelCard=itineraryHotelCard(day.dateValue);
       return `
-      <article class="day-card">
-        <div class="day-head">
-          <p class="eyebrow">${escapeHtml(day.date)}</p>
-          <h3>Tag ${index+1}</h3>
-          <p class="day-progress" data-day-progress>${escapeHtml(progress)}</p>
-          ${weatherLine}
-          ${dayHintList}
-        </div>
-        <div class="day-items">
+      <article class="itinerary-day day-card is-${escapeHtml(dayState)}" data-day-state="${escapeHtml(dayState)}" ${dayState==="today"?"data-itinerary-today=\"1\"":""}>
+        <header class="itinerary-day-head day-head">
+          <div>
+            <p class="eyebrow">${escapeHtml(weekday||day.date)}</p>
+            <h3>${escapeHtml(weekday?`${weekday} · ${day.date}`:`Tag ${index+1} · ${day.date}`)}</h3>
+            <p class="day-progress" data-day-progress>${escapeHtml(progress)}</p>
+          </div>
+          ${weatherBadge}
+        </header>
+        ${hotelCard}
+        <ol class="itinerary-track day-items">
           ${day.items.map(item=>{
             const done=doneSet.has(String(item.id));
+            const linked=linkedBookingForItem(item);
+            const state=itemTemporalState(item,day.dateValue,nextId,now);
+            const fields=itineraryFilledFields(item,linked);
             return `
-            <div class="day-item day-item-travel ${done?"is-done":""}">
-              <label class="day-item-done">
-                <input type="checkbox" data-program-done="${escapeHtml(item.id)}" ${done?"checked":""}>
-                <span class="sr-only">Erledigt</span>
-              </label>
-              <a class="day-item-main" href="#${detailId(item)}">
-                <span class="timeline-time">${escapeHtml(item.startTime||"")}</span>
-                <span>
-                  <strong>${escapeHtml(item.title||"")}</strong>
-                  <small>${escapeHtml(item.shortDescription||"")}</small>
-                  <small>${escapeHtml(item.meetingPoint||item.address||"")}</small>
-                </span>
-                <span class="tag">${escapeHtml(programStatusLabel(item))}</span>
-              </a>
-              <div class="day-item-actions card-actions">
-                ${travelActionsMarkup(item,{compact:true})}
+            <li class="itinerary-item day-item day-item-travel is-${escapeHtml(state)} ${done?"is-done":""}" data-item-state="${escapeHtml(state)}">
+              <div class="itinerary-rail" aria-hidden="true">
+                <span class="itinerary-dot"></span>
               </div>
-            </div>
+              <article class="itinerary-card">
+                <div class="itinerary-card-top">
+                  <label class="day-item-done">
+                    <input type="checkbox" data-program-done="${escapeHtml(item.id)}" ${done?"checked":""}>
+                    <span class="sr-only">Erledigt</span>
+                  </label>
+                  <div class="itinerary-card-heading">
+                    <p class="itinerary-time">${escapeHtml(item.startTime||"")}${item.endTime?` – ${escapeHtml(item.endTime)}`:""}</p>
+                    <h4>${escapeHtml(item.title||"")}</h4>
+                    ${hasDisplayValue(item.category)||programStatusLabel(item)?`<p class="itinerary-tags"><span class="tag">${escapeHtml([item.category,programStatusLabel(item)].filter(hasDisplayValue).join(" · "))}</span></p>`:""}
+                  </div>
+                </div>
+                ${itineraryDescriptionMarkup(item)}
+                ${fields.length?`<dl class="itinerary-fields field-list">${fields.map(([label,value])=>`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`:""}
+                ${itineraryDocumentStrip(item,linked)}
+                ${itineraryMapsButtons(item)}
+                ${itineraryHikeCompactMarkup(item)}
+                <div class="itinerary-card-actions card-actions day-item-actions">
+                  <a class="button soft" href="#${detailId(item)}">Details</a>
+                  ${travelActionsMarkup(item,{compact:true,mode:"secondary"})}
+                </div>
+              </article>
+            </li>
           `;
           }).join("")}
-        </div>
+        </ol>
       </article>
     `;
-    }).join("");
+    }).join("")||`<p class="today-empty">Für diese Reise sind noch keine Programmpunkte hinterlegt.</p>`;
+    observeLazyMaps(rootEl);
   }
 
   function linkedBookingForItem(item){
@@ -2231,7 +2431,10 @@
     }
   }
 
+  let actionsBound=false;
   function bindActions(){
+    if(actionsBound)return;
+    actionsBound=true;
     document.addEventListener("change",event=>{
       const doneToggle=event.target.closest("input[data-program-done]");
       if(!doneToggle)return;

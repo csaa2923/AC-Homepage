@@ -16,8 +16,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=51/);
-    assert.match(portalHtml, /customer-portal\.css\?v=23/);
+    assert.match(portalHtml, /customer-portal\.js\?v=52/);
+    assert.match(portalHtml, /customer-portal\.css\?v=24/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -25,14 +25,15 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /id="overview"/);
     assert.match(portalHtml, /id="status"/);
     assert.match(portalHtml, /id="concierge"/);
-    assert.match(portalHtml, /id="overall-timeline"[^>]*data-app-view="itinerary"/);
-    assert.match(portalHtml, /id="day-timeline"[^>]*data-app-view="itinerary"/);
-    assert.match(portalHtml, /id="program-details"[^>]*data-app-view="itinerary"/);
-    assert.match(portalHtml, /id="bookings"[^>]*data-app-view="itinerary"/);
+    assert.match(portalHtml, /id="viewItinerary"[^>]*data-app-view="itinerary"/);
+    assert.match(portalHtml, /id="overall-timeline"/);
+    assert.match(portalHtml, /id="day-timeline"/);
+    assert.match(portalHtml, /id="program-details"/);
+    assert.match(portalHtml, /id="bookings"/);
+    assert.match(portalHtml, /id="calendar"/);
     assert.match(portalHtml, /id="documents"[^>]*data-app-view="documents"/);
     assert.match(portalHtml, /id="contact"[^>]*data-app-view="service"/);
     assert.match(portalHtml, /id="actions"[^>]*data-app-view="service"/);
-    assert.match(portalHtml, /id="calendar"[^>]*data-app-view="itinerary"/);
     assert.match(portalHtml, /id="accommodation"[^>]*data-app-view="service"/);
     assert.match(portalHtml, /id="discover"[^>]*data-app-view="discover"/);
     assert.match(portalHtml, /id="conciergeRoot"/);
@@ -148,5 +149,46 @@ describe("customer portal today view (4.2)", () => {
     assert.match(portalCss, /\.today-quick-grid/);
     assert.match(portalCss, /@media\(min-width:980px\)/);
     assert.match(portalCss, /position:sticky/);
+  });
+});
+
+describe("customer portal itinerary view (4.3)", () => {
+  it("builds itinerary view wrapper with stable timeline ids", () => {
+    assert.match(portalHtml, /id="viewItinerary"/);
+    assert.match(portalHtml, /class="[^"]*itinerary-view/);
+    assert.match(portalHtml, /id="dayTimelines"/);
+    assert.match(portalHtml, /id="programDetails"/);
+    assert.match(portalHtml, /id="bookingGrid"/);
+    assert.match(portalHtml, /Wanderdetails|dayTimelineTitle/);
+  });
+
+  it("renders premium day grouping and temporal states from existing data helpers", () => {
+    assert.match(portalJs, /function renderDayTimelines\(/);
+    assert.match(portalJs, /function weekdayLabel\(/);
+    assert.match(portalJs, /function dayTemporalState\(/);
+    assert.match(portalJs, /function itemTemporalState\(/);
+    assert.match(portalJs, /function resolveNextProgramItemId\(/);
+    assert.match(portalJs, /function itineraryMapsButtons\(/);
+    assert.match(portalJs, /function itineraryDocumentStrip\(/);
+    assert.match(portalJs, /function itineraryWeatherBadge\(/);
+    assert.match(portalJs, /function itineraryHotelCard\(/);
+    assert.match(portalJs, /function itineraryHikeCompactMarkup\(/);
+    assert.match(portalJs, /Wanderdetails/);
+    assert.match(portalJs, /Google Maps/);
+    assert.match(portalJs, /Apple Karten/);
+    assert.match(portalJs, /groupedProgram\(\)/);
+    assert.match(portalJs, /actionsBound/);
+  });
+
+  it("styles timeline rail and status without aggressive colors", () => {
+    assert.match(portalCss, /\.itinerary-track/);
+    assert.match(portalCss, /\.itinerary-rail/);
+    assert.match(portalCss, /\.itinerary-card/);
+    assert.match(portalCss, /\.itinerary-weather-badge/);
+    assert.match(portalCss, /\.itinerary-hotel-card/);
+    assert.match(portalCss, /width:min\(1200px,100%\)/);
+    assert.match(portalCss, /prefers-reduced-motion:reduce/);
+    assert.match(portalCss, /\.itinerary-item\.is-past/);
+    assert.match(portalCss, /\.itinerary-day\.is-today/);
   });
 });

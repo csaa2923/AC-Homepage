@@ -1330,9 +1330,10 @@ h3{font-size:24px;color:var(--green)}
 }
 .customer-app[data-view-mode="filtered"] > [data-app-view]:not([hidden]):not([data-view-hidden="1"]){
   animation:app-view-enter .28s ease;
+  opacity:1;
 }
 @keyframes app-view-enter{
-  from{opacity:0;transform:translateY(8px)}
+  from{opacity:.01;transform:translateY(8px)}
   to{opacity:1;transform:none}
 }
 @media (prefers-reduced-motion:reduce){

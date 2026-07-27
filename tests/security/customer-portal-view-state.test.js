@@ -16,8 +16,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=53/);
-    assert.match(portalHtml, /customer-portal\.css\?v=25/);
+    assert.match(portalHtml, /customer-portal\.js\?v=54/);
+    assert.match(portalHtml, /customer-portal\.css\?v=26/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -225,5 +225,86 @@ describe("customer portal documents view (4.4)", () => {
     assert.match(portalCss, /\.documents-empty/);
     assert.match(portalCss, /grid-template-columns:repeat\(2,/);
     assert.match(portalCss, /min-height:44px/);
+  });
+});
+
+describe("customer portal render/layout stabilization (4.4A)", () => {
+  const criticalIds = [
+    "portalRoot",
+    "viewToday",
+    "portalTitle",
+    "tripTitle",
+    "heroMeta",
+    "publicationStatus",
+    "updatedAt",
+    "progressFill",
+    "statusSteps",
+    "conciergeRoot",
+    "nextEventCard",
+    "weatherCard",
+    "viewItinerary",
+    "dayTimelines",
+    "programDetails",
+    "bookingGrid",
+    "tripCalendar",
+    "dayCalendar",
+    "overallTimeline",
+    "viewDocuments",
+    "documentGrid",
+    "hotelCard",
+    "contactCard",
+    "actionGrid",
+    "historyList",
+    "whatsappHero",
+    "whatsappQuick"
+  ];
+
+  it("keeps every render target id exactly once (no missing/duplicate critical ids)", () => {
+    for (const id of criticalIds) {
+      const matches = portalHtml.match(new RegExp(`id="${id}"`, "g")) || [];
+      assert.equal(matches.length, 1, `expected exactly one #${id}, got ${matches.length}`);
+    }
+    assert.equal((portalHtml.match(/id="weatherDays"/g) || []).length, 0, "weatherDays is injected by renderWeather");
+  });
+
+  it("guards renderPortal so one failing block cannot blank the rest", () => {
+    assert.match(portalJs, /function el\(/);
+    assert.match(portalJs, /function setHtml\(/);
+    assert.match(portalJs, /function safeRender\(/);
+    assert.match(portalJs, /safeRender\("meta",renderMeta\)/);
+    assert.match(portalJs, /safeRender\("status",renderStatus\)/);
+    assert.match(portalJs, /safeRender\("nextEvent",renderNextEvent\)/);
+    assert.match(portalJs, /safeRender\("concierge",renderConciergeAssistant\)/);
+    assert.match(portalJs, /safeRender\("weather",renderWeather\)/);
+    assert.match(portalJs, /safeRender\("documents",renderDocuments\)/);
+    assert.match(portalJs, /safeRender\("dayTimelines",renderDayTimelines\)/);
+    assert.match(portalJs, /safeRender\("programDetails",renderProgramDetails\)/);
+    assert.match(portalJs, /Willkommen \$\{customer\.customerName\|\|"Gast"\}/);
+    assert.match(portalJs, /applyAppViewVisibility\(\)/);
+    assert.doesNotMatch(portalJs, /getElementById\([^)]+\)\.(innerHTML|href)\s*=/);
+  });
+
+  it("keeps calendar/weather empty-state guards and null-safe whatsapp links", () => {
+    assert.match(portalJs, /function calendarBounds\(items\)/);
+    assert.match(portalJs, /if\(!starts\.length\|\|!ends\.length\)/);
+    assert.match(portalJs, /Noch keine Programmpunkte für den Kalender/);
+    assert.match(portalJs, /String\(number\|\|""\)\.replace/);
+    assert.match(portalJs, /safeRender\("concierge",renderConciergeAssistant\)/);
+    assert.match(portalJs, /safeRender\("dayTimelines",renderDayTimelines\)/);
+  });
+
+  it("does not leave filtered views stuck at opacity 0 after enter animation", () => {
+    assert.match(portalCss, /opacity:1/);
+    assert.match(portalCss, /from\{opacity:\.01/);
+    assert.match(portalCss, /prefers-reduced-motion:reduce/);
+    assert.match(portalCss, /animation:none/);
+  });
+
+  it("preserves existing premium content containers for today/itinerary/documents/service", () => {
+    assert.match(portalHtml, /id="viewToday"[\s\S]*id="portalTitle"[\s\S]*id="conciergeRoot"[\s\S]*id="nextEventCard"[\s\S]*id="weatherCard"/);
+    assert.match(portalHtml, /id="viewItinerary"[\s\S]*id="dayTimelines"[\s\S]*id="programDetails"/);
+    assert.match(portalHtml, /id="viewDocuments"[\s\S]*id="documentGrid"/);
+    assert.match(portalHtml, /data-app-view="service"[\s\S]*id="hotelCard"/);
+    assert.match(portalHtml, /data-app-view="service"[\s\S]*id="contactCard"/);
   });
 });

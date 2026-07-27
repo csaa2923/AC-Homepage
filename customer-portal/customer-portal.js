@@ -493,6 +493,13 @@
     next.weather={...base.weather,...(next.weather||{}),days:Array.isArray(next.weather?.days)?next.weather.days:[]};
     next.history=Array.isArray(next.history)?next.history:[];
     next.hotel=next.accommodations[0]||next.hotel||{};
+    next.customerName=String(
+      next.customerName
+      ||[next.firstName,next.lastName].filter(value=>String(value||"").trim()).join(" ")
+      ||next.name
+      ||base.customerName
+    ).trim();
+    next.whatsapp=String(next.whatsapp||next.contact?.whatsapp||base.whatsapp||"").trim()||base.whatsapp;
     return next;
   }
 
@@ -1418,7 +1425,7 @@
   }
 
   function whatsappLink(number,message){
-    const normalized=number.replace(/[^\d]/g,"");
+    const normalized=String(number||"").replace(/[^\d]/g,"");
     return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
   }
 
@@ -1538,8 +1545,10 @@
   }
 
   function calendarBounds(items){
-    const starts=items.map(item=>timeToMinutes(item.startTime)).filter(Number.isFinite);
-    const ends=items.map(eventEndMinutes).filter(Number.isFinite);
+    const list=Array.isArray(items)?items:[];
+    const starts=list.map(item=>timeToMinutes(item.startTime)).filter(Number.isFinite);
+    const ends=list.map(eventEndMinutes).filter(Number.isFinite);
+    if(!starts.length||!ends.length)return {startHour:8,endHour:18,hours:10};
     const startHour=Math.max(6,Math.floor((Math.min(...starts)-60)/60));
     const endHour=Math.min(23,Math.ceil((Math.max(...ends)+60)/60));
     return {startHour,endHour,hours:Math.max(4,endHour-startHour)};
@@ -1589,6 +1598,24 @@
     return "";
   }
 
+  function el(id){
+    return document.getElementById(id);
+  }
+
+  function setHtml(id,html){
+    const target=el(id);
+    if(target)target.innerHTML=html;
+    return target;
+  }
+
+  function safeRender(label,fn){
+    try{
+      fn();
+    }catch(error){
+      console.warn(`[ACT Portal] Render fehlgeschlagen (${label}):`,error&&error.message?error.message:error);
+    }
+  }
+
   function renderMeta(){
     const customerNumber=portalCustomerNumber(customer);
     const items=[
@@ -1596,13 +1623,13 @@
       ["Region",customer.region],
       ["Mitreisende",customer.companions],
       ["Reisestatus",customer.status],
-      ["Countdown",daysUntil(customer.startDate)],
+      ["Countdown",daysUntil(customer.startDate||customer.startDatePlain)],
       ["Concierge",customer.concierge],
       ...(customerNumber?[["Kundennummer",customerNumber]]:[]),
       ["Portal",`Version ${customer.version}`],
       ["Veröffentlichung",customer.publicationState]
     ].filter(([,value])=>hasDisplayValue(value));
-    document.getElementById("heroMeta").innerHTML=items.map(([label,value])=>`<div class="meta-item"><span>${label}</span><span>${value}</span></div>`).join("");
+    setHtml("heroMeta",items.map(([label,value])=>`<div class="meta-item"><span>${label}</span><span>${value}</span></div>`).join(""));
   }
 
   function renderStatus(){
@@ -1611,13 +1638,14 @@
     const currentIndex=steps.indexOf(customer.status);
     const doneIndex=Math.max(currentIndex,0);
     const percentage=steps.length>1?(doneIndex/(steps.length-1))*100:0;
-    document.getElementById("progressFill").style.width=`${percentage}%`;
-    document.getElementById("statusSteps").innerHTML=steps.map((step,index)=>`
+    const fill=el("progressFill");
+    if(fill)fill.style.width=`${percentage}%`;
+    setHtml("statusSteps",steps.map((step,index)=>`
       <li class="${index<=doneIndex?"done":""}">
         <span class="step-dot"></span>
         <span>${step}</span>
       </li>
-    `).join("");
+    `).join(""));
   }
 
   function renderNextEvent(){
@@ -1645,7 +1673,9 @@
 
   function renderCalendarControls(){
     const days=groupedProgram();
-    document.getElementById("calendarDaySelector").innerHTML=days.map((day,index)=>`
+    const selector=el("calendarDaySelector");
+    if(!selector)return;
+    selector.innerHTML=days.map((day,index)=>`
       <button class="${index===calendarState.dayIndex?"active":""}" type="button" data-calendar-day="${index}">
         <span>Tag ${index+1}</span>
         <strong>${day.date}</strong>
@@ -1658,8 +1688,14 @@
 
   function renderTripCalendar(){
     const days=groupedProgram();
+    const target=el("tripCalendar");
+    if(!target)return;
+    if(!days.length){
+      target.innerHTML=`<p class="today-empty">Noch keine Programmpunkte für den Kalender hinterlegt.</p>`;
+      return;
+    }
     const bounds=calendarBounds(programItems());
-    document.getElementById("tripCalendar").innerHTML=`
+    target.innerHTML=`
       <div class="calendar-grid" style="--calendar-height:${bounds.hours*72}px;--calendar-days:${days.length}">
         <div class="calendar-time-axis">${hourLabels(bounds)}</div>
         <div class="calendar-day-columns">
@@ -1678,19 +1714,25 @@
 
   function renderDayCalendar(){
     const days=groupedProgram();
+    const target=el("dayCalendar");
+    if(!target)return;
     const day=days[calendarState.dayIndex]||days[0];
-    const bounds=calendarBounds(day.items);
-    document.getElementById("dayCalendar").innerHTML=`
+    if(!day){
+      target.innerHTML=`<p class="today-empty">Noch keine Programmpunkte für den Kalender hinterlegt.</p>`;
+      return;
+    }
+    const bounds=calendarBounds(day.items||[]);
+    target.innerHTML=`
       <div class="single-day-calendar">
         <header>
-          <p class="eyebrow">Tagesansicht</p>
+          <p class="eyebrow">Tag ${(calendarState.dayIndex||0)+1}</p>
           <h3>${day.date}</h3>
         </header>
-        <div class="calendar-grid day-only" style="--calendar-height:${bounds.hours*72}px">
+        <div class="calendar-grid day-only" style="--calendar-height:${bounds.hours*72}px;--calendar-days:1">
           <div class="calendar-time-axis">${hourLabels(bounds)}</div>
           <section class="calendar-day-column">
             <div class="calendar-day-body">
-              ${day.items.map(item=>calendarBlock(item,bounds)).join("")}
+              ${(day.items||[]).map(item=>calendarBlock(item,bounds)).join("")}
             </div>
           </section>
         </div>
@@ -1699,10 +1741,10 @@
   }
 
   function updateCalendarVisibility(){
-    const trip=document.getElementById("tripCalendar");
-    const day=document.getElementById("dayCalendar");
-    trip.hidden=calendarState.view!=="trip";
-    day.hidden=calendarState.view!=="day";
+    const trip=el("tripCalendar");
+    const day=el("dayCalendar");
+    if(trip)trip.hidden=calendarState.view!=="trip";
+    if(day)day.hidden=calendarState.view!=="day";
   }
 
   function renderCalendar(){
@@ -1714,15 +1756,15 @@
   }
 
   function renderOverallTimeline(){
-    document.getElementById("overallTimeline").innerHTML=programItems().map(item=>`
+    setHtml("overallTimeline",programItems().map(item=>`
       <a class="timeline-link" href="#${detailId(item)}">
         <span class="timeline-date">${itemDate(item)}</span>
-        <span class="timeline-time">${item.startTime}</span>
-        <span class="timeline-title">${item.title}</span>
-        <span class="timeline-place">${item.meetingPoint}</span>
+        <span class="timeline-time">${item.startTime||""}</span>
+        <span class="timeline-title">${item.title||""}</span>
+        <span class="timeline-place">${item.meetingPoint||""}</span>
         <span class="tag">${programStatusLabel(item)}</span>
       </a>
-    `).join("");
+    `).join(""));
   }
 
   function renderConciergeAssistant(){
@@ -2103,7 +2145,8 @@
 
   function renderProgramDetails(){
     const items=programItems();
-    const detailsRoot=document.getElementById("programDetails");
+    const detailsRoot=el("programDetails");
+    if(!detailsRoot)return;
     detailsRoot.innerHTML=items.map((item,index)=>{
       const previous=items[index-1];
       const next=items[index+1];
@@ -2118,10 +2161,10 @@
         :travelActionsMarkup(item);
       return `
         <article class="program-detail-card" id="${detailId(item)}">
-          <span class="tag">${item.category} · ${programStatusLabel(item)}</span>
-          <h3>${item.title}</h3>
+          <span class="tag">${escapeHtml(item.category||"")} · ${escapeHtml(programStatusLabel(item))}</span>
+          <h3>${escapeHtml(item.title||"")}</h3>
           ${companionParts.intro}
-          <p>${item.description}</p>
+          <p>${escapeHtml(item.description||"")}</p>
           ${companionParts.route}
           ${linked?.customerNote?`<p class="booking-customer-note"><strong>Hinweis:</strong> ${escapeHtml(linked.customerNote)}</p>`:""}
           ${definitionList([
@@ -2187,11 +2230,11 @@
   }
 
   function renderHotel(){
-    const hotel=customer.hotel;
+    const hotel=customer.hotel||{};
     const navUrl=resolveNavigationUrl(hotel.navigation,hotel.address,hotel.name);
-    document.getElementById("hotelCard").innerHTML=`
+    setHtml("hotelCard",`
       <p class="eyebrow">Unterkunft</p>
-      <h2>${hotel.name}</h2>
+      <h2>${escapeHtml(hotel.name||"Unterkunft")}</h2>
       ${definitionList([
         ["Adresse",hotel.address],
         ["Check-in",hotel.checkIn],
@@ -2199,12 +2242,12 @@
         ["Kontakt",hotel.contact],
         ["Voucher",hotel.voucherStatus]
       ])}
-      ${navUrl?`<div class="card-actions"><a class="button primary" href="${navUrl}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a></div>`:""}
-    `;
+      ${navUrl?`<div class="card-actions"><a class="button primary" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a></div>`:""}
+    `);
   }
 
   function renderWeather(){
-    document.getElementById("weatherCard").innerHTML=`
+    setHtml("weatherCard",`
       <p class="eyebrow">Wetter</p>
       <h2>Reisewetter</h2>
       <p id="weatherLocationLabel"><strong>Wetter für:</strong> ${escapeHtml(weatherRegionLabel())}</p>
@@ -2212,7 +2255,7 @@
         <div class="weather-day"><strong>Live-Wetter wird geladen …</strong><span>Daten kommen direkt von Open-Meteo fuer Ihren Reisezeitraum.</span></div>
       </div>
       <div id="weatherMeta"></div>
-    `;
+    `);
     updateOpenMeteoWeather();
   }
 
@@ -2262,8 +2305,8 @@
       if(heading)heading.innerHTML=`<strong>Wetter für:</strong> ${escapeHtml(result.location.name)}`;
       target.innerHTML=days.map(weatherDayMarkup).join("");
       if(meta)meta.innerHTML=weatherMetaMarkup(result,result.range);
-      renderConciergeAssistant();
-      renderDayTimelines();
+      safeRender("concierge",renderConciergeAssistant);
+      safeRender("dayTimelines",renderDayTimelines);
     }catch(error){
       console.warn("[ACT Portal] Open-Meteo nicht verfügbar:",error&&error.message?error.message:"Fehler");
       const message=error&&error.message?error.message:"Wetterdaten konnten nicht geladen werden.";
@@ -2330,8 +2373,8 @@
   }
 
   function renderContact(){
-    const contact=customer.contact;
-    document.getElementById("contactCard").innerHTML=`
+    const contact=customer.contact||{};
+    setHtml("contactCard",`
       ${definitionList([
         ["Unternehmen",contact.company],
         ["Telefon",contact.phone],
@@ -2342,9 +2385,9 @@
       ])}
       <div class="card-actions">
         <a class="button primary" href="${whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.")}" target="_blank" rel="noopener noreferrer">WhatsApp öffnen</a>
-        <a class="button soft" href="mailto:${contact.email}">E-Mail senden</a>
+        <a class="button soft" href="mailto:${escapeHtml(contact.email||"")}">E-Mail senden</a>
       </div>
-    `;
+    `);
   }
 
   function renderActions(){
@@ -2357,7 +2400,7 @@
       ["Drucken","print"],
       ["Kalender speichern","calendar"]
     ];
-    document.getElementById("actionGrid").innerHTML=actions.map(([label,action])=>`<button class="button ${action==="confirm"?"primary":"soft"}" type="button" data-action="${action}">${label}</button>`).join("");
+    setHtml("actionGrid",actions.map(([label,action])=>`<button class="button ${action==="confirm"?"primary":"soft"}" type="button" data-action="${action}">${label}</button>`).join(""));
   }
 
   function historyDisplayText(item){
@@ -2371,12 +2414,12 @@
 
   function renderHistory(){
     const items=(customer.history||[]).filter(item=>[item.date,historyDisplayText(item)].some(hasDisplayValue));
-    document.getElementById("historyList").innerHTML=items.length?items.map(item=>`
+    setHtml("historyList",items.length?items.map(item=>`
       <article class="history-item">
         <time>${escapeHtml(item.date||"")}</time>
         <strong>${escapeHtml(historyDisplayText(item))}</strong>
       </article>
-    `).join(""):`<article class="history-item"><strong>Noch keine Änderungen protokolliert.</strong></article>`;
+    `).join(""):`<article class="history-item"><strong>Noch keine Änderungen protokolliert.</strong></article>`);
   }
 
   function isAppleMobile(){
@@ -2606,33 +2649,35 @@
 
   function renderPortal(){
     root.removeAttribute("aria-busy");
-    text("portalTitle",`Willkommen ${customer.customerName}`);
-    text("tripTitle",customer.tripName);
-    text("portalVersion",`Version ${customer.version}`);
+    text("portalTitle",`Willkommen ${customer.customerName||"Gast"}`);
+    text("tripTitle",customer.tripName||customer.tripTitle||"");
+    text("portalVersion",`Version ${customer.version||"1.0"}`);
     text("publicationStatus",`Reisestatus: ${customer.status||"Noch nicht festgelegt"}`);
-    text("updatedAt",`Zuletzt aktualisiert: ${customer.updatedAt}`);
-    document.getElementById("whatsappHero").href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
-    const whatsappQuick=document.getElementById("whatsappQuick");
+    text("updatedAt",`Zuletzt aktualisiert: ${customer.updatedAt||""}`);
+    const whatsappHero=el("whatsappHero");
+    if(whatsappHero)whatsappHero.href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
+    const whatsappQuick=el("whatsappQuick");
     if(whatsappQuick)whatsappQuick.href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
-    renderMeta();
-    renderStatus();
-    renderNextEvent();
-    renderCalendar();
-    renderOverallTimeline();
-    renderConciergeAssistant();
-    renderDayTimelines();
-    renderProgramDetails();
-    renderBookings();
-    renderHotel();
-    renderWeather();
-    renderDocuments();
-    renderContact();
-    renderActions();
-    renderHistory();
-    renderDataSourceNotice();
-    renderAdminVersionHint();
+    safeRender("meta",renderMeta);
+    safeRender("status",renderStatus);
+    safeRender("nextEvent",renderNextEvent);
+    safeRender("calendar",renderCalendar);
+    safeRender("overallTimeline",renderOverallTimeline);
+    safeRender("concierge",renderConciergeAssistant);
+    safeRender("dayTimelines",renderDayTimelines);
+    safeRender("programDetails",renderProgramDetails);
+    safeRender("bookings",renderBookings);
+    safeRender("hotel",renderHotel);
+    safeRender("weather",renderWeather);
+    safeRender("documents",renderDocuments);
+    safeRender("contact",renderContact);
+    safeRender("actions",renderActions);
+    safeRender("history",renderHistory);
+    safeRender("dataSourceNotice",renderDataSourceNotice);
+    safeRender("adminVersionHint",renderAdminVersionHint);
     bindActions();
     hydrateShareDocumentUrls();
+    applyAppViewVisibility();
   }
 
   function renderAdminVersionHint(){

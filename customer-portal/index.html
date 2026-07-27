@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=24">
+<link rel="stylesheet" href="customer-portal.css?v=25">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -234,12 +234,17 @@
     <p class="app-view-placeholder-copy">Empfehlungen und Highlights folgen in einem nächsten Schritt.</p>
   </section>
 
-  <section class="portal-section" id="documents" data-app-view="documents" aria-labelledby="documentTitle">
-    <div class="section-head">
-      <p class="eyebrow">Unterlagen</p>
-      <h2 id="documentTitle">Dokumente</h2>
-    </div>
-    <div class="document-grid" id="documentGrid"></div>
+  <section id="viewDocuments" class="app-view documents-view" data-app-view="documents" data-view="documents" aria-labelledby="documentTitle" hidden>
+    <header class="documents-hero portal-section">
+      <div class="section-head">
+        <p class="eyebrow">Unterlagen</p>
+        <h2 id="documentTitle">Dokumente</h2>
+        <p class="documents-intro">Ihre freigegebenen Reiseunterlagen – zum Öffnen und Herunterladen.</p>
+      </div>
+    </header>
+    <section class="portal-section documents-center-section" id="documents" aria-label="Dokumentencenter">
+      <div class="documents-center" id="documentGrid"></div>
+    </section>
   </section>
 
   <section class="portal-section split-grid" id="accommodation" data-app-view="service" aria-label="Unterkunft">
@@ -304,6 +309,6 @@
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=52"></script>
+<script src="customer-portal.js?v=53"></script>
 </body>
 </html>

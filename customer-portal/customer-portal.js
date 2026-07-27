@@ -502,6 +502,138 @@
     return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString("de-DE");
   }
 
+  function formatDocumentFileSize(bytes){
+    const size=Number(bytes||0);
+    if(!Number.isFinite(size)||size<=0)return "";
+    if(size<1024)return `${Math.round(size)} B`;
+    if(size<1024*1024)return `${(size/1024).toFixed(size<10*1024?1:0)} KB`;
+    return `${(size/(1024*1024)).toFixed(size<10*1024*1024?1:0)} MB`;
+  }
+
+  function documentTypeIcon(item){
+    const blob=`${item?.mimeType||""} ${item?.contentType||""} ${item?.fileName||""} ${item?.title||""} ${item?.category||""} ${item?.type||""}`.toLowerCase();
+    if(isPdfDocument(item))return {icon:"📄",label:"PDF"};
+    if(isImageDocument(item))return {icon:"🖼",label:"Bild"};
+    if(/qr|barcode/.test(blob))return {icon:"▦",label:"QR"};
+    if(/word|msword|\.docx?\b/.test(blob))return {icon:"📝",label:"Word"};
+    if(/excel|spreadsheet|\.xlsx?\b/.test(blob))return {icon:"📊",label:"Excel"};
+    if(/ticket|flug|bahn/.test(blob))return {icon:"🎟",label:"Ticket"};
+    return {icon:"📎",label:"Datei"};
+  }
+
+  function documentGroupLabel(item){
+    const raw=String(item.category||item.type||"").trim();
+    const blob=`${raw} ${item.title||""} ${item.fileName||""}`.toLowerCase();
+    if(/ticket|flug|bahn|zug/.test(blob))return "Tickets";
+    if(/buchung|booking|reserv/.test(blob))return "Buchungen";
+    if(/voucher|gutschein/.test(blob))return "Voucher";
+    if(/hotel|unterkunft|accommodation/.test(blob))return "Hotel";
+    if(/wander|hike|gpx|kml|tour/.test(blob))return "Wanderungen";
+    if(/transfer|shuttle|taxi/.test(blob))return "Transfers";
+    if(/rechnung|invoice|zahlungs?beleg/.test(blob))return "Rechnungen";
+    if(raw&&!/^sonstig/i.test(raw)&&raw!=="Dokument"&&raw!=="Platzhalter")return raw;
+    return "Weitere Dokumente";
+  }
+
+  function groupPortalDocuments(documents){
+    const order=["Tickets","Buchungen","Voucher","Hotel","Wanderungen","Transfers","Rechnungen"];
+    const groups=new Map();
+    documents.forEach(item=>{
+      const label=documentGroupLabel(item);
+      if(!groups.has(label))groups.set(label,[]);
+      groups.get(label).push(item);
+    });
+    const ranked=[...groups.keys()].sort((a,b)=>{
+      const ai=order.indexOf(a);
+      const bi=order.indexOf(b);
+      if(a==="Weitere Dokumente")return 1;
+      if(b==="Weitere Dokumente")return -1;
+      if(ai!==-1||bi!==-1)return (ai===-1?999:ai)-(bi===-1?999:bi);
+      return a.localeCompare(b,"de");
+    });
+    return ranked.map(label=>({label,items:groups.get(label)}));
+  }
+
+  function documentCardFields(item,fileName){
+    const sizeLabel=formatDocumentFileSize(item.fileSize||item.size);
+    const typeIcon=documentTypeIcon(item);
+    return [
+      ["Dateiname",fileName&&fileName!==(item.title||"")?fileName:""],
+      ["Kategorie",hasDisplayValue(item.category)?item.category:""],
+      ["Dateityp",typeIcon.label||item.type||""],
+      ["Dateigröße",sizeLabel],
+      ["Datum",formatUploadDate(item.uploadedAt)],
+      ["Hinweis",item.note],
+      ["Ablaufdatum",formatUploadDate(item.expiryDate)||item.expiryDate||""]
+    ].filter(([,value])=>hasDisplayValue(value));
+  }
+
+  function renderDocumentCard(item){
+    const url=resolveDocumentUrl(item);
+    const title=item.title||item.fileName||"Dokument";
+    const fileName=item.fileName||title;
+    const documentId=item.documentId||item.id||"";
+    const typeIcon=documentTypeIcon(item);
+    const fields=documentCardFields(item,fileName);
+    if(!url)console.warn(`[PortalDocuments] Dokument ${documentId||title} ohne gueltige Datei-URL.`);
+    const preview=url&&isImageDocument(item)
+      ?`<div class="document-preview"><img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" loading="lazy"></div>`
+      :"";
+    let actions="";
+    if(url){
+      const openLabel=isPdfDocument(item)?"PDF oeffnen":isImageDocument(item)?"Bild oeffnen":"Oeffnen";
+      actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(openLabel)}: ${escapeHtml(title)}">${openLabel}</a>
+        <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}" aria-label="Herunterladen: ${escapeHtml(title)}">Herunterladen</a>`;
+    }else if(isShareAccess&&documentId){
+      actions=`<button class="button primary" type="button" data-open-portal-document="${escapeHtml(documentId)}" aria-label="Dokument oeffnen: ${escapeHtml(title)}">Dokument oeffnen</button>`;
+    }else{
+      actions=`<span class="button soft document-disabled" aria-disabled="true">Dieses Dokument ist derzeit nicht verfuegbar.</span>`;
+    }
+    return `
+      <article class="document-card documents-card ${url?"":"document-unavailable"}" data-document-id="${escapeHtml(documentId)}">
+        <div class="documents-card-top">
+          <span class="documents-type-icon" aria-hidden="true">${typeIcon.icon}</span>
+          <div class="documents-card-heading">
+            <p class="documents-type-label">${escapeHtml(typeIcon.label)}</p>
+            <h3>${escapeHtml(title)}</h3>
+          </div>
+        </div>
+        ${preview}
+        ${fields.length?`<dl class="documents-fields field-list">${fields.map(([label,value])=>`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`:""}
+        <div class="card-actions documents-card-actions">${actions}</div>
+      </article>
+    `;
+  }
+
+  function renderDocuments(){
+    const target=document.getElementById("documentGrid");
+    if(!target)return;
+    const documents=(customer.documents||[]).map(normalizeDocument);
+    const visibleDocuments=documents.filter(isPortalDocument);
+    if(!visibleDocuments.length){
+      target.innerHTML=`
+        <div class="documents-empty document-card document-empty" role="status">
+          <p class="eyebrow">Dokumentencenter</p>
+          <h3>Noch keine Unterlagen freigegeben</h3>
+          <p class="muted">Sobald Tickets, Voucher oder andere Reiseunterlagen für Sie freigegeben sind, erscheinen sie hier zum Öffnen und Herunterladen.</p>
+        </div>
+      `;
+      return;
+    }
+    const groups=groupPortalDocuments(visibleDocuments);
+    target.innerHTML=groups.map(group=>`
+      <section class="documents-group" aria-labelledby="doc-group-${escapeHtml(group.label.replace(/[^\wäöüÄÖÜß-]+/gi,"-"))}">
+        <header class="documents-group-head">
+          <h3 id="doc-group-${escapeHtml(group.label.replace(/[^\wäöüÄÖÜß-]+/gi,"-"))}">${escapeHtml(group.label)}</h3>
+          <p class="documents-group-count">${group.items.length} ${group.items.length===1?"Dokument":"Dokumente"}</p>
+        </header>
+        <div class="documents-group-grid document-grid">
+          ${group.items.map(renderDocumentCard).join("")}
+        </div>
+      </section>
+    `).join("");
+  }
+
   function numberValue(value){
     const trimmed=String(value??"").trim();
     if(!trimmed)return null;
@@ -2195,46 +2327,6 @@
       resetButton();
       window.alert(error&&error.message?error.message:"Dieses Dokument ist derzeit nicht verfuegbar.");
     }
-  }
-
-  function renderDocuments(){
-    const documents=(customer.documents||[]).map(normalizeDocument);
-    const visibleDocuments=documents.filter(isPortalDocument);
-    document.getElementById("documentGrid").innerHTML=visibleDocuments.length?visibleDocuments.map(item=>{
-      const url=resolveDocumentUrl(item);
-      const title=item.title||item.fileName||"Dokument";
-      const fileName=item.fileName||title;
-      const documentId=item.documentId||item.id||"";
-      const fields=[
-        ["Dokumenttyp",item.type||"Sonstiges"],
-        ["Hinweis",item.note],
-        ["Dateiname",fileName],
-        ["Upload-Datum",formatUploadDate(item.uploadedAt)]
-      ];
-      if(hasDisplayValue(item.category)&&item.category!==item.type)fields.splice(1,0,["Kategorie",item.category]);
-      if(hasDisplayValue(item.expiryDate))fields.push(["Ablaufdatum",formatUploadDate(item.expiryDate)||item.expiryDate]);
-      if(!url)console.warn(`[PortalDocuments] Dokument ${documentId||title} ohne gueltige Datei-URL.`);
-      const preview=url&&isImageDocument(item)
-        ?`<div class="document-preview"><img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" loading="lazy"></div>`
-        :"";
-      let actions="";
-      if(url){
-        actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${isPdfDocument(item)?"PDF oeffnen":isImageDocument(item)?"Bild oeffnen":"Oeffnen"}</a>
-          <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}">Herunterladen</a>`;
-      }else if(isShareAccess&&documentId){
-        actions=`<button class="button primary" type="button" data-open-portal-document="${escapeHtml(documentId)}">Dokument oeffnen</button>`;
-      }else{
-        actions=`<span class="button soft document-disabled" aria-disabled="true">Dieses Dokument ist derzeit nicht verfuegbar.</span>`;
-      }
-      return `
-      <article class="document-card ${url?"":"document-unavailable"}" data-document-id="${escapeHtml(documentId)}">
-        <h3>${escapeHtml(title)}</h3>
-        ${preview}
-        ${definitionList(fields)}
-        <div class="card-actions">${actions}</div>
-      </article>
-      `;
-    }).join(""):`<article class="document-card document-empty"><h3>Derzeit sind noch keine Dokumente verfügbar.</h3><p class="muted">Sobald Unterlagen freigegeben sind, erscheinen sie hier zum Download.</p></article>`;
   }
 
   function renderContact(){

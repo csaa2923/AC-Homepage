@@ -16,8 +16,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=52/);
-    assert.match(portalHtml, /customer-portal\.css\?v=24/);
+    assert.match(portalHtml, /customer-portal\.js\?v=53/);
+    assert.match(portalHtml, /customer-portal\.css\?v=25/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -31,7 +31,9 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /id="program-details"/);
     assert.match(portalHtml, /id="bookings"/);
     assert.match(portalHtml, /id="calendar"/);
-    assert.match(portalHtml, /id="documents"[^>]*data-app-view="documents"/);
+    assert.match(portalHtml, /id="viewDocuments"[^>]*data-app-view="documents"/);
+    assert.match(portalHtml, /id="documentGrid"/);
+    assert.match(portalHtml, /id="documents"/);
     assert.match(portalHtml, /id="contact"[^>]*data-app-view="service"/);
     assert.match(portalHtml, /id="actions"[^>]*data-app-view="service"/);
     assert.match(portalHtml, /id="accommodation"[^>]*data-app-view="service"/);
@@ -190,5 +192,38 @@ describe("customer portal itinerary view (4.3)", () => {
     assert.match(portalCss, /prefers-reduced-motion:reduce/);
     assert.match(portalCss, /\.itinerary-item\.is-past/);
     assert.match(portalCss, /\.itinerary-day\.is-today/);
+  });
+});
+
+describe("customer portal documents view (4.4)", () => {
+  it("builds documents center structure with stable ids", () => {
+    assert.match(portalHtml, /id="viewDocuments"/);
+    assert.match(portalHtml, /class="[^"]*documents-view/);
+    assert.match(portalHtml, /id="documentGrid"/);
+    assert.match(portalHtml, /id="documentTitle"/);
+    assert.match(portalHtml, /documents-intro/);
+  });
+
+  it("groups and renders document cards with existing open/download paths", () => {
+    assert.match(portalJs, /function groupPortalDocuments\(/);
+    assert.match(portalJs, /function documentGroupLabel\(/);
+    assert.match(portalJs, /function renderDocumentCard\(/);
+    assert.match(portalJs, /function documentTypeIcon\(/);
+    assert.match(portalJs, /Weitere Dokumente/);
+    assert.match(portalJs, /Herunterladen/);
+    assert.match(portalJs, /data-open-portal-document/);
+    assert.match(portalJs, /resolveDocumentUrl/);
+    assert.match(portalJs, /isPortalDocument/);
+    assert.match(portalJs, /Noch keine Unterlagen freigegeben/);
+    assert.doesNotMatch(portalJs, /fetch\([^)]*document[^)]*\)[\s\S]{0,80}new XMLHttpRequest/);
+  });
+
+  it("styles documents grid for mobile and desktop", () => {
+    assert.match(portalCss, /\.documents-view/);
+    assert.match(portalCss, /\.documents-group-grid/);
+    assert.match(portalCss, /\.documents-card/);
+    assert.match(portalCss, /\.documents-empty/);
+    assert.match(portalCss, /grid-template-columns:repeat\(2,/);
+    assert.match(portalCss, /min-height:44px/);
   });
 });

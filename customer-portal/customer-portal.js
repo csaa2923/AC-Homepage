@@ -17,9 +17,229 @@
   const root=document.getElementById("portalRoot");
   const travelLib=()=>window.ACTTravelActionsLibrary||null;
   const conciergeLib=()=>window.ACTConciergeAssistantLibrary||null;
+  const APP_VIEWS=["today","itinerary","discover","documents","service"];
+  const APP_VIEW_LABELS={
+    today:"Heute",
+    itinerary:"Reiseplan",
+    discover:"Entdecken",
+    documents:"Dokumente",
+    service:"Service"
+  };
+  const appViewState={
+    active:"today",
+    mode:"filtered",
+    ready:false,
+    navBound:false
+  };
+  const APP_VIEW_SECTION_MAP={
+    overview:"today",
+    status:"today",
+    calendar:"itinerary",
+    concierge:"today",
+    "overall-timeline":"itinerary",
+    "day-timeline":"itinerary",
+    "program-details":"itinerary",
+    bookings:"itinerary",
+    discover:"discover",
+    documents:"documents",
+    accommodation:"service",
+    contact:"service",
+    actions:"service"
+  };
+  const PORTAL_LANG_KEY="act_customer_portal_language";
   const calendarState={
     view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
     dayIndex:0
+  };
+
+  function normalizeAppView(view){
+    const value=String(view||"").trim().toLowerCase();
+    return APP_VIEWS.includes(value)?value:"today";
+  }
+
+  function getAppViewMode(){
+    const mode=String(root?.getAttribute("data-view-mode")||appViewState.mode||"filtered").trim().toLowerCase();
+    return mode==="legacy"?"legacy":"filtered";
+  }
+
+  function parseAppViewFromHash(hashValue){
+    const raw=String(hashValue??window.location.hash||"").replace(/^#/,"").trim().toLowerCase();
+    if(!raw)return null;
+    if(APP_VIEWS.includes(raw))return raw;
+    return APP_VIEW_SECTION_MAP[raw]||null;
+  }
+
+  function setLocationHash(hash,{replace=true}={}){
+    const nextHash=String(hash||"").startsWith("#")?String(hash):`#${hash}`;
+    if(window.location.hash===nextHash)return;
+    // Keep ?share= / ?token= (and any other query) untouched — only swap the fragment.
+    const url=`${window.location.pathname}${window.location.search}${nextHash}`;
+    if(replace)window.history.replaceState(null,"",url);
+    else window.history.pushState(null,"",url);
+  }
+
+  function invalidateVisibleHikeMaps(){
+    hikeMapRegistry.forEach(entry=>{
+      try{
+        if(entry?.map&&typeof entry.map.invalidateSize==="function"){
+          entry.map.invalidateSize({animate:false});
+        }
+      }catch(_error){
+        // Map may already be disposed; ignore.
+      }
+    });
+  }
+
+  function syncAppNavigationUI(){
+    const active=appViewState.active;
+    document.querySelectorAll(".app-bottom-nav [data-app-nav], .app-desktop-nav [data-app-nav]").forEach(item=>{
+      const view=normalizeAppView(item.getAttribute("data-app-nav"));
+      const isActive=view===active;
+      item.classList.toggle("is-active",isActive);
+      if(isActive)item.setAttribute("aria-current","page");
+      else item.removeAttribute("aria-current");
+    });
+    document.body.setAttribute("data-active-view",active);
+    document.body.classList.toggle("app-shell",true);
+    document.querySelectorAll(".app-view[data-view]").forEach(viewEl=>{
+      const view=normalizeAppView(viewEl.getAttribute("data-view"));
+      viewEl.classList.toggle("is-active",view===active);
+    });
+  }
+
+  function applyAppViewVisibility(){
+    if(!root)return;
+    const mode=getAppViewMode();
+    appViewState.mode=mode;
+    root.classList.add("customer-app");
+    root.setAttribute("data-customer-app","1");
+    root.setAttribute("data-view-mode",mode);
+    root.setAttribute("data-active-view",appViewState.active);
+    root.querySelectorAll("[data-app-view]").forEach(section=>{
+      const views=String(section.getAttribute("data-app-view")||"").split(/\s+/).filter(Boolean);
+      const match=!views.length||views.includes(appViewState.active);
+      if(mode==="legacy"){
+        section.hidden=false;
+        section.removeAttribute("data-view-hidden");
+        return;
+      }
+      section.hidden=!match;
+      if(match)section.removeAttribute("data-view-hidden");
+      else section.setAttribute("data-view-hidden","1");
+    });
+    syncAppNavigationUI();
+  }
+
+  function setAppView(view,options={}){
+    const opts=options&&typeof options==="object"?options:{};
+    const next=normalizeAppView(view);
+    const changed=appViewState.active!==next;
+    appViewState.active=next;
+    applyAppViewVisibility();
+    if(opts.updateHash&&changed){
+      setLocationHash(next,{replace:opts.replace===true});
+    }
+    if(changed&&getAppViewMode()==="filtered"){
+      if(opts.scroll!==false){
+        try{window.scrollTo({top:0,behavior:opts.instant?"auto":"smooth"});}catch(_error){window.scrollTo(0,0);}
+      }
+      requestAnimationFrame(()=>{
+        invalidateVisibleHikeMaps();
+        setTimeout(invalidateVisibleHikeMaps,120);
+      });
+    }
+    return appViewState.active;
+  }
+
+  // Alias expected by Ops Ready 4.1C navigation work.
+  function setActiveAppView(view,options){
+    return setAppView(view,options);
+  }
+
+  function syncAppViewFromLocation(options={}){
+    const mapped=parseAppViewFromHash();
+    if(mapped)setAppView(mapped,{updateHash:false,scroll:options.scroll===true,instant:true});
+    else applyAppViewVisibility();
+    return appViewState.active;
+  }
+
+  function bindAppNavigation(){
+    if(appViewState.navBound)return;
+    document.addEventListener("click",event=>{
+      const target=event.target.closest("[data-app-nav]");
+      if(!target||target.closest("a[href^='http']"))return;
+      event.preventDefault();
+      const view=normalizeAppView(target.getAttribute("data-app-nav"));
+      const scrollTo=String(target.getAttribute("data-scroll-to")||"").trim();
+      setActiveAppView(view,{updateHash:true,replace:false});
+      if(scrollTo){
+        window.setTimeout(()=>{
+          const el=document.getElementById(scrollTo);
+          if(el)el.scrollIntoView({behavior:"smooth",block:"start"});
+        },80);
+      }
+    });
+    appViewState.navBound=true;
+  }
+
+  function normalizePortalLanguage(value){
+    return String(value||"").trim().toLowerCase()==="en"?"en":"de";
+  }
+
+  function syncPortalLanguageUI(lang){
+    const active=normalizePortalLanguage(lang);
+    document.documentElement.lang=active;
+    document.body.setAttribute("data-portal-language",active);
+    document.querySelectorAll("[data-portal-lang]").forEach(btn=>{
+      const isActive=normalizePortalLanguage(btn.getAttribute("data-portal-lang"))===active;
+      btn.classList.toggle("is-active",isActive);
+      btn.setAttribute("aria-pressed",isActive?"true":"false");
+    });
+  }
+
+  function bindPortalLanguageControls(){
+    const group=document.querySelector(".app-lang");
+    if(!group||group.dataset.bound==="1")return;
+    group.dataset.bound="1";
+    group.addEventListener("click",event=>{
+      const btn=event.target.closest("[data-portal-lang]");
+      if(!btn)return;
+      const lang=normalizePortalLanguage(btn.getAttribute("data-portal-lang"));
+      try{sessionStorage.setItem(PORTAL_LANG_KEY,lang);}catch(_error){}
+      syncPortalLanguageUI(lang);
+    });
+    let initial="de";
+    try{initial=sessionStorage.getItem(PORTAL_LANG_KEY)||"de";}catch(_error){initial="de";}
+    syncPortalLanguageUI(initial);
+  }
+
+  function initAppViewState(){
+    if(!root)return;
+    if(!appViewState.ready){
+      appViewState.mode=getAppViewMode();
+      const mapped=parseAppViewFromHash();
+      appViewState.active=mapped||"today";
+      window.addEventListener("hashchange",()=>syncAppViewFromLocation({scroll:false}));
+      window.addEventListener("popstate",()=>syncAppViewFromLocation({scroll:false}));
+      appViewState.ready=true;
+    }
+    bindAppNavigation();
+    bindPortalLanguageControls();
+    applyAppViewVisibility();
+  }
+
+  window.ACTCustomerPortalViews={
+    views:APP_VIEWS.slice(),
+    labels:Object.assign({},APP_VIEW_LABELS),
+    getState(){
+      return {active:appViewState.active,mode:appViewState.mode,ready:appViewState.ready};
+    },
+    setAppView,
+    setActiveAppView,
+    applyAppViewVisibility,
+    syncAppViewFromLocation,
+    parseAppViewFromHash,
+    invalidateVisibleHikeMaps
   };
   const travelProgressSteps=[
     "Anfrage eingegangen",
@@ -1269,17 +1489,23 @@
   }
 
   function renderNextEvent(){
+    const card=document.getElementById("nextEventCard");
+    if(!card)return;
     const next=programItems()[0];
-    if(!next)return;
+    if(!next){
+      card.innerHTML=`<p class="today-empty">Aktuell ist kein nächster Programmpunkt hinterlegt.</p>`;
+      return;
+    }
     const navUrl=itemNavigationUrl(itemForTravelActions(next));
-    document.getElementById("nextEventCard").innerHTML=`
+    const detail=detailId(next);
+    card.innerHTML=`
       <div>
         <p class="eyebrow">Nächster Programmpunkt</p>
         <h3>${next.startTime} ${next.title}</h3>
         <p>${next.meetingPoint}</p>
       </div>
       <div class="card-actions compact-actions">
-        <a class="button primary" href="#${detailId(next)}">Details anzeigen</a>
+        <button class="button primary" type="button" data-app-nav="itinerary" data-scroll-to="${escapeHtml(detail)}">Details anzeigen</button>
         ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>`:`<p class="travel-nav-missing">Kein Startpunkt vorhanden</p>`}
       </div>
     `;
@@ -2091,8 +2317,11 @@
     text("publicationStatus",`Reisestatus: ${customer.status||"Noch nicht festgelegt"}`);
     text("updatedAt",`Zuletzt aktualisiert: ${customer.updatedAt}`);
     document.getElementById("whatsappHero").href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
+    const whatsappQuick=document.getElementById("whatsappQuick");
+    if(whatsappQuick)whatsappQuick.href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
     renderMeta();
     renderStatus();
+    renderNextEvent();
     renderCalendar();
     renderOverallTimeline();
     renderConciergeAssistant();
@@ -2141,6 +2370,7 @@
   }
 
   async function initPortal(){
+    initAppViewState();
     const loaded=await loadCustomerData();
     if(!loaded){
       if(!root.querySelector(".not-found")){
@@ -2151,7 +2381,9 @@
     }
     customer=normalizeCustomerData(loaded,isShareAccess?loaded.customerId||"":customerId);
     renderPortal();
+    applyAppViewVisibility();
   }
 
+  initAppViewState();
   initPortal();
 })();

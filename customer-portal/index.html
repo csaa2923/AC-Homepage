@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pers&ouml;nliches Kundenportal | Alpine Concierge Tirol</title>
 <meta name="description" content="Pers&ouml;nliches Kundenportal von Alpine Concierge Tirol.">
 <meta name="referrer" content="no-referrer">
@@ -11,73 +11,170 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=20">
+<link rel="stylesheet" href="customer-portal.css?v=23">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
 </head>
-<body>
-<header class="portal-header" aria-label="Kundenportal Kopfbereich">
+<body class="app-shell" data-active-view="today">
+<header class="portal-header app-topbar" aria-label="Kundenportal Kopfbereich">
   <a class="portal-brand" href="../index.html" aria-label="Alpine Concierge Tirol">
     <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol Logo" width="108" height="80" decoding="async">
   </a>
-  <div>
-    <p class="eyebrow">Pers&ouml;nliches Kundenportal</p>
-    <p class="secure-note">Diese Seite ist ausschlie&szlig;lich &uuml;ber Ihren pers&ouml;nlichen Link erreichbar.</p>
+
+  <nav class="app-desktop-nav" id="appDesktopNav" aria-label="Hauptnavigation">
+    <button type="button" class="app-nav-item is-active" data-app-nav="today" aria-current="page" aria-label="Heute">
+      <span class="app-nav-icon" aria-hidden="true">🏠</span>
+      <span class="app-nav-label">Heute</span>
+    </button>
+    <button type="button" class="app-nav-item" data-app-nav="itinerary" aria-label="Reiseplan">
+      <span class="app-nav-icon" aria-hidden="true">🗓</span>
+      <span class="app-nav-label">Reiseplan</span>
+    </button>
+    <button type="button" class="app-nav-item" data-app-nav="discover" aria-label="Entdecken">
+      <span class="app-nav-icon" aria-hidden="true">✨</span>
+      <span class="app-nav-label">Entdecken</span>
+    </button>
+    <button type="button" class="app-nav-item" data-app-nav="documents" aria-label="Dokumente">
+      <span class="app-nav-icon" aria-hidden="true">📄</span>
+      <span class="app-nav-label">Dokumente</span>
+    </button>
+    <button type="button" class="app-nav-item" data-app-nav="service" aria-label="Service">
+      <span class="app-nav-icon" aria-hidden="true">☎</span>
+      <span class="app-nav-label">Service</span>
+    </button>
+  </nav>
+
+  <div class="app-lang" role="group" aria-label="Sprache">
+    <button type="button" class="app-lang-btn is-active" data-portal-lang="de" aria-pressed="true">DE</button>
+    <button type="button" class="app-lang-btn" data-portal-lang="en" aria-pressed="false">EN</button>
   </div>
+
+  <p class="secure-note app-secure-note">Diese Seite ist ausschlie&szlig;lich &uuml;ber Ihren pers&ouml;nlichen Link erreichbar.</p>
 </header>
 
-<nav class="portal-nav" aria-label="Kundenportal Navigation">
-  <a href="#overview">&Uuml;bersicht</a>
-  <a href="#calendar">Kalender</a>
-  <a href="#overall-timeline">Gesamt-Timeline</a>
-  <a href="#concierge">Concierge</a>
-  <a href="#day-timeline">Tagesprogramm</a>
-  <a href="#program-details">Programmdetails</a>
-  <a href="#bookings">Buchungen</a>
-  <a href="#accommodation">Unterkunft</a>
-  <a href="#documents">Dokumente</a>
-  <a href="#contact">Kontakt</a>
-  <a href="#actions">Aktionen</a>
+<nav class="app-bottom-nav" id="appBottomNav" aria-label="App-Navigation">
+  <button type="button" class="app-nav-item is-active" data-app-nav="today" aria-current="page" aria-label="Heute">
+    <span class="app-nav-icon" aria-hidden="true">🏠</span>
+    <span class="app-nav-label">Heute</span>
+  </button>
+  <button type="button" class="app-nav-item" data-app-nav="itinerary" aria-label="Reise">
+    <span class="app-nav-icon" aria-hidden="true">🗓</span>
+    <span class="app-nav-label">Reise</span>
+  </button>
+  <button type="button" class="app-nav-item" data-app-nav="discover" aria-label="Entdecken">
+    <span class="app-nav-icon" aria-hidden="true">✨</span>
+    <span class="app-nav-label">Entdecken</span>
+  </button>
+  <button type="button" class="app-nav-item" data-app-nav="documents" aria-label="Dokumente">
+    <span class="app-nav-icon" aria-hidden="true">📄</span>
+    <span class="app-nav-label">Dokumente</span>
+  </button>
+  <button type="button" class="app-nav-item" data-app-nav="service" aria-label="Service">
+    <span class="app-nav-icon" aria-hidden="true">☎</span>
+    <span class="app-nav-label">Service</span>
+  </button>
 </nav>
 
-<main id="portalRoot">
-  <section class="portal-hero" id="overview" aria-labelledby="portalTitle">
-    <div class="hero-panel">
-      <p class="eyebrow" id="portalVersion">Version 1.0</p>
-      <p class="admin-version-hint" id="adminVersionHint" hidden></p>
-      <h1 id="portalTitle">Willkommen</h1>
-      <p class="hero-subtitle" id="tripTitle"></p>
-      <div class="hero-meta" id="heroMeta"></div>
-      <div class="hero-actions">
-        <a class="button primary" id="whatsappHero" href="#" target="_blank" rel="noopener noreferrer">WhatsApp &ouml;ffnen</a>
-        <button class="button soft" type="button" data-action="print">Drucken</button>
+<!--
+  Ops Ready 4.2: Today-View Premium-Struktur.
+  Stabile DOM-IDs bleiben; Elemente werden nur umgeordnet, nicht dupliziert.
+-->
+<main id="portalRoot" class="customer-app" data-customer-app="1" data-view-mode="filtered" data-active-view="today" aria-live="polite">
+
+  <section id="viewToday" class="app-view today-view is-active" data-app-view="today" data-view="today" aria-label="Heute">
+    <section class="today-hero portal-hero" id="overview" aria-labelledby="portalTitle">
+      <div class="hero-panel today-hero-panel">
+        <p class="eyebrow today-brand-eyebrow">Alpine Concierge Tirol</p>
+        <p class="eyebrow" id="portalVersion">Version 1.0</p>
+        <p class="admin-version-hint" id="adminVersionHint" hidden></p>
+        <h1 id="portalTitle">Willkommen</h1>
+        <p class="hero-subtitle" id="tripTitle"></p>
+        <div class="hero-meta" id="heroMeta"></div>
+        <div class="hero-actions">
+          <a class="button primary" id="whatsappHero" href="#" target="_blank" rel="noopener noreferrer">WhatsApp &ouml;ffnen</a>
+          <button class="button soft" type="button" data-action="print">Drucken</button>
+        </div>
       </div>
-    </div>
+    </section>
+
+    <section class="today-status portal-section status-section" id="status" aria-labelledby="statusTitle">
+      <div class="section-head">
+        <p class="eyebrow">Reisestatus</p>
+        <h2 id="statusTitle">Wo Sie stehen</h2>
+      </div>
+      <div class="status-card today-status-card">
+        <div class="status-topline">
+          <span id="publicationStatus">Status: Ver&ouml;ffentlicht</span>
+          <span id="updatedAt">Zuletzt aktualisiert</span>
+        </div>
+        <div class="progress-track" aria-hidden="true"><span id="progressFill"></span></div>
+        <ol class="status-steps" id="statusSteps"></ol>
+      </div>
+    </section>
+
+    <section class="today-primary-grid">
+      <div class="today-main-column">
+        <section class="today-concierge portal-section concierge-section" id="concierge" aria-labelledby="conciergeTitle">
+          <div class="section-head">
+            <p class="eyebrow">Concierge</p>
+            <h2 id="conciergeTitle">Heute wichtig</h2>
+          </div>
+          <div id="conciergeRoot" data-concierge-root></div>
+        </section>
+
+        <section class="today-next-event portal-section" aria-labelledby="todayNextTitle">
+          <div class="section-head">
+            <p class="eyebrow">Als Nächstes</p>
+            <h2 id="todayNextTitle">Nächster Programmpunkt</h2>
+          </div>
+          <div class="next-event-card today-next-card" id="nextEventCard"></div>
+        </section>
+      </div>
+
+      <aside class="today-side-column">
+        <section class="today-weather portal-section" aria-labelledby="todayWeatherTitle">
+          <div class="section-head">
+            <p class="eyebrow">Wetter</p>
+            <h2 id="todayWeatherTitle">Aktuelles Wetter</h2>
+          </div>
+          <article class="info-card weather-card today-weather-card" id="weatherCard"></article>
+        </section>
+
+        <section class="today-quick-actions portal-section" aria-labelledby="todayQuickTitle">
+          <div class="section-head">
+            <p class="eyebrow">Schnellzugriff</p>
+            <h2 id="todayQuickTitle">Weiter</h2>
+          </div>
+          <div class="today-quick-grid" id="todayQuickActions">
+            <button type="button" class="today-quick-btn" data-app-nav="itinerary">
+              <span class="today-quick-icon" aria-hidden="true">🗓</span>
+              <span>Reiseplan</span>
+            </button>
+            <button type="button" class="today-quick-btn" data-app-nav="documents">
+              <span class="today-quick-icon" aria-hidden="true">📄</span>
+              <span>Dokumente</span>
+            </button>
+            <button type="button" class="today-quick-btn" data-app-nav="service">
+              <span class="today-quick-icon" aria-hidden="true">☎</span>
+              <span>Kontakt</span>
+            </button>
+            <a class="today-quick-btn today-quick-link" id="whatsappQuick" href="#" target="_blank" rel="noopener noreferrer">
+              <span class="today-quick-icon" aria-hidden="true">💬</span>
+              <span>WhatsApp</span>
+            </a>
+          </div>
+        </section>
+      </aside>
+    </section>
   </section>
 
-  <section class="portal-section status-section" id="status" aria-labelledby="statusTitle">
-    <div class="section-head">
-      <p class="eyebrow">Reisestatus</p>
-      <h2 id="statusTitle">Aktueller Fortschritt</h2>
-    </div>
-    <div class="status-card">
-      <div class="status-topline">
-        <span id="publicationStatus">Status: Ver&ouml;ffentlicht</span>
-        <span id="updatedAt">Zuletzt aktualisiert</span>
-      </div>
-      <div class="progress-track" aria-hidden="true"><span id="progressFill"></span></div>
-      <ol class="status-steps" id="statusSteps"></ol>
-    </div>
-  </section>
-
-  <section class="portal-section calendar-section" id="calendar" aria-labelledby="calendarTitle">
+  <section class="portal-section calendar-section" id="calendar" data-app-view="itinerary" aria-labelledby="calendarTitle">
     <div class="section-head">
       <p class="eyebrow">Kalender</p>
       <h2 id="calendarTitle">Ihre Reise als Kalender</h2>
     </div>
     <div class="calendar-panel">
-      <div class="next-event-card" id="nextEventCard"></div>
       <div class="calendar-toolbar" aria-label="Kalendersteuerung">
         <div class="segmented-control" role="group" aria-label="Kalenderansicht">
           <button class="active" type="button" data-calendar-view="trip">Gesamtreise</button>
@@ -91,7 +188,7 @@
     </div>
   </section>
 
-  <section class="portal-section" id="overall-timeline" aria-labelledby="overallTimelineTitle">
+  <section class="portal-section" id="overall-timeline" data-app-view="itinerary" aria-labelledby="overallTimelineTitle">
     <div class="section-head">
       <p class="eyebrow">Gesamt-Timeline</p>
       <h2 id="overallTimelineTitle">Alle Programmpunkte chronologisch</h2>
@@ -99,15 +196,7 @@
     <div class="overall-timeline" id="overallTimeline"></div>
   </section>
 
-  <section class="portal-section concierge-section" id="concierge" aria-labelledby="conciergeTitle">
-    <div class="section-head">
-      <p class="eyebrow">Concierge</p>
-      <h2 id="conciergeTitle">Ihr persönlicher Concierge</h2>
-    </div>
-    <div id="conciergeRoot" data-concierge-root></div>
-  </section>
-
-  <section class="portal-section" id="day-timeline" aria-labelledby="dayTimelineTitle">
+  <section class="portal-section" id="day-timeline" data-app-view="itinerary" aria-labelledby="dayTimelineTitle">
     <div class="section-head">
       <p class="eyebrow">Tagesprogramm</p>
       <h2 id="dayTimelineTitle">Ihre Reise nach Tagen</h2>
@@ -115,7 +204,7 @@
     <div class="day-timelines" id="dayTimelines"></div>
   </section>
 
-  <section class="portal-section" id="program-details" aria-labelledby="programDetailsTitle">
+  <section class="portal-section" id="program-details" data-app-view="itinerary" aria-labelledby="programDetailsTitle">
     <div class="section-head">
       <p class="eyebrow">Details</p>
       <h2 id="programDetailsTitle">Detailinformationen je Programmpunkt</h2>
@@ -123,7 +212,7 @@
     <div class="detail-card-grid" id="programDetails"></div>
   </section>
 
-  <section class="portal-section" id="bookings" aria-labelledby="bookingsTitle">
+  <section class="portal-section" id="bookings" data-app-view="itinerary" aria-labelledby="bookingsTitle">
     <div class="section-head">
       <p class="eyebrow">Buchungen</p>
       <h2 id="bookingsTitle">Ihre bestätigten Leistungen</h2>
@@ -131,12 +220,15 @@
     <div class="booking-grid" id="bookingGrid"></div>
   </section>
 
-  <section class="portal-section split-grid" id="accommodation" aria-label="Unterkunft und Wetter">
-    <article class="info-card" id="hotelCard"></article>
-    <article class="info-card weather-card" id="weatherCard"></article>
+  <section class="portal-section app-view-placeholder" id="discover" data-app-view="discover" aria-labelledby="discoverTitle" hidden>
+    <div class="section-head">
+      <p class="eyebrow">Entdecken</p>
+      <h2 id="discoverTitle">Entdecken</h2>
+    </div>
+    <p class="app-view-placeholder-copy">Empfehlungen und Highlights folgen in einem nächsten Schritt.</p>
   </section>
 
-  <section class="portal-section" id="documents" aria-labelledby="documentTitle">
+  <section class="portal-section" id="documents" data-app-view="documents" aria-labelledby="documentTitle">
     <div class="section-head">
       <p class="eyebrow">Unterlagen</p>
       <h2 id="documentTitle">Dokumente</h2>
@@ -144,7 +236,11 @@
     <div class="document-grid" id="documentGrid"></div>
   </section>
 
-  <section class="portal-section" id="contact" aria-labelledby="contactTitle">
+  <section class="portal-section split-grid" id="accommodation" data-app-view="service" aria-label="Unterkunft">
+    <article class="info-card" id="hotelCard"></article>
+  </section>
+
+  <section class="portal-section" id="contact" data-app-view="service" aria-labelledby="contactTitle">
     <div class="section-head">
       <p class="eyebrow">Erreichbarkeit</p>
       <h2 id="contactTitle">Kontakt &amp; Notfall</h2>
@@ -152,7 +248,7 @@
     <article class="info-card contact-card" id="contactCard"></article>
   </section>
 
-  <section class="portal-section" id="actions" aria-labelledby="actionsTitle">
+  <section class="portal-section" id="actions" data-app-view="service" aria-labelledby="actionsTitle">
     <div class="section-head">
       <p class="eyebrow">Kundenaktionen</p>
       <h2 id="actionsTitle">N&auml;chste Schritte</h2>
@@ -162,7 +258,7 @@
     </article>
   </section>
 
-  <section class="portal-section" aria-labelledby="historyTitle">
+  <section class="portal-section" data-app-view="service" aria-labelledby="historyTitle">
     <div class="section-head">
       <p class="eyebrow">Versionierung</p>
       <h2 id="historyTitle">&Auml;nderungsverlauf</h2>
@@ -202,6 +298,6 @@
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=48"></script>
+<script src="customer-portal.js?v=51"></script>
 </body>
 </html>

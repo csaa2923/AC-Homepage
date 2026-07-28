@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=62/);
-    assert.match(portalHtml, /customer-portal\.css\?v=35/);
+    assert.match(portalHtml, /customer-portal\.js\?v=63/);
+    assert.match(portalHtml, /customer-portal\.css\?v=36/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -347,10 +347,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=62"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=63"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=62/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=63/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -434,8 +434,8 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=35/);
-    assert.match(portalHtml, /customer-portal\.js\?v=62/);
+    assert.match(portalHtml, /customer-portal\.css\?v=36/);
+    assert.match(portalHtml, /customer-portal\.js\?v=63/);
   });
 });
 
@@ -458,7 +458,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=62/);
+    assert.match(portalHtml, /customer-portal\.js\?v=63/);
   });
 });
 
@@ -596,5 +596,41 @@ describe("customer portal service premium redesign (4.5E)", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.service-main-grid\{[\s\S]*grid-template-columns/);
     assert.match(portalCss, /\.service-side-column\{[\s\S]*position:sticky/);
     assert.match(portalCss, /\.service-view[\s\S]*min-height:44px/);
+  });
+});
+
+describe("customer portal discover premium redesign (4.5F)", () => {
+  it("composes discover hero, featured tip, categories and cards", () => {
+    assert.match(portalHtml, /id="discover"[^>]*discover-view/);
+    assert.match(portalHtml, /id="discoverTitle"/);
+    assert.match(portalHtml, /id="discoverFeatured"/);
+    assert.match(portalHtml, /id="discoverCategoryNav"/);
+    assert.match(portalHtml, /id="discoverGrid"/);
+    assert.match(portalHtml, /Besondere Empfehlungen für Ihren Aufenthalt/);
+    assert.match(portalJs, /function renderDiscover\(/);
+    assert.match(portalJs, /safeRender\("discover",renderDiscover\)/);
+  });
+
+  it("uses existing recommendation and place data without inventing content", () => {
+    assert.match(portalJs, /conciergeRecommendations/);
+    assert.match(portalJs, /customer\.restaurants/);
+    assert.match(portalJs, /customer\.activities/);
+    assert.match(portalJs, /filterRecommendations/);
+    assert.match(portalJs, /Heute empfehlen wir/);
+    assert.match(portalJs, /Noch keine Empfehlungen freigegeben/);
+    assert.match(portalJs, /data-discover-group/);
+    assert.match(portalJs, /Mehr erfahren/);
+    assert.match(portalJs, /Navigation/);
+  });
+
+  it("styles discover cards for mobile and desktop", () => {
+    assert.match(portalCss, /Ops Ready 4\.5F/);
+    assert.match(portalCss, /\.discover-hero\{[\s\S]*background-color:var\(--act-forest\)/);
+    assert.match(portalCss, /aspect-ratio:16 \/ 10/);
+    assert.match(portalCss, /overflow-x:clip/);
+    assert.match(portalCss, /\.discover-group-grid\{[\s\S]*grid-template-columns:1fr/);
+    assert.match(portalCss, /@media\(min-width:720px\)\{[\s\S]*\.discover-group-grid\{[\s\S]*repeat\(2/);
+    assert.match(portalCss, /@media\(min-width:1040px\)\{[\s\S]*\.discover-group-grid\{[\s\S]*repeat\(3/);
+    assert.match(portalCss, /\.discover-card-actions \.button\{[\s\S]*min-height:44px/);
   });
 });

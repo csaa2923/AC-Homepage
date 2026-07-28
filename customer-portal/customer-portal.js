@@ -720,6 +720,273 @@
     }).join("");
   }
 
+  function discoverCategoryLabel(category){
+    const key=String(category||"").trim().toLowerCase();
+    const labels={
+      general:"Allgemein",
+      tip:"Tipp",
+      food:"Kulinarik",
+      viewpoint:"Aussicht",
+      family:"Familie",
+      evening:"Abend",
+      indoor:"Indoor",
+      warning:"Hinweis",
+      hike:"Wandern",
+      event:"Events",
+      transport:"Transfer",
+      restaurant:"Restaurant",
+      activity:"Aktivität",
+      culinary:"Kulinarik",
+      wellness:"Wellness",
+      nature:"Natur"
+    };
+    if(labels[key])return labels[key];
+    const raw=String(category||"").trim();
+    return raw||"Empfehlung";
+  }
+
+  function discoverGroupDomId(label){
+    return `discover-group-${String(label||"").replace(/[^\wäöüÄÖÜß-]+/gi,"-")}`;
+  }
+
+  function discoverPlaceItems(){
+    const places=[];
+    (Array.isArray(customer.restaurants)?customer.restaurants:[]).forEach((item,index)=>{
+      if(!item||item.visible===false||item.visibleForCustomer===false)return;
+      const title=String(item.title||item.name||"").trim();
+      if(!title)return;
+      places.push({
+        id:item.id||`restaurant-${index+1}`,
+        kind:"place",
+        category:item.category||"restaurant",
+        title,
+        place:item.location||item.meetingPoint||item.address||item.locationAddress||"",
+        description:item.description||item.notes||item.shortDescription||"",
+        navigationUrl:itemNavigationUrl(itemForTravelActions(item)),
+        programItemId:item.id||"",
+        imageUrl:item.imageUrl||item.image||item.heroImage||item.coverImage||""
+      });
+    });
+    (Array.isArray(customer.activities)?customer.activities:[]).forEach((item,index)=>{
+      if(!item||item.visible===false||item.visibleForCustomer===false)return;
+      const title=String(item.title||item.name||"").trim();
+      if(!title)return;
+      places.push({
+        id:item.id||`activity-${index+1}`,
+        kind:"place",
+        category:item.category||"activity",
+        title,
+        place:item.location||item.meetingPoint||item.address||item.locationAddress||"",
+        description:item.description||item.notes||item.shortDescription||"",
+        navigationUrl:itemNavigationUrl(itemForTravelActions(item)),
+        programItemId:item.id||"",
+        imageUrl:item.imageUrl||item.image||item.heroImage||item.coverImage||""
+      });
+    });
+    return places;
+  }
+
+  function discoverTipItems(){
+    const lib=conciergeLib();
+    const raw=Array.isArray(customer.conciergeRecommendations)?customer.conciergeRecommendations:[];
+    if(lib?.filterRecommendations){
+      const modelContext=lib.resolveConciergeForPortal?.({
+        customer,
+        days:groupedProgram(),
+        weatherForDate,
+        now:new Date()
+      })||{};
+      const now=new Date();
+      const hourMinute=`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+      return lib.filterRecommendations(raw,{
+        language:modelContext.language||"de",
+        season:modelContext.season||"all",
+        weatherMode:modelContext.weatherMode||"any",
+        profile:modelContext.profile||"nature",
+        hourMinute,
+        dayDate:now
+      }).map((tip,index)=>{
+        const linked=tip.programItemId?programItems().find(item=>String(item.id)===String(tip.programItemId)):null;
+        const full=String(tip.text||"").trim();
+        const title=full.length>72?`${full.slice(0,69).trim()}…`:full;
+        return {
+          id:tip.id||`tip-${index+1}`,
+          kind:"tip",
+          category:tip.category||"tip",
+          title,
+          place:linked?(linked.location||linked.meetingPoint||linked.address||""):"",
+          description:full,
+          navigationUrl:linked?itemNavigationUrl(itemForTravelActions(linked)):"",
+          programItemId:tip.programItemId||"",
+          imageUrl:"",
+          priority:tip.priority||3
+        };
+      }).filter(item=>hasDisplayValue(item.description||item.title));
+    }
+    return raw.filter(item=>item&&item.visibility!=="hidden"&&hasDisplayValue(item.text||item.title)).map((tip,index)=>{
+      const full=String(tip.text||tip.title||"").trim();
+      const title=full.length>72?`${full.slice(0,69).trim()}…`:full;
+      return {
+      id:tip.id||`tip-${index+1}`,
+      kind:"tip",
+      category:tip.category||"tip",
+      title,
+      place:"",
+      description:full,
+      navigationUrl:"",
+      programItemId:tip.programItemId||"",
+      imageUrl:"",
+      priority:tip.priority||3
+    };
+    });
+  }
+
+  function discoverFeaturedItem(tips,places){
+    const rankedTips=[...tips].sort((a,b)=>(Number(b.priority)||0)-(Number(a.priority)||0));
+    if(rankedTips[0])return rankedTips[0];
+    return places[0]||null;
+  }
+
+  function discoverCardMedia(item){
+    const category=discoverCategoryLabel(item.category);
+    if(hasDisplayValue(item.imageUrl)&&/^https?:\/\//i.test(String(item.imageUrl))){
+      return `<div class="discover-card-media"><img src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy"></div>`;
+    }
+    return `<div class="discover-card-media discover-card-media-fallback" data-category="${escapeHtml(String(item.category||"general"))}" aria-hidden="true"><span class="discover-card-media-label">${escapeHtml(category)}</span></div>`;
+  }
+
+  function discoverCardMarkup(item){
+    const category=discoverCategoryLabel(item.category);
+    const detailHref=item.programItemId?`#${detailId({id:item.programItemId})}`:"";
+    const primary=detailHref
+      ?`<a class="button primary" href="${escapeHtml(detailHref)}">Mehr erfahren</a>`
+      :(hasDisplayValue(item.description)
+        ?`<button class="button primary" type="button" data-discover-expand>Mehr erfahren</button>`
+        :"");
+    const secondary=item.navigationUrl
+      ?`<a class="button soft" href="${escapeHtml(item.navigationUrl)}" target="_blank" rel="noopener noreferrer">Navigation</a>`
+      :"";
+    const shortCopy=String(item.description||"").trim();
+    const preview=shortCopy.length>140?`${shortCopy.slice(0,137).trim()}…`:shortCopy;
+    return `
+      <article class="discover-card" data-discover-category="${escapeHtml(category)}">
+        ${discoverCardMedia(item)}
+        <div class="discover-card-body">
+          <p class="discover-card-eyebrow">${escapeHtml(category)}</p>
+          <h3>${escapeHtml(item.title)}</h3>
+          ${hasDisplayValue(item.place)?`<p class="discover-card-place">${escapeHtml(item.place)}</p>`:""}
+          ${preview?`<p class="discover-card-copy">${escapeHtml(preview)}</p>`:""}
+          ${shortCopy&&shortCopy!==preview?`<p class="discover-card-copy discover-card-copy-full" hidden>${escapeHtml(shortCopy)}</p>`:""}
+          ${primary||secondary?`<div class="card-actions discover-card-actions">${primary}${secondary}</div>`:""}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderDiscoverCategoryNav(groups){
+    const nav=document.getElementById("discoverCategoryNav");
+    if(!nav)return;
+    if(!groups.length){
+      nav.hidden=true;
+      nav.innerHTML="";
+      return;
+    }
+    nav.hidden=false;
+    nav.innerHTML=groups.map(group=>{
+      const id=discoverGroupDomId(group.label);
+      return `<button class="discover-category-chip" type="button" data-discover-group="${escapeHtml(id)}" aria-label="${escapeHtml(group.label)}: ${group.items.length}">
+        <span>${escapeHtml(group.label)}</span>
+        <span class="discover-category-chip-count">${group.items.length}</span>
+      </button>`;
+    }).join("");
+  }
+
+  function renderDiscoverRegion(){
+    const section=document.getElementById("discoverRegion");
+    const card=document.getElementById("discoverRegionCard");
+    if(!section||!card)return;
+    const region=String(customer.region||customer.weatherLocationName||"").trim();
+    const lat=Number(customer.latitude);
+    const lng=Number(customer.longitude);
+    const hasCoords=Number.isFinite(lat)&&Number.isFinite(lng)&&!(Math.abs(lat)<0.0001&&Math.abs(lng)<0.0001);
+    if(!region&&!hasCoords){
+      section.hidden=true;
+      card.innerHTML="";
+      return;
+    }
+    section.hidden=false;
+    const navUrl=hasCoords
+      ?resolveNavigationUrl("",`${lat},${lng}`,region)
+      :resolveNavigationUrl("","",region);
+    card.innerHTML=`
+      <p class="eyebrow">Umgebung</p>
+      <h3>${escapeHtml(region||"Ihre Region")}</h3>
+      <p class="discover-region-copy">Persönlich ausgewählte Impulse rund um Ihren Aufenthaltsort – ruhig, regional und auf Ihre Reise abgestimmt.</p>
+      ${navUrl?`<div class="card-actions"><a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Region in Maps öffnen</a></div>`:""}
+    `;
+  }
+
+  function renderDiscover(){
+    const featuredRoot=document.getElementById("discoverFeatured");
+    const grid=document.getElementById("discoverGrid");
+    if(!grid)return;
+    const tips=discoverTipItems();
+    const places=discoverPlaceItems();
+    const all=[...places,...tips];
+    const featured=discoverFeaturedItem(tips,places);
+    if(featuredRoot){
+      featuredRoot.innerHTML=featured?`
+        <article class="discover-featured-card">
+          <p class="eyebrow">Heute empfehlen wir…</p>
+          <h3>${escapeHtml(featured.description||featured.title)}</h3>
+          ${hasDisplayValue(featured.place)?`<p class="discover-card-place">${escapeHtml(featured.place)}</p>`:""}
+          <p class="discover-featured-meta">${escapeHtml(discoverCategoryLabel(featured.category))}</p>
+        </article>
+      `:`
+        <article class="discover-featured-card discover-empty" role="status">
+          <p class="eyebrow">Concierge</p>
+          <h3>Ihre Empfehlungen werden vorbereitet</h3>
+          <p class="discover-featured-copy">Sobald Ihr Concierge persönliche Tipps freigibt, erscheinen sie hier – kuratiert für Ihren Aufenthalt.</p>
+        </article>
+      `;
+    }
+    if(!all.length){
+      renderDiscoverCategoryNav([]);
+      grid.innerHTML=`
+        <article class="discover-empty" role="status">
+          <p class="eyebrow">Concierge</p>
+          <h3>Noch keine Empfehlungen freigegeben</h3>
+          <p>Wir stellen gerade eine persönliche Auswahl für Sie zusammen. Schauen Sie später wieder vorbei – oder fragen Sie Ihren Concierge direkt.</p>
+        </article>
+      `;
+      renderDiscoverRegion();
+      return;
+    }
+    const groups=new Map();
+    all.forEach(item=>{
+      const label=discoverCategoryLabel(item.category);
+      if(!groups.has(label))groups.set(label,[]);
+      groups.get(label).push(item);
+    });
+    const ordered=[...groups.entries()].map(([label,items])=>({label,items}));
+    renderDiscoverCategoryNav(ordered);
+    grid.innerHTML=ordered.map(group=>{
+      const id=discoverGroupDomId(group.label);
+      return `
+        <section class="discover-group" id="${escapeHtml(id)}" aria-labelledby="${escapeHtml(id)}-title">
+          <header class="discover-group-head">
+            <h3 id="${escapeHtml(id)}-title">${escapeHtml(group.label)}</h3>
+            <p class="discover-group-count">${group.items.length}</p>
+          </header>
+          <div class="discover-group-grid">
+            ${group.items.map(discoverCardMarkup).join("")}
+          </div>
+        </section>
+      `;
+    }).join("");
+    renderDiscoverRegion();
+  }
+
   function numberValue(value){
     const trimmed=String(value??"").trim();
     if(!trimmed)return null;
@@ -2873,6 +3140,29 @@
         return;
       }
 
+      const discoverGroupButton=event.target.closest("[data-discover-group]");
+      if(discoverGroupButton){
+        const groupId=discoverGroupButton.getAttribute("data-discover-group")||"";
+        const groupEl=groupId?document.getElementById(groupId):null;
+        if(groupEl){
+          groupEl.scrollIntoView({behavior:prefersReducedMotion()?"auto":"smooth",block:"start"});
+        }
+        return;
+      }
+
+      const discoverExpand=event.target.closest("[data-discover-expand]");
+      if(discoverExpand){
+        const card=discoverExpand.closest(".discover-card");
+        const preview=card?.querySelector(".discover-card-copy:not(.discover-card-copy-full)");
+        const full=card?.querySelector(".discover-card-copy-full");
+        if(full){
+          full.hidden=false;
+          if(preview)preview.hidden=true;
+          discoverExpand.hidden=true;
+        }
+        return;
+      }
+
       const placeholder=event.target.closest("[data-placeholder]");
       if(placeholder)window.alert(`${placeholder.dataset.placeholder}: Dokument-Platzhalter für Schritt 1.`);
 
@@ -2930,6 +3220,7 @@
     safeRender("hotel",renderHotel);
     safeRender("weather",renderWeather);
     safeRender("documents",renderDocuments);
+    safeRender("discover",renderDiscover);
     safeRender("contact",renderContact);
     safeRender("actions",renderActions);
     safeRender("history",renderHistory);

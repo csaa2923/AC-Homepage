@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=35">
+<link rel="stylesheet" href="customer-portal.css?v=36">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -274,12 +274,46 @@
     </section>
   </section>
 
-  <section class="portal-section app-view-placeholder" id="discover" data-app-view="discover" aria-labelledby="discoverTitle" hidden>
-    <div class="section-head">
-      <p class="eyebrow">Entdecken</p>
-      <h2 id="discoverTitle">Entdecken</h2>
-    </div>
-    <p class="app-view-placeholder-copy">Empfehlungen und Highlights folgen in einem nächsten Schritt.</p>
+  <section id="discover" class="app-view discover-view" data-app-view="discover" data-view="discover" aria-labelledby="discoverTitle" hidden>
+    <header class="discover-hero" aria-label="Entdecken">
+      <div class="discover-hero-stage">
+        <p class="eyebrow discover-brand-eyebrow">Concierge</p>
+        <h1 id="discoverTitle">Entdecken</h1>
+        <p class="discover-hero-copy">Besondere Empfehlungen für Ihren Aufenthalt.</p>
+      </div>
+    </header>
+
+    <section class="discover-featured portal-section" aria-labelledby="discoverFeaturedTitle">
+      <div class="section-head">
+        <p class="eyebrow">Persönlich</p>
+        <h2 id="discoverFeaturedTitle">Heute empfehlen wir</h2>
+      </div>
+      <div id="discoverFeatured" class="discover-featured-root"></div>
+    </section>
+
+    <section class="discover-categories portal-section" aria-labelledby="discoverCategoriesTitle">
+      <div class="section-head">
+        <p class="eyebrow">Themen</p>
+        <h2 id="discoverCategoriesTitle">Ihre Kategorien</h2>
+      </div>
+      <div class="discover-category-nav" id="discoverCategoryNav" hidden></div>
+    </section>
+
+    <section class="discover-list portal-section" aria-labelledby="discoverListTitle">
+      <div class="section-head">
+        <p class="eyebrow">Auswahl</p>
+        <h2 id="discoverListTitle">Empfehlungen</h2>
+      </div>
+      <div class="discover-grid" id="discoverGrid"></div>
+    </section>
+
+    <section class="discover-region portal-section" id="discoverRegion" aria-labelledby="discoverRegionTitle" hidden>
+      <div class="section-head">
+        <p class="eyebrow">Region</p>
+        <h2 id="discoverRegionTitle">Ihre Umgebung</h2>
+      </div>
+      <article class="discover-region-card" id="discoverRegionCard"></article>
+    </section>
   </section>
 
   <section id="viewDocuments" class="app-view documents-view" data-app-view="documents" data-view="documents" aria-labelledby="documentTitle" hidden>
@@ -397,6 +431,6 @@
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=62"></script>
+<script src="customer-portal.js?v=63"></script>
 </body>
 </html>

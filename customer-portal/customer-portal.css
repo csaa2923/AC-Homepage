@@ -2036,55 +2036,112 @@ h3{font-size:24px;color:var(--green)}
   width:100%;
   max-width:100%;
   margin:0;
-  padding:4px 2px 10px;
+  padding:4px 2px 12px;
   overflow-x:auto;
   overflow-y:hidden;
   -webkit-overflow-scrolling:touch;
   scroll-snap-type:x proximity;
-  scrollbar-width:none;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(16,40,32,.28) transparent;
 }
-.itinerary-day-selector::-webkit-scrollbar{display:none}
-.itinerary-day-chip{
+.itinerary-day-selector::-webkit-scrollbar{
+  height:6px;
+  display:block;
+}
+.itinerary-day-selector::-webkit-scrollbar-thumb{
+  background:rgba(16,40,32,.28);
+  border-radius:999px;
+}
+.itinerary-view .day-selector button.itinerary-day-chip,
+.itinerary-view .itinerary-day-chip{
   flex:0 0 auto;
   display:grid;
-  gap:6px;
-  min-width:128px;
-  min-height:76px;
-  padding:14px 16px;
-  border:1px solid var(--act-line);
+  gap:4px;
+  align-content:center;
+  min-width:136px;
+  min-height:56px;
+  padding:12px 16px;
+  border:1px solid rgba(185,145,62,.55);
   border-radius:var(--act-radius-lg);
-  background:var(--act-card);
+  background:var(--act-paper);
   color:var(--act-ink);
   text-align:left;
   cursor:pointer;
   scroll-snap-align:start;
-  box-shadow:var(--act-shadow-card);
-  transition:border-color var(--act-motion-fast) ease,transform var(--act-motion-fast) ease,background var(--act-motion-fast) ease;
+  box-shadow:none;
+  font-weight:500;
+  transition:border-color var(--act-motion-fast) ease,transform var(--act-motion-fast) ease,background var(--act-motion-fast) ease,box-shadow var(--act-motion-fast) ease;
 }
-.itinerary-day-chip-index{
+.itinerary-view .day-selector button.itinerary-day-chip .itinerary-day-chip-index,
+.itinerary-view .itinerary-day-chip-index{
   color:var(--act-gold-deep);
   font-family:var(--act-font-sans);
-  font-size:11px;
+  font-size:12px;
   font-weight:700;
   letter-spacing:.1em;
   text-transform:uppercase;
+  line-height:1.2;
 }
-.itinerary-day-chip-date{
+.itinerary-view .day-selector button.itinerary-day-chip .itinerary-day-chip-date,
+.itinerary-view .itinerary-day-chip-date{
   font-family:var(--act-font-serif);
-  font-size:16px;
+  font-size:15px;
   font-weight:400;
   color:var(--act-forest);
+  line-height:1.25;
+  overflow-wrap:anywhere;
 }
-.itinerary-day-chip.active{
-  border-color:rgba(216,183,106,.7);
-  background:linear-gradient(160deg,var(--act-forest) 0%,var(--act-forest-soft) 100%);
+.itinerary-view .itinerary-day-chip-today{
+  display:inline-block;
+  width:fit-content;
+  margin:0;
+  padding:2px 0 0;
+  color:var(--act-forest-mid);
+  font-family:var(--act-font-sans);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  line-height:1.2;
+}
+.itinerary-view .day-selector button.itinerary-day-chip:hover,
+.itinerary-view .itinerary-day-chip:hover{
+  border-color:var(--act-gold-deep);
   transform:translateY(-1px);
 }
-.itinerary-day-chip.active .itinerary-day-chip-index{color:var(--act-gold-bright)}
-.itinerary-day-chip.active .itinerary-day-chip-date{color:var(--act-on-dark)}
-.itinerary-day-chip:focus-visible{
+.itinerary-view .day-selector button.itinerary-day-chip:focus-visible,
+.itinerary-view .itinerary-day-chip:focus-visible{
   outline:2px solid var(--act-gold);
   outline-offset:3px;
+}
+/* Active: forest + on-dark (overrides legacy .day-selector button.active gold) */
+.itinerary-view .day-selector button.itinerary-day-chip.active,
+.itinerary-view .itinerary-day-chip.active{
+  background:var(--act-forest);
+  color:var(--act-on-dark);
+  border-color:var(--act-gold);
+  box-shadow:inset 0 0 0 1px rgba(216,183,106,.35);
+  transform:none;
+}
+.itinerary-view .day-selector button.itinerary-day-chip.active .itinerary-day-chip-index,
+.itinerary-view .day-selector button.itinerary-day-chip.active .itinerary-day-chip-date,
+.itinerary-view .itinerary-day-chip.active .itinerary-day-chip-index,
+.itinerary-view .itinerary-day-chip.active .itinerary-day-chip-date{
+  color:var(--act-on-dark);
+}
+.itinerary-view .day-selector button.itinerary-day-chip.active .itinerary-day-chip-today,
+.itinerary-view .itinerary-day-chip.active .itinerary-day-chip-today{
+  color:var(--act-gold-bright);
+}
+.itinerary-view .itinerary-day-chip.is-today:not(.active){
+  border-color:rgba(185,145,62,.85);
+}
+.itinerary-view .itinerary-day.is-selected{
+  border-color:rgba(216,183,106,.55);
+  box-shadow:0 0 0 1px rgba(216,183,106,.25);
+}
+.itinerary-view .itinerary-day{
+  scroll-margin-top:112px;
 }
 
 /* Main grid: timeline + details */
@@ -2364,7 +2421,7 @@ h3{font-size:24px;color:var(--green)}
   .itinerary-hero{min-height:min(56vh,520px)}
   .itinerary-hero-stage{padding:48px 40px 56px}
   .itinerary-overview-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .itinerary-day-chip{min-width:148px}
+  .itinerary-day-chip{min-width:148px;min-height:60px}
   .itinerary-item{grid-template-columns:36px minmax(0,1fr);gap:16px}
   .itinerary-card{padding:22px 20px}
   .itinerary-day{padding:24px 22px 12px}
@@ -2422,6 +2479,7 @@ h3{font-size:24px;color:var(--green)}
   .itinerary-doc-chip{
     transition:none !important;
   }
+  .itinerary-view .itinerary-day{scroll-behavior:auto}
 }
 
 @media print{
@@ -2433,6 +2491,12 @@ h3{font-size:24px;color:var(--green)}
   .itinerary-hero h1,
   .itinerary-hero-copy{color:#111 !important;text-shadow:none}
   .itinerary-view .program-detail-card{display:grid !important}
+}
+
+/* Ops Ready 4.5C.2 – Day navigation usability + contrast */
+.itinerary-view .day-selector button.itinerary-day-chip.active{
+  background:var(--act-forest) !important;
+  color:var(--act-on-dark) !important;
 }
 
 /* Ops Ready 4.5C.1 – Desktop detail UX (active card, hike stats, map, buttons) */

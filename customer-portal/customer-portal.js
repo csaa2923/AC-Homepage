@@ -1755,16 +1755,56 @@
     `;
   }
 
+  function prefersReducedMotion(){
+    return Boolean(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+
+  function itineraryDayDomId(index){
+    return `itinerary-day-${Number(index)||0}`;
+  }
+
+  function selectCalendarDay(index,{scroll=true}={}){
+    const days=groupedProgram();
+    if(!days.length){
+      calendarState.dayIndex=0;
+      renderCalendar();
+      return;
+    }
+    const next=Math.max(0,Math.min(Number(index)||0,days.length-1));
+    calendarState.dayIndex=next;
+    calendarState.view="day";
+    renderCalendar();
+    document.querySelectorAll("[data-itinerary-day]").forEach(article=>{
+      const dayIndex=Number(article.getAttribute("data-itinerary-day"));
+      article.classList.toggle("is-selected",dayIndex===next);
+    });
+    if(!scroll)return;
+    const behavior=prefersReducedMotion()?"auto":"smooth";
+    const chip=document.querySelector(`#calendarDaySelector [data-calendar-day="${next}"]`);
+    if(chip&&typeof chip.scrollIntoView==="function"){
+      chip.scrollIntoView({behavior,inline:"center",block:"nearest"});
+    }
+    const dayEl=document.getElementById(itineraryDayDomId(next));
+    if(dayEl&&typeof dayEl.scrollIntoView==="function"){
+      dayEl.scrollIntoView({behavior,block:"start"});
+    }
+  }
+
   function renderCalendarControls(){
     const days=groupedProgram();
     const selector=el("calendarDaySelector");
     if(!selector)return;
-    selector.innerHTML=days.map((day,index)=>`
-      <button class="itinerary-day-chip ${index===calendarState.dayIndex?"active":""}" type="button" data-calendar-day="${index}">
+    selector.innerHTML=days.map((day,index)=>{
+      const isActive=index===calendarState.dayIndex;
+      const isToday=dayTemporalState(day.dateValue)==="today";
+      return `
+      <button class="itinerary-day-chip${isActive?" active":""}${isToday?" is-today":""}" type="button" data-calendar-day="${index}" aria-pressed="${isActive?"true":"false"}"${isActive?` aria-current="date"`:""} aria-label="Tag ${index+1}, ${escapeHtml(day.date||"")}${isToday?", heute":""}">
         <span class="itinerary-day-chip-index">Tag ${index+1}</span>
-        <strong class="itinerary-day-chip-date">${day.date}</strong>
+        ${isToday?`<span class="itinerary-day-chip-today">Heute</span>`:""}
+        <strong class="itinerary-day-chip-date">${escapeHtml(day.date||"")}</strong>
       </button>
-    `).join("");
+    `;
+    }).join("");
     document.querySelectorAll("[data-calendar-view]").forEach(button=>{
       button.classList.toggle("active",button.dataset.calendarView===calendarState.view);
     });
@@ -2177,7 +2217,7 @@
       const weatherBadge=itineraryWeatherBadge(day.dateValue||day.items[0]?.dateValue||"");
       const hotelCard=itineraryHotelCard(day.dateValue);
       return `
-      <article class="itinerary-day day-card is-${escapeHtml(dayState)}" data-day-state="${escapeHtml(dayState)}" ${dayState==="today"?"data-itinerary-today=\"1\"":""}>
+      <article class="itinerary-day day-card is-${escapeHtml(dayState)}${index===calendarState.dayIndex?" is-selected":""}" id="${itineraryDayDomId(index)}" data-itinerary-day="${index}" data-day-state="${escapeHtml(dayState)}" ${dayState==="today"?"data-itinerary-today=\"1\"":""}>
         <header class="itinerary-day-head day-head">
           <div>
             <p class="eyebrow">${escapeHtml(weekday||day.date)}</p>
@@ -2733,9 +2773,7 @@
 
       const dayButton=event.target.closest("[data-calendar-day]");
       if(dayButton){
-        calendarState.dayIndex=Number(dayButton.dataset.calendarDay);
-        calendarState.view="day";
-        renderCalendar();
+        selectCalendarDay(dayButton.dataset.calendarDay,{scroll:true});
         return;
       }
 

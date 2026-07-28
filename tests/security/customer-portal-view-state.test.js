@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=59/);
-    assert.match(portalHtml, /customer-portal\.css\?v=32/);
+    assert.match(portalHtml, /customer-portal\.js\?v=60/);
+    assert.match(portalHtml, /customer-portal\.css\?v=33/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -346,10 +346,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=59"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=60"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=59/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=60/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -433,8 +433,8 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=32/);
-    assert.match(portalHtml, /customer-portal\.js\?v=59/);
+    assert.match(portalHtml, /customer-portal\.css\?v=33/);
+    assert.match(portalHtml, /customer-portal\.js\?v=60/);
   });
 });
 
@@ -457,7 +457,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=59/);
+    assert.match(portalHtml, /customer-portal\.js\?v=60/);
   });
 });
 
@@ -505,5 +505,33 @@ describe("customer portal itinerary desktop detail UX (4.5C.1)", () => {
     assert.match(portalJs, /data-calendar-id/);
     assert.match(portalJs, /data-travel-open-maps/);
     assert.match(portalCss, /\.program-detail-actions-tertiary \.button/);
+  });
+});
+
+describe("customer portal itinerary day navigation (4.5C.2)", () => {
+  it("keeps data-calendar-day chips and selects via existing calendar state", () => {
+    assert.match(portalJs, /data-calendar-day=/);
+    assert.match(portalJs, /function selectCalendarDay\(/);
+    assert.match(portalJs, /calendarState\.dayIndex/);
+    assert.match(portalJs, /itinerary-day-\$/);
+    assert.match(portalJs, /data-itinerary-day=/);
+    assert.match(portalJs, /selectCalendarDay\(dayButton\.dataset\.calendarDay/);
+  });
+
+  it("scrolls to the day section and respects reduced motion", () => {
+    assert.match(portalJs, /function prefersReducedMotion\(/);
+    assert.match(portalJs, /prefers-reduced-motion:\s*reduce/);
+    assert.match(portalJs, /scrollIntoView\(\{behavior/);
+    assert.match(portalCss, /scroll-margin-top:112px/);
+  });
+
+  it("sets aria-pressed/current and readable active contrast", () => {
+    assert.match(portalJs, /aria-pressed=/);
+    assert.match(portalJs, /aria-current="date"/);
+    assert.match(portalJs, /itinerary-day-chip-today/);
+    assert.match(portalCss, /Ops Ready 4\.5C\.2/);
+    assert.match(portalCss, /\.day-selector button\.itinerary-day-chip\.active\{[\s\S]*background:var\(--act-forest\)/);
+    assert.match(portalCss, /\.day-selector button\.itinerary-day-chip\.active\{[\s\S]*color:var\(--act-on-dark\)/);
+    assert.doesNotMatch(portalCss, /\.itinerary-view[\s\S]{0,220}\.itinerary-day-chip\.active\{[\s\S]{0,120}background:linear-gradient\(135deg,var\(--gold/);
   });
 });

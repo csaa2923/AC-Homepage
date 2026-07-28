@@ -51,6 +51,10 @@
     view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
     dayIndex:0
   };
+  const detailFieldsState={
+    showEmpty:false,
+    bound:false
+  };
 
   function normalizeAppView(view){
     const value=String(view||"").trim().toLowerCase();
@@ -999,7 +1003,10 @@
       <div class="hike-overview">
         <h4>Wanderübersicht</h4>
         <ul class="hike-stats">
-          ${stats.map(stat=>`<li><span class="hike-stat-icon" aria-hidden="true">${escapeHtml(stat.icon)}</span><span class="hike-stat-label">${escapeHtml(stat.label)}</span><span class="hike-stat-value">${escapeHtml(stat.value)}</span></li>`).join("")}
+          ${stats.map(stat=>{
+            const meaningful=hasMeaningfulValue(stat?.value);
+            return `<li${meaningful?"":` data-empty-field="1"`}><span class="hike-stat-icon" aria-hidden="true">${escapeHtml(stat.icon)}</span><span class="hike-stat-label">${escapeHtml(stat.label)}</span><span class="hike-stat-value">${escapeHtml(meaningful?stat.value:"—")}</span></li>`;
+          }).join("")}
         </ul>
       </div>
     `:"";
@@ -1444,8 +1451,26 @@
     return "Reisezeitraum liegt in der Vergangenheit";
   }
 
+  function hasMeaningfulValue(value){
+    if(value===null||value===undefined)return false;
+    if(Array.isArray(value))return value.some(hasMeaningfulValue);
+    if(typeof value==="object")return Object.values(value).some(hasMeaningfulValue);
+    const normalized=String(value).trim();
+    if(!normalized)return false;
+    return ![
+      "",
+      "-",
+      "–",
+      "—",
+      "null",
+      "undefined",
+      "n/a",
+      "nicht vorhanden"
+    ].includes(normalized.toLowerCase());
+  }
+
   function hasDisplayValue(value){
-    return value!==undefined&&value!==null&&String(value).trim()!==""&&String(value).trim()!=="undefined";
+    return hasMeaningfulValue(value);
   }
 
   function tripPeriod(){
@@ -1456,7 +1481,11 @@
   }
 
   function definitionList(items){
-    return `<dl class="field-list">${items.map(([label,value])=>`<div><dt>${label}</dt><dd>${value||"-"}</dd></div>`).join("")}</dl>`;
+    const rows=(Array.isArray(items)?items:[]).filter(Boolean).map(([label,value])=>{
+      const meaningful=hasMeaningfulValue(value);
+      return `<div${meaningful?"":` data-empty-field="1"`}><dt>${label}</dt><dd>${meaningful?value:"—"}</dd></div>`;
+    }).join("");
+    return `<dl class="field-list">${rows}</dl>`;
   }
 
   function formatDateValue(dateValue){
@@ -1933,7 +1962,7 @@
   }
 
   function itineraryFilledFields(item,linked){
-    const timeRange=[item.startTime,item.endTime].filter(hasDisplayValue).join(" – ");
+    const timeRange=[item.startTime,item.endTime].filter(hasMeaningfulValue).join(" – ");
     return [
       ["Uhrzeit",timeRange],
       ["Kategorie",item.category],
@@ -1945,7 +1974,14 @@
       ["Telefon",item.phone],
       ["Status",programStatusLabel(item)],
       ["Anbieter",linked?.provider||""]
-    ].filter(([,value])=>hasDisplayValue(value));
+    ].map(([label,value])=>{
+      const meaningful=hasMeaningfulValue(value);
+      return {
+        label,
+        value:meaningful?value:"—",
+        meaningful
+      };
+    });
   }
 
   function itineraryDescriptionMarkup(item){
@@ -2120,7 +2156,7 @@
                   </div>
                 </div>
                 ${itineraryDescriptionMarkup(item)}
-                ${fields.length?`<dl class="itinerary-fields field-list">${fields.map(([label,value])=>`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`:""}
+                ${fields.length?`<dl class="itinerary-fields field-list">${fields.map(field=>`<div${field.meaningful?"":` data-empty-field="1"`}><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`).join("")}</dl>`:""}
                 ${itineraryDocumentStrip(item,linked)}
                 ${itineraryMapsButtons(item)}
                 ${itineraryHikeCompactMarkup(item)}
@@ -2566,10 +2602,33 @@
     }
   }
 
+  function syncEmptyFieldsVisibility(){
+    if(!root)return;
+    if(detailFieldsState.showEmpty)root.setAttribute("data-show-empty-fields","1");
+    else root.removeAttribute("data-show-empty-fields");
+    document.querySelectorAll("[data-toggle-empty-fields]").forEach(input=>{
+      if(input instanceof HTMLInputElement&&input.type==="checkbox"){
+        input.checked=detailFieldsState.showEmpty;
+      }
+    });
+  }
+
+  function bindEmptyFieldsToggle(){
+    if(detailFieldsState.bound)return;
+    detailFieldsState.bound=true;
+    document.addEventListener("change",event=>{
+      const toggle=event.target.closest("[data-toggle-empty-fields]");
+      if(!toggle||!(toggle instanceof HTMLInputElement))return;
+      detailFieldsState.showEmpty=Boolean(toggle.checked);
+      syncEmptyFieldsVisibility();
+    });
+  }
+
   let actionsBound=false;
   function bindActions(){
     if(actionsBound)return;
     actionsBound=true;
+    bindEmptyFieldsToggle();
     document.addEventListener("change",event=>{
       const doneToggle=event.target.closest("input[data-program-done]");
       if(!doneToggle)return;
@@ -2676,6 +2735,7 @@
     safeRender("dataSourceNotice",renderDataSourceNotice);
     safeRender("adminVersionHint",renderAdminVersionHint);
     bindActions();
+    syncEmptyFieldsVisibility();
     hydrateShareDocumentUrls();
     applyAppViewVisibility();
   }

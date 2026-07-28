@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=55/);
-    assert.match(portalHtml, /customer-portal\.css\?v=26/);
+    assert.match(portalHtml, /customer-portal\.js\?v=56/);
+    assert.match(portalHtml, /customer-portal\.css\?v=27/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -313,10 +313,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=55"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=56"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=55/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=56/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -336,5 +336,32 @@ describe("customer portal critical startup fix (4.4B)", () => {
     assert.match(portalJs, /function bindAppNavigation\(/);
     assert.match(portalJs, /function bindActions\(/);
     assert.match(portalJs, /initAppViewState\(\);\s*\n\s*initPortal\(\);/);
+  });
+});
+
+describe("customer portal empty detail fields filter (4.4C)", () => {
+  it("defines hasMeaningfulValue and marks empty definition rows", () => {
+    assert.match(portalJs, /function hasMeaningfulValue\(/);
+    assert.match(portalJs, /nicht vorhanden/);
+    assert.match(portalJs, /data-empty-field="1"/);
+    assert.match(portalJs, /function definitionList\(/);
+    assert.match(portalJs, /meaningful\?value:"—"/);
+    assert.match(portalJs, /hasDisplayValue\(value\)\{\s*return hasMeaningfulValue\(value\);/);
+  });
+
+  it("exposes a guest toggle to show all fields again", () => {
+    assert.match(portalHtml, /data-toggle-empty-fields/);
+    assert.match(portalHtml, /Alle Felder anzeigen/);
+    assert.match(portalJs, /function syncEmptyFieldsVisibility\(/);
+    assert.match(portalJs, /function bindEmptyFieldsToggle\(/);
+    assert.match(portalJs, /data-show-empty-fields/);
+    assert.match(portalJs, /detailFieldsState/);
+  });
+
+  it("hides empty fields by default via CSS until toggle is on", () => {
+    assert.match(portalCss, /data-show-empty-fields="1"/);
+    assert.match(portalCss, /data-empty-field="1"/);
+    assert.match(portalCss, /display:none !important/);
+    assert.match(portalCss, /\.detail-fields-filter/);
   });
 });

@@ -1079,6 +1079,29 @@ h3{font-size:24px;color:var(--green)}
   padding-bottom:10px;
   border-bottom:1px solid var(--line);
 }
+.customer-app:not([data-show-empty-fields="1"]) [data-empty-field="1"]{
+  display:none !important;
+}
+.detail-fields-filter{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  margin-top:14px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:rgba(255,255,255,.7);
+  color:var(--green);
+  font-size:14px;
+  font-weight:700;
+  cursor:pointer;
+  user-select:none;
+}
+.detail-fields-filter input{
+  width:18px;
+  height:18px;
+  accent-color:var(--green);
+}
 .field-list dt{
   color:#8d6b20;
   text-transform:uppercase;

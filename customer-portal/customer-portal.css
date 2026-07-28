@@ -1925,21 +1925,30 @@ h3{font-size:24px;color:var(--green)}
   border:1px solid rgba(216,183,106,.4);
   background:rgba(255,255,255,.75);
   font-size:20px;
+  flex:0 0 auto;
+}
+.documents-card-heading{
+  min-width:0;
 }
 .documents-type-label{
   margin:0 0 4px;
   color:#8d6b20;
-  font-size:12px;
+  font-size:11px;
   font-weight:700;
-  letter-spacing:.06em;
+  letter-spacing:.08em;
   text-transform:uppercase;
 }
 .documents-card-heading h3{
   margin:0;
   font-family:Georgia,serif;
-  font-size:22px;
+  font-size:clamp(17px,4.4vw,20px);
+  font-weight:400;
   color:var(--green);
-  line-height:1.2;
+  line-height:1.28;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  hyphens:auto;
+  max-width:100%;
 }
 .documents-fields{
   margin:0;

@@ -521,6 +521,26 @@
     return `${(size/(1024*1024)).toFixed(size<10*1024*1024?1:0)} MB`;
   }
 
+  function formatDocumentDisplayTitle(document){
+    const preferredTitle=String(
+      document?.title
+      ||document?.name
+      ||document?.fileName
+      ||document?.filename
+      ||""
+    ).trim();
+    let title=preferredTitle
+      .replace(/\.[a-z0-9]{2,6}$/i,"")
+      .replace(/[_-]+/g," ")
+      .replace(/\s+/g," ")
+      .trim();
+    if(!title)return "Dokument";
+    if(title.length>2&&title===title.toUpperCase()&&/[A-ZÄÖÜ]/.test(title)){
+      title=title.toLocaleLowerCase("de-DE").replace(/(^|[^\p{L}\p{N}])(\p{L})/gu,(_,prefix,letter)=>`${prefix}${letter.toLocaleUpperCase("de-DE")}`);
+    }
+    return title;
+  }
+
   function documentTypeIcon(item){
     const blob=`${item?.mimeType||""} ${item?.contentType||""} ${item?.fileName||""} ${item?.title||""} ${item?.category||""} ${item?.type||""}`.toLowerCase();
     if(isPdfDocument(item))return {icon:"📄",label:"PDF"};
@@ -565,13 +585,23 @@
     return ranked.map(label=>({label,items:groups.get(label)}));
   }
 
-  function documentCardFields(item,fileName){
+  function documentCardFields(item,fileName,displayTitle,typeIcon){
     const sizeLabel=formatDocumentFileSize(item.fileSize||item.size);
-    const typeIcon=documentTypeIcon(item);
+    const groupLabel=documentGroupLabel(item);
+    const category=hasDisplayValue(item.category)?String(item.category).trim():"";
+    const typeLabel=String(typeIcon?.label||item.type||"").trim();
+    const showCategory=category
+      &&category.toLowerCase()!==typeLabel.toLowerCase()
+      &&category.toLowerCase()!==groupLabel.toLowerCase()
+      &&!/^(dokument|datei|sonstig\w*)$/i.test(category);
+    const rawName=String(fileName||"").trim();
+    const rawAsTitle=formatDocumentDisplayTitle({fileName:rawName});
+    const showFileName=rawName
+      &&rawAsTitle.toLowerCase()!==String(displayTitle||"").toLowerCase()
+      &&rawName.toLowerCase()!==String(displayTitle||"").toLowerCase();
     return [
-      ["Dateiname",fileName&&fileName!==(item.title||"")?fileName:""],
-      ["Kategorie",hasDisplayValue(item.category)?item.category:""],
-      ["Dateityp",typeIcon.label||item.type||""],
+      ["Dateiname",showFileName?rawName:""],
+      ["Kategorie",showCategory?category:""],
       ["Dateigröße",sizeLabel],
       ["Datum",formatUploadDate(item.uploadedAt)],
       ["Hinweis",item.note],
@@ -581,22 +611,22 @@
 
   function renderDocumentCard(item){
     const url=resolveDocumentUrl(item);
-    const title=item.title||item.fileName||"Dokument";
-    const fileName=item.fileName||title;
+    const displayTitle=formatDocumentDisplayTitle(item);
+    const fileName=String(item.fileName||item.filename||item.title||item.name||"Dokument").trim()||"Dokument";
     const documentId=item.documentId||item.id||"";
     const typeIcon=documentTypeIcon(item);
-    const fields=documentCardFields(item,fileName);
-    if(!url)console.warn(`[PortalDocuments] Dokument ${documentId||title} ohne gueltige Datei-URL.`);
+    const fields=documentCardFields(item,fileName,displayTitle,typeIcon);
+    if(!url)console.warn(`[PortalDocuments] Dokument ${documentId||displayTitle} ohne gueltige Datei-URL.`);
     const preview=url&&isImageDocument(item)
-      ?`<div class="document-preview"><img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" loading="lazy"></div>`
+      ?`<div class="document-preview"><img src="${escapeHtml(url)}" alt="${escapeHtml(displayTitle)}" loading="lazy"></div>`
       :"";
     let actions="";
     if(url){
       const openLabel=isPdfDocument(item)?"PDF oeffnen":isImageDocument(item)?"Bild oeffnen":"Oeffnen";
-      actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(openLabel)}: ${escapeHtml(title)}">${openLabel}</a>
-        <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}" aria-label="Herunterladen: ${escapeHtml(title)}">Herunterladen</a>`;
+      actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(openLabel)}: ${escapeHtml(displayTitle)}">${openLabel}</a>
+        <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}" aria-label="Herunterladen: ${escapeHtml(displayTitle)}">Herunterladen</a>`;
     }else if(isShareAccess&&documentId){
-      actions=`<button class="button primary" type="button" data-open-portal-document="${escapeHtml(documentId)}" aria-label="Dokument oeffnen: ${escapeHtml(title)}">Dokument oeffnen</button>`;
+      actions=`<button class="button primary" type="button" data-open-portal-document="${escapeHtml(documentId)}" aria-label="Dokument oeffnen: ${escapeHtml(displayTitle)}">Dokument oeffnen</button>`;
     }else{
       actions=`<span class="button soft document-disabled" aria-disabled="true">Dieses Dokument ist derzeit nicht verfuegbar.</span>`;
     }
@@ -606,11 +636,11 @@
           <span class="documents-type-icon" aria-hidden="true">${typeIcon.icon}</span>
           <div class="documents-card-heading">
             <p class="documents-type-label">${escapeHtml(typeIcon.label)}</p>
-            <h3>${escapeHtml(title)}</h3>
+            <h3>${escapeHtml(displayTitle)}</h3>
           </div>
         </div>
         ${preview}
-        ${fields.length?`<dl class="documents-fields field-list">${fields.map(([label,value])=>`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`:""}
+        ${fields.length?`<dl class="documents-fields field-list">${fields.map(([label,value])=>`<div${hasMeaningfulValue(value)?"":` data-empty-field="1"`}><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`:""}
         <div class="card-actions documents-card-actions">${actions}</div>
       </article>
     `;

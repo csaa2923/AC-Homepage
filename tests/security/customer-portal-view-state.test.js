@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=56/);
-    assert.match(portalHtml, /customer-portal\.css\?v=27/);
+    assert.match(portalHtml, /customer-portal\.js\?v=57/);
+    assert.match(portalHtml, /customer-portal\.css\?v=28/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -230,6 +230,39 @@ describe("customer portal documents view (4.4)", () => {
   });
 });
 
+describe("customer portal document title typography (4.4D)", () => {
+  it("formats display titles without extensions or underscores", () => {
+    assert.match(portalJs, /function formatDocumentDisplayTitle\(/);
+    assert.match(portalJs, /replace\(\/\\\.\[a-z0-9\]\{2,6\}\$\/i/);
+    assert.match(portalJs, /replace\(\/\[_-\]\+\/g/);
+    assert.match(portalJs, /formatDocumentDisplayTitle\(item\)/);
+    assert.match(portalJs, /const displayTitle=formatDocumentDisplayTitle\(item\)/);
+    assert.doesNotMatch(portalJs, /function documentCardFields\([\s\S]*?\["Dateityp"/);
+  });
+
+  it("keeps download filename raw while showing readable heading", () => {
+    assert.match(portalJs, /download="\$\{escapeHtml\(fileName\)\}"/);
+    assert.match(portalJs, /<h3>\$\{escapeHtml\(displayTitle\)\}<\/h3>/);
+  });
+
+  it("softens document card title typography for long names", () => {
+    assert.match(portalCss, /\.documents-card-heading\{[\s\S]*min-width:0/);
+    assert.match(portalCss, /overflow-wrap:anywhere/);
+    assert.match(portalCss, /word-break:break-word/);
+    assert.match(portalCss, /font-size:clamp\(17px/);
+  });
+
+  it("produces readable titles for raw filenames", () => {
+    const match = portalJs.match(/function formatDocumentDisplayTitle\(document\)\{[\s\S]*?\n  \}\n/);
+    assert.ok(match, "formatDocumentDisplayTitle must exist");
+    const formatDocumentDisplayTitle = new Function(`${match[0]}; return formatDocumentDisplayTitle;`)();
+    assert.equal(formatDocumentDisplayTitle({fileName: "Insektenschiebetüre_Fountain.jpg"}), "Insektenschiebetüre Fountain");
+    assert.equal(formatDocumentDisplayTitle({fileName: "KOSTENVORANSCHLAG.pdf"}), "Kostenvoranschlag");
+    assert.equal(formatDocumentDisplayTitle({title: "Skipass"}), "Skipass");
+    assert.equal(formatDocumentDisplayTitle({}), "Dokument");
+  });
+});
+
 describe("customer portal render/layout stabilization (4.4A)", () => {
   const criticalIds = [
     "portalRoot",
@@ -313,10 +346,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=56"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=57"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=56/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=57/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 

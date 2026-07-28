@@ -19,7 +19,7 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
     assert.match(portalHtml, /customer-portal\.js\?v=57/);
-    assert.match(portalHtml, /customer-portal\.css\?v=29/);
+    assert.match(portalHtml, /customer-portal\.css\?v=30/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -119,7 +119,7 @@ describe("customer portal today view (4.2)", () => {
     assert.match(portalHtml, /id="viewToday"/);
     assert.match(portalHtml, /class="[^"]*today-view/);
     assert.match(portalHtml, /class="today-hero/);
-    assert.match(portalHtml, /class="today-primary-grid"/);
+    assert.match(portalHtml, /class="[^"]*today-primary-grid/);
     assert.match(portalHtml, /class="today-main-column"/);
     assert.match(portalHtml, /class="today-side-column"/);
     assert.match(portalHtml, /class="today-concierge/);
@@ -419,7 +419,7 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("scopes today premium pilot styles without changing DOM ids", () => {
-    assert.match(portalCss, /Ops Ready 4\.5B – Today Premium Pilot/);
+    assert.match(portalCss, /Ops Ready 4\.5B\.1 – Today Premium Redesign/);
     assert.match(portalCss, /\.today-view\{[\s\S]*background:var\(--act-cream\)/);
     assert.match(portalCss, /\.today-hero-panel h1\{[\s\S]*font-family:var\(--act-font-serif\)/);
     assert.match(portalCss, /\.today-quick-btn\{[\s\S]*font-family:var\(--act-font-sans\)/);
@@ -433,7 +433,30 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=29/);
+    assert.match(portalHtml, /customer-portal\.css\?v=30/);
+    assert.match(portalHtml, /customer-portal\.js\?v=57/);
+  });
+});
+
+describe("customer portal today premium layout redesign (4.5B.1)", () => {
+  it("composes today as hero → experience → further info", () => {
+    assert.match(portalHtml, /id="viewToday"[\s\S]*id="overview"[\s\S]*today-experience[\s\S]*id="concierge"[\s\S]*id="nextEventCard"[\s\S]*id="weatherCard"[\s\S]*id="todayQuickActions"[\s\S]*id="status"/);
+    assert.match(portalHtml, /today-hero-stage/);
+    assert.match(portalHtml, /today-further/);
+    assert.match(portalHtml, /Weitere Informationen/);
+  });
+
+  it("styles luxury hero and unified card surfaces", () => {
+    assert.match(portalCss, /min-height:min\(78vh/);
+    assert.match(portalCss, /background-color:var\(--act-forest\)/);
+    assert.match(portalCss, /\.today-hero-panel\{[\s\S]*background:transparent/);
+    assert.match(portalCss, /\.today-status-card,[\s\S]*\.today-next-card,[\s\S]*\.today-weather-card/);
+    assert.match(portalCss, /overflow-x:clip/);
+    assert.match(portalCss, /\.today-quick-btn\{[\s\S]*min-height:104px/);
+  });
+
+  it("keeps sticky side column on desktop without JS changes", () => {
+    assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
     assert.match(portalHtml, /customer-portal\.js\?v=57/);
   });
 });

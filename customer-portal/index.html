@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=29">
+<link rel="stylesheet" href="customer-portal.css?v=30">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -83,37 +83,26 @@
 <main id="portalRoot" class="customer-app" data-customer-app="1" data-view-mode="filtered" data-active-view="today" aria-live="polite">
 
   <section id="viewToday" class="app-view today-view is-active" data-app-view="today" data-view="today" aria-label="Heute">
+    <!-- 1 Hero -->
     <section class="today-hero portal-hero" id="overview" aria-labelledby="portalTitle">
-      <div class="hero-panel today-hero-panel">
-        <p class="eyebrow today-brand-eyebrow">Alpine Concierge Tirol</p>
-        <p class="eyebrow" id="portalVersion">Version 1.0</p>
-        <p class="admin-version-hint" id="adminVersionHint" hidden></p>
-        <h1 id="portalTitle">Willkommen</h1>
-        <p class="hero-subtitle" id="tripTitle"></p>
-        <div class="hero-meta" id="heroMeta"></div>
-        <div class="hero-actions">
-          <a class="button primary" id="whatsappHero" href="#" target="_blank" rel="noopener noreferrer">WhatsApp &ouml;ffnen</a>
-          <button class="button soft" type="button" data-action="print">Drucken</button>
+      <div class="today-hero-stage">
+        <div class="hero-panel today-hero-panel">
+          <p class="eyebrow today-brand-eyebrow">Alpine Concierge Tirol</p>
+          <p class="eyebrow today-version-eyebrow" id="portalVersion">Version 1.0</p>
+          <p class="admin-version-hint" id="adminVersionHint" hidden></p>
+          <h1 id="portalTitle">Willkommen</h1>
+          <p class="hero-subtitle" id="tripTitle"></p>
+          <div class="hero-meta" id="heroMeta"></div>
+          <div class="hero-actions">
+            <a class="button primary" id="whatsappHero" href="#" target="_blank" rel="noopener noreferrer">WhatsApp &ouml;ffnen</a>
+            <button class="button soft" type="button" data-action="print">Drucken</button>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="today-status portal-section status-section" id="status" aria-labelledby="statusTitle">
-      <div class="section-head">
-        <p class="eyebrow">Reisestatus</p>
-        <h2 id="statusTitle">Wo Sie stehen</h2>
-      </div>
-      <div class="status-card today-status-card">
-        <div class="status-topline">
-          <span id="publicationStatus">Status: Ver&ouml;ffentlicht</span>
-          <span id="updatedAt">Zuletzt aktualisiert</span>
-        </div>
-        <div class="progress-track" aria-hidden="true"><span id="progressFill"></span></div>
-        <ol class="status-steps" id="statusSteps"></ol>
-      </div>
-    </section>
-
-    <section class="today-primary-grid">
+    <!-- 2 Concierge · 3 Next · 4 Wetter · 5 Quick Actions -->
+    <section class="today-primary-grid today-experience" aria-label="Heute im Fokus">
       <div class="today-main-column">
         <section class="today-concierge portal-section concierge-section" id="concierge" aria-labelledby="conciergeTitle">
           <div class="section-head">
@@ -166,6 +155,22 @@
           </div>
         </section>
       </aside>
+    </section>
+
+    <!-- 6 Weitere Informationen -->
+    <section class="today-status portal-section status-section today-further" id="status" aria-labelledby="statusTitle">
+      <div class="section-head">
+        <p class="eyebrow">Weitere Informationen</p>
+        <h2 id="statusTitle">Wo Sie stehen</h2>
+      </div>
+      <div class="status-card today-status-card">
+        <div class="status-topline">
+          <span id="publicationStatus">Status: Ver&ouml;ffentlicht</span>
+          <span id="updatedAt">Zuletzt aktualisiert</span>
+        </div>
+        <div class="progress-track" aria-hidden="true"><span id="progressFill"></span></div>
+        <ol class="status-steps" id="statusSteps"></ol>
+      </div>
     </section>
   </section>
 

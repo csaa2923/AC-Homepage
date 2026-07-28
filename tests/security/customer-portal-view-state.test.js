@@ -19,7 +19,7 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
     assert.match(portalHtml, /customer-portal\.js\?v=57/);
-    assert.match(portalHtml, /customer-portal\.css\?v=28/);
+    assert.match(portalHtml, /customer-portal\.css\?v=29/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -396,5 +396,44 @@ describe("customer portal empty detail fields filter (4.4C)", () => {
     assert.match(portalCss, /data-empty-field="1"/);
     assert.match(portalCss, /display:none !important/);
     assert.match(portalCss, /\.detail-fields-filter/);
+  });
+});
+
+describe("customer portal design tokens and today pilot (4.5B)", () => {
+  it("defines ACT design tokens and keeps legacy aliases", () => {
+    assert.match(portalCss, /--act-forest:#001a14/);
+    assert.match(portalCss, /--act-gold:#d8b76a/);
+    assert.match(portalCss, /--act-paper:#fffdf7/);
+    assert.match(portalCss, /--act-cream:#fffaf0/);
+    assert.match(portalCss, /--act-ink:#102820/);
+    assert.match(portalCss, /--act-space-8:48px/);
+    assert.match(portalCss, /--act-radius-md:12px/);
+    assert.match(portalCss, /--act-shadow-card:/);
+    assert.match(portalCss, /--act-font-serif:/);
+    assert.match(portalCss, /--act-font-sans:/);
+    assert.match(portalCss, /--act-motion-view:280ms/);
+    assert.match(portalCss, /--act-z-nav:30/);
+    assert.match(portalCss, /--green:var\(--act-forest\)/);
+    assert.match(portalCss, /--gold:var\(--act-gold\)/);
+    assert.match(portalCss, /--cream:var\(--act-cream\)/);
+  });
+
+  it("scopes today premium pilot styles without changing DOM ids", () => {
+    assert.match(portalCss, /Ops Ready 4\.5B – Today Premium Pilot/);
+    assert.match(portalCss, /\.today-view\{[\s\S]*background:var\(--act-cream\)/);
+    assert.match(portalCss, /\.today-hero-panel h1\{[\s\S]*font-family:var\(--act-font-serif\)/);
+    assert.match(portalCss, /\.today-quick-btn\{[\s\S]*font-family:var\(--act-font-sans\)/);
+    assert.match(portalCss, /\.today-view \.concierge-card\{/);
+    assert.match(portalHtml, /id="viewToday"/);
+    assert.match(portalHtml, /id="portalTitle"/);
+    assert.match(portalHtml, /id="conciergeRoot"/);
+    assert.match(portalHtml, /id="nextEventCard"/);
+    assert.match(portalHtml, /id="weatherCard"/);
+    assert.match(portalHtml, /id="todayQuickActions"/);
+  });
+
+  it("bumps stylesheet pin only for the design pilot", () => {
+    assert.match(portalHtml, /customer-portal\.css\?v=29/);
+    assert.match(portalHtml, /customer-portal\.js\?v=57/);
   });
 });

@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=60/);
-    assert.match(portalHtml, /customer-portal\.css\?v=33/);
+    assert.match(portalHtml, /customer-portal\.js\?v=61/);
+    assert.match(portalHtml, /customer-portal\.css\?v=34/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -211,12 +211,12 @@ describe("customer portal documents view (4.4)", () => {
     assert.match(portalJs, /function documentGroupLabel\(/);
     assert.match(portalJs, /function renderDocumentCard\(/);
     assert.match(portalJs, /function documentTypeIcon\(/);
-    assert.match(portalJs, /Weitere Dokumente/);
+    assert.match(portalJs, /Allgemein/);
     assert.match(portalJs, /Herunterladen/);
     assert.match(portalJs, /data-open-portal-document/);
     assert.match(portalJs, /resolveDocumentUrl/);
     assert.match(portalJs, /isPortalDocument/);
-    assert.match(portalJs, /Noch keine Unterlagen freigegeben/);
+    assert.match(portalJs, /Ihre Unterlagen folgen in Kürze|Noch keine Unterlagen freigegeben/);
     assert.doesNotMatch(portalJs, /fetch\([^)]*document[^)]*\)[\s\S]{0,80}new XMLHttpRequest/);
   });
 
@@ -249,7 +249,7 @@ describe("customer portal document title typography (4.4D)", () => {
     assert.match(portalCss, /\.documents-card-heading\{[\s\S]*min-width:0/);
     assert.match(portalCss, /overflow-wrap:anywhere/);
     assert.match(portalCss, /word-break:break-word/);
-    assert.match(portalCss, /font-size:clamp\(17px/);
+    assert.match(portalCss, /font-size:clamp\(18px/);
   });
 
   it("produces readable titles for raw filenames", () => {
@@ -346,10 +346,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=60"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=61"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=60/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=61/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -433,8 +433,8 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=33/);
-    assert.match(portalHtml, /customer-portal\.js\?v=60/);
+    assert.match(portalHtml, /customer-portal\.css\?v=34/);
+    assert.match(portalHtml, /customer-portal\.js\?v=61/);
   });
 });
 
@@ -457,7 +457,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=60/);
+    assert.match(portalHtml, /customer-portal\.js\?v=61/);
   });
 });
 
@@ -533,5 +533,36 @@ describe("customer portal itinerary day navigation (4.5C.2)", () => {
     assert.match(portalCss, /\.day-selector button\.itinerary-day-chip\.active\{[\s\S]*background:var\(--act-forest\)/);
     assert.match(portalCss, /\.day-selector button\.itinerary-day-chip\.active\{[\s\S]*color:var\(--act-on-dark\)/);
     assert.doesNotMatch(portalCss, /\.itinerary-view[\s\S]{0,220}\.itinerary-day-chip\.active\{[\s\S]{0,120}background:linear-gradient\(135deg,var\(--gold/);
+  });
+});
+
+describe("customer portal documents premium redesign (4.5D)", () => {
+  it("composes hero, overview, categories and document cards", () => {
+    assert.match(portalHtml, /id="viewDocuments"[\s\S]*documents-hero[\s\S]*id="documentTitle"[\s\S]*id="documentsCategoryNav"[\s\S]*id="documentGrid"/);
+    assert.match(portalHtml, /Ihre Reiseunterlagen/);
+    assert.match(portalHtml, /Alle wichtigen Dokumente an einem Ort/);
+    assert.match(portalJs, /function renderDocumentsCategoryNav\(/);
+    assert.match(portalJs, /data-documents-group/);
+    assert.match(portalJs, /function documentPreviewMarkup\(/);
+  });
+
+  it("keeps open and download actions while refining card chrome", () => {
+    assert.match(portalJs, /Dokument oeffnen/);
+    assert.match(portalJs, /Herunterladen/);
+    assert.match(portalJs, /data-open-portal-document/);
+    assert.match(portalJs, /download="\$\{escapeHtml\(fileName\)\}"/);
+    assert.match(portalJs, /documents-preview-pdf|documents-preview-image/);
+    assert.match(portalJs, /Unterkunft|Restaurant|Aktivitäten|Allgemein/);
+  });
+
+  it("styles premium documents layout for mobile and desktop", () => {
+    assert.match(portalCss, /Ops Ready 4\.5D/);
+    assert.match(portalCss, /\.documents-hero\{[\s\S]*background-color:var\(--act-forest\)/);
+    assert.match(portalCss, /overflow-x:clip/);
+    assert.match(portalCss, /\.documents-group-grid\{[\s\S]*grid-template-columns:1fr/);
+    assert.match(portalCss, /@media\(min-width:720px\)\{[\s\S]*\.documents-group-grid\{[\s\S]*repeat\(2/);
+    assert.match(portalCss, /@media\(min-width:1040px\)\{[\s\S]*\.documents-group-grid\{[\s\S]*repeat\(3/);
+    assert.match(portalCss, /\.documents-empty/);
+    assert.match(portalCss, /\.documents-card-actions \.button\{[\s\S]*min-height:44px/);
   });
 });

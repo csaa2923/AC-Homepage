@@ -556,18 +556,24 @@
     const raw=String(item.category||item.type||"").trim();
     const blob=`${raw} ${item.title||""} ${item.fileName||""}`.toLowerCase();
     if(/ticket|flug|bahn|zug/.test(blob))return "Tickets";
-    if(/buchung|booking|reserv/.test(blob))return "Buchungen";
     if(/voucher|gutschein/.test(blob))return "Voucher";
-    if(/hotel|unterkunft|accommodation/.test(blob))return "Hotel";
-    if(/wander|hike|gpx|kml|tour/.test(blob))return "Wanderungen";
+    if(/hotel|unterkunft|accommodation/.test(blob))return "Unterkunft";
+    if(/restaurant|essen|dinner|lunch|menü|menu/.test(blob))return "Restaurant";
+    if(/wander|hike|gpx|kml|tour|aktivit|erlebnis/.test(blob))return "Aktivitäten";
+    if(/buchung|booking|reserv/.test(blob))return "Buchungen";
     if(/transfer|shuttle|taxi/.test(blob))return "Transfers";
     if(/rechnung|invoice|zahlungs?beleg/.test(blob))return "Rechnungen";
-    if(raw&&!/^sonstig/i.test(raw)&&raw!=="Dokument"&&raw!=="Platzhalter")return raw;
-    return "Weitere Dokumente";
+    if(/reise|trip|itinerary|programm/.test(blob))return "Reise";
+    if(raw&&!/^sonstig/i.test(raw)&&raw!=="Dokument"&&raw!=="Platzhalter"&&raw!=="Allgemein")return raw;
+    return "Allgemein";
+  }
+
+  function documentGroupDomId(label){
+    return `doc-group-${String(label||"").replace(/[^\wäöüÄÖÜß-]+/gi,"-")}`;
   }
 
   function groupPortalDocuments(documents){
-    const order=["Tickets","Buchungen","Voucher","Hotel","Wanderungen","Transfers","Rechnungen"];
+    const order=["Tickets","Voucher","Unterkunft","Restaurant","Aktivitäten","Buchungen","Transfers","Rechnungen","Reise","Allgemein"];
     const groups=new Map();
     documents.forEach(item=>{
       const label=documentGroupLabel(item);
@@ -577,8 +583,8 @@
     const ranked=[...groups.keys()].sort((a,b)=>{
       const ai=order.indexOf(a);
       const bi=order.indexOf(b);
-      if(a==="Weitere Dokumente")return 1;
-      if(b==="Weitere Dokumente")return -1;
+      if(a==="Allgemein")return 1;
+      if(b==="Allgemein")return -1;
       if(ai!==-1||bi!==-1)return (ai===-1?999:ai)-(bi===-1?999:bi);
       return a.localeCompare(b,"de");
     });
@@ -593,7 +599,7 @@
     const showCategory=category
       &&category.toLowerCase()!==typeLabel.toLowerCase()
       &&category.toLowerCase()!==groupLabel.toLowerCase()
-      &&!/^(dokument|datei|sonstig\w*)$/i.test(category);
+      &&!/^(dokument|datei|sonstig\w*|allgemein)$/i.test(category);
     const rawName=String(fileName||"").trim();
     const rawAsTitle=formatDocumentDisplayTitle({fileName:rawName});
     const showFileName=rawName
@@ -609,6 +615,16 @@
     ].filter(([,value])=>hasDisplayValue(value));
   }
 
+  function documentPreviewMarkup(item,url,displayTitle,typeIcon){
+    if(url&&isImageDocument(item)){
+      return `<div class="document-preview documents-preview documents-preview-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(displayTitle)}" loading="lazy"></div>`;
+    }
+    if(isPdfDocument(item)){
+      return `<div class="document-preview documents-preview documents-preview-pdf" aria-hidden="true"><span class="documents-preview-badge">PDF</span><span class="documents-preview-glyph">📄</span><span class="documents-preview-caption">Dokumentvorschau</span></div>`;
+    }
+    return `<div class="document-preview documents-preview documents-preview-file" aria-hidden="true"><span class="documents-preview-glyph">${typeIcon.icon}</span><span class="documents-preview-caption">${escapeHtml(typeIcon.label||"Datei")}</span></div>`;
+  }
+
   function renderDocumentCard(item){
     const url=resolveDocumentUrl(item);
     const displayTitle=formatDocumentDisplayTitle(item);
@@ -616,14 +632,18 @@
     const documentId=item.documentId||item.id||"";
     const typeIcon=documentTypeIcon(item);
     const fields=documentCardFields(item,fileName,displayTitle,typeIcon);
+    const groupLabel=documentGroupLabel(item);
     if(!url)console.warn(`[PortalDocuments] Dokument ${documentId||displayTitle} ohne gueltige Datei-URL.`);
-    const preview=url&&isImageDocument(item)
-      ?`<div class="document-preview"><img src="${escapeHtml(url)}" alt="${escapeHtml(displayTitle)}" loading="lazy"></div>`
-      :"";
+    const preview=documentPreviewMarkup(item,url,displayTitle,typeIcon);
+    const metaBits=[
+      typeIcon.label,
+      groupLabel,
+      formatUploadDate(item.uploadedAt),
+      formatDocumentFileSize(item.fileSize||item.size)
+    ].filter(hasDisplayValue);
     let actions="";
     if(url){
-      const openLabel=isPdfDocument(item)?"PDF oeffnen":isImageDocument(item)?"Bild oeffnen":"Oeffnen";
-      actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(openLabel)}: ${escapeHtml(displayTitle)}">${openLabel}</a>
+      actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Dokument oeffnen: ${escapeHtml(displayTitle)}">Dokument oeffnen</a>
         <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}" aria-label="Herunterladen: ${escapeHtml(displayTitle)}">Herunterladen</a>`;
     }else if(isShareAccess&&documentId){
       actions=`<button class="button primary" type="button" data-open-portal-document="${escapeHtml(documentId)}" aria-label="Dokument oeffnen: ${escapeHtml(displayTitle)}">Dokument oeffnen</button>`;
@@ -632,18 +652,38 @@
     }
     return `
       <article class="document-card documents-card ${url?"":"document-unavailable"}" data-document-id="${escapeHtml(documentId)}">
-        <div class="documents-card-top">
-          <span class="documents-type-icon" aria-hidden="true">${typeIcon.icon}</span>
-          <div class="documents-card-heading">
-            <p class="documents-type-label">${escapeHtml(typeIcon.label)}</p>
-            <h3>${escapeHtml(displayTitle)}</h3>
-          </div>
-        </div>
         ${preview}
-        ${fields.length?`<dl class="documents-fields field-list">${fields.map(([label,value])=>`<div${hasMeaningfulValue(value)?"":` data-empty-field="1"`}><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`:""}
-        <div class="card-actions documents-card-actions">${actions}</div>
+        <div class="documents-card-body">
+          <div class="documents-card-top">
+            <div class="documents-card-heading">
+              <p class="documents-type-label">${escapeHtml(typeIcon.label)}</p>
+              <h3>${escapeHtml(displayTitle)}</h3>
+              ${metaBits.length?`<p class="documents-card-meta">${escapeHtml(metaBits.join(" · "))}</p>`:""}
+            </div>
+          </div>
+          ${fields.length?`<dl class="documents-fields field-list">${fields.map(([label,value])=>`<div${hasMeaningfulValue(value)?"":` data-empty-field="1"`}><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`:""}
+          <div class="card-actions documents-card-actions">${actions}</div>
+        </div>
       </article>
     `;
+  }
+
+  function renderDocumentsCategoryNav(groups){
+    const nav=document.getElementById("documentsCategoryNav");
+    if(!nav)return;
+    if(!groups.length){
+      nav.hidden=true;
+      nav.innerHTML="";
+      return;
+    }
+    nav.hidden=false;
+    nav.innerHTML=groups.map(group=>{
+      const id=documentGroupDomId(group.label);
+      return `<button class="documents-category-chip" type="button" data-documents-group="${escapeHtml(id)}" aria-label="${escapeHtml(group.label)}: ${group.items.length} ${group.items.length===1?"Dokument":"Dokumente"}">
+        <span class="documents-category-chip-label">${escapeHtml(group.label)}</span>
+        <span class="documents-category-chip-count">${group.items.length}</span>
+      </button>`;
+    }).join("");
   }
 
   function renderDocuments(){
@@ -652,27 +692,32 @@
     const documents=(customer.documents||[]).map(normalizeDocument);
     const visibleDocuments=documents.filter(isPortalDocument);
     if(!visibleDocuments.length){
+      renderDocumentsCategoryNav([]);
       target.innerHTML=`
         <div class="documents-empty document-card document-empty" role="status">
-          <p class="eyebrow">Dokumentencenter</p>
-          <h3>Noch keine Unterlagen freigegeben</h3>
-          <p class="muted">Sobald Tickets, Voucher oder andere Reiseunterlagen für Sie freigegeben sind, erscheinen sie hier zum Öffnen und Herunterladen.</p>
+          <p class="eyebrow">Concierge</p>
+          <h3>Ihre Unterlagen folgen in Kürze</h3>
+          <p>Sobald Tickets, Voucher oder andere Reiseunterlagen für Sie freigegeben sind, finden Sie sie hier – klar sortiert und jederzeit griffbereit.</p>
         </div>
       `;
       return;
     }
     const groups=groupPortalDocuments(visibleDocuments);
-    target.innerHTML=groups.map(group=>`
-      <section class="documents-group" aria-labelledby="doc-group-${escapeHtml(group.label.replace(/[^\wäöüÄÖÜß-]+/gi,"-"))}">
+    renderDocumentsCategoryNav(groups);
+    target.innerHTML=groups.map(group=>{
+      const id=documentGroupDomId(group.label);
+      return `
+      <section class="documents-group" id="${escapeHtml(id)}" aria-labelledby="${escapeHtml(id)}-title">
         <header class="documents-group-head">
-          <h3 id="doc-group-${escapeHtml(group.label.replace(/[^\wäöüÄÖÜß-]+/gi,"-"))}">${escapeHtml(group.label)}</h3>
+          <h3 id="${escapeHtml(id)}-title">${escapeHtml(group.label)}</h3>
           <p class="documents-group-count">${group.items.length} ${group.items.length===1?"Dokument":"Dokumente"}</p>
         </header>
         <div class="documents-group-grid document-grid">
           ${group.items.map(renderDocumentCard).join("")}
         </div>
       </section>
-    `).join("");
+    `;
+    }).join("");
   }
 
   function numberValue(value){
@@ -2774,6 +2819,16 @@
       const dayButton=event.target.closest("[data-calendar-day]");
       if(dayButton){
         selectCalendarDay(dayButton.dataset.calendarDay,{scroll:true});
+        return;
+      }
+
+      const documentsGroupButton=event.target.closest("[data-documents-group]");
+      if(documentsGroupButton){
+        const groupId=documentsGroupButton.getAttribute("data-documents-group")||"";
+        const groupEl=groupId?document.getElementById(groupId):null;
+        if(groupEl){
+          groupEl.scrollIntoView({behavior:prefersReducedMotion()?"auto":"smooth",block:"start"});
+        }
         return;
       }
 

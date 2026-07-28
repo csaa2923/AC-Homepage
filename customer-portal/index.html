@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=33">
+<link rel="stylesheet" href="customer-portal.css?v=34">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -283,15 +283,37 @@
   </section>
 
   <section id="viewDocuments" class="app-view documents-view" data-app-view="documents" data-view="documents" aria-labelledby="documentTitle" hidden>
-    <header class="documents-hero portal-section">
-      <div class="section-head">
-        <p class="eyebrow">Unterlagen</p>
-        <h2 id="documentTitle">Dokumente</h2>
-        <p class="documents-intro">Ihre freigegebenen Reiseunterlagen – zum Öffnen und Herunterladen.</p>
+    <header class="documents-hero" aria-label="Reiseunterlagen">
+      <div class="documents-hero-stage">
+        <p class="eyebrow documents-brand-eyebrow">Alpine Concierge Tirol</p>
+        <h1 id="documentTitle">Ihre Reiseunterlagen</h1>
+        <p class="documents-hero-copy documents-intro">Alle wichtigen Dokumente an einem Ort.</p>
       </div>
     </header>
+
+    <section class="documents-overview portal-section" aria-labelledby="documentsOverviewTitle">
+      <div class="section-head">
+        <p class="eyebrow">Übersicht</p>
+        <h2 id="documentsOverviewTitle">Ihre Kategorien</h2>
+        <p class="documents-overview-copy">Tickets, Voucher und persönliche Unterlagen – übersichtlich nach Thema.</p>
+      </div>
+      <div class="documents-category-nav" id="documentsCategoryNav" hidden></div>
+    </section>
+
     <section class="portal-section documents-center-section" id="documents" aria-label="Dokumentencenter">
+      <div class="section-head documents-center-head">
+        <p class="eyebrow">Unterlagen</p>
+        <h2 id="documentsListTitle">Ihre Dokumente</h2>
+      </div>
       <div class="documents-center" id="documentGrid"></div>
+    </section>
+
+    <section class="documents-notes portal-section" aria-labelledby="documentsNotesTitle">
+      <article class="documents-note-card">
+        <p class="eyebrow">Concierge</p>
+        <h2 id="documentsNotesTitle">Fragen zu Ihren Unterlagen?</h2>
+        <p>Fehlt ein Ticket oder Voucher, melden Sie sich einfach bei Ihrem Concierge – wir helfen gerne weiter.</p>
+      </article>
     </section>
   </section>
 
@@ -357,6 +379,6 @@
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=60"></script>
+<script src="customer-portal.js?v=61"></script>
 </body>
 </html>

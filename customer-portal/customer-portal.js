@@ -63,7 +63,7 @@
   }
 
   function parseAppViewFromHash(hashValue){
-    const raw=String(hashValue??window.location.hash||"").replace(/^#/,"").trim().toLowerCase();
+    const raw=String(hashValue??(window.location.hash||"")).replace(/^#/,"").trim().toLowerCase();
     if(!raw)return null;
     if(APP_VIEWS.includes(raw))return raw;
     return APP_VIEW_SECTION_MAP[raw]||null;

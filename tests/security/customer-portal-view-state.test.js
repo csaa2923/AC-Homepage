@@ -1,12 +1,14 @@
 import {describe, it} from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {spawnSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {dirname, join} from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const portalHtml = readFileSync(join(root, "customer-portal/index.html"), "utf8");
-const portalJs = readFileSync(join(root, "customer-portal/customer-portal.js"), "utf8");
+const portalJsPath = join(root, "customer-portal/customer-portal.js");
+const portalJs = readFileSync(portalJsPath, "utf8");
 const portalCss = readFileSync(join(root, "customer-portal/customer-portal.css"), "utf8");
 
 describe("customer portal view-state foundation (4.1B)", () => {
@@ -16,7 +18,7 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=54/);
+    assert.match(portalHtml, /customer-portal\.js\?v=55/);
     assert.match(portalHtml, /customer-portal\.css\?v=26/);
   });
 
@@ -306,5 +308,33 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
     assert.match(portalHtml, /id="viewDocuments"[\s\S]*id="documentGrid"/);
     assert.match(portalHtml, /data-app-view="service"[\s\S]*id="hotelCard"/);
     assert.match(portalHtml, /data-app-view="service"[\s\S]*id="contactCard"/);
+  });
+});
+
+describe("customer portal critical startup fix (4.4B)", () => {
+  it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=55"><\/script>/);
+    assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
+    assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=55/);
+    assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
+  });
+
+  it("passes node --check syntax validation", () => {
+    const result = spawnSync(process.execPath, ["--check", portalJsPath], {encoding: "utf8"});
+    assert.equal(result.status, 0, result.stderr || result.stdout || "node --check failed");
+  });
+
+  it("does not mix ?? and || without parentheses (parse killer)", () => {
+    assert.doesNotMatch(portalJs, /\?\?[^();\n]*\|\|/);
+    assert.match(portalJs, /hashValue\?\?\(window\.location\.hash\|\|""\)/);
+  });
+
+  it("still boots view state and portal init after parse", () => {
+    assert.match(portalJs, /function initAppViewState\(/);
+    assert.match(portalJs, /function initPortal\(/);
+    assert.match(portalJs, /function bindAppNavigation\(/);
+    assert.match(portalJs, /function bindActions\(/);
+    assert.match(portalJs, /initAppViewState\(\);\s*\n\s*initPortal\(\);/);
   });
 });

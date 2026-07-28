@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=57/);
-    assert.match(portalHtml, /customer-portal\.css\?v=30/);
+    assert.match(portalHtml, /customer-portal\.js\?v=58/);
+    assert.match(portalHtml, /customer-portal\.css\?v=31/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -190,7 +190,7 @@ describe("customer portal itinerary view (4.3)", () => {
     assert.match(portalCss, /\.itinerary-card/);
     assert.match(portalCss, /\.itinerary-weather-badge/);
     assert.match(portalCss, /\.itinerary-hotel-card/);
-    assert.match(portalCss, /width:min\(1200px,100%\)/);
+    assert.match(portalCss, /width:min\(1180px,100%\)/);
     assert.match(portalCss, /prefers-reduced-motion:reduce/);
     assert.match(portalCss, /\.itinerary-item\.is-past/);
     assert.match(portalCss, /\.itinerary-day\.is-today/);
@@ -346,10 +346,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=57"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=58"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=57/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=58/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -433,8 +433,8 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=30/);
-    assert.match(portalHtml, /customer-portal\.js\?v=57/);
+    assert.match(portalHtml, /customer-portal\.css\?v=31/);
+    assert.match(portalHtml, /customer-portal\.js\?v=58/);
   });
 });
 
@@ -457,6 +457,28 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=57/);
+    assert.match(portalHtml, /customer-portal\.js\?v=58/);
+  });
+});
+
+describe("customer portal itinerary premium redesign (4.5C)", () => {
+  it("composes hero, overview, day nav, timeline and details", () => {
+    assert.match(portalHtml, /id="viewItinerary"[\s\S]*itinerary-hero[\s\S]*id="dayTimelineTitle"[\s\S]*id="itineraryOverview"[\s\S]*id="calendarDaySelector"[\s\S]*id="dayTimelines"[\s\S]*id="programDetails"[\s\S]*id="bookingGrid"/);
+    assert.match(portalHtml, /id="itineraryPeriod"/);
+    assert.match(portalHtml, /id="itineraryRegion"/);
+    assert.match(portalHtml, /id="itineraryDuration"/);
+    assert.match(portalHtml, /itinerary-main-grid/);
+    assert.match(portalJs, /function renderItineraryOverview\(/);
+    assert.match(portalJs, /itinerary-day-chip/);
+  });
+
+  it("styles premium day chips, timeline cards and desktop split", () => {
+    assert.match(portalCss, /Ops Ready 4\.5C – Reiseplan Premium Redesign/);
+    assert.match(portalCss, /\.itinerary-hero\{[\s\S]*background-color:var\(--act-forest\)/);
+    assert.match(portalCss, /\.itinerary-day-chip\.active/);
+    assert.match(portalCss, /aspect-ratio:16 \/ 10/);
+    assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.itinerary-main-grid\{[\s\S]*grid-template-columns/);
+    assert.match(portalCss, /\.itinerary-details-column\{[\s\S]*position:sticky/);
+    assert.match(portalCss, /overflow-x:clip/);
   });
 });

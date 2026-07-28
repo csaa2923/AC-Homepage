@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=30">
+<link rel="stylesheet" href="customer-portal.css?v=31">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -175,22 +175,78 @@
   </section>
 
   <section id="viewItinerary" class="app-view itinerary-view" data-app-view="itinerary" data-view="itinerary" aria-label="Reiseplan" hidden>
-    <header class="itinerary-hero portal-section">
-      <div class="section-head">
-        <p class="eyebrow">Reiseplan</p>
-        <h2 id="dayTimelineTitle">Ihr Aufenthalt</h2>
-        <p class="itinerary-hero-copy">Alle Programmpunkte chronologisch – Tag für Tag.</p>
-        <label class="detail-fields-filter">
-          <input type="checkbox" data-toggle-empty-fields>
-          <span>Alle Felder anzeigen</span>
-        </label>
+    <!-- 1 Hero -->
+    <header class="itinerary-hero" aria-labelledby="dayTimelineTitle">
+      <div class="itinerary-hero-stage">
+        <p class="eyebrow itinerary-brand-eyebrow">Alpine Concierge Tirol</p>
+        <h1 id="dayTimelineTitle">Reiseplan</h1>
+        <p class="itinerary-hero-copy">Ihr persönlicher Reisebegleiter – Tag für Tag.</p>
       </div>
     </header>
 
-    <section class="portal-section itinerary-timeline-section" id="day-timeline" aria-labelledby="dayTimelineTitle">
-      <div class="day-timelines itinerary-day-timelines" id="dayTimelines"></div>
+    <!-- 2 Reiseübersicht -->
+    <section class="itinerary-overview portal-section" aria-label="Reiseübersicht">
+      <div class="itinerary-overview-grid" id="itineraryOverview">
+        <div class="itinerary-overview-item">
+          <span>Reisezeitraum</span>
+          <strong id="itineraryPeriod"></strong>
+        </div>
+        <div class="itinerary-overview-item">
+          <span>Region</span>
+          <strong id="itineraryRegion"></strong>
+        </div>
+        <div class="itinerary-overview-item">
+          <span>Reisedauer</span>
+          <strong id="itineraryDuration"></strong>
+        </div>
+      </div>
+      <label class="detail-fields-filter itinerary-fields-toggle">
+        <input type="checkbox" data-toggle-empty-fields>
+        <span>Alle Felder anzeigen</span>
+      </label>
     </section>
 
+    <!-- 3 Tagesnavigation -->
+    <section class="itinerary-day-nav portal-section" aria-label="Tagesnavigation">
+      <div class="section-head itinerary-day-nav-head">
+        <p class="eyebrow">Tage</p>
+        <h2>Ihre Reisetage</h2>
+      </div>
+      <div class="day-selector itinerary-day-selector" id="calendarDaySelector" aria-label="Tagesauswahl"></div>
+    </section>
+
+    <!-- 4 Timeline + 5 Programmdetails -->
+    <section class="itinerary-main-grid">
+      <div class="itinerary-timeline-column">
+        <section class="portal-section itinerary-timeline-section" id="day-timeline" aria-label="Tages-Timeline">
+          <div class="day-timelines itinerary-day-timelines" id="dayTimelines"></div>
+        </section>
+      </div>
+      <aside class="itinerary-details-column">
+        <section class="portal-section itinerary-details-section" id="program-details" aria-labelledby="programDetailsTitle">
+          <div class="section-head">
+            <p class="eyebrow">Details</p>
+            <h2 id="programDetailsTitle">Programmpunkte im Detail</h2>
+            <label class="detail-fields-filter">
+              <input type="checkbox" data-toggle-empty-fields>
+              <span>Alle Felder anzeigen</span>
+            </label>
+          </div>
+          <div class="detail-card-grid" id="programDetails"></div>
+        </section>
+      </aside>
+    </section>
+
+    <!-- 6 Tagesabschluss / Buchungen -->
+    <section class="portal-section itinerary-closing" id="bookings" aria-labelledby="bookingsTitle">
+      <div class="section-head">
+        <p class="eyebrow">Abschluss</p>
+        <h2 id="bookingsTitle">Bestätigte Leistungen</h2>
+      </div>
+      <div class="booking-grid" id="bookingGrid"></div>
+    </section>
+
+    <!-- Secondary: Kalender & Gesamt-Timeline -->
     <section class="portal-section calendar-section itinerary-secondary" id="calendar" aria-labelledby="calendarTitle">
       <div class="section-head">
         <p class="eyebrow">Kalender</p>
@@ -202,7 +258,6 @@
             <button class="active" type="button" data-calendar-view="trip">Gesamtreise</button>
             <button type="button" data-calendar-view="day">Tagesansicht</button>
           </div>
-          <div class="day-selector" id="calendarDaySelector" aria-label="Tagesauswahl"></div>
           <button class="button soft" type="button" id="downloadTripCalendarButton">Gesamtreise in Kalender speichern</button>
         </div>
         <div class="calendar-view" id="tripCalendar"></div>
@@ -216,26 +271,6 @@
         <h2 id="overallTimelineTitle">Alle Programmpunkte chronologisch</h2>
       </div>
       <div class="overall-timeline" id="overallTimeline"></div>
-    </section>
-
-    <section class="portal-section" id="program-details" aria-labelledby="programDetailsTitle">
-      <div class="section-head">
-        <p class="eyebrow">Details</p>
-        <h2 id="programDetailsTitle">Detailinformationen je Programmpunkt</h2>
-        <label class="detail-fields-filter">
-          <input type="checkbox" data-toggle-empty-fields>
-          <span>Alle Felder anzeigen</span>
-        </label>
-      </div>
-      <div class="detail-card-grid" id="programDetails"></div>
-    </section>
-
-    <section class="portal-section" id="bookings" aria-labelledby="bookingsTitle">
-      <div class="section-head">
-        <p class="eyebrow">Buchungen</p>
-        <h2 id="bookingsTitle">Ihre bestätigten Leistungen</h2>
-      </div>
-      <div class="booking-grid" id="bookingGrid"></div>
     </section>
   </section>
 
@@ -322,6 +357,6 @@
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=57"></script>
+<script src="customer-portal.js?v=58"></script>
 </body>
 </html>

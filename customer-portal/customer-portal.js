@@ -1503,6 +1503,31 @@
     return hasMeaningfulValue(value);
   }
 
+  function tripDurationLabel(){
+    const start=String(customer.startDatePlain||"").trim();
+    const end=String(customer.endDatePlain||"").trim();
+    if(start&&end&&start.includes("-")&&end.includes("-")){
+      const from=new Date(`${start}T12:00:00`);
+      const to=new Date(`${end}T12:00:00`);
+      const nights=Math.round((to-from)/86400000);
+      if(Number.isFinite(nights)&&nights>=0){
+        if(nights===0)return "1 Tag";
+        return `${nights+1} Tage · ${nights} ${nights===1?"Nacht":"Nächte"}`;
+      }
+    }
+    return daysUntil(customer.startDate||customer.startDatePlain);
+  }
+
+  function renderItineraryOverview(){
+    text("itineraryPeriod",tripPeriod()||"");
+    text("itineraryRegion",customer.region||customer.weatherLocationName||"");
+    text("itineraryDuration",tripDurationLabel()||"");
+    document.querySelectorAll(".itinerary-overview-item").forEach(item=>{
+      const value=item.querySelector("strong");
+      item.hidden=!hasMeaningfulValue(value?.textContent);
+    });
+  }
+
   function tripPeriod(){
     if(customer.startDatePlain&&customer.endDatePlain)return `${formatDateValue(customer.startDatePlain)} - ${formatDateValue(customer.endDatePlain)}`;
     if(customer.startDatePlain)return formatDateValue(customer.startDatePlain);
@@ -1735,9 +1760,9 @@
     const selector=el("calendarDaySelector");
     if(!selector)return;
     selector.innerHTML=days.map((day,index)=>`
-      <button class="${index===calendarState.dayIndex?"active":""}" type="button" data-calendar-day="${index}">
-        <span>Tag ${index+1}</span>
-        <strong>${day.date}</strong>
+      <button class="itinerary-day-chip ${index===calendarState.dayIndex?"active":""}" type="button" data-calendar-day="${index}">
+        <span class="itinerary-day-chip-index">Tag ${index+1}</span>
+        <strong class="itinerary-day-chip-date">${day.date}</strong>
       </button>
     `).join("");
     document.querySelectorAll("[data-calendar-view]").forEach(button=>{
@@ -2743,6 +2768,7 @@
     text("portalVersion",`Version ${customer.version||"1.0"}`);
     text("publicationStatus",`Reisestatus: ${customer.status||"Noch nicht festgelegt"}`);
     text("updatedAt",`Zuletzt aktualisiert: ${customer.updatedAt||""}`);
+    safeRender("itineraryOverview",renderItineraryOverview);
     const whatsappHero=el("whatsappHero");
     if(whatsappHero)whatsappHero.href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
     const whatsappQuick=el("whatsappQuick");

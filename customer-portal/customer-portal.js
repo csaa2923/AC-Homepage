@@ -2418,18 +2418,31 @@
 
   function renderHotel(){
     const hotel=customer.hotel||{};
+    const hasHotel=[hotel.name,hotel.address,hotel.checkIn,hotel.checkOut,hotel.contact,hotel.voucherStatus]
+      .some(hasDisplayValue);
+    if(!hasHotel){
+      setHtml("hotelCard",`
+        <p class="eyebrow">Unterkunft</p>
+        <h2>Aufenthalt</h2>
+        <p class="service-empty-copy">Ihre Unterkunftsdaten werden gerade vorbereitet und erscheinen hier, sobald sie freigegeben sind.</p>
+      `);
+      return;
+    }
     const navUrl=resolveNavigationUrl(hotel.navigation,hotel.address,hotel.name);
+    const stay=[hotel.checkIn,hotel.checkOut].filter(hasDisplayValue);
+    const stayLabel=stay.length===2?`${stay[0]} – ${stay[1]}`:stay[0]||"";
     setHtml("hotelCard",`
       <p class="eyebrow">Unterkunft</p>
       <h2>${escapeHtml(hotel.name||"Unterkunft")}</h2>
+      ${stayLabel?`<p class="service-hotel-stay">${escapeHtml(stayLabel)}</p>`:""}
+      ${hasDisplayValue(hotel.address)?`<p class="service-hotel-address">${escapeHtml(hotel.address)}</p>`:""}
       ${definitionList([
-        ["Adresse",hotel.address],
-        ["Check-in",hotel.checkIn],
-        ["Check-out",hotel.checkOut],
+        ...(stayLabel?[]:[["Check-in",hotel.checkIn],["Check-out",hotel.checkOut]]),
         ["Kontakt",hotel.contact],
-        ["Voucher",hotel.voucherStatus]
+        ["Voucher",hotel.voucherStatus],
+        ["Hinweise",hotel.notes||hotel.hint||hotel.importantNote||""]
       ])}
-      ${navUrl?`<div class="card-actions"><a class="button primary" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a></div>`:""}
+      ${navUrl?`<div class="card-actions service-hotel-actions"><a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a></div>`:""}
     `);
   }
 
@@ -2559,35 +2572,63 @@
     }
   }
 
+  function serviceTelHref(phone){
+    const raw=String(phone||"").trim();
+    if(!raw)return "";
+    const digits=raw.replace(/[^\d+]/g,"");
+    return digits?`tel:${digits}`:"";
+  }
+
   function renderContact(){
     const contact=customer.contact||{};
+    const company=hasDisplayValue(contact.company)?String(contact.company).trim():"Alpine Concierge Tirol";
+    const phone=hasDisplayValue(contact.phone)?String(contact.phone).trim():"";
+    const email=hasDisplayValue(contact.email)?String(contact.email).trim():"";
+    const whatsappDisplay=hasDisplayValue(contact.whatsapp)?String(contact.whatsapp).trim():(hasDisplayValue(customer.whatsapp)?String(customer.whatsapp).trim():"");
+    const phoneHref=serviceTelHref(phone);
+    const hasReachability=[phone,email,whatsappDisplay,contact.emergency,contact.localEmergency].some(hasDisplayValue);
+    const waHref=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
+    const primaryActions=[
+      `<a class="button primary" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp öffnen</a>`,
+      phoneHref?`<a class="button soft" href="${escapeHtml(phoneHref)}">Anrufen</a>`:"",
+      email?`<a class="button soft" href="mailto:${escapeHtml(email)}">E-Mail schreiben</a>`:""
+    ].filter(Boolean).join("");
     setHtml("contactCard",`
-      ${definitionList([
-        ["Unternehmen",contact.company],
-        ["Telefon",contact.phone],
-        ["WhatsApp",contact.whatsapp],
-        ["E-Mail",contact.email],
+      <div class="service-concierge-top">
+        <img class="service-concierge-mark" src="../images/logo/logo.jpg" alt="" width="72" height="54" decoding="async">
+        <div class="service-concierge-heading">
+          <p class="eyebrow">Persönliche Betreuung</p>
+          <h3>${escapeHtml(company)}</h3>
+          <p class="service-concierge-lead">Wir begleiten Ihre Reise persönlich – von der ersten Frage bis zum besonderen Moment vor Ort.</p>
+        </div>
+      </div>
+      ${hasReachability?definitionList([
+        ["Telefon",phoneHref?`<a href="${escapeHtml(phoneHref)}">${escapeHtml(phone)}</a>`:phone],
+        ["WhatsApp",whatsappDisplay],
+        ["E-Mail",email?`<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`:""],
         ["Notfallkontakt",contact.emergency],
         ["Lokale Notrufnummern",contact.localEmergency]
-      ])}
-      <div class="card-actions">
-        <a class="button primary" href="${whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.")}" target="_blank" rel="noopener noreferrer">WhatsApp öffnen</a>
-        <a class="button soft" href="mailto:${escapeHtml(contact.email||"")}">E-Mail senden</a>
-      </div>
+      ]):`<p class="service-empty-copy">Ihre persönliche Betreuung wird gerade vorbereitet.</p>`}
+      <div class="card-actions service-contact-actions-primary">${primaryActions}</div>
     `);
   }
 
   function renderActions(){
     const actions=[
-      ["Programm bestätigen","confirm"],
-      ["Änderungswunsch senden","change"],
       ["WhatsApp öffnen","whatsapp"],
+      ["Änderungswunsch senden","change"],
+      ["Programm bestätigen","confirm"],
       ["Zahlung öffnen","payment"],
       ["PDF herunterladen","pdf"],
       ["Drucken","print"],
       ["Kalender speichern","calendar"]
     ];
-    setHtml("actionGrid",actions.map(([label,action])=>`<button class="button ${action==="confirm"?"primary":"soft"}" type="button" data-action="${action}">${label}</button>`).join(""));
+    setHtml("actionGrid",actions.map(([label,action])=>{
+      const isPrimary=action==="whatsapp";
+      const isTertiary=["payment","pdf","print","calendar"].includes(action);
+      const className=`button ${isPrimary?"primary":"soft"}${isTertiary?" service-action-tertiary":""}`;
+      return `<button class="${className}" type="button" data-action="${action}">${label}</button>`;
+    }).join(""));
   }
 
   function historyDisplayText(item){
@@ -2602,11 +2643,11 @@
   function renderHistory(){
     const items=(customer.history||[]).filter(item=>[item.date,historyDisplayText(item)].some(hasDisplayValue));
     setHtml("historyList",items.length?items.map(item=>`
-      <article class="history-item">
+      <article class="history-item service-history-item">
         <time>${escapeHtml(item.date||"")}</time>
         <strong>${escapeHtml(historyDisplayText(item))}</strong>
       </article>
-    `).join(""):`<article class="history-item"><strong>Noch keine Änderungen protokolliert.</strong></article>`);
+    `).join(""):`<article class="history-item service-history-item service-history-empty"><p class="eyebrow">Concierge</p><strong>Noch keine Änderungen notiert</strong><p class="service-empty-copy">Sobald es Aktualisierungen zu Ihrer Reise gibt, erscheinen sie hier.</p></article>`);
   }
 
   function isAppleMobile(){

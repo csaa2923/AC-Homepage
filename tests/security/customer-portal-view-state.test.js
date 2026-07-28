@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=61/);
-    assert.match(portalHtml, /customer-portal\.css\?v=34/);
+    assert.match(portalHtml, /customer-portal\.js\?v=62/);
+    assert.match(portalHtml, /customer-portal\.css\?v=35/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -36,6 +36,7 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /id="viewDocuments"[^>]*data-app-view="documents"/);
     assert.match(portalHtml, /id="documentGrid"/);
     assert.match(portalHtml, /id="documents"/);
+    assert.match(portalHtml, /id="viewService"[^>]*data-app-view="service"/);
     assert.match(portalHtml, /id="contact"[^>]*data-app-view="service"/);
     assert.match(portalHtml, /id="actions"[^>]*data-app-view="service"/);
     assert.match(portalHtml, /id="accommodation"[^>]*data-app-view="service"/);
@@ -346,10 +347,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=61"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=62"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=61/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=62/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -433,8 +434,8 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=34/);
-    assert.match(portalHtml, /customer-portal\.js\?v=61/);
+    assert.match(portalHtml, /customer-portal\.css\?v=35/);
+    assert.match(portalHtml, /customer-portal\.js\?v=62/);
   });
 });
 
@@ -457,7 +458,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=61/);
+    assert.match(portalHtml, /customer-portal\.js\?v=62/);
   });
 });
 
@@ -564,5 +565,36 @@ describe("customer portal documents premium redesign (4.5D)", () => {
     assert.match(portalCss, /@media\(min-width:1040px\)\{[\s\S]*\.documents-group-grid\{[\s\S]*repeat\(3/);
     assert.match(portalCss, /\.documents-empty/);
     assert.match(portalCss, /\.documents-card-actions \.button\{[\s\S]*min-height:44px/);
+  });
+});
+
+describe("customer portal service premium redesign (4.5E)", () => {
+  it("composes service hero, concierge, accommodation and actions", () => {
+    assert.match(portalHtml, /id="viewService"[\s\S]*service-hero[\s\S]*id="serviceHeroTitle"[\s\S]*id="contactCard"[\s\S]*id="hotelCard"[\s\S]*id="actionGrid"[\s\S]*id="historyList"/);
+    assert.match(portalHtml, /Ihr persönlicher Concierge/);
+    assert.match(portalHtml, /id="contact"[^>]*data-app-view="service"/);
+    assert.match(portalHtml, /id="accommodation"[^>]*data-app-view="service"/);
+    assert.match(portalHtml, /id="actions"[^>]*data-app-view="service"/);
+  });
+
+  it("keeps whatsapp, phone, email and data-action handlers", () => {
+    assert.match(portalJs, /function renderContact\(/);
+    assert.match(portalJs, /WhatsApp öffnen/);
+    assert.match(portalJs, /whatsappLink\(/);
+    assert.match(portalJs, /mailto:/);
+    assert.match(portalJs, /function serviceTelHref\(/);
+    assert.match(portalJs, /data-action="\$\{action\}"/);
+    assert.match(portalJs, /function renderHotel\(/);
+    assert.match(portalJs, /Navigation öffnen/);
+    assert.match(portalJs, /Ihre persönliche Betreuung wird gerade vorbereitet/);
+  });
+
+  it("styles service layout for mobile and desktop sidebar", () => {
+    assert.match(portalCss, /Ops Ready 4\.5E/);
+    assert.match(portalCss, /\.service-hero\{[\s\S]*background-color:var\(--act-forest\)/);
+    assert.match(portalCss, /overflow-x:clip/);
+    assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.service-main-grid\{[\s\S]*grid-template-columns/);
+    assert.match(portalCss, /\.service-side-column\{[\s\S]*position:sticky/);
+    assert.match(portalCss, /\.service-view[\s\S]*min-height:44px/);
   });
 });

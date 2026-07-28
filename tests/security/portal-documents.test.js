@@ -103,7 +103,7 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/function isPdfDocument\(item\)/);
     assert.match(portalJs,/Herunterladen/);
     assert.match(portalJs,/Dieses Dokument ist derzeit nicht verfuegbar\./);
-    assert.match(portalHtml,/customer-portal\.js\?v=61/);
+    assert.match(portalHtml,/customer-portal\.js\?v=62/);
     assert.match(portalHtml,/redact-allowlist\.js\?v=13/);
     assert.match(portalHtml,/travel-actions-library\.js\?v=11/);
     assert.match(portalHtml,/concierge-assistant-library\.js\?v=2/);

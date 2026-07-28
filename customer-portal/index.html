@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=34">
+<link rel="stylesheet" href="customer-portal.css?v=35">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -317,34 +317,52 @@
     </section>
   </section>
 
-  <section class="portal-section split-grid" id="accommodation" data-app-view="service" aria-label="Unterkunft">
-    <article class="info-card" id="hotelCard"></article>
-  </section>
+  <section id="viewService" class="app-view service-view" data-app-view="service" data-view="service" aria-labelledby="serviceHeroTitle" hidden>
+    <header class="service-hero" aria-label="Service">
+      <div class="service-hero-stage">
+        <p class="eyebrow service-brand-eyebrow">Service</p>
+        <h1 id="serviceHeroTitle">Ihr persönlicher Concierge</h1>
+        <p class="service-hero-copy">Wir sind für Ihre Wünsche, Fragen und besonderen Momente an Ihrer Seite.</p>
+      </div>
+    </header>
 
-  <section class="portal-section" id="contact" data-app-view="service" aria-labelledby="contactTitle">
-    <div class="section-head">
-      <p class="eyebrow">Erreichbarkeit</p>
-      <h2 id="contactTitle">Kontakt &amp; Notfall</h2>
-    </div>
-    <article class="info-card contact-card" id="contactCard"></article>
-  </section>
+    <div class="service-main-grid">
+      <aside class="service-side-column">
+        <section class="portal-section service-contact-section" id="contact" data-app-view="service" aria-labelledby="contactTitle">
+          <div class="section-head">
+            <p class="eyebrow">Concierge</p>
+            <h2 id="contactTitle">Ihr Ansprechpartner</h2>
+          </div>
+          <article class="info-card contact-card service-concierge-card" id="contactCard"></article>
+        </section>
 
-  <section class="portal-section" id="actions" data-app-view="service" aria-labelledby="actionsTitle">
-    <div class="section-head">
-      <p class="eyebrow">Kundenaktionen</p>
-      <h2 id="actionsTitle">N&auml;chste Schritte</h2>
-    </div>
-    <article class="info-card action-card">
-      <div class="action-grid" id="actionGrid"></div>
-    </article>
-  </section>
+        <section class="portal-section service-accommodation-section split-grid" id="accommodation" data-app-view="service" aria-label="Unterkunft">
+          <article class="info-card service-hotel-card" id="hotelCard"></article>
+        </section>
+      </aside>
 
-  <section class="portal-section" data-app-view="service" aria-labelledby="historyTitle">
-    <div class="section-head">
-      <p class="eyebrow">Versionierung</p>
-      <h2 id="historyTitle">&Auml;nderungsverlauf</h2>
+      <div class="service-main-column">
+        <section class="portal-section service-actions-section" id="actions" data-app-view="service" aria-labelledby="actionsTitle">
+          <div class="section-head">
+            <p class="eyebrow">Unterstützung</p>
+            <h2 id="actionsTitle">Was wir für Sie tun können</h2>
+            <p class="service-section-copy">Direkte Hilfe zu Programm, Änderungen und praktischen Anliegen – ein Schritt genügt.</p>
+          </div>
+          <article class="info-card action-card service-action-card">
+            <div class="action-grid service-action-grid" id="actionGrid"></div>
+          </article>
+        </section>
+      </div>
     </div>
-    <div class="history-list" id="historyList"></div>
+
+    <section class="portal-section service-history-section" data-app-view="service" aria-labelledby="historyTitle">
+      <div class="section-head">
+        <p class="eyebrow">Hinweise</p>
+        <h2 id="historyTitle">Änderungsverlauf</h2>
+        <p class="service-section-copy">Wichtige Aktualisierungen zu Ihrer Reise – chronologisch und übersichtlich.</p>
+      </div>
+      <div class="history-list service-history-list" id="historyList"></div>
+    </section>
   </section>
 </main>
 
@@ -379,6 +397,6 @@
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=61"></script>
+<script src="customer-portal.js?v=62"></script>
 </body>
 </html>

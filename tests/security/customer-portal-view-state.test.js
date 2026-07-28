@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=58/);
-    assert.match(portalHtml, /customer-portal\.css\?v=31/);
+    assert.match(portalHtml, /customer-portal\.js\?v=59/);
+    assert.match(portalHtml, /customer-portal\.css\?v=32/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -346,10 +346,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=58"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=59"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=58/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=59/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -433,8 +433,8 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=31/);
-    assert.match(portalHtml, /customer-portal\.js\?v=58/);
+    assert.match(portalHtml, /customer-portal\.css\?v=32/);
+    assert.match(portalHtml, /customer-portal\.js\?v=59/);
   });
 });
 
@@ -457,7 +457,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=58/);
+    assert.match(portalHtml, /customer-portal\.js\?v=59/);
   });
 });
 
@@ -480,5 +480,30 @@ describe("customer portal itinerary premium redesign (4.5C)", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.itinerary-main-grid\{[\s\S]*grid-template-columns/);
     assert.match(portalCss, /\.itinerary-details-column\{[\s\S]*position:sticky/);
     assert.match(portalCss, /overflow-x:clip/);
+  });
+});
+
+describe("customer portal itinerary desktop detail UX (4.5C.1)", () => {
+  it("shows one active detail card via :target and widens desktop columns", () => {
+    assert.match(portalCss, /Ops Ready 4\.5C\.1/);
+    assert.match(portalCss, /detail-card-grid:has\(\.program-detail-card:target\)/);
+    assert.match(portalCss, /grid-template-columns:minmax\(0,1\.25fr\) minmax\(380px,1fr\)/);
+    assert.match(portalCss, /width:min\(1320px,100%\)/);
+    assert.match(portalHtml, /Ihr Programmpunkt/);
+  });
+
+  it("repairs hike stats and enlarges detail maps", () => {
+    assert.match(portalCss, /\.itinerary-view \.hike-stats li\{[\s\S]*flex-direction:column/);
+    assert.match(portalCss, /writing-mode:horizontal-tb/);
+    assert.match(portalCss, /\.itinerary-view \.hike-leaflet-map[\s\S]*min-height:240px/);
+    assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.itinerary-view \.hike-stats\{grid-template-columns:repeat\(3/);
+  });
+
+  it("groups detail actions without removing handlers", () => {
+    assert.match(portalJs, /program-detail-actions-primary/);
+    assert.match(portalJs, /program-detail-actions-tertiary/);
+    assert.match(portalJs, /data-calendar-id/);
+    assert.match(portalJs, /data-travel-open-maps/);
+    assert.match(portalCss, /\.program-detail-actions-tertiary \.button/);
   });
 });

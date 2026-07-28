@@ -2379,14 +2379,16 @@ h3{font-size:24px;color:var(--green)}
   .itinerary-hero{min-height:min(58vh,560px)}
   .itinerary-hero-stage{padding:64px 48px 72px}
   .itinerary-main-grid{
-    grid-template-columns:minmax(0,1.35fr) minmax(320px,.75fr);
-    gap:28px;
+    width:min(1320px,100%);
+    grid-template-columns:minmax(0,1.25fr) minmax(380px,1fr);
+    gap:36px;
     align-items:start;
-    padding:12px 28px 40px;
+    padding:12px 32px 48px;
   }
   .itinerary-details-column{
     position:sticky;
     top:108px;
+    min-width:0;
   }
   .itinerary-details-section .section-head,
   .itinerary-timeline-section,
@@ -2397,7 +2399,8 @@ h3{font-size:24px;color:var(--green)}
   .itinerary-day-nav,
   .itinerary-closing,
   .itinerary-secondary{
-    padding-inline:28px;
+    width:min(1320px,100%);
+    padding-inline:32px;
   }
   .itinerary-overview-grid,
   .itinerary-day-nav-head,
@@ -2429,6 +2432,301 @@ h3{font-size:24px;color:var(--green)}
   }
   .itinerary-hero h1,
   .itinerary-hero-copy{color:#111 !important;text-shadow:none}
+  .itinerary-view .program-detail-card{display:grid !important}
+}
+
+/* Ops Ready 4.5C.1 – Desktop detail UX (active card, hike stats, map, buttons) */
+.itinerary-main-grid{
+  width:min(1320px,100%);
+}
+.itinerary-details-section .section-head h2{
+  font-size:clamp(22px,3.5vw,28px);
+  max-width:16ch;
+}
+.itinerary-detail-toggle{
+  margin-top:10px;
+  padding:8px 10px;
+  font-size:13px;
+  box-shadow:none;
+  background:transparent;
+}
+.itinerary-view #programDetails.detail-card-grid,
+.itinerary-view .detail-card-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) !important;
+  gap:0;
+  width:100%;
+  margin:0;
+}
+.itinerary-view .program-detail-card{
+  display:none;
+  gap:14px;
+  padding:22px 20px;
+  border:1px solid var(--act-line);
+  border-radius:var(--act-radius-lg);
+  background:var(--act-card);
+  box-shadow:var(--act-shadow-card);
+  min-width:0;
+}
+.itinerary-view .program-detail-card:first-child,
+.itinerary-view .program-detail-card:target{
+  display:grid;
+}
+.itinerary-view .detail-card-grid:has(.program-detail-card:target) .program-detail-card:first-child{
+  display:none;
+}
+.itinerary-view .detail-card-grid:has(.program-detail-card:target) .program-detail-card:target{
+  display:grid;
+}
+.itinerary-view .program-detail-card:target{
+  outline:none;
+  box-shadow:var(--act-shadow-card),0 0 0 1px rgba(216,183,106,.45);
+}
+.itinerary-view .program-detail-eyebrow{
+  margin:0;
+  color:var(--act-gold-deep);
+  font-family:var(--act-font-sans);
+  font-size:var(--act-text-meta);
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  font-weight:700;
+}
+.itinerary-view .program-detail-card > h3{
+  margin:0;
+  font-family:var(--act-font-serif);
+  font-size:clamp(24px,3vw,32px);
+  color:var(--act-forest);
+  line-height:1.15;
+  overflow-wrap:anywhere;
+}
+.itinerary-view .program-detail-copy{
+  margin:0;
+  color:var(--act-muted);
+  font-family:var(--act-font-sans);
+  font-size:15px;
+  line-height:1.65;
+  max-width:46ch;
+}
+.itinerary-view .program-detail-copy:empty{display:none}
+.itinerary-view .program-detail-card > .field-list{
+  margin-top:0;
+  gap:8px;
+}
+.itinerary-view .program-detail-card > .field-list > div{
+  padding:10px 0;
+  border-bottom:1px solid rgba(16,40,32,.08);
+  grid-template-columns:minmax(0,1fr);
+}
+.itinerary-view .hike-overview{
+  padding:4px 0 0;
+}
+.itinerary-view .hike-overview h4{
+  margin:0 0 12px;
+  font-family:var(--act-font-serif);
+  font-size:18px;
+  color:var(--act-forest);
+  font-weight:400;
+}
+.itinerary-view .hike-stats{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.itinerary-view .hike-stats li{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:6px;
+  min-width:0;
+  padding:12px 14px;
+  border:1px solid var(--act-line);
+  border-radius:var(--act-radius-md);
+  background:rgba(255,255,255,.55);
+  grid-template-columns:unset;
+}
+.itinerary-view .hike-stat-icon{
+  font-size:14px;
+  opacity:.75;
+}
+.itinerary-view .hike-stat-label{
+  color:var(--act-gold-deep);
+  font-family:var(--act-font-sans);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  writing-mode:horizontal-tb;
+  white-space:normal;
+}
+.itinerary-view .hike-stat-value{
+  color:var(--act-forest);
+  font-family:var(--act-font-serif);
+  font-size:18px;
+  font-weight:400;
+  text-align:left;
+  writing-mode:horizontal-tb;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  max-width:100%;
+}
+.itinerary-view .hike-map,
+.itinerary-view .hike-map-frame,
+.itinerary-view .hike-leaflet-map,
+.itinerary-view .hike-map-fallback-frame,
+.itinerary-view .hike-map-frame iframe{
+  width:100%;
+  max-width:100%;
+}
+.itinerary-view .hike-map-frame,
+.itinerary-view .hike-leaflet-map,
+.itinerary-view .hike-map-fallback-frame,
+.itinerary-view .hike-map-frame iframe{
+  min-height:240px;
+  height:260px;
+  border-radius:var(--act-radius-md);
+}
+.itinerary-view .hike-toolbar,
+.itinerary-view .hike-map-live{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:12px;
+}
+.itinerary-view .hike-toolbar .button.soft{
+  min-height:44px;
+  background:rgba(0,26,20,.04);
+  border-color:rgba(16,40,32,.16);
+}
+.itinerary-view .hike-toolbar .button.primary{
+  min-height:44px;
+}
+.itinerary-view .program-detail-actions{
+  display:grid;
+  gap:12px;
+  margin-top:8px;
+  padding-top:14px;
+  border-top:1px solid var(--act-line);
+}
+.itinerary-view .program-detail-actions-primary,
+.itinerary-view .program-detail-actions-tertiary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.itinerary-view .program-detail-actions-primary .button{
+  min-height:44px;
+  flex:1 1 160px;
+  justify-content:center;
+}
+.itinerary-view .program-detail-actions-primary .button.soft{
+  background:rgba(0,26,20,.04);
+  border-color:rgba(16,40,32,.16);
+}
+.itinerary-view .program-detail-actions-primary .button.primary,
+.itinerary-view .hike-toolbar .button.primary{
+  background:linear-gradient(135deg,var(--act-gold-bright),var(--act-gold));
+  color:var(--act-ink);
+  border-color:transparent;
+}
+.itinerary-view .hike-map-live .button{
+  min-height:44px;
+  background:transparent;
+  border-color:transparent;
+  color:var(--act-muted);
+  box-shadow:none;
+  text-transform:none;
+  letter-spacing:.02em;
+  font-weight:650;
+  padding-inline:10px;
+}
+.itinerary-view .program-detail-actions-tertiary .button{
+  min-height:44px;
+  flex:1 1 140px;
+  justify-content:center;
+  background:transparent;
+  border-color:transparent;
+  color:var(--act-muted);
+  text-transform:none;
+  letter-spacing:.02em;
+  font-weight:650;
+  box-shadow:none;
+  padding-inline:10px;
+}
+.itinerary-view .program-detail-actions-tertiary .button:hover,
+.itinerary-view .program-detail-actions-tertiary .button:focus-visible{
+  color:var(--act-forest);
+  background:rgba(0,26,20,.04);
+  transform:none;
+}
+
+/* Calm left timeline */
+.itinerary-view .itinerary-day{
+  background:transparent;
+  border:0;
+  box-shadow:none;
+  padding:8px 0 4px;
+}
+.itinerary-view .itinerary-day.is-today{
+  box-shadow:none;
+  border:0;
+}
+.itinerary-view .itinerary-day-head{
+  margin-bottom:12px;
+  padding-bottom:10px;
+  border-bottom:1px solid rgba(16,40,32,.08);
+}
+.itinerary-view .itinerary-card{
+  box-shadow:none;
+  border-color:rgba(16,40,32,.1);
+}
+.itinerary-view .itinerary-item.is-current .itinerary-card,
+.itinerary-view .itinerary-item.is-next .itinerary-card{
+  border-color:rgba(216,183,106,.5);
+  box-shadow:0 0 0 1px rgba(216,183,106,.2);
+}
+.itinerary-view .itinerary-fields{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:6px;
+}
+.itinerary-view .itinerary-card-actions{
+  border-top:1px solid rgba(16,40,32,.08);
+  padding-top:12px;
+}
+
+@media(min-width:720px){
+  .itinerary-view .hike-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .itinerary-view .hike-map-frame,
+  .itinerary-view .hike-leaflet-map,
+  .itinerary-view .hike-map-fallback-frame,
+  .itinerary-view .hike-map-frame iframe{
+    min-height:280px;
+    height:300px;
+  }
+}
+
+@media(min-width:980px){
+  .itinerary-view .hike-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .itinerary-view .hike-map-frame,
+  .itinerary-view .hike-leaflet-map,
+  .itinerary-view .hike-map-fallback-frame,
+  .itinerary-view .hike-map-frame iframe{
+    min-height:300px;
+    height:320px;
+  }
+  .itinerary-view .program-detail-actions-primary .button{flex:1 1 180px}
+  .itinerary-view .program-detail-actions-tertiary .button{flex:1 1 auto}
+}
+
+@media(min-width:1280px){
+  .itinerary-main-grid{
+    width:min(1400px,100%);
+    grid-template-columns:minmax(0,1.15fr) minmax(420px,1fr);
+    gap:40px;
+  }
 }
 
 /* Ops Ready 4.4 – Premium documents center */

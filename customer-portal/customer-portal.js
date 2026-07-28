@@ -2250,35 +2250,46 @@
       const secondaryActions=omitTravelStats
         ?travelActionsMarkup(item,{mode:"secondary"})
         :travelActionsMarkup(item);
+      const navFallback=(!omitTravelStats&&!travelLib()?.programItemActions&&(linked?.navigationUrl||itemNavigationUrl(item)))
+        ?`<a class="button primary" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`
+        :"";
+      const primaryMeta=definitionList([
+        ["Datum",itemDate(item)],
+        ["Uhrzeit",`${item.startTime||""}${item.endTime?` - ${item.endTime}`:""}`],
+        ["Treffpunkt",item.meetingPoint]
+      ]);
+      const secondaryMeta=definitionList([
+        ["Dauer",item.duration],
+        ...travelMetaRows(item,{omitTravelStats,omitWeather}),
+        ["Anbieter",linked?.provider||""],
+        ["Kleidung / Ausrüstung",item.outfit],
+        ["Hinweise",item.notes],
+        ["Kontaktperson",item.contactPerson],
+        ["Telefon",item.phone],
+        ["Dokumente",item.documents&&item.documents.length?item.documents.join(", "):""]
+      ]);
       return `
         <article class="program-detail-card" id="${detailId(item)}">
-          <span class="tag">${escapeHtml(item.category||"")} · ${escapeHtml(programStatusLabel(item))}</span>
+          <p class="eyebrow program-detail-eyebrow">${escapeHtml([item.category,programStatusLabel(item)].filter(hasDisplayValue).join(" · ")||"Programmpunkt")}</p>
           <h3>${escapeHtml(item.title||"")}</h3>
+          ${primaryMeta}
+          <p class="program-detail-copy">${escapeHtml(item.description||"")}</p>
           ${companionParts.intro}
-          <p>${escapeHtml(item.description||"")}</p>
-          ${companionParts.route}
           ${linked?.customerNote?`<p class="booking-customer-note"><strong>Hinweis:</strong> ${escapeHtml(linked.customerNote)}</p>`:""}
-          ${definitionList([
-            ["Datum",itemDate(item)],
-            ["Uhrzeit",`${item.startTime||""}${item.endTime?` - ${item.endTime}`:""}`],
-            ["Dauer",item.duration],
-            ["Treffpunkt",item.meetingPoint],
-            ...travelMetaRows(item,{omitTravelStats,omitWeather}),
-            ["Anbieter",linked?.provider||""],
-            ["Kleidung / Ausrüstung",item.outfit],
-            ["Hinweise",item.notes],
-            ["Kontaktperson",item.contactPerson],
-            ["Telefon",item.phone],
-            ["Dokumente",item.documents&&item.documents.length?item.documents.join(", "):""]
-          ])}
-          <div class="card-actions">
-            <a class="button soft" href="#calendar">Zurück zum Kalender</a>
-            <a class="button soft" href="#overall-timeline">Zurück zur Gesamt-Timeline</a>
-            ${previous?`<a class="button soft" href="#${detailId(previous)}">Vorheriger Programmpunkt</a>`:""}
-            ${next?`<a class="button soft" href="#${detailId(next)}">Nächster Programmpunkt</a>`:""}
-            ${secondaryActions}
-            ${(!omitTravelStats&&!travelLib()?.programItemActions&&(linked?.navigationUrl||itemNavigationUrl(item)))?`<a class="button soft" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:""}
-            ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(resolveDocumentUrl(doc))}" target="_blank" rel="noopener noreferrer">Dokument oeffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
+          ${secondaryMeta}
+          ${companionParts.route}
+          <div class="card-actions program-detail-actions">
+            <div class="program-detail-actions-primary">
+              ${navFallback}
+              ${secondaryActions}
+            </div>
+            <div class="program-detail-actions-tertiary">
+              <a class="button soft" href="#calendar">Zurück zum Kalender</a>
+              <a class="button soft" href="#overall-timeline">Zurück zur Gesamt-Timeline</a>
+              ${previous?`<a class="button soft" href="#${detailId(previous)}">Vorheriger Programmpunkt</a>`:""}
+              ${next?`<a class="button soft" href="#${detailId(next)}">Nächster Programmpunkt</a>`:""}
+              ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(resolveDocumentUrl(doc))}" target="_blank" rel="noopener noreferrer">Dokument oeffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
+            </div>
           </div>
         </article>
       `;

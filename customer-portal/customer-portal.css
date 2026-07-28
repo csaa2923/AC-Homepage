@@ -1,5 +1,5 @@
-:root{
-  /* Ops Ready 4.5B – ACT Design Tokens (Blueprint 4.5A) */
+﻿:root{
+  /* Ops Ready 4.5B - ACT Design Tokens (Blueprint 4.5A) */
   --act-forest:#001a14;
   --act-forest-mid:#0b342a;
   --act-forest-soft:#143f34;
@@ -48,11 +48,23 @@
   --act-font-serif:Georgia,"Times New Roman",serif;
   --act-font-sans:"Segoe UI",system-ui,-apple-system,sans-serif;
 
-  --act-text-hero:clamp(34px,9vw,58px);
-  --act-text-section:clamp(26px,6vw,40px);
-  --act-text-card:clamp(18px,4vw,22px);
+  --act-text-hero:clamp(36px,9vw,64px);
+  --act-text-section:clamp(26px,5.5vw,40px);
+  --act-text-card:clamp(20px,4vw,28px);
   --act-text-body:15px;
   --act-text-meta:11px;
+  --act-text-button:12px;
+  --act-leading-tight:1.05;
+  --act-leading-title:1.15;
+  --act-leading-body:1.55;
+
+  --act-hero-min:min(48vh,460px);
+  --act-hero-min-lg:min(52vh,520px);
+  --act-hero-today:min(72vh,640px);
+  --act-hero-today-lg:min(78vh,720px);
+  --act-content-max:1320px;
+  --act-sticky-offset:112px;
+  --act-btn-min:44px;
 
   --act-motion-fast:150ms;
   --act-motion-base:260ms;
@@ -62,7 +74,7 @@
   --act-z-overlay:40;
   --act-z-toast:50;
 
-  /* Legacy aliases – existing selectors keep working */
+  /* Legacy aliases ? existing selectors keep working */
   --green:var(--act-forest);
   --green-2:#062a22;
   --green-3:var(--act-forest-mid);
@@ -226,21 +238,21 @@ button{font:inherit}
   opacity:.82;
 }
 .app-bottom-nav .app-nav-label{
-  font-family:Georgia,"Times New Roman",serif;
+  font-family:var(--act-font-sans);
   font-size:10px;
   letter-spacing:.04em;
-  font-weight:600;
+  font-weight:650;
   line-height:1.1;
 }
 .app-bottom-nav .app-nav-item.is-active{
-  color:#f8f1dd;
+  color:var(--act-on-dark);
 }
 .app-bottom-nav .app-nav-item.is-active .app-nav-icon{
   opacity:1;
-  transform:translateY(-1px) scale(1.06);
+  transform:translateY(-1px);
 }
 .app-bottom-nav .app-nav-item.is-active .app-nav-label{
-  color:var(--gold-2);
+  color:var(--act-on-dark);
   font-weight:700;
 }
 .app-bottom-nav .app-nav-item.is-active::after{
@@ -251,7 +263,7 @@ button{font:inherit}
   width:18px;
   height:2px;
   border-radius:999px;
-  background:linear-gradient(90deg,rgba(216,183,106,.2),var(--gold),rgba(216,183,106,.2));
+  background:var(--act-gold);
   transform:translateX(-50%);
 }
 
@@ -318,23 +330,44 @@ h3{font-size:24px;color:var(--green)}
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  min-height:48px;
-  padding:13px 17px;
-  border:1px solid var(--gold);
-  border-radius:8px;
-  background:#fff;
-  color:var(--green);
+  min-height:var(--act-btn-min);
+  padding:12px 16px;
+  border:1px solid var(--act-gold);
+  border-radius:var(--act-radius-md);
+  background:var(--act-paper);
+  color:var(--act-forest);
   text-decoration:none;
   text-transform:uppercase;
-  font-size:12px;
-  font-weight:900;
+  font-family:var(--act-font-sans);
+  font-size:var(--act-text-button);
+  font-weight:800;
   letter-spacing:.08em;
   cursor:pointer;
-  transition:transform .18s ease,box-shadow .18s ease,background .18s ease;
+  transition:transform var(--act-motion-fast) ease,box-shadow var(--act-motion-fast) ease,background var(--act-motion-fast) ease,color var(--act-motion-fast) ease,border-color var(--act-motion-fast) ease;
 }
-.button:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(5,24,19,.13)}
-.button.primary{background:linear-gradient(135deg,var(--gold-2),var(--gold));color:#102820}
-.button.soft{background:rgba(0,26,20,.06)}
+.button:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(5,24,19,.12)}
+.button:focus-visible{
+  outline:2px solid var(--act-gold);
+  outline-offset:3px;
+}
+.button.primary{
+  background:linear-gradient(135deg,var(--act-gold-bright),var(--act-gold));
+  color:var(--act-ink);
+  border-color:transparent;
+}
+.button.soft{
+  background:rgba(0,26,20,.04);
+  border-color:rgba(16,40,32,.16);
+  color:var(--act-forest);
+}
+.button:disabled,
+.button[aria-disabled="true"],
+.button.document-disabled{
+  opacity:.55;
+  cursor:not-allowed;
+  transform:none;
+  box-shadow:none;
+}
 
 .portal-section{
   padding:58px 18px;
@@ -676,7 +709,7 @@ h3{font-size:24px;color:var(--green)}
   min-height:180px;
   border:0;
   display:block;
-  /* Allow OSM/Leaflet zoom (+/−), pan and touch; route SVG overlay stays non-interactive. */
+  /* Allow OSM/Leaflet zoom (+/?), pan and touch; route SVG overlay stays non-interactive. */
   pointer-events:auto;
 }
 .travel-map-actions{
@@ -1043,7 +1076,7 @@ h3{font-size:24px;color:var(--green)}
 .marker-cluster-large{
   background-clip:padding-box;
 }
-/* Legacy SVG overlay kept only as non-interactive fallback asset — not used over Leaflet. */
+/* Legacy SVG overlay kept only as non-interactive fallback asset ? not used over Leaflet. */
 .hike-route-overlay,
 .hike-route-svg{
   position:absolute;
@@ -1340,13 +1373,13 @@ h3{font-size:24px;color:var(--green)}
   }
   .app-desktop-nav .app-nav-icon{font-size:15px;opacity:.85;transition:transform .22s ease,opacity .22s ease}
   .app-desktop-nav .app-nav-label{
-    font-family:Georgia,"Times New Roman",serif;
+    font-family:var(--act-font-sans);
     font-size:14px;
     letter-spacing:.03em;
-    font-weight:600;
+    font-weight:650;
   }
   .app-desktop-nav .app-nav-item.is-active{
-    color:#f8f1dd;
+    color:var(--act-on-dark);
     background:rgba(216,183,106,.12);
   }
   .app-desktop-nav .app-nav-item.is-active .app-nav-icon{
@@ -1354,7 +1387,7 @@ h3{font-size:24px;color:var(--green)}
     transform:translateY(-1px);
   }
   .app-desktop-nav .app-nav-item.is-active .app-nav-label{
-    color:var(--gold-2);
+    color:var(--act-on-dark);
     font-weight:700;
   }
   .app-desktop-nav .app-nav-item.is-active::after{
@@ -1365,15 +1398,16 @@ h3{font-size:24px;color:var(--green)}
     bottom:5px;
     height:2px;
     border-radius:999px;
-    background:linear-gradient(90deg,transparent,var(--gold),transparent);
+    background:var(--act-gold);
   }
   .app-lang{display:inline-flex}
   .customer-app{
-    width:min(1240px,100%);
-    margin-inline:auto;
+    width:100%;
+    max-width:none;
+    margin:0;
   }
   .portal-hero{min-height:calc(100vh - 88px)}
-  [id]{scroll-margin-top:110px}
+  [id]{scroll-margin-top:var(--act-sticky-offset)}
 }
 
 @media(min-width:1040px){
@@ -1412,7 +1446,7 @@ h3{font-size:24px;color:var(--green)}
   letter-spacing:.02em;
 }
 
-/* Ops Ready 4.1B/C – App-Container / View-State.
+/* Ops Ready 4.1B/C ? App-Container / View-State.
    legacy keeps every section visible; filtered is used by app navigation. */
 .customer-app{
   display:block;
@@ -1447,7 +1481,7 @@ h3{font-size:24px;color:var(--green)}
   line-height:1.55;
 }
 
-/* Ops Ready 4.5B.1 – Today Premium Redesign (layout, scoped to .today-view) */
+/* Ops Ready 4.5B.1 - Today Premium Redesign (layout, scoped to .today-view) */
 .today-view{
   display:block;
   width:100%;
@@ -1488,7 +1522,7 @@ h3{font-size:24px;color:var(--green)}
   box-shadow:var(--act-shadow-card);
 }
 
-/* 1 Hero – luxury travel entry */
+/* 1 Hero ? luxury travel entry */
 .today-hero.portal-hero{
   position:relative;
   min-height:min(78vh,680px);
@@ -1597,7 +1631,7 @@ h3{font-size:24px;color:var(--green)}
   background:rgba(255,253,247,.08);
   border-color:var(--act-gold-bright);
 }
-/* Experience layers: Concierge → Next → Wetter → Quick → Further */
+/* Experience layers: Concierge ? Next ? Wetter ? Quick ? Further */
 .today-primary-grid,
 .today-experience{
   display:grid;
@@ -1902,7 +1936,7 @@ h3{font-size:24px;color:var(--green)}
   }
 }
 
-/* Ops Ready 4.5C – Reiseplan Premium Redesign (scoped to .itinerary-view) */
+/* Ops Ready 4.5C - Reiseplan Premium Redesign (scoped to .itinerary-view) */
 .itinerary-view{
   display:block;
   width:100%;
@@ -2493,13 +2527,13 @@ h3{font-size:24px;color:var(--green)}
   .itinerary-view .program-detail-card{display:grid !important}
 }
 
-/* Ops Ready 4.5C.2 – Day navigation usability + contrast */
+/* Ops Ready 4.5C.2 - Day navigation usability + contrast */
 .itinerary-view .day-selector button.itinerary-day-chip.active{
   background:var(--act-forest) !important;
   color:var(--act-on-dark) !important;
 }
 
-/* Ops Ready 4.5C.1 – Desktop detail UX (active card, hike stats, map, buttons) */
+/* Ops Ready 4.5C.1 - Desktop detail UX (active card, hike stats, map, buttons) */
 .itinerary-main-grid{
   width:min(1320px,100%);
 }
@@ -2793,7 +2827,7 @@ h3{font-size:24px;color:var(--green)}
   }
 }
 
-/* Ops Ready 4.5D – Documents premium redesign */
+/* Ops Ready 4.5D - Documents premium redesign */
 .documents-view{
   display:block;
   width:100%;
@@ -3169,7 +3203,7 @@ h3{font-size:24px;color:var(--green)}
 }
 
 
-/* Ops Ready 4.5E � Service premium redesign */
+/* Ops Ready 4.5E - Service premium redesign */
 .service-view{
   display:block;
   width:100%;
@@ -3443,7 +3477,7 @@ h3{font-size:24px;color:var(--green)}
   }
 }
 
-/* Ops Ready 4.5F ? Discover premium redesign */
+/* Ops Ready 4.5F - Discover premium redesign */
 .discover-view{
   display:block;
   width:100%;
@@ -3744,6 +3778,284 @@ h3{font-size:24px;color:var(--green)}
   .discover-category-chip,
   .discover-card-actions .button{
     transition:none !important;
+  }
+}
+
+/* Ops Ready 4.6 - Premium Polish & UX Harmonisierung */
+.today-view .section-head h2,
+.itinerary-view .section-head h2,
+.documents-view .section-head h2,
+.service-view .section-head h2,
+.discover-view .section-head h2{
+  font-family:var(--act-font-serif);
+  font-size:var(--act-text-section);
+  color:var(--act-forest);
+  line-height:var(--act-leading-title);
+  font-weight:400;
+}
+.today-view .section-head .eyebrow,
+.itinerary-view .section-head .eyebrow,
+.documents-view .section-head .eyebrow,
+.service-view .section-head .eyebrow,
+.discover-view .section-head .eyebrow{
+  color:var(--act-gold-deep);
+  font-family:var(--act-font-sans);
+  font-size:var(--act-text-meta);
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  font-weight:700;
+}
+
+.today-brand-eyebrow,
+.itinerary-brand-eyebrow,
+.documents-brand-eyebrow,
+.service-brand-eyebrow,
+.discover-brand-eyebrow{
+  color:var(--act-gold-bright) !important;
+  margin:0 0 12px !important;
+  font-family:var(--act-font-sans) !important;
+  font-size:var(--act-text-meta) !important;
+  font-weight:700 !important;
+  letter-spacing:.2em !important;
+  text-transform:uppercase;
+}
+
+.today-hero.portal-hero,
+.itinerary-hero,
+.documents-hero,
+.service-hero,
+.discover-hero{
+  position:relative;
+  display:flex;
+  align-items:flex-end;
+  padding:0;
+  background-color:var(--act-forest);
+  background-image:
+    linear-gradient(180deg,rgba(0,17,13,.22) 0%,rgba(0,17,13,.58) 55%,var(--act-overlay) 100%),
+    radial-gradient(ellipse at 70% 18%,rgba(216,183,106,.14),transparent 50%),
+    url("../images/hero/hero.jpg");
+  background-position:center;
+  background-size:cover;
+  background-repeat:no-repeat;
+}
+.today-hero.portal-hero{min-height:var(--act-hero-today)}
+.itinerary-hero,
+.documents-hero,
+.service-hero,
+.discover-hero{min-height:var(--act-hero-min)}
+
+.today-hero-stage,
+.itinerary-hero-stage,
+.documents-hero-stage,
+.service-hero-stage,
+.discover-hero-stage{
+  width:min(820px,100%);
+  padding:calc(28px + env(safe-area-inset-top,0px)) var(--act-space-4) var(--act-space-8);
+}
+
+.today-hero h1,
+.itinerary-hero h1,
+.documents-hero h1,
+.service-hero h1,
+.discover-hero h1{
+  margin:0;
+  font-family:var(--act-font-serif);
+  font-size:var(--act-text-hero);
+  color:var(--act-on-dark);
+  line-height:var(--act-leading-tight);
+  font-weight:400;
+  text-shadow:0 10px 36px rgba(0,0,0,.35);
+  overflow-wrap:anywhere;
+}
+.today-hero-copy,
+.itinerary-hero-copy,
+.documents-hero-copy,
+.documents-intro,
+.service-hero-copy,
+.discover-hero-copy{
+  margin:14px 0 0;
+  color:rgba(248,241,221,.88);
+  font-family:var(--act-font-sans);
+  font-size:16px;
+  line-height:var(--act-leading-body);
+  max-width:36ch;
+}
+
+.today-status-card,
+.today-next-card,
+.today-weather-card,
+.today-view .concierge-card,
+.itinerary-view .program-detail-card,
+.documents-card,
+.documents-empty,
+.documents-note-card,
+.service-concierge-card,
+.service-hotel-card,
+.service-action-card,
+.service-history-item,
+.discover-card,
+.discover-featured-card,
+.discover-region-card,
+.discover-empty{
+  border:1px solid var(--act-line);
+  border-radius:var(--act-radius-lg);
+  background:var(--act-card);
+  box-shadow:var(--act-shadow-card);
+}
+
+.documents-card-heading h3,
+.discover-card-body h3,
+.service-concierge-heading h3,
+.service-hotel-card h2,
+.itinerary-view .program-detail-card > h3{
+  font-family:var(--act-font-serif);
+  font-size:var(--act-text-card);
+  color:var(--act-forest);
+  font-weight:400;
+  line-height:var(--act-leading-title);
+  overflow-wrap:anywhere;
+}
+
+.customer-app .button.service-action-tertiary,
+.customer-app .program-detail-actions-tertiary .button,
+.customer-app .hike-map-live .button{
+  min-height:var(--act-btn-min);
+  background:transparent;
+  border-color:transparent;
+  color:var(--act-muted);
+  box-shadow:none;
+  text-transform:none;
+  letter-spacing:.02em;
+  font-weight:650;
+  padding-inline:10px;
+}
+.customer-app .button.service-action-tertiary:hover,
+.customer-app .button.service-action-tertiary:focus-visible,
+.customer-app .program-detail-actions-tertiary .button:hover,
+.customer-app .program-detail-actions-tertiary .button:focus-visible,
+.customer-app .hike-map-live .button:hover,
+.customer-app .hike-map-live .button:focus-visible{
+  color:var(--act-forest);
+  background:rgba(0,26,20,.04);
+  transform:none;
+}
+
+.today-empty,
+.documents-empty,
+.discover-empty,
+.service-history-empty,
+.discover-featured-card.discover-empty{
+  padding:var(--act-space-7) var(--act-space-6);
+  text-align:left;
+}
+.today-empty,
+.documents-empty .eyebrow,
+.discover-empty .eyebrow,
+.service-history-empty .eyebrow{
+  color:var(--act-gold-deep);
+  font-family:var(--act-font-sans);
+  font-size:var(--act-text-meta);
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  font-weight:700;
+}
+.documents-empty h3,
+.discover-empty h3,
+.service-history-empty strong,
+.discover-featured-card.discover-empty h3{
+  margin:8px 0 10px;
+  font-family:var(--act-font-serif);
+  font-size:var(--act-text-section);
+  color:var(--act-forest);
+  font-weight:400;
+  line-height:var(--act-leading-title);
+}
+.documents-empty p,
+.discover-empty p,
+.service-empty-copy,
+.discover-featured-copy,
+.today-empty{
+  color:var(--act-muted);
+  font-family:var(--act-font-sans);
+  font-size:var(--act-text-body);
+  line-height:var(--act-leading-body);
+  max-width:46ch;
+}
+
+.itinerary-overview,
+.itinerary-day-nav,
+.itinerary-closing,
+.itinerary-secondary,
+.itinerary-main-grid,
+.documents-overview,
+.documents-center-section,
+.documents-notes,
+.service-main-grid,
+.service-history-section,
+.discover-featured,
+.discover-categories,
+.discover-list,
+.discover-region{
+  width:min(var(--act-content-max),100%);
+}
+
+.itinerary-view .itinerary-day,
+.documents-group,
+.discover-group,
+.service-view .portal-section,
+[id]{
+  scroll-margin-top:var(--act-sticky-offset);
+}
+
+.app-nav-item:focus-visible{
+  outline:2px solid var(--act-gold);
+  outline-offset:2px;
+}
+
+@media(min-width:980px){
+  .today-hero.portal-hero{min-height:var(--act-hero-today-lg)}
+  .itinerary-hero,
+  .documents-hero,
+  .service-hero,
+  .discover-hero{min-height:var(--act-hero-min-lg)}
+  .today-hero-stage,
+  .itinerary-hero-stage,
+  .documents-hero-stage,
+  .service-hero-stage,
+  .discover-hero-stage{
+    padding:64px 48px 72px;
+  }
+  .itinerary-overview,
+  .itinerary-day-nav,
+  .itinerary-closing,
+  .itinerary-secondary,
+  .itinerary-main-grid,
+  .documents-overview,
+  .documents-center-section,
+  .documents-notes,
+  .service-main-grid,
+  .service-history-section,
+  .discover-featured,
+  .discover-categories,
+  .discover-list,
+  .discover-region{
+    padding-inline:32px;
+  }
+}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .button,
+  .app-nav-item,
+  .itinerary-day-chip,
+  .documents-category-chip,
+  .discover-category-chip,
+  .today-quick-btn{
+    transition:none !important;
+  }
+  .button:hover,
+  .app-nav-item:hover{
+    transform:none !important;
   }
 }
 

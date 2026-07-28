@@ -217,9 +217,178 @@
   function isFullRouteMapsUrl(url){
     const value=text(url);
     if(!value)return false;
+    if(/[?&]origin=/i.test(value)&&/[?&]destination=/i.test(value))return true;
     if(/[?&]origin=/i.test(value))return true;
     // /maps/dir/lat,lng/lat,lng/...
     return /\/maps\/dir\/-?\d+(\.\d+)?,-?\d+(\.\d+)?\/-?\d+(\.\d+)?,-?\d+(\.\d+)?/i.test(value);
+  }
+
+  function isHikeLikeItem(item){
+    const source=item||{};
+    const blob=`${source.category||""} ${source.type||""} ${source.title||""} ${source.colorClass||""}`.toLowerCase();
+    if(/wander|hike|hiking|tour|bergtour|trail|gpx|kml/.test(blob))return true;
+    if(source.gpxFile&&typeof source.gpxFile==="object")return true;
+    if(source.kmlFile&&typeof source.kmlFile==="object")return true;
+    if(normalizeRoutePoints(source.routePoints).length>=2)return true;
+    if(parseCoords(source.startLatitude,source.startLongitude).ok&&parseCoords(source.endLatitude,source.endLongitude).ok)return true;
+    return false;
+  }
+
+  function mapsPointValue(point){
+    if(!point||typeof point!=="object")return "";
+    if(Number.isFinite(Number(point.latitude))&&Number.isFinite(Number(point.longitude))){
+      return `${Number(point.latitude)},${Number(point.longitude)}`;
+    }
+    return text(point.address);
+  }
+
+  function googleDirectionsUrl(origin,destination,waypoints=[],travelmode=""){
+    const originValue=mapsPointValue(origin);
+    const destinationValue=mapsPointValue(destination);
+    if(!originValue||!destinationValue)return "";
+    let url=`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originValue)}&destination=${encodeURIComponent(destinationValue)}`;
+    const list=(Array.isArray(waypoints)?waypoints:[]).map(mapsPointValue).filter(Boolean);
+    if(list.length)url+=`&waypoints=${encodeURIComponent(list.join("|"))}`;
+    if(travelmode)url+=`&travelmode=${encodeURIComponent(travelmode)}`;
+    return url;
+  }
+
+  function sampleWaypointsForMaps(points,maxWaypoints=8){
+    const list=normalizeRoutePoints(points);
+    if(list.length<=2)return [];
+    const middle=list.slice(1,-1);
+    if(!middle.length)return [];
+    if(middle.length<=maxWaypoints)return middle;
+    return sampleRoutePoints(middle,maxWaypoints);
+  }
+
+  function normalizeWaypointList(value){
+    if(!Array.isArray(value))return [];
+    const points=[];
+    value.forEach(entry=>{
+      if(!entry)return;
+      if(typeof entry==="string"){
+        const address=text(entry);
+        if(address)points.push({address});
+        return;
+      }
+      const coords=coordsFromObject(entry);
+      if(coords.ok){
+        points.push({latitude:coords.latitude,longitude:coords.longitude});
+        return;
+      }
+      const address=text(entry.address||entry.location||entry.name||entry.title);
+      if(address)points.push({address});
+    });
+    return points;
+  }
+
+  function resolveHikeEndpoints(item){
+    const source=item||{};
+    const points=routePointsFromItem(source);
+    let origin=null;
+    let destination=null;
+
+    const startCoords=parseCoords(source.startLatitude,source.startLongitude);
+    if(startCoords.ok)origin={latitude:startCoords.latitude,longitude:startCoords.longitude};
+    if(!origin){
+      const startObject=coordsFromObject(source.start||source.startPoint||source.origin);
+      if(startObject.ok)origin={latitude:startObject.latitude,longitude:startObject.longitude};
+    }
+    if(!origin&&points.length)origin={latitude:points[0].latitude,longitude:points[0].longitude};
+    if(!origin){
+      const gpxStart=routeStartFromAttachment(source.gpxFile);
+      if(gpxStart.ok)origin={latitude:gpxStart.latitude,longitude:gpxStart.longitude};
+    }
+    if(!origin){
+      const kmlStart=routeStartFromAttachment(source.kmlFile);
+      if(kmlStart.ok)origin={latitude:kmlStart.latitude,longitude:kmlStart.longitude};
+    }
+    if(!origin){
+      const startAddress=text(source.startAddress||source.startLocation||source.originAddress);
+      if(startAddress)origin={address:startAddress};
+    }
+    if(!origin){
+      const meeting=text(source.meetingPoint);
+      if(meeting)origin={address:meeting};
+    }
+
+    const endCoords=parseCoords(source.endLatitude,source.endLongitude);
+    if(endCoords.ok)destination={latitude:endCoords.latitude,longitude:endCoords.longitude};
+    if(!destination){
+      const endObject=coordsFromObject(source.end||source.endPoint||source.destination);
+      if(endObject.ok)destination={latitude:endObject.latitude,longitude:endObject.longitude};
+    }
+    if(!destination&&points.length>=2){
+      const last=points[points.length-1];
+      destination={latitude:last.latitude,longitude:last.longitude};
+    }
+    if(!destination){
+      const fileEnd=parseCoords(
+        source.gpxFile?.endLatitude??source.kmlFile?.endLatitude,
+        source.gpxFile?.endLongitude??source.kmlFile?.endLongitude
+      );
+      if(fileEnd.ok)destination={latitude:fileEnd.latitude,longitude:fileEnd.longitude};
+    }
+    if(!destination){
+      const destCoords=parseCoords(source.latitude,source.longitude);
+      if(destCoords.ok){
+        const sameAsOrigin=origin
+          &&Number.isFinite(Number(origin.latitude))
+          &&origin.latitude===destCoords.latitude
+          &&origin.longitude===destCoords.longitude;
+        if(!sameAsOrigin)destination={latitude:destCoords.latitude,longitude:destCoords.longitude};
+      }
+    }
+    if(!destination){
+      const destAddress=text(source.endAddress||source.endLocation||source.destinationAddress||source.address||source.locationAddress||source.location);
+      if(destAddress){
+        const sameAsOrigin=origin&&origin.address&&origin.address===destAddress;
+        if(!sameAsOrigin)destination={address:destAddress};
+      }
+    }
+
+    let waypoints=[];
+    if(points.length>=3)waypoints=sampleWaypointsForMaps(points);
+    if(!waypoints.length){
+      waypoints=normalizeWaypointList(
+        source.waypoints||source.intermediateStops||source.via||source.stops||[]
+      );
+    }
+
+    return {origin,destination,waypoints};
+  }
+
+  function hikeDirectionsUrl(item,provider,travelmode="walking"){
+    const endpoints=resolveHikeEndpoints(item);
+    if(endpoints.origin&&endpoints.destination){
+      if(provider==="apple"){
+        const originValue=mapsPointValue(endpoints.origin);
+        const destinationValue=mapsPointValue(endpoints.destination);
+        if(!originValue||!destinationValue)return "";
+        return `https://maps.apple.com/?saddr=${encodeURIComponent(originValue)}&daddr=${encodeURIComponent(destinationValue)}&dirflg=w`;
+      }
+      return googleDirectionsUrl(endpoints.origin,endpoints.destination,endpoints.waypoints,travelmode);
+    }
+    if(endpoints.destination){
+      return mapsUrlFromDestination({
+        ok:true,
+        kind:Number.isFinite(Number(endpoints.destination.latitude))?"coords":"address",
+        latitude:endpoints.destination.latitude??null,
+        longitude:endpoints.destination.longitude??null,
+        address:endpoints.destination.address||""
+      },provider,"directions");
+    }
+    if(endpoints.origin){
+      return mapsUrlFromDestination({
+        ok:true,
+        kind:Number.isFinite(Number(endpoints.origin.latitude))?"coords":"address",
+        latitude:endpoints.origin.latitude??null,
+        longitude:endpoints.origin.longitude??null,
+        address:endpoints.origin.address||""
+      },provider,"directions");
+    }
+    return "";
   }
 
   function mapsUrlFromRoutePoints(points,provider,mode="place"){
@@ -229,16 +398,13 @@
     const last=list[list.length-1];
     if(provider==="apple"){
       // Apple Maps has no multi-waypoint path URL; show start→end of the hike (not device location).
-      if(mode==="directions")return `https://maps.apple.com/?daddr=${first.latitude},${first.longitude}`;
+      if(mode==="directions"){
+        return `https://maps.apple.com/?saddr=${first.latitude},${first.longitude}&daddr=${last.latitude},${last.longitude}&dirflg=w`;
+      }
       return `https://maps.apple.com/?saddr=${first.latitude},${first.longitude}&daddr=${last.latitude},${last.longitude}&dirflg=w`;
     }
-    if(mode==="directions"){
-      // Navigation to hike start from the device location.
-      return `https://www.google.com/maps/dir/?api=1&destination=${first.latitude},${first.longitude}&travelmode=walking`;
-    }
-    // Full track as explicit path stops — never uses the device location as origin.
-    const path=list.map(point=>`${point.latitude},${point.longitude}`).join("/");
-    return `https://www.google.com/maps/dir/${path}`;
+    // Google: explicit origin + destination (+ sampled waypoints). Never claim exact GPX geometry.
+    return googleDirectionsUrl(first,last,sampleWaypointsForMaps(list),mode==="directions"?"walking":"walking");
   }
 
   function routeFileFromItem(item){
@@ -490,6 +656,13 @@
 
   function placeUrlForDevice(item,userAgent){
     const provider=isAppleDevice(userAgent)?"apple":"google";
+    if(isHikeLikeItem(item)){
+      const endpoints=resolveHikeEndpoints(item);
+      if(endpoints.origin&&endpoints.destination){
+        const hikeUrl=hikeDirectionsUrl(item,provider,"walking");
+        if(hikeUrl)return hikeUrl;
+      }
+    }
     const routePoints=routePointsFromItem(item);
     if(routePoints.length>=2){
       return mapsUrlFromRoutePoints(routePoints,provider,"place");
@@ -502,9 +675,12 @@
 
   function navigationUrlForDevice(item,userAgent){
     const provider=isAppleDevice(userAgent)?"apple":"google";
+    if(isHikeLikeItem(item)){
+      const hikeUrl=hikeDirectionsUrl(item,provider,"walking");
+      if(hikeUrl)return hikeUrl;
+    }
     const routePoints=routePointsFromItem(item);
     if(routePoints.length>=2){
-      // Walk-nav to the hike start — device location is only used here intentionally.
       return mapsUrlFromRoutePoints(routePoints,provider,"directions");
     }
     if(routePoints.length===1){
@@ -1301,6 +1477,10 @@ node["hazard"](${south},${west},${north},${east});
     routePointsFromItem,
     mapsUrlFromRoutePoints,
     isFullRouteMapsUrl,
+    isHikeLikeItem,
+    resolveHikeEndpoints,
+    googleDirectionsUrl,
+    hikeDirectionsUrl,
     ensureRoutePointsOnItem,
     resolveMapsPlaceUrl,
     normalizeTravelAttachment,

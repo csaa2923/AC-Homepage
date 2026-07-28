@@ -19,7 +19,7 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
     assert.match(portalHtml, /customer-portal\.js\?v=63/);
-    assert.match(portalHtml, /customer-portal\.css\?v=36/);
+    assert.match(portalHtml, /customer-portal\.css\?v=37/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -103,7 +103,8 @@ describe("customer portal app navigation (4.1C)", () => {
     assert.match(portalCss, /@media\(min-width:900px\)/);
     assert.match(portalCss, /\.app-desktop-nav\{[\s\S]*display:flex/);
     assert.match(portalCss, /body\.app-shell\{[\s\S]*padding-bottom:calc\(76px \+ env\(safe-area-inset-bottom/);
-    assert.match(portalCss, /width:min\(1240px,100%\)/);
+    assert.match(portalCss, /width:100%/);
+    assert.match(portalCss, /\.customer-app\{[\s\S]*max-width:none/);
   });
 
   it("keeps desktop language controls and focus styles", () => {
@@ -420,7 +421,8 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("scopes today premium pilot styles without changing DOM ids", () => {
-    assert.match(portalCss, /Ops Ready 4\.5B\.1 – Today Premium Redesign/);
+    assert.match(portalCss, /Ops Ready 4\.5B\.1/);
+    assert.match(portalCss, /Today Premium Redesign/);
     assert.match(portalCss, /\.today-view\{[\s\S]*background:var\(--act-cream\)/);
     assert.match(portalCss, /\.today-hero-panel h1\{[\s\S]*font-family:var\(--act-font-serif\)/);
     assert.match(portalCss, /\.today-quick-btn\{[\s\S]*font-family:var\(--act-font-sans\)/);
@@ -434,7 +436,7 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=36/);
+    assert.match(portalHtml, /customer-portal\.css\?v=37/);
     assert.match(portalHtml, /customer-portal\.js\?v=63/);
   });
 });
@@ -474,7 +476,8 @@ describe("customer portal itinerary premium redesign (4.5C)", () => {
   });
 
   it("styles premium day chips, timeline cards and desktop split", () => {
-    assert.match(portalCss, /Ops Ready 4\.5C – Reiseplan Premium Redesign/);
+    assert.match(portalCss, /Ops Ready 4\.5C/);
+    assert.match(portalCss, /Reiseplan Premium Redesign/);
     assert.match(portalCss, /\.itinerary-hero\{[\s\S]*background-color:var\(--act-forest\)/);
     assert.match(portalCss, /\.itinerary-day-chip\.active/);
     assert.match(portalCss, /aspect-ratio:16 \/ 10/);
@@ -632,5 +635,42 @@ describe("customer portal discover premium redesign (4.5F)", () => {
     assert.match(portalCss, /@media\(min-width:720px\)\{[\s\S]*\.discover-group-grid\{[\s\S]*repeat\(2/);
     assert.match(portalCss, /@media\(min-width:1040px\)\{[\s\S]*\.discover-group-grid\{[\s\S]*repeat\(3/);
     assert.match(portalCss, /\.discover-card-actions \.button\{[\s\S]*min-height:44px/);
+  });
+});
+
+describe("customer portal premium polish (4.6)", () => {
+  it("keeps shared design tokens for typography heroes buttons and spacing", () => {
+    assert.match(portalCss, /--act-text-hero:/);
+    assert.match(portalCss, /--act-text-section:/);
+    assert.match(portalCss, /--act-hero-min:/);
+    assert.match(portalCss, /--act-content-max:/);
+    assert.match(portalCss, /--act-btn-min:/);
+    assert.match(portalCss, /--act-sticky-offset:/);
+    assert.match(portalCss, /Ops Ready 4\.6/);
+  });
+
+  it("harmonizes heroes navigation and button hierarchy without removing ids", () => {
+    assert.match(portalHtml, /id="viewToday"/);
+    assert.match(portalHtml, /id="viewItinerary"/);
+    assert.match(portalHtml, /id="viewDocuments"/);
+    assert.match(portalHtml, /id="viewService"/);
+    assert.match(portalHtml, /id="discover"/);
+    assert.match(portalCss, /\.today-hero\.portal-hero,[\s\S]*\.discover-hero\{/);
+    assert.match(portalCss, /\.button\.primary\{[\s\S]*--act-gold/);
+    assert.match(portalCss, /\.button\.soft\{/);
+    assert.match(portalCss, /\.button\.service-action-tertiary/);
+    assert.match(portalCss, /\.app-bottom-nav \.app-nav-item\.is-active \.app-nav-label\{[\s\S]*--act-on-dark/);
+    assert.match(portalCss, /\.customer-app\{[\s\S]*width:100%/);
+  });
+
+  it("keeps interaction hooks and reduced-motion polish", () => {
+    assert.match(portalJs, /data-action=/);
+    assert.match(portalJs, /data-calendar-day=/);
+    assert.match(portalJs, /data-open-portal-document/);
+    assert.match(portalJs, /data-discover-group/);
+    assert.match(portalJs, /whatsappLink\(/);
+    assert.match(portalCss, /prefers-reduced-motion:reduce[\s\S]*\.button,/);
+    assert.match(portalHtml, /customer-portal\.css\?v=37/);
+    assert.match(portalHtml, /customer-portal\.js\?v=63/);
   });
 });

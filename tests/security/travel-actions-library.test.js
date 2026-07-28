@@ -265,7 +265,9 @@ describe("travel actions navigation destination", () => {
       }
     };
     const place = lib.placeUrlForDevice(item, "Mozilla/5.0 (Windows)");
-    assert.match(place, /maps\/dir\//);
+    assert.match(place, /maps\/dir\/\?api=1/);
+    assert.match(place, /origin=/);
+    assert.match(place, /destination=/);
     assert.equal(lib.isFullRouteMapsUrl(place), true);
     assert.doesNotMatch(place, /maps\/search/);
     const first = extracted.routePoints[0];
@@ -297,6 +299,8 @@ describe("travel actions navigation destination", () => {
       }
     }, "Mozilla/5.0 (Windows)");
     assert.equal(lib.isFullRouteMapsUrl(place), true);
+    assert.match(place, /origin=/);
+    assert.match(place, /destination=/);
     assert.match(place, /47\.59102/);
   });
 
@@ -490,5 +494,107 @@ describe("travel actions navigation destination", () => {
       {ok: true, latitude: 47.4, longitude: 11.3},
       12
     ), "Streckenwanderung");
+  });
+});
+
+describe("travel actions hike directions origin and destination", () => {
+  it("builds Google directions with origin and destination for hike coordinates", () => {
+    const lib = loadLibrary();
+    const item = {
+      title: "Gipfelwanderung",
+      category: "Wandern",
+      startLatitude: 47.33,
+      startLongitude: 11.18,
+      endLatitude: 47.4,
+      endLongitude: 11.3
+    };
+    const url = lib.navigationUrlForDevice(item, "Mozilla/5.0 (Windows)");
+    assert.match(url, /maps\/dir\/\?api=1/);
+    assert.match(url, /origin=47\.33%2C11\.18|origin=47\.33,11\.18/);
+    assert.match(url, /destination=47\.4%2C11\.3|destination=47\.4,11\.3/);
+    assert.doesNotMatch(url, /maps\/search/);
+  });
+
+  it("builds Google directions with origin and destination for hike addresses", () => {
+    const lib = loadLibrary();
+    const item = {
+      title: "Wanderung",
+      category: "Wandern",
+      startAddress: "Parkplatz Seefeld",
+      endAddress: "Reither Spitze"
+    };
+    const url = lib.navigationUrlForDevice(item, "Mozilla/5.0 (Windows)");
+    assert.match(url, /origin=/);
+    assert.match(url, /destination=/);
+    assert.match(url, /Parkplatz/);
+    assert.match(url, /Reither/);
+    assert.match(url, /%C3%9C|Spitze/);
+  });
+
+  it("includes waypoints when present on hike items", () => {
+    const lib = loadLibrary();
+    const item = {
+      title: "Tour",
+      category: "Hiking",
+      startLatitude: 47.1,
+      startLongitude: 11.1,
+      endLatitude: 47.3,
+      endLongitude: 11.3,
+      waypoints: [
+        {latitude: 47.2, longitude: 11.2},
+        {latitude: 47.25, longitude: 11.25}
+      ]
+    };
+    const url = lib.navigationUrlForDevice(item, "Mozilla/5.0 (Windows)");
+    assert.match(url, /waypoints=/);
+    assert.match(url, /47\.2/);
+    assert.match(url, /47\.25/);
+  });
+
+  it("falls back to destination-only navigation when hike has only a target", () => {
+    const lib = loadLibrary();
+    const url = lib.navigationUrlForDevice({
+      title: "Wanderung",
+      category: "Wandern",
+      endLatitude: 47.4,
+      endLongitude: 11.3
+    }, "Mozilla/5.0 (Windows)");
+    assert.match(url, /maps\/dir\/\?api=1/);
+    assert.match(url, /destination=/);
+    assert.doesNotMatch(url, /origin=/);
+  });
+
+  it("keeps restaurant and hotel as destination-only navigation", () => {
+    const lib = loadLibrary();
+    const restaurant = lib.navigationUrlForDevice({
+      title: "Dinner",
+      category: "Restaurant",
+      latitude: 47.26,
+      longitude: 11.39
+    }, "Mozilla/5.0 (Windows)");
+    assert.match(restaurant, /destination=47\.26/);
+    assert.doesNotMatch(restaurant, /origin=/);
+    const hotel = lib.placeUrlForDevice({
+      title: "Hotel Lodge",
+      category: "Hotel",
+      address: "Möserer Straße 18, Seefeld"
+    }, "Mozilla/5.0 (Windows)");
+    assert.match(hotel, /maps\/search/);
+    assert.match(hotel, /M%C3%B6serer|Moserer|Seefeld/);
+    assert.doesNotMatch(hotel, /origin=/);
+  });
+
+  it("encodes umlaut addresses in hike directions", () => {
+    const lib = loadLibrary();
+    const url = lib.navigationUrlForDevice({
+      title: "Wanderung",
+      category: "Wandern",
+      startAddress: "Parkplatz Nähe Seekirchl",
+      endAddress: "Hütte am See"
+    }, "Mozilla/5.0 (Windows)");
+    assert.match(url, /origin=/);
+    assert.match(url, /destination=/);
+    assert.match(url, /N%C3%A4he|Seekirchl/);
+    assert.match(url, /H%C3%BCtte|Hutte/);
   });
 });

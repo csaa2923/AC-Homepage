@@ -389,7 +389,7 @@
   async function loadShareCustomerData(){
     const db=window.ACTFirebaseDatabase;
     if(!db||!db.fetchPortalShareData){
-      throw new Error("Portal-Zugang ist vorübergehend nicht verfügbar.");
+      throw new Error(t("errors.temporarilyUnavailable"));
     }
     const payload=await db.fetchPortalShareData(portalParams.shareId,portalParams.rawToken);
     dataSource="share";
@@ -398,15 +398,15 @@
 
   async function loadCustomerData(){
     root.setAttribute("aria-busy","true");
-    text("portalTitle","Daten werden geladen ...");
-    text("tripTitle","Ihr persönliches Reiseprogramm wird vorbereitet.");
+    text("portalTitle",t("common.loading.portalTitle"));
+    text("tripTitle",t("common.loading.tripPreparing"));
 
     if(isShareAccess){
       try{
         return await loadShareCustomerData();
       }catch(error){
         console.warn("Share-Link konnte nicht geladen werden.");
-        showShareError("Dieser Portal-Link ist nicht gültig oder nicht mehr verfügbar.");
+        showShareError(t("errors.shareUnavailable.copy"));
         return null;
       }
     }
@@ -1707,7 +1707,7 @@
         const elevText=point.elevation!=null?`${Math.round(point.elevation)} m`:"—";
         const distText=point.distanceKm!=null?`${Number(point.distanceKm).toFixed(1)} km`:"—";
         readout.hidden=false;
-        readout.textContent=`Höhe ${elevText} · Distanz ${distText}`;
+        readout.textContent=t("itinerary.route.elevationDistance",{elevation:elevText,distance:distText});
       }
       if(cursor){
         const width=Number(svg.viewBox.baseVal.width||320);
@@ -1930,7 +1930,7 @@
         fillColor:"#1f6b57",
         fillOpacity:1,
         weight:2
-      }).addTo(map).bindTooltip("Start",{direction:"top",offset:[0,-6]});
+      }).addTo(map).bindTooltip(t("itinerary.route.start"),{direction:"top",offset:[0,-6]});
     }
     if(end&&hikeMapEndpointsDiffer(start,end)){
       L.circleMarker([end.latitude,end.longitude],{
@@ -1939,7 +1939,7 @@
         fillColor:"#8b3d31",
         fillOpacity:1,
         weight:2
-      }).addTo(map).bindTooltip("Ziel",{direction:"top",offset:[0,-6]});
+      }).addTo(map).bindTooltip(t("itinerary.route.end"),{direction:"top",offset:[0,-6]});
     }
 
     hikeMapRegistry.set(mapId,{map,points,bounds,end:end||null,markers:[]});
@@ -1990,14 +1990,14 @@
     const entry=hikeMapRegistry.get(mapId);
     const status=document.querySelector(`[data-hike-live-status="${mapId}"]`);
     if(!entry?.map){
-      if(status){status.hidden=false;status.textContent="Karte ist noch nicht geladen.";}
+      if(status){status.hidden=false;status.textContent=t("itinerary.route.mapNotReady");}
       return;
     }
     if(!navigator.geolocation){
-      if(status){status.hidden=false;status.textContent="Standort wird von diesem Gerät nicht unterstützt.";}
+      if(status){status.hidden=false;status.textContent=t("itinerary.route.locationUnsupported");}
       return;
     }
-    if(status){status.hidden=false;status.textContent="Standort wird ermittelt …";}
+    if(status){status.hidden=false;status.textContent=t("itinerary.route.locationDetecting");}
     navigator.geolocation.getCurrentPosition(position=>{
       const lat=position.coords.latitude;
       const lng=position.coords.longitude;
@@ -2009,31 +2009,31 @@
           fillColor:"#3b82f6",
           fillOpacity:0.9,
           weight:2
-        }).addTo(entry.map).bindTooltip("Ihr Standort",{direction:"top"});
+        }).addTo(entry.map).bindTooltip(t("itinerary.route.yourLocation"),{direction:"top"});
       }else{
         entry.liveMarker.setLatLng([lat,lng]);
       }
       entry.map.panTo([lat,lng],{animate:true});
       const lib=travelLib();
       const origin={latitude:lat,longitude:lng};
-      const parts=["Standort aktiv (nur lokal, nicht gespeichert)"];
+      const parts=[t("itinerary.route.locationActive")];
       const end=entry.end&&lib?.parseCoords?.(entry.end.latitude,entry.end.longitude);
       if(end?.ok&&lib?.haversineKm){
         const gap=lib.haversineKm(origin,end);
-        if(Number.isFinite(gap))parts.push(`${gap.toFixed(1)} km bis Ziel`);
+        if(Number.isFinite(gap))parts.push(t("itinerary.route.toDestination",{km:gap.toFixed(1)}));
       }
       if(lib?.nearestMarkerDistanceKm){
         const hutKm=lib.nearestMarkerDistanceKm(origin,entry.markers||[],["hut"]);
         const parkingKm=lib.nearestMarkerDistanceKm(origin,entry.markers||[],["parking"]);
-        if(hutKm!=null)parts.push(`${hutKm.toFixed(1)} km bis naechste Huette`);
-        if(parkingKm!=null)parts.push(`${parkingKm.toFixed(1)} km bis Parkplatz`);
+        if(hutKm!=null)parts.push(t("itinerary.route.toHut",{km:hutKm.toFixed(1)}));
+        if(parkingKm!=null)parts.push(t("itinerary.route.toParking",{km:parkingKm.toFixed(1)}));
       }
       if(status){
         status.hidden=false;
         status.textContent=parts.join(" · ");
       }
     },()=>{
-      if(status){status.hidden=false;status.textContent="Standort konnte nicht ermittelt werden. Bitte Berechtigung prüfen.";}
+      if(status){status.hidden=false;status.textContent=t("itinerary.route.locationFailed");}
     },{enableHighAccuracy:true,timeout:10000,maximumAge:0});
   }
 
@@ -3418,7 +3418,7 @@
       });
     }
     const events=(items||[]).filter(item=>item.calendarEnabled!==false&&item.dateValue);
-    if(!events.length)throw new Error("Keine exportierbaren Kalendertermine vorhanden.");
+    if(!events.length)throw new Error(t("itinerary.calendar.exportMissing"));
     const lines=[
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
@@ -3460,7 +3460,7 @@
       const content=buildIcsContent([item]);
       openIcsFile(content,`${item.dateValue}-${item.id}.ics`);
     }catch(error){
-      window.alert(error.message||"Kalenderdatei konnte nicht erstellt werden.");
+      window.alert(error.message||t("itinerary.calendar.exportFailed"));
     }
   }
 
@@ -3469,7 +3469,7 @@
       const content=buildIcsContent(programItems());
       openIcsFile(content,`${customerId||"reise"}-programm.ics`);
     }catch(error){
-      window.alert(error.message||"Kalenderdatei konnte nicht erstellt werden.");
+      window.alert(error.message||t("itinerary.calendar.exportFailed"));
     }
   }
 
@@ -3576,7 +3576,7 @@
       }
 
       const placeholder=event.target.closest("[data-placeholder]");
-      if(placeholder)window.alert(`${placeholder.dataset.placeholder}: Dokument-Platzhalter für Schritt 1.`);
+      if(placeholder)window.alert(t("common.alerts.documentPlaceholder",{name:placeholder.dataset.placeholder}));
 
       const calendarButton=event.target.closest("[data-calendar-id]");
       if(calendarButton){
@@ -3597,11 +3597,11 @@
       if(!action)return;
       const type=action.dataset.action;
       if(type==="print")window.print();
-      if(type==="whatsapp")window.open(whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm."),"_blank","noopener");
-      if(type==="confirm")window.alert("Danke. Die echte Bestätigung wird in einem späteren Schritt angebunden.");
-      if(type==="change")window.open(whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe einen Änderungswunsch zu meinem Reiseprogramm."),"_blank","noopener");
-      if(type==="payment")window.alert("Zahlungsfunktion wird in einem späteren Schritt angebunden.");
-      if(type==="pdf")window.alert("PDF-Erstellung wird in einem späteren Schritt angebunden.");
+      if(type==="whatsapp")window.open(whatsappLink(customer.whatsapp,t("common.messages.whatsappQuestion")),"_blank","noopener");
+      if(type==="confirm")window.alert(t("common.alerts.confirmThanks"));
+      if(type==="change")window.open(whatsappLink(customer.whatsapp,t("common.messages.whatsappChange")),"_blank","noopener");
+      if(type==="payment")window.alert(t("common.alerts.paymentLater"));
+      if(type==="pdf")window.alert(t("common.alerts.pdfLater"));
       if(type==="calendar")downloadTripCalendar();
     });
     const tripCalendarButton=document.getElementById("downloadTripCalendarButton");
@@ -3610,7 +3610,7 @@
 
   function renderPortal(){
     root.removeAttribute("aria-busy");
-    const guestName=customer.customerName||"Gast";
+    const guestName=customer.customerName||t("common.guest");
     text("portalTitle",t("today.hero.welcome",{name:guestName}));
     text("tripTitle",customer.tripName||customer.tripTitle||"");
     text("portalVersion",t("common.version",{version:customer.version||"1.0"}));
@@ -3618,9 +3618,9 @@
     text("updatedAt",t("today.status.updated",{date:customer.updatedAt||""}));
     safeRender("itineraryOverview",renderItineraryOverview);
     const whatsappHero=el("whatsappHero");
-    if(whatsappHero)whatsappHero.href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
+    if(whatsappHero)whatsappHero.href=whatsappLink(customer.whatsapp,t("common.messages.whatsappQuestion"));
     const whatsappQuick=el("whatsappQuick");
-    if(whatsappQuick)whatsappQuick.href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
+    if(whatsappQuick)whatsappQuick.href=whatsappLink(customer.whatsapp,t("common.messages.whatsappQuestion"));
     safeRender("meta",renderMeta);
     safeRender("status",renderStatus);
     safeRender("nextEvent",renderNextEvent);

@@ -33,10 +33,23 @@
       notAvailable:"Non disponibile",
       secureNote:"Questa pagina è accessibile esclusivamente tramite il tuo link personale.",
       brand:"Alpine Concierge Tirol",
+      guest:"Ospite",
       whatsappOpen:"Apri WhatsApp",
       contactWhatsApp:"Contatta Alpine Concierge Tirol",
       showAllFields:"Mostra tutti i campi",
       version:"Versione {version}",
+      messages:{
+        whatsappQuestion:"Buongiorno Alpine Concierge Tirol, ho una domanda sul mio programma di viaggio.",
+        whatsappChange:"Buongiorno Alpine Concierge Tirol, vorrei richiedere una modifica al mio programma di viaggio."
+      },
+      alerts:{
+        confirmThanks:"Grazie. La conferma reale verrà collegata in un passaggio successivo.",
+        paymentLater:"La funzione di pagamento verrà collegata in un passaggio successivo.",
+        pdfLater:"La creazione del PDF verrà collegata in un passaggio successivo.",
+        documentPlaceholder:"{name}: Segnaposto documento per il passo 1.",
+        calendarMissing:"Nessun evento di calendario esportabile disponibile.",
+        calendarFailed:"Impossibile creare il file calendario."
+      },
       actions:{
         showDetails:"Mostra dettagli",
         openNavigation:"Apri navigazione",
@@ -55,7 +68,9 @@
       loading:{
         default:"Caricamento …",
         preparing:"Preparazione dei dati …",
-        weather:"Caricamento meteo …"
+        weather:"Caricamento meteo …",
+        portalTitle:"Caricamento dati …",
+        tripPreparing:"Il vostro programma di viaggio personale è in preparazione."
       },
       errors:{
         loadFailed:"Impossibile caricare i dati.",
@@ -356,7 +371,19 @@
         elevationAria:"Profilo altimetrico interattivo",
         toolbarAria:"Barra della mappa",
         showLocation:"Mostra la mia posizione",
-        openGoogleMaps:"Apri in Google Maps"
+        openGoogleMaps:"Apri in Google Maps",
+        mapNotReady:"La mappa non è ancora caricata.",
+        locationUnsupported:"La posizione non è supportata su questo dispositivo.",
+        locationDetecting:"Rilevamento della posizione …",
+        yourLocation:"La vostra posizione",
+        locationFailed:"Impossibile determinare la posizione. Controllare i permessi.",
+        locationActive:"Posizione attiva (solo locale, non salvata)",
+        toDestination:"{km} km fino alla destinazione",
+        toHut:"{km} km fino al rifugio più vicino",
+        toParking:"{km} km fino al parcheggio",
+        elevationDistance:"Altitudine {elevation} · Distanza {distance}",
+        start:"Partenza",
+        end:"Arrivo"
       },
       calendar:{
         eyebrow:"Calendario",
@@ -365,7 +392,9 @@
         viewAria:"Vista calendario",
         tripView:"Viaggio intero",
         dayView:"Vista giornaliera",
-        allDay:"Tutto il giorno"
+        allDay:"Tutto il giorno",
+        exportMissing:"Nessun evento di calendario esportabile disponibile.",
+        exportFailed:"Impossibile creare il file calendario."
       },
       timeline:{
         eyebrow:"Timeline completa",
@@ -859,6 +888,7 @@
         title:"Portale non disponibile",
         copy:"Questo link al portale non è valido o non è più disponibile."
       },
+      temporarilyUnavailable:"L'accesso al portale è temporaneamente non disponibile.",
       documentUnavailable:"Documento non disponibile"
     },
     aria:{

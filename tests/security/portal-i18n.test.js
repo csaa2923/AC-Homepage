@@ -165,12 +165,12 @@ describe("portal i18n foundation (5.0A)", () => {
   });
 
   it("wires i18n scripts, language controls, and cache pins in portal html/js", () => {
-    assert.match(portalHtml, /i18n\/de\.js\?v=6/);
-    assert.match(portalHtml, /i18n\/en\.js\?v=6/);
-    assert.match(portalHtml, /i18n\/it\.js\?v=6/);
-    assert.match(portalHtml, /i18n\/fr\.js\?v=6/);
+    assert.match(portalHtml, /i18n\/de\.js\?v=7/);
+    assert.match(portalHtml, /i18n\/en\.js\?v=7/);
+    assert.match(portalHtml, /i18n\/it\.js\?v=7/);
+    assert.match(portalHtml, /i18n\/fr\.js\?v=7/);
     assert.match(portalHtml, /i18n\/portal-i18n\.js\?v=3/);
-    assert.match(portalHtml, /customer-portal\.js\?v=71/);
+    assert.match(portalHtml, /customer-portal\.js\?v=72/);
     assert.match(portalHtml, /data-portal-lang="de"/);
     assert.match(portalHtml, /data-portal-lang="en"/);
     assert.match(portalHtml, /data-portal-lang="it"/);

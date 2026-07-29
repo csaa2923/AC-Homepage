@@ -33,10 +33,23 @@
       notAvailable:"Not available",
       secureNote:"This page is only accessible via your personal link.",
       brand:"Alpine Concierge Tirol",
+      guest:"Guest",
       whatsappOpen:"Open WhatsApp",
       contactWhatsApp:"Contact Alpine Concierge Tirol",
       showAllFields:"Show all fields",
       version:"Version {version}",
+      messages:{
+        whatsappQuestion:"Hello Alpine Concierge Tirol, I have a question about my travel programme.",
+        whatsappChange:"Hello Alpine Concierge Tirol, I would like to request a change to my travel programme."
+      },
+      alerts:{
+        confirmThanks:"Thank you. The real confirmation will be connected in a later step.",
+        paymentLater:"Payment will be connected in a later step.",
+        pdfLater:"PDF generation will be connected in a later step.",
+        documentPlaceholder:"{name}: Document placeholder for step 1.",
+        calendarMissing:"No exportable calendar events available.",
+        calendarFailed:"The calendar file could not be created."
+      },
       actions:{
         showDetails:"View details",
         openNavigation:"Open navigation",
@@ -55,7 +68,9 @@
       loading:{
         default:"Loading …",
         preparing:"Preparing your data …",
-        weather:"Loading weather …"
+        weather:"Loading weather …",
+        portalTitle:"Loading data …",
+        tripPreparing:"Your personal travel programme is being prepared."
       },
       errors:{
         loadFailed:"The data could not be loaded.",
@@ -356,7 +371,19 @@
         elevationAria:"Interactive elevation profile",
         toolbarAria:"Map toolbar",
         showLocation:"Show my location",
-        openGoogleMaps:"Open in Google Maps"
+        openGoogleMaps:"Open in Google Maps",
+        mapNotReady:"The map is not loaded yet.",
+        locationUnsupported:"Location is not supported on this device.",
+        locationDetecting:"Detecting location …",
+        yourLocation:"Your location",
+        locationFailed:"Location could not be determined. Please check permissions.",
+        locationActive:"Location active (local only, not stored)",
+        toDestination:"{km} km to destination",
+        toHut:"{km} km to nearest hut",
+        toParking:"{km} km to parking",
+        elevationDistance:"Elevation {elevation} · Distance {distance}",
+        start:"Start",
+        end:"Finish"
       },
       calendar:{
         eyebrow:"Calendar",
@@ -365,7 +392,9 @@
         viewAria:"Calendar view",
         tripView:"Full trip",
         dayView:"Day view",
-        allDay:"All day"
+        allDay:"All day",
+        exportMissing:"No exportable calendar events available.",
+        exportFailed:"The calendar file could not be created."
       },
       timeline:{
         eyebrow:"Full timeline",
@@ -859,6 +888,7 @@
         title:"Portal unavailable",
         copy:"This portal link is invalid or no longer available."
       },
+      temporarilyUnavailable:"Portal access is temporarily unavailable.",
       documentUnavailable:"Document not available"
     },
     aria:{

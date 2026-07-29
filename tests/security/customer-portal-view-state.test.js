@@ -18,7 +18,7 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=65/);
+    assert.match(portalHtml, /customer-portal\.js\?v=69/);
     assert.match(portalHtml, /customer-portal\.css\?v=37/);
   });
 
@@ -168,7 +168,7 @@ describe("customer portal itinerary view (4.3)", () => {
     assert.match(portalHtml, /id="dayTimelines"/);
     assert.match(portalHtml, /id="programDetails"/);
     assert.match(portalHtml, /id="bookingGrid"/);
-    assert.match(portalHtml, /Wanderdetails|dayTimelineTitle/);
+    assert.match(portalHtml, /itinerary\.hero\.title|dayTimelineTitle/);
   });
 
   it("renders premium day grouping and temporal states from existing data helpers", () => {
@@ -182,9 +182,9 @@ describe("customer portal itinerary view (4.3)", () => {
     assert.match(portalJs, /function itineraryWeatherBadge\(/);
     assert.match(portalJs, /function itineraryHotelCard\(/);
     assert.match(portalJs, /function itineraryHikeCompactMarkup\(/);
-    assert.match(portalJs, /Wanderdetails/);
-    assert.match(portalJs, /Google Maps/);
-    assert.match(portalJs, /Apple Karten/);
+    assert.match(portalJs, /itinerary\.actions\.hikeDetails/);
+    assert.match(portalJs, /itinerary\.actions\.googleMaps/);
+    assert.match(portalJs, /itinerary\.actions\.appleMaps/);
     assert.match(portalJs, /groupedProgram\(\)/);
     assert.match(portalJs, /actionsBound/);
   });
@@ -247,7 +247,7 @@ describe("customer portal document title typography (4.4D)", () => {
   });
 
   it("keeps download filename raw while showing readable heading", () => {
-    assert.match(portalJs, /download="\$\{escapeHtml\(fileName\)\}"/);
+    assert.match(portalJs, /download="\$\{escapeHtml\(downloadName\)\}"/);
     assert.match(portalJs, /<h3>\$\{escapeHtml\(displayTitle\)\}<\/h3>/);
   });
 
@@ -261,7 +261,12 @@ describe("customer portal document title typography (4.4D)", () => {
   it("produces readable titles for raw filenames", () => {
     const match = portalJs.match(/function formatDocumentDisplayTitle\(document\)\{[\s\S]*?\n  \}\n/);
     assert.ok(match, "formatDocumentDisplayTitle must exist");
-    const formatDocumentDisplayTitle = new Function(`${match[0]}; return formatDocumentDisplayTitle;`)();
+    const formatDocumentDisplayTitle = new Function(`
+      function t(key){return key==="documents.types.document"?"Dokument":key;}
+      function i18nLib(){return {getLocale(){return "de-AT";}};}
+      ${match[0]};
+      return formatDocumentDisplayTitle;
+    `)();
     assert.equal(formatDocumentDisplayTitle({fileName: "Insektenschiebetüre_Fountain.jpg"}), "Insektenschiebetüre Fountain");
     assert.equal(formatDocumentDisplayTitle({fileName: "KOSTENVORANSCHLAG.pdf"}), "Kostenvoranschlag");
     assert.equal(formatDocumentDisplayTitle({title: "Skipass"}), "Skipass");
@@ -352,10 +357,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=65"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=69"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=65/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=69/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -441,7 +446,7 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
 
   it("bumps stylesheet pin only for the design pilot", () => {
     assert.match(portalHtml, /customer-portal\.css\?v=37/);
-    assert.match(portalHtml, /customer-portal\.js\?v=65/);
+    assert.match(portalHtml, /customer-portal\.js\?v=69/);
   });
 });
 
@@ -464,7 +469,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=65/);
+    assert.match(portalHtml, /customer-portal\.js\?v=69/);
   });
 });
 
@@ -558,9 +563,9 @@ describe("customer portal documents premium redesign (4.5D)", () => {
     assert.match(portalJs, /documents\.actions\.open/);
     assert.match(portalJs, /documents\.actions\.download/);
     assert.match(portalJs, /data-open-portal-document/);
-    assert.match(portalJs, /download="\$\{escapeHtml\(fileName\)\}"/);
+    assert.match(portalJs, /download="\$\{escapeHtml\(downloadName\)\}"/);
     assert.match(portalJs, /documents-preview-pdf|documents-preview-image/);
-    assert.match(portalJs, /Unterkunft|Restaurant|Aktivitäten|Allgemein/);
+    assert.match(portalJs, /documents\.categories\.|unterkunft|accommodation|restaurant|aktivit|allgemein/i);
   });
 
   it("styles premium documents layout for mobile and desktop", () => {
@@ -592,7 +597,7 @@ describe("customer portal service premium redesign (4.5E)", () => {
     assert.match(portalJs, /function serviceTelHref\(/);
     assert.match(portalJs, /data-action="\$\{action\}"/);
     assert.match(portalJs, /function renderHotel\(/);
-    assert.match(portalJs, /Navigation öffnen/);
+    assert.match(portalJs, /Navigation öffnen|today\.actions\.openNavigation|common\.actions\.openNavigation/);
     assert.match(portalJs, /service\.empty\.care/);
   });
 
@@ -675,6 +680,6 @@ describe("customer portal premium polish (4.6)", () => {
     assert.match(portalJs, /whatsappLink\(/);
     assert.match(portalCss, /prefers-reduced-motion:reduce[\s\S]*\.button,/);
     assert.match(portalHtml, /customer-portal\.css\?v=37/);
-    assert.match(portalHtml, /customer-portal\.js\?v=65/);
+    assert.match(portalHtml, /customer-portal\.js\?v=69/);
   });
 });

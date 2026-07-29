@@ -332,6 +332,25 @@
     "Reise läuft",
     "Reise abgeschlossen"
   ];
+  const travelProgressStepKeys=[
+    "today.status.steps.inquiryReceived",
+    "today.status.steps.offerCreated",
+    "today.status.steps.offerSent",
+    "today.status.steps.offerConfirmed",
+    "today.status.steps.paymentOpen",
+    "today.status.steps.depositReceived",
+    "today.status.steps.fullyPaid",
+    "today.status.steps.programInProgress",
+    "today.status.steps.programPublished",
+    "today.status.steps.tripOngoing",
+    "today.status.steps.tripCompleted"
+  ];
+
+  function travelProgressStepLabel(step){
+    const index=travelProgressSteps.indexOf(step);
+    if(index>=0)return t(travelProgressStepKeys[index]);
+    return String(step||"");
+  }
 
   function loadStoredCustomer(id){
     try{
@@ -611,84 +630,112 @@
       .replace(/[_-]+/g," ")
       .replace(/\s+/g," ")
       .trim();
-    if(!title)return "Dokument";
+    if(!title)return t("documents.types.document");
+    const locale=i18nLib()?.getLocale?.()||"de-AT";
     if(title.length>2&&title===title.toUpperCase()&&/[A-ZÄÖÜ]/.test(title)){
-      title=title.toLocaleLowerCase("de-DE").replace(/(^|[^\p{L}\p{N}])(\p{L})/gu,(_,prefix,letter)=>`${prefix}${letter.toLocaleUpperCase("de-DE")}`);
+      title=title.toLocaleLowerCase(locale).replace(/(^|[^\p{L}\p{N}])(\p{L})/gu,(_,prefix,letter)=>`${prefix}${letter.toLocaleUpperCase(locale)}`);
     }
     return title;
   }
 
+  const DOCUMENT_CATEGORY_KEYS=new Set([
+    "tickets","vouchers","accommodation","flight","train","rentalCar","activities","restaurant",
+    "wellness","transfers","bookings","invoices","contracts","insurance","travelInfo","travel",
+    "downloads","general","other"
+  ]);
+
   function documentTypeIcon(item){
     const blob=`${item?.mimeType||""} ${item?.contentType||""} ${item?.fileName||""} ${item?.title||""} ${item?.category||""} ${item?.type||""}`.toLowerCase();
-    if(isPdfDocument(item))return {icon:"📄",label:"PDF"};
-    if(isImageDocument(item))return {icon:"🖼",label:"Bild"};
-    if(/qr|barcode/.test(blob))return {icon:"▦",label:"QR"};
-    if(/word|msword|\.docx?\b/.test(blob))return {icon:"📝",label:"Word"};
-    if(/excel|spreadsheet|\.xlsx?\b/.test(blob))return {icon:"📊",label:"Excel"};
-    if(/ticket|flug|bahn/.test(blob))return {icon:"🎟",label:"Ticket"};
-    return {icon:"📎",label:"Datei"};
+    if(isPdfDocument(item))return {icon:"📄",label:t("documents.types.pdf")};
+    if(isImageDocument(item))return {icon:"🖼",label:t("documents.types.image")};
+    if(/qr|barcode/.test(blob))return {icon:"▦",label:t("documents.types.qr")};
+    if(/word|msword|\.docx?\b/.test(blob))return {icon:"📝",label:t("documents.types.word")};
+    if(/excel|spreadsheet|\.xlsx?\b/.test(blob))return {icon:"📊",label:t("documents.types.excel")};
+    if(/ticket|flug|bahn/.test(blob))return {icon:"🎟",label:t("documents.types.ticket")};
+    return {icon:"📎",label:t("documents.types.file")};
   }
 
-  function documentGroupLabel(item){
+  function documentGroupKey(item){
     const raw=String(item.category||item.type||"").trim();
     const blob=`${raw} ${item.title||""} ${item.fileName||""}`.toLowerCase();
-    if(/ticket|flug|bahn|zug/.test(blob))return "Tickets";
-    if(/voucher|gutschein/.test(blob))return "Voucher";
-    if(/hotel|unterkunft|accommodation/.test(blob))return "Unterkunft";
-    if(/restaurant|essen|dinner|lunch|menü|menu/.test(blob))return "Restaurant";
-    if(/wander|hike|gpx|kml|tour|aktivit|erlebnis/.test(blob))return "Aktivitäten";
-    if(/buchung|booking|reserv/.test(blob))return "Buchungen";
-    if(/transfer|shuttle|taxi/.test(blob))return "Transfers";
-    if(/rechnung|invoice|zahlungs?beleg/.test(blob))return "Rechnungen";
-    if(/reise|trip|itinerary|programm/.test(blob))return "Reise";
-    if(raw&&!/^sonstig/i.test(raw)&&raw!=="Dokument"&&raw!=="Platzhalter"&&raw!=="Allgemein")return raw;
-    return "Allgemein";
+    if(/mietwagen|rental\s*car|car\s*hire|autovermiet/.test(blob))return "rentalCar";
+    if(/flug|flight|airline|boarding/.test(blob))return "flight";
+    if(/bahn|zug|train|rail/.test(blob))return "train";
+    if(/ticket|boarding\s*pass/.test(blob))return "tickets";
+    if(/voucher|gutschein/.test(blob))return "vouchers";
+    if(/hotel|unterkunft|accommodation/.test(blob))return "accommodation";
+    if(/restaurant|essen|dinner|lunch|menü|menu/.test(blob))return "restaurant";
+    if(/wellness|spa|massage/.test(blob))return "wellness";
+    if(/wander|hike|gpx|kml|tour|aktivit|erlebnis/.test(blob))return "activities";
+    if(/buchung|booking|reserv/.test(blob))return "bookings";
+    if(/transfer|shuttle|taxi/.test(blob))return "transfers";
+    if(/rechnung|invoice|zahlungs?beleg/.test(blob))return "invoices";
+    if(/vertrag|contract/.test(blob))return "contracts";
+    if(/versicherung|insurance/.test(blob))return "insurance";
+    if(/reiseinfo|travel\s*info|reiseinformation/.test(blob))return "travelInfo";
+    if(/download/.test(blob))return "downloads";
+    if(/reise|trip|itinerary|programm/.test(blob))return "travel";
+    if(raw&&!/^sonstig/i.test(raw)&&raw!=="Dokument"&&raw!=="Platzhalter"&&raw!=="Allgemein"&&raw!=="Other"&&raw!=="General"){
+      return raw;
+    }
+    return "other";
   }
 
-  function documentGroupDomId(label){
-    return `doc-group-${String(label||"").replace(/[^\wäöüÄÖÜß-]+/gi,"-")}`;
+  function documentGroupLabel(keyOrLabel){
+    const key=String(keyOrLabel||"").trim();
+    if(DOCUMENT_CATEGORY_KEYS.has(key))return t(`documents.categories.${key}`);
+    return key||t("documents.categories.other");
+  }
+
+  function documentGroupDomId(keyOrLabel){
+    return `doc-group-${String(keyOrLabel||"").replace(/[^\wäöüÄÖÜß-]+/gi,"-")}`;
   }
 
   function groupPortalDocuments(documents){
-    const order=["Tickets","Voucher","Unterkunft","Restaurant","Aktivitäten","Buchungen","Transfers","Rechnungen","Reise","Allgemein"];
+    const order=[
+      "tickets","flight","train","accommodation","rentalCar","activities","restaurant","wellness",
+      "transfers","bookings","invoices","vouchers","contracts","insurance","travelInfo","travel",
+      "downloads","general","other"
+    ];
     const groups=new Map();
     documents.forEach(item=>{
-      const label=documentGroupLabel(item);
-      if(!groups.has(label))groups.set(label,[]);
-      groups.get(label).push(item);
+      const key=documentGroupKey(item);
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push(item);
     });
+    const locale=i18nLib()?.getLocale?.()||"de-AT";
     const ranked=[...groups.keys()].sort((a,b)=>{
       const ai=order.indexOf(a);
       const bi=order.indexOf(b);
-      if(a==="Allgemein")return 1;
-      if(b==="Allgemein")return -1;
+      if(a==="other"||a==="general")return 1;
+      if(b==="other"||b==="general")return -1;
       if(ai!==-1||bi!==-1)return (ai===-1?999:ai)-(bi===-1?999:bi);
-      return a.localeCompare(b,"de");
+      return documentGroupLabel(a).localeCompare(documentGroupLabel(b),locale);
     });
-    return ranked.map(label=>({label,items:groups.get(label)}));
+    return ranked.map(key=>({key,label:documentGroupLabel(key),items:groups.get(key)}));
   }
 
   function documentCardFields(item,fileName,displayTitle,typeIcon){
     const sizeLabel=formatDocumentFileSize(item.fileSize||item.size);
-    const groupLabel=documentGroupLabel(item);
+    const groupLabel=documentGroupLabel(documentGroupKey(item));
     const category=hasDisplayValue(item.category)?String(item.category).trim():"";
     const typeLabel=String(typeIcon?.label||item.type||"").trim();
     const showCategory=category
       &&category.toLowerCase()!==typeLabel.toLowerCase()
       &&category.toLowerCase()!==groupLabel.toLowerCase()
-      &&!/^(dokument|datei|sonstig\w*|allgemein)$/i.test(category);
+      &&!/^(dokument|datei|sonstig\w*|allgemein|other|general|document|file)$/i.test(category);
     const rawName=String(fileName||"").trim();
     const rawAsTitle=formatDocumentDisplayTitle({fileName:rawName});
     const showFileName=rawName
       &&rawAsTitle.toLowerCase()!==String(displayTitle||"").toLowerCase()
       &&rawName.toLowerCase()!==String(displayTitle||"").toLowerCase();
     return [
-      ["Dateiname",showFileName?rawName:""],
-      ["Kategorie",showCategory?category:""],
-      ["Dateigröße",sizeLabel],
-      ["Datum",formatUploadDate(item.uploadedAt)],
-      ["Hinweis",item.note],
-      ["Ablaufdatum",formatUploadDate(item.expiryDate)||item.expiryDate||""]
+      [t("documents.fields.fileName"),showFileName?rawName:""],
+      [t("documents.fields.category"),showCategory?category:""],
+      [t("documents.fields.fileSize"),sizeLabel],
+      [t("documents.fields.date"),formatUploadDate(item.uploadedAt)],
+      [t("documents.fields.note"),item.note],
+      [t("documents.fields.expiryDate"),formatUploadDate(item.expiryDate)||item.expiryDate||""]
     ].filter(([,value])=>hasDisplayValue(value));
   }
 
@@ -697,35 +744,64 @@
       return `<div class="document-preview documents-preview documents-preview-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(displayTitle)}" loading="lazy"></div>`;
     }
     if(isPdfDocument(item)){
-      return `<div class="document-preview documents-preview documents-preview-pdf" aria-hidden="true"><span class="documents-preview-badge">PDF</span><span class="documents-preview-glyph">📄</span><span class="documents-preview-caption">Dokumentvorschau</span></div>`;
+      return `<div class="document-preview documents-preview documents-preview-pdf" aria-hidden="true"><span class="documents-preview-badge">${escapeHtml(t("documents.types.pdf"))}</span><span class="documents-preview-glyph">📄</span><span class="documents-preview-caption">${escapeHtml(t("documents.preview.caption"))}</span></div>`;
     }
-    return `<div class="document-preview documents-preview documents-preview-file" aria-hidden="true"><span class="documents-preview-glyph">${typeIcon.icon}</span><span class="documents-preview-caption">${escapeHtml(typeIcon.label||"Datei")}</span></div>`;
+    return `<div class="document-preview documents-preview documents-preview-file" aria-hidden="true"><span class="documents-preview-glyph">${typeIcon.icon}</span><span class="documents-preview-caption">${escapeHtml(typeIcon.label||t("documents.types.file"))}</span></div>`;
+  }
+
+  function translateDocumentStatus(value){
+    const raw=String(value||"").trim();
+    if(!raw)return "";
+    const map={
+      "verfügbar":"documents.status.available",
+      verfuegbar:"documents.status.available",
+      available:"documents.status.available",
+      "wird vorbereitet":"documents.status.preparing",
+      preparing:"documents.status.preparing",
+      "nicht vorhanden":"documents.status.missing",
+      missing:"documents.status.missing",
+      archiviert:"documents.status.archived",
+      archived:"documents.status.archived"
+    };
+    const key=map[raw]||map[raw.toLowerCase()];
+    return key?t(key):raw;
+  }
+
+  function documentFreshnessLabel(item){
+    if(item?.isNew===true||item?.badge==="new"||item?.freshness==="new")return t("documents.actions.new");
+    if(item?.isUpdated===true||item?.badge==="updated"||item?.freshness==="updated")return t("documents.actions.updated");
+    return "";
   }
 
   function renderDocumentCard(item){
     const url=resolveDocumentUrl(item);
     const displayTitle=formatDocumentDisplayTitle(item);
-    const fileName=String(item.fileName||item.filename||item.title||item.name||"Dokument").trim()||"Dokument";
+    const fileName=String(item.fileName||item.filename||item.title||item.name||"").trim();
+    const downloadName=fileName||"document";
     const documentId=item.documentId||item.id||"";
     const typeIcon=documentTypeIcon(item);
     const fields=documentCardFields(item,fileName,displayTitle,typeIcon);
-    const groupLabel=documentGroupLabel(item);
+    const groupLabel=documentGroupLabel(documentGroupKey(item));
     if(!url)console.warn(`[PortalDocuments] Dokument ${documentId||displayTitle} ohne gueltige Datei-URL.`);
     const preview=documentPreviewMarkup(item,url,displayTitle,typeIcon);
+    const statusLabel=translateDocumentStatus(item.status||item.statusLabel||"");
+    const freshness=documentFreshnessLabel(item);
     const metaBits=[
       typeIcon.label,
       groupLabel,
+      statusLabel,
+      freshness,
       formatUploadDate(item.uploadedAt),
       formatDocumentFileSize(item.fileSize||item.size)
     ].filter(hasDisplayValue);
     let actions="";
     if(url){
       actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(t("documents.actions.openNamed",{title:displayTitle}))}">${escapeHtml(t("documents.actions.open"))}</a>
-        <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}" aria-label="${escapeHtml(t("documents.actions.downloadNamed",{title:displayTitle}))}">${escapeHtml(t("documents.actions.download"))}</a>`;
+        <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(downloadName)}" aria-label="${escapeHtml(t("documents.actions.downloadNamed",{title:displayTitle}))}">${escapeHtml(t("documents.actions.download"))}</a>`;
     }else if(isShareAccess&&documentId){
       actions=`<button class="button primary" type="button" data-open-portal-document="${escapeHtml(documentId)}" aria-label="${escapeHtml(t("documents.actions.openNamed",{title:displayTitle}))}">${escapeHtml(t("documents.actions.open"))}</button>`;
     }else{
-      actions=`<span class="button soft document-disabled" aria-disabled="true">${escapeHtml(t("errors.documentUnavailable"))}</span>`;
+      actions=`<span class="button soft document-disabled" aria-disabled="true">${escapeHtml(t("documents.errors.unavailable"))}</span>`;
     }
     return `
       <article class="document-card documents-card ${url?"":"document-unavailable"}" data-document-id="${escapeHtml(documentId)}">
@@ -755,8 +831,9 @@
     }
     nav.hidden=false;
     nav.innerHTML=groups.map(group=>{
-      const id=documentGroupDomId(group.label);
-      return `<button class="documents-category-chip" type="button" data-documents-group="${escapeHtml(id)}" aria-label="${escapeHtml(group.label)}: ${group.items.length} ${group.items.length===1?"Dokument":"Dokumente"}">
+      const id=documentGroupDomId(group.key);
+      const countLabel=t(group.items.length===1?"documents.count.one":"documents.count.other",{count:group.items.length});
+      return `<button class="documents-category-chip" type="button" data-documents-group="${escapeHtml(id)}" aria-label="${escapeHtml(t("documents.aria.categoryChip",{label:group.label,count:countLabel}))}">
         <span class="documents-category-chip-label">${escapeHtml(group.label)}</span>
         <span class="documents-category-chip-count">${group.items.length}</span>
       </button>`;
@@ -772,7 +849,7 @@
       renderDocumentsCategoryNav([]);
       target.innerHTML=`
         <div class="documents-empty document-card document-empty" role="status">
-          <p class="eyebrow">Concierge</p>
+          <p class="eyebrow">${escapeHtml(t("documents.empty.concierge"))}</p>
           <h3>${escapeHtml(t("documents.empty.title"))}</h3>
           <p>${escapeHtml(t("documents.empty.copy"))}</p>
         </div>
@@ -782,7 +859,7 @@
     const groups=groupPortalDocuments(visibleDocuments);
     renderDocumentsCategoryNav(groups);
     target.innerHTML=groups.map(group=>{
-      const id=documentGroupDomId(group.label);
+      const id=documentGroupDomId(group.key);
       const countLabel=t(group.items.length===1?"documents.count.one":"documents.count.other",{count:group.items.length});
       return `
       <section class="documents-group" id="${escapeHtml(id)}" aria-labelledby="${escapeHtml(id)}-title">
@@ -1105,14 +1182,14 @@
         mode:"too_far",
         start,
         end,
-        message:`Eine Wettervorhersage ist erst ab 16 Tage vor Reisebeginn (${formatDateValue(start)}) verfuegbar.`
+        message:t("today.weather.tooFar",{date:formatDateValue(start)})
       };
     }
     if(start&&end){
       const queryStart=start<today?today:start;
       const queryEnd=end>forecastEnd?forecastEnd:end;
       if(queryStart>queryEnd){
-        return {mode:"unavailable",message:"Fuer den Reisezeitraum liegt aktuell keine Vorhersage vor."};
+        return {mode:"unavailable",message:t("today.weather.rangeUnavailable")};
       }
       return {
         mode:"trip",
@@ -1122,11 +1199,11 @@
         tripEnd:end,
         partial:start<today||end>forecastEnd,
         partialMessage:start<today&&end>forecastEnd
-          ?`Zeigt den verfuegbaren Vorhersagezeitraum innerhalb Ihrer Reise (${formatDateValue(queryStart)} bis ${formatDateValue(queryEnd)}).`
+          ?t("today.weather.partialBoth",{start:formatDateValue(queryStart),end:formatDateValue(queryEnd)})
           :start<today
-            ?`Ab heute (${formatDateValue(queryStart)}) bis Reiseende, soweit Vorhersage verfuegbar.`
+            ?t("today.weather.partialPast",{start:formatDateValue(queryStart)})
             :end>forecastEnd
-              ?`Vorhersage bis ${formatDateValue(queryEnd)}. Weitere Tage folgen naeher am Reisedatum.`
+              ?t("today.weather.partialFuture",{end:formatDateValue(queryEnd)})
               :""
       };
     }
@@ -1138,40 +1215,23 @@
   }
 
   function weatherMetaMarkup(result,range){
-    const updatedAt=new Date().toLocaleString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+    const lib=i18nLib();
+    const updatedAt=lib?.formatDateTime?lib.formatDateTime(new Date()):new Date().toLocaleString("de-AT",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
     const coords=formatCoordinates(result.location.latitude,result.location.longitude);
     const parts=[
-      `Quelle: Open-Meteo`,
-      `Koordinaten: ${coords}`,
-      `Aktualisiert: ${updatedAt}`
+      t("today.weather.source"),
+      t("today.weather.coordinates",{coords}),
+      t("today.weather.updated",{time:updatedAt})
     ];
     if(range&&range.partial&&range.partialMessage)parts.push(range.partialMessage);
     return `<p class="weather-meta">${parts.map(part=>`<span>${escapeHtml(part)}</span>`).join("")}</p>`;
   }
 
   function weatherCodeText(code){
-    const labels={
-      0:"Klar",
-      1:"Überwiegend sonnig",
-      2:"Teilweise bewölkt",
-      3:"Bewölkt",
-      45:"Nebel",
-      48:"Reifnebel",
-      51:"Leichter Nieselregen",
-      53:"Nieselregen",
-      55:"Starker Nieselregen",
-      61:"Leichter Regen",
-      63:"Regen",
-      65:"Starker Regen",
-      71:"Leichter Schnee",
-      73:"Schnee",
-      75:"Starker Schnee",
-      80:"Regenschauer",
-      81:"Schauer",
-      82:"Starke Schauer",
-      95:"Gewitter"
-    };
-    return labels[code]||"Wetterdaten";
+    const key=`today.weather.codes.${code}`;
+    const translated=t(key);
+    if(translated&&translated!==key)return translated;
+    return t("today.weather.codes.fallback");
   }
 
   function weatherSymbol(code){
@@ -1189,11 +1249,11 @@
     const rain=Number(day.rainProbability||0);
     const min=Number(day.tempMin||0);
     const wind=Number(day.wind||0);
-    if(rain>=60)return "Regenjacke und wasserfeste Schuhe einplanen.";
-    if(min<=5)return "Warme Schichten und winddichte Jacke einpacken.";
-    if(wind>=35)return "Windfeste Jacke empfohlen.";
-    if(Number(day.tempMax)>=25)return "Sonnenschutz und leichte Kleidung empfohlen.";
-    return "Bequeme Kleidung in Schichten ist passend.";
+    if(rain>=60)return t("today.weather.clothing.rain");
+    if(min<=5)return t("today.weather.clothing.cold");
+    if(wind>=35)return t("today.weather.clothing.wind");
+    if(Number(day.tempMax)>=25)return t("today.weather.clothing.hot");
+    return t("today.weather.clothing.layers");
   }
 
   function weatherSearchName(){
@@ -1201,7 +1261,7 @@
   }
 
   function weatherRegionLabel(){
-    return customer.weatherLocationName||customer.region||customer.tripName||"Nicht festgelegt";
+    return customer.weatherLocationName||customer.region||customer.tripName||t("today.weather.notSet");
   }
 
   async function resolveWeatherLocation(){
@@ -1211,24 +1271,25 @@
       return {
         latitude,
         longitude,
-        name:weatherRegionLabel()!=="Nicht festgelegt"?weatherRegionLabel():`Standort aus Koordinaten ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        name:weatherRegionLabel()!==t("today.weather.notSet")?weatherRegionLabel():`Standort aus Koordinaten ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
         timezone:"auto",
         source:"customer-coordinates"
       };
     }
     const name=weatherSearchName().trim();
-    if(!name)throw new Error("Bitte Wetter-Ort oder Region in den Stammdaten hinterlegen.");
+    if(!name)throw new Error(t("today.weather.noLocation"));
+    const lang=normalizePortalLanguage(i18nLib()?.getLanguage?.()||"de");
     const params=new URLSearchParams({
       name,
       count:"5",
-      language:"de",
+      language:lang,
       format:"json"
     });
     const response=await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params.toString()}`);
     if(!response.ok)throw new Error(`Open-Meteo Standortsuche nicht erreichbar: ${response.status}`);
     const data=await response.json();
     const location=(data.results||[]).find(result=>validCoordinates(Number(result.latitude),Number(result.longitude)));
-    if(!location)throw new Error(`Kein gueltiger Wetter-Standort fuer "${name}" gefunden. Bitte Wetter-Ort praezisieren, z. B. "Grado, Italien".`);
+    if(!location)throw new Error(t("today.weather.unavailable"));
     return {
       latitude:Number(location.latitude),
       longitude:Number(location.longitude),
@@ -1343,6 +1404,22 @@
     return {...item,navigationUrl:linked.navigationUrl};
   }
 
+  function translateTravelActionLabel(label,fallbackKey){
+    const raw=String(label||"").trim();
+    const map={
+      "Navigation starten":"itinerary.actions.openNavigation",
+      "In Maps oeffnen":"itinerary.actions.openMap",
+      "In Maps öffnen":"itinerary.actions.openMap",
+      "In Google Maps oeffnen":"itinerary.route.openGoogleMaps",
+      "In Google Maps öffnen":"itinerary.route.openGoogleMaps",
+      "In Apple Karten oeffnen":"itinerary.actions.appleMaps",
+      "In Apple Karten öffnen":"itinerary.actions.appleMaps"
+    };
+    if(map[raw])return t(map[raw]);
+    if(raw)return raw;
+    return fallbackKey?t(fallbackKey):"";
+  }
+
   function travelActionsMarkup(item,{compact=false,mode="all"}={}){
     const lib=travelLib();
     const source=itemForTravelActions(item);
@@ -1350,7 +1427,7 @@
     if(!actions){
       if(mode==="secondary")return "";
       const nav=itemNavigationUrl(source);
-      return nav?`<a class="button soft" href="${escapeHtml(nav)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`:"";
+      return nav?`<a class="button soft" href="${escapeHtml(nav)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.actions.openNavigation"))}</a>`:"";
     }
     const buttons=[];
     const travelPayload=escapeHtml(JSON.stringify({
@@ -1370,9 +1447,9 @@
     const includeSecondary=mode==="all"||mode==="secondary";
     if(includeToolbar){
       if(actions.maps?.show||hasRouteFile){
-        buttons.push(`<a class="button soft" href="${escapeHtml(actions.maps?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${travelPayload}">${escapeHtml(actions.maps?.label||"In Maps oeffnen")}</a>`);
+        buttons.push(`<a class="button soft" href="${escapeHtml(actions.maps?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${travelPayload}">${escapeHtml(translateTravelActionLabel(actions.maps?.label,"itinerary.actions.openMap"))}</a>`);
       }
-      if(actions.navigation.show)buttons.push(`<a class="button ${compact?"soft":"primary"}" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.navigation.label)}</a>`);
+      if(actions.navigation.show)buttons.push(`<a class="button ${compact?"soft":"primary"}" href="${escapeHtml(actions.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(translateTravelActionLabel(actions.navigation.label,"itinerary.actions.openNavigation"))}</a>`);
       else if(actions.navigation.hint&&mode!=="toolbar")buttons.push(`<p class="travel-nav-missing">${escapeHtml(actions.navigation.hint)}</p>`);
       if(actions.gpx.show){
         buttons.push(`<a class="button soft" href="${escapeHtml(actions.gpx.url)}" download="${escapeHtml(actions.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(actions.gpx.label)}${actions.gpx.fileSizeLabel?` (${escapeHtml(actions.gpx.fileSizeLabel)})`:""}</a>`);
@@ -1397,14 +1474,14 @@
     const tempMin=Number.isFinite(Number(weather.tempMin))?Math.round(Number(weather.tempMin)):null;
     const tempMax=Number.isFinite(Number(weather.tempMax))?Math.round(Number(weather.tempMax)):null;
     const temp=tempMin!==null&&tempMax!==null?`${tempMin}–${tempMax}°C`:"";
-    const precip=Number.isFinite(Number(weather.rainProbability))?`${Math.round(Number(weather.rainProbability))}% Regen`:"";
+    const precip=Number.isFinite(Number(weather.rainProbability))?t("today.weather.rain",{value:Math.round(Number(weather.rainProbability))}):"";
     const parts=[weather.condition||weather.summary||"",temp,precip].filter(Boolean);
     if(!parts.length)return "";
     return `
-      <div class="hike-weather" aria-label="Wetter">
+      <div class="hike-weather" aria-label="${escapeHtml(t("itinerary.aria.weather"))}">
         <span class="hike-weather-icon" aria-hidden="true">${escapeHtml(weather.symbol||"☀️")}</span>
         <div>
-          <strong>Wetter</strong>
+          <strong>${escapeHtml(t("itinerary.labels.weather"))}</strong>
           <p>${escapeHtml(parts.join(" · "))}</p>
         </div>
       </div>
@@ -1421,7 +1498,7 @@
     const stats=companion?.stats||[];
     const overview=stats.length?`
       <div class="hike-overview">
-        <h4>Wanderübersicht</h4>
+        <h4>${escapeHtml(t("itinerary.route.overview"))}</h4>
         <ul class="hike-stats">
           ${stats.map(stat=>{
             const meaningful=hasMeaningfulValue(stat?.value);
@@ -1438,17 +1515,17 @@
     const mapBlock=companion?.map?.ok?`
       <div class="hike-map travel-map-preview" data-hike-map-shell="${escapeHtml(mapId)}">
         <div class="hike-map-frame">
-          <div class="hike-leaflet-map" id="${escapeHtml(mapId)}" data-hike-map="${mapPayload}" role="region" aria-label="Interaktive Routenkarte"></div>
+          <div class="hike-leaflet-map" id="${escapeHtml(mapId)}" data-hike-map="${mapPayload}" role="region" aria-label="${escapeHtml(t("itinerary.route.interactiveMapAria"))}"></div>
         </div>
         <div class="hike-map-live">
-          <button class="button soft" type="button" data-hike-live-location="${escapeHtml(mapId)}">Meinen Standort zeigen</button>
+          <button class="button soft" type="button" data-hike-live-location="${escapeHtml(mapId)}">${escapeHtml(t("itinerary.route.showLocation"))}</button>
           <p class="hike-live-status" data-hike-live-status="${escapeHtml(mapId)}" hidden></p>
         </div>
       </div>
     `:"";
     const elevBlock=companion?.elevationProfile?.show?`
-      <div class="hike-elev" aria-label="Interaktives Hoehenprofil" data-hike-elev-for="${escapeHtml(mapId)}" data-hike-elev="${elevPayload}">
-        <h4>Höhenprofil</h4>
+      <div class="hike-elev" aria-label="${escapeHtml(t("itinerary.route.elevationAria"))}" data-hike-elev-for="${escapeHtml(mapId)}" data-hike-elev="${elevPayload}">
+        <h4>${escapeHtml(t("itinerary.route.elevation"))}</h4>
         ${companion.elevationProfile.svg}
         <p class="hike-elev-readout" data-hike-elev-readout hidden></p>
         ${companion.elevationProfile.minElevation!=null&&companion.elevationProfile.maxElevation!=null
@@ -1458,7 +1535,7 @@
     `:"";
     const summary=companion?.summary?.length?`
       <div class="hike-summary">
-        <h4>Kurzinfo</h4>
+        <h4>${escapeHtml(t("itinerary.route.summary"))}</h4>
         <ul>${companion.summary.map(line=>`<li>${escapeHtml(line)}</li>`).join("")}</ul>
       </div>
     `:"";
@@ -1489,10 +1566,10 @@
       kmlFile:source.kmlFile||null
     }));
     if(toolbar.maps?.show||toolbar.gpx?.show||toolbar.kml?.show){
-      buttons.push(`<a class="button soft" href="${escapeHtml(toolbar.maps?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${travelPayload}">${escapeHtml(toolbar.mapsLabel||"In Google Maps oeffnen")}</a>`);
+      buttons.push(`<a class="button soft" href="${escapeHtml(toolbar.maps?.url||"#")}" target="_blank" rel="noopener noreferrer" data-travel-open-maps="1" data-travel-item="${travelPayload}">${escapeHtml(toolbar.mapsLabel||t("itinerary.route.openGoogleMaps"))}</a>`);
     }
     if(toolbar.navigation?.show){
-      buttons.push(`<a class="button primary" href="${escapeHtml(toolbar.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(toolbar.navigation.label||"Navigation starten")}</a>`);
+      buttons.push(`<a class="button primary" href="${escapeHtml(toolbar.navigation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(toolbar.navigation.label||t("itinerary.actions.openNavigation"))}</a>`);
     }
     if(toolbar.gpx?.show){
       buttons.push(`<a class="button soft" href="${escapeHtml(toolbar.gpx.url)}" download="${escapeHtml(toolbar.gpx.fileName||"route.gpx")}" target="_blank" rel="noopener noreferrer">${escapeHtml(toolbar.gpx.label)}${toolbar.gpx.fileSizeLabel?` (${escapeHtml(toolbar.gpx.fileSizeLabel)})`:""}</a>`);
@@ -1504,7 +1581,7 @@
     const hint=toolbar.gpx?.show
       ?`<p class="travel-offline-hint">${escapeHtml(companion?.meta?.offlineHint||"GPX-Datei jetzt herunterladen und in Ihrer bevorzugten Navigations-App offline nutzen.")}</p>`
       :"";
-    return `<div class="hike-toolbar card-actions" aria-label="Kartenleiste">${buttons.join("")}${hint}</div>`;
+    return `<div class="hike-toolbar card-actions" aria-label="${escapeHtml(t("itinerary.route.toolbarAria"))}">${buttons.join("")}${hint}</div>`;
   }
 
   const hikeMapRegistry=new Map();
@@ -1517,7 +1594,7 @@
         <p>${escapeHtml(marker.label||marker.category||"")}</p>
         ${marker.description?`<p>${escapeHtml(marker.description)}</p>`:""}
         ${marker.distanceLabel?`<p class="hike-marker-distance">${escapeHtml(marker.distanceLabel)}</p>`:""}
-        <a class="button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">In Google Maps oeffnen</a>
+        <a class="button soft" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.route.openGoogleMaps"))}</a>
       </div>
     `;
   }
@@ -1766,7 +1843,7 @@
       if(payload.embedUrl){
         const frame=document.createElement("iframe");
         frame.src=String(payload.embedUrl);
-        frame.title="Route auf Karte";
+        frame.title=t("itinerary.route.title");
         frame.loading="lazy";
         frame.referrerPolicy="no-referrer";
         frame.className="hike-map-fallback-frame";
@@ -1950,17 +2027,17 @@
     const tempMin=Number.isFinite(Number(weather?.tempMin))?Math.round(Number(weather.tempMin)):null;
     const tempMax=Number.isFinite(Number(weather?.tempMax))?Math.round(Number(weather.tempMax)):null;
     const weatherText=weather
-      ?`${weather.condition||weather.summary||"Wetter"}${tempMin!==null&&tempMax!==null?` · ${tempMin}–${tempMax}°C`:""}`
+      ?`${weather.condition||weather.summary||t("itinerary.labels.weather")}${tempMin!==null&&tempMax!==null?` · ${tempMin}–${tempMax}°C`:""}`
       :"";
     const rows=[
-      ["Adresse",meta.address||item.address||""],
-      omitTravelStats?null:["Schwierigkeit",meta.difficulty||""],
-      omitTravelStats?null:["Distanz",meta.distanceKm||""],
-      omitTravelStats?null:["Gehzeit",meta.walkDuration||""],
-      omitTravelStats?null:["Hoehenmeter",meta.elevationGain||""],
-      omitTravelStats?null:["Abstieg",meta.elevationLoss||""],
-      omitWeather?null:["Wetter",weatherText],
-      ["Buchungsnummer",meta.bookingNumber||""]
+      [t("itinerary.labels.address"),meta.address||item.address||""],
+      omitTravelStats?null:[t("itinerary.labels.difficulty"),meta.difficulty||""],
+      omitTravelStats?null:[t("itinerary.labels.distance"),meta.distanceKm||""],
+      omitTravelStats?null:[t("itinerary.labels.walkDuration"),meta.walkDuration||""],
+      omitTravelStats?null:[t("itinerary.labels.elevation"),meta.elevationGain||""],
+      omitTravelStats?null:[t("itinerary.labels.descent"),meta.elevationLoss||""],
+      omitWeather?null:[t("itinerary.labels.weather"),weatherText],
+      [t("itinerary.labels.bookingNumber"),meta.bookingNumber||""]
     ];
     return rows.filter(Boolean);
   }
@@ -1976,13 +2053,13 @@
 
   function daysUntil(dateValue){
     const target=new Date(dateValue);
-    if(Number.isNaN(target.getTime()))return "Datum folgt";
+    if(Number.isNaN(target.getTime()))return t("today.countdown.pending");
     const today=new Date();
     const diff=Math.ceil((target.setHours(0,0,0,0)-today.setHours(0,0,0,0))/86400000);
-    if(diff>1)return `${diff} Tage bis Reisebeginn`;
-    if(diff===1)return "Morgen beginnt Ihre Reise";
-    if(diff===0)return "Ihre Reise beginnt heute";
-    return "Reisezeitraum liegt in der Vergangenheit";
+    if(diff>1)return t("today.countdown.daysUntil",{count:diff});
+    if(diff===1)return t("today.countdown.tomorrow");
+    if(diff===0)return t("today.countdown.today");
+    return t("today.countdown.past");
   }
 
   function hasMeaningfulValue(value){
@@ -2015,11 +2092,48 @@
       const to=new Date(`${end}T12:00:00`);
       const nights=Math.round((to-from)/86400000);
       if(Number.isFinite(nights)&&nights>=0){
-        if(nights===0)return "1 Tag";
-        return `${nights+1} Tage · ${nights} ${nights===1?"Nacht":"Nächte"}`;
+        if(nights===0)return t("itinerary.days.oneDay");
+        return t("itinerary.days.daysNights",{
+          days:nights+1,
+          nights,
+          nightsLabel:nights===1?t("itinerary.days.night"):t("itinerary.days.nights")
+        });
       }
     }
     return daysUntil(customer.startDate||customer.startDatePlain);
+  }
+
+  function translateProgramStatus(value){
+    const raw=String(value||"").trim();
+    if(!raw)return "";
+    const map={
+      Optional:"itinerary.status.optional",
+      Reserviert:"itinerary.status.reserved",
+      Reserved:"itinerary.status.reserved",
+      "Bestätigt":"itinerary.status.confirmed",
+      Bestaetigt:"itinerary.status.confirmed",
+      Confirmed:"itinerary.status.confirmed",
+      Geplant:"itinerary.status.planned",
+      Planned:"itinerary.status.planned",
+      Abgeschlossen:"itinerary.status.completed",
+      Completed:"itinerary.status.completed",
+      Opzionale:"itinerary.status.optional",
+      Prenotato:"itinerary.status.reserved",
+      Confermato:"itinerary.status.confirmed",
+      Pianificato:"itinerary.status.planned",
+      Completato:"itinerary.status.completed",
+      Optionnel:"itinerary.status.optional",
+      "Réservé":"itinerary.status.reserved",
+      "Confirmé":"itinerary.status.confirmed",
+      "Planifié":"itinerary.status.planned",
+      "Terminé":"itinerary.status.completed"
+    };
+    const key=map[raw];
+    return key?t(key):raw;
+  }
+
+  function displayProgramStatus(item){
+    return translateProgramStatus(programStatusLabel(item));
   }
 
   function renderItineraryOverview(){
@@ -2167,13 +2281,13 @@
 
   function calendarBlock(item,bounds){
     const continuation=item._isContinuation;
-    const timeLabel=continuation?"Ganztägig":item.startTime;
-    const titleLabel=continuation?`${item.title} (Fortsetzung)`:item.title;
+    const timeLabel=continuation?t("itinerary.calendar.allDay"):item.startTime;
+    const titleLabel=continuation?`${item.title} ${t("itinerary.status.continuation")}`:item.title;
     return `
       <a class="calendar-event ${item.colorClass||"type-concierge"}${continuation?" is-continuation":""}" href="#${detailId(item)}" style="${continuation?"top:0;height:48px":calendarEventStyle(item,bounds)}">
         <strong>${timeLabel} ${titleLabel}</strong>
         <span>${item.meetingPoint||""}</span>
-        <em>${programStatusLabel(item)}</em>
+        <em>${displayProgramStatus(item)}</em>
       </a>
     `;
   }
@@ -2216,17 +2330,17 @@
   function renderMeta(){
     const customerNumber=portalCustomerNumber(customer);
     const items=[
-      ["Reisezeitraum",tripPeriod()],
-      ["Region",customer.region],
-      ["Mitreisende",customer.companions],
-      ["Reisestatus",customer.status],
-      ["Countdown",daysUntil(customer.startDate||customer.startDatePlain)],
-      ["Concierge",customer.concierge],
-      ...(customerNumber?[["Kundennummer",customerNumber]]:[]),
-      ["Portal",`Version ${customer.version}`],
-      ["Veröffentlichung",customer.publicationState]
+      [t("today.labels.tripPeriod"),tripPeriod()],
+      [t("today.labels.region"),customer.region],
+      [t("today.labels.companions"),customer.companions],
+      [t("today.labels.tripStatus"),customer.status],
+      [t("today.labels.countdown"),daysUntil(customer.startDate||customer.startDatePlain)],
+      [t("today.labels.concierge"),customer.concierge],
+      ...(customerNumber?[[t("today.labels.customerNumber"),customerNumber]]:[]),
+      [t("today.labels.portal"),t("common.version",{version:customer.version||"1.0"})],
+      [t("today.labels.publication"),customer.publicationState]
     ].filter(([,value])=>hasDisplayValue(value));
-    setHtml("heroMeta",items.map(([label,value])=>`<div class="meta-item"><span>${label}</span><span>${value}</span></div>`).join(""));
+    setHtml("heroMeta",items.map(([label,value])=>`<div class="meta-item"><span>${escapeHtml(label)}</span><span>${escapeHtml(value)}</span></div>`).join(""));
   }
 
   function renderStatus(){
@@ -2240,7 +2354,7 @@
     setHtml("statusSteps",steps.map((step,index)=>`
       <li class="${index<=doneIndex?"done":""}">
         <span class="step-dot"></span>
-        <span>${step}</span>
+        <span>${escapeHtml(travelProgressStepLabel(step))}</span>
       </li>
     `).join(""));
   }
@@ -2257,13 +2371,13 @@
     const detail=detailId(next);
     card.innerHTML=`
       <div>
-        <p class="eyebrow">Nächster Programmpunkt</p>
-        <h3>${next.startTime} ${next.title}</h3>
-        <p>${next.meetingPoint}</p>
+        <p class="eyebrow">${escapeHtml(t("today.schedule.title"))}</p>
+        <h3>${escapeHtml(next.startTime||"")} ${escapeHtml(next.title||"")}</h3>
+        <p>${escapeHtml(next.meetingPoint||"")}</p>
       </div>
       <div class="card-actions compact-actions">
-        <button class="button primary" type="button" data-app-nav="itinerary" data-scroll-to="${escapeHtml(detail)}">Details anzeigen</button>
-        ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>`:`<p class="travel-nav-missing">Kein Startpunkt vorhanden</p>`}
+        <button class="button primary" type="button" data-app-nav="itinerary" data-scroll-to="${escapeHtml(detail)}">${escapeHtml(t("today.actions.showDetails"))}</button>
+        ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("today.actions.openNavigation"))}</a>`:`<p class="travel-nav-missing">${escapeHtml(t("today.actions.missingStart"))}</p>`}
       </div>
     `;
   }
@@ -2303,6 +2417,18 @@
     }
   }
 
+  function dayRelativeLabel(dateValue){
+    const today=todayDateValue();
+    const value=String(dateValue||"");
+    if(!value)return "";
+    if(value===today)return t("itinerary.days.today");
+    try{
+      if(value===addDays(today,1))return t("itinerary.days.tomorrow");
+      if(value===addDays(today,-1))return t("itinerary.days.yesterday");
+    }catch(_error){/* optional */}
+    return "";
+  }
+
   function renderCalendarControls(){
     const days=groupedProgram();
     const selector=el("calendarDaySelector");
@@ -2310,12 +2436,17 @@
     selector.innerHTML=days.map((day,index)=>{
       const isActive=index===calendarState.dayIndex;
       const isToday=dayTemporalState(day.dateValue)==="today";
-      const dayLabel=t("itinerary.day.label",{n:index+1});
-      const ariaDay=t("itinerary.day.labelWithDate",{n:index+1,date:day.date||""})+(isToday?t("itinerary.day.todaySuffix"):"");
+      const relative=dayRelativeLabel(day.dateValue);
+      const dayLabel=t("itinerary.days.label",{n:index+1});
+      const ariaDay=t("itinerary.days.labelWithDate",{n:index+1,date:day.date||""})+(isToday?t("itinerary.days.todaySuffix"):"");
+      const phase=index===0
+        ?t("itinerary.navigation.arrival")
+        :(index===days.length-1&&days.length>1?t("itinerary.navigation.departure"):"");
       return `
       <button class="itinerary-day-chip${isActive?" active":""}${isToday?" is-today":""}" type="button" data-calendar-day="${index}" aria-pressed="${isActive?"true":"false"}"${isActive?` aria-current="date"`:""} aria-label="${escapeHtml(ariaDay)}">
         <span class="itinerary-day-chip-index">${escapeHtml(dayLabel)}</span>
-        ${isToday?`<span class="itinerary-day-chip-today">${escapeHtml(t("navigation.today"))}</span>`:""}
+        ${relative?`<span class="itinerary-day-chip-today">${escapeHtml(relative)}</span>`:""}
+        ${phase&&!relative?`<span class="itinerary-day-chip-phase">${escapeHtml(phase)}</span>`:""}
         <strong class="itinerary-day-chip-date">${escapeHtml(day.date||"")}</strong>
       </button>
     `;
@@ -2364,7 +2495,7 @@
     target.innerHTML=`
       <div class="single-day-calendar">
         <header>
-          <p class="eyebrow">Tag ${(calendarState.dayIndex||0)+1}</p>
+          <p class="eyebrow">${escapeHtml(t("itinerary.days.label",{n:(calendarState.dayIndex||0)+1}))}</p>
           <h3>${day.date}</h3>
         </header>
         <div class="calendar-grid day-only" style="--calendar-height:${bounds.hours*72}px;--calendar-days:1">
@@ -2401,7 +2532,7 @@
         <span class="timeline-time">${item.startTime||""}</span>
         <span class="timeline-title">${item.title||""}</span>
         <span class="timeline-place">${item.meetingPoint||""}</span>
-        <span class="tag">${programStatusLabel(item)}</span>
+        <span class="tag">${displayProgramStatus(item)}</span>
       </a>
     `).join(""));
   }
@@ -2439,27 +2570,27 @@
     const badWeather=model.badWeather||{};
     target.innerHTML=`
       <div class="concierge-stack">
-        <article class="concierge-card" aria-label="Persoenlicher Concierge">
-          <p class="concierge-card-eyebrow">🌿 Ihr persönlicher Concierge</p>
-          <h3>${escapeHtml(model.greeting||"Willkommen")}</h3>
+        <article class="concierge-card" aria-label="${escapeHtml(t("today.concierge.personalAria"))}">
+          <p class="concierge-card-eyebrow">🌿 ${escapeHtml(t("today.concierge.personal"))}</p>
+          <h3>${escapeHtml(model.greeting||t("today.concierge.greetingFallback"))}</h3>
           ${narrative.length?`<div class="concierge-narrative">${narrative.map(line=>`<p>${escapeHtml(line)}</p>`).join("")}</div>`:""}
           ${timedHints.length?`
-            <ul class="concierge-timed-hints" aria-label="Aktuelle Hinweise">
+            <ul class="concierge-timed-hints" aria-label="${escapeHtml(t("today.concierge.currentHintsAria"))}">
               ${timedHints.map(hint=>`<li><span class="concierge-hint-icon" aria-hidden="true">${escapeHtml(hint.icon||"⚠")}</span><span>${escapeHtml(hint.text||"")}</span></li>`).join("")}
             </ul>
           `:""}
           ${hints.length?`<ul class="concierge-hints">${hints.map(hint=>`<li><span class="concierge-hint-icon" aria-hidden="true">${escapeHtml(hint.icon||"✓")}</span><span>${escapeHtml(hint.text||"")}</span></li>`).join("")}</ul>`:""}
           ${adminTips.length?`<ul class="concierge-admin-tips">${adminTips.map(tip=>`<li><span class="concierge-hint-icon" aria-hidden="true">✦</span><span>${escapeHtml(tip.text||"")}</span></li>`).join("")}</ul>`:""}
           ${optimizations.length?`<ul class="concierge-optimizations">${optimizations.map(tip=>`<li><span class="concierge-hint-icon" aria-hidden="true">→</span><span>${escapeHtml(tip)}</span></li>`).join("")}</ul>`:""}
-          ${model.profileLabel?`<p class="concierge-profile">Reiseprofil: ${escapeHtml(model.profileLabel)}</p>`:""}
+          ${model.profileLabel?`<p class="concierge-profile">${escapeHtml(t("today.concierge.profile",{label:model.profileLabel}))}</p>`:""}
         </article>
         ${timelineEvents.length?`
           <details class="concierge-card concierge-timeline-card" open>
             <summary class="concierge-timeline-summary">
-              <span class="concierge-card-eyebrow">Concierge Timeline</span>
+              <span class="concierge-card-eyebrow">${escapeHtml(t("today.concierge.timeline"))}</span>
               <span class="concierge-timeline-toggle" aria-hidden="true"></span>
             </summary>
-            <ol class="concierge-timeline" aria-label="Tages-Timeline">
+            <ol class="concierge-timeline" aria-label="${escapeHtml(t("today.concierge.timelineAria"))}">
               ${timelineEvents.map(event=>`
                 <li class="concierge-timeline-item" data-kind="${escapeHtml(event.kind||"")}">
                   <span class="concierge-timeline-icon" aria-hidden="true">${escapeHtml(event.icon||"📍")}</span>
@@ -2477,8 +2608,8 @@
           </details>
         `:""}
         ${status.length?`
-          <article class="concierge-card" aria-label="Live Reisestatus">
-            <p class="concierge-card-eyebrow">Live Reisestatus</p>
+          <article class="concierge-card" aria-label="${escapeHtml(t("today.concierge.liveStatusAria"))}">
+            <p class="concierge-card-eyebrow">${escapeHtml(t("today.concierge.liveStatus"))}</p>
             <ul class="concierge-status">
               ${status.map(item=>`
                 <li>
@@ -2490,16 +2621,16 @@
           </article>
         `:""}
         ${badWeather.show?`
-          <article class="concierge-card" aria-label="Schlechtwetter Alternativen">
-            <p class="concierge-card-eyebrow">${escapeHtml(badWeather.title||"Schlechtwetter-Alternativen")}</p>
+          <article class="concierge-card" aria-label="${escapeHtml(t("today.concierge.badWeatherAria"))}">
+            <p class="concierge-card-eyebrow">${escapeHtml(badWeather.title||t("today.concierge.badWeather"))}</p>
             <ul class="concierge-alt-list">
               ${(badWeather.alternatives||[]).map(item=>`<li><span class="concierge-hint-icon" aria-hidden="true">•</span><span>${escapeHtml(item.label||"")}</span></li>`).join("")}
             </ul>
           </article>
         `:""}
         ${evening.show?`
-          <article class="concierge-card" aria-label="Abendempfehlung">
-            <p class="concierge-card-eyebrow">${escapeHtml(evening.title||"Heute Abend empfehlen wir…")}</p>
+          <article class="concierge-card" aria-label="${escapeHtml(t("today.concierge.eveningAria"))}">
+            <p class="concierge-card-eyebrow">${escapeHtml(evening.title||t("today.concierge.evening"))}</p>
             <ul class="concierge-evening-list">
               ${(evening.items||[]).map(item=>`<li><span class="concierge-hint-icon" aria-hidden="true">•</span><span>${escapeHtml(item.label||"")}</span></li>`).join("")}
             </ul>
@@ -2576,16 +2707,16 @@
   function itineraryFilledFields(item,linked){
     const timeRange=[item.startTime,item.endTime].filter(hasMeaningfulValue).join(" – ");
     return [
-      ["Uhrzeit",timeRange],
-      ["Kategorie",item.category],
-      ["Ort",item.location||item.address||item.locationAddress||""],
-      ["Dauer",item.duration],
-      ["Treffpunkt",item.meetingPoint],
-      ["Hinweise",item.notes||linked?.customerNote||""],
-      ["Ansprechpartner",item.contactPerson],
-      ["Telefon",item.phone],
-      ["Status",programStatusLabel(item)],
-      ["Anbieter",linked?.provider||""]
+      [t("itinerary.labels.time"),timeRange],
+      [t("itinerary.labels.category"),item.category],
+      [t("itinerary.labels.location"),item.location||item.address||item.locationAddress||""],
+      [t("itinerary.labels.duration"),item.duration],
+      [t("itinerary.labels.meetingPoint"),item.meetingPoint],
+      [t("itinerary.labels.notes"),item.notes||linked?.customerNote||""],
+      [t("itinerary.labels.contact"),item.contactPerson],
+      [t("itinerary.labels.phone"),item.phone],
+      [t("itinerary.labels.status"),displayProgramStatus(item)],
+      [t("itinerary.labels.provider"),linked?.provider||""]
     ].map(([label,value])=>{
       const meaningful=hasMeaningfulValue(value);
       return {
@@ -2602,7 +2733,7 @@
     if(textValue.length<=180)return `<p class="itinerary-card-desc">${escapeHtml(textValue)}</p>`;
     return `
       <details class="itinerary-desc">
-        <summary>Beschreibung lesen</summary>
+        <summary>${escapeHtml(t("itinerary.actions.readDescription"))}</summary>
         <p>${escapeHtml(textValue)}</p>
       </details>
     `;
@@ -2614,11 +2745,11 @@
     const google=lib?.googleMapsUrl?.(source)||"";
     const apple=lib?.appleMapsUrl?.(source)||"";
     const buttons=[];
-    if(google)buttons.push(`<a class="button soft" href="${escapeHtml(google)}" target="_blank" rel="noopener noreferrer">Google Maps</a>`);
-    if(apple)buttons.push(`<a class="button soft" href="${escapeHtml(apple)}" target="_blank" rel="noopener noreferrer">Apple Karten</a>`);
+    if(google)buttons.push(`<a class="button soft" href="${escapeHtml(google)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.actions.googleMaps"))}</a>`);
+    if(apple)buttons.push(`<a class="button soft" href="${escapeHtml(apple)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.actions.appleMaps"))}</a>`);
     if(!buttons.length){
       const nav=itemNavigationUrl(source);
-      if(nav)buttons.push(`<a class="button soft" href="${escapeHtml(nav)}" target="_blank" rel="noopener noreferrer">Navigation</a>`);
+      if(nav)buttons.push(`<a class="button soft" href="${escapeHtml(nav)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.actions.navigation"))}</a>`);
     }
     return buttons.length?`<div class="itinerary-maps card-actions">${buttons.join("")}</div>`:"";
   }
@@ -2627,15 +2758,15 @@
     const docs=[];
     (linked?.documents||[]).map(normalizeDocument).forEach(doc=>{
       const url=resolveDocumentUrl(doc);
-      if(url&&doc.visible!==false)docs.push({title:doc.title||doc.fileName||"Dokument",url});
+      if(url&&doc.visible!==false)docs.push({title:doc.title||doc.fileName||t("itinerary.labels.documents"),url});
     });
     if(Array.isArray(item.documents)){
       item.documents.forEach(entry=>{
-        if(typeof entry==="string"&&/^https?:\/\//i.test(entry))docs.push({title:"Dokument",url:entry});
+        if(typeof entry==="string"&&/^https?:\/\//i.test(entry))docs.push({title:t("itinerary.labels.documents"),url:entry});
         else if(entry&&typeof entry==="object"){
           const doc=normalizeDocument(entry);
           const url=resolveDocumentUrl(doc);
-          if(url)docs.push({title:doc.title||doc.fileName||"Dokument",url});
+          if(url)docs.push({title:doc.title||doc.fileName||t("itinerary.labels.documents"),url});
         }
       });
     }
@@ -2646,7 +2777,7 @@
     if(actions?.voucher?.show)docs.push({title:actions.voucher.label||"Voucher",url:actions.voucher.url});
     if(!docs.length)return "";
     return `
-      <div class="itinerary-docs" aria-label="Dokumente">
+      <div class="itinerary-docs" aria-label="${escapeHtml(t("itinerary.aria.documents"))}">
         ${docs.map(doc=>`<a class="itinerary-doc-chip" href="${escapeHtml(doc.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(doc.title)}</a>`).join("")}
       </div>
     `;
@@ -2660,15 +2791,15 @@
     const day=String(dateValue||"");
     if(!day||(day!==start&&day!==end))return "";
     const navUrl=resolveNavigationUrl(hotel.navigation,hotel.address,hotel.name);
-    const phase=day===end?"Check-out":"Check-in";
+    const phase=day===end?t("itinerary.labels.checkOut"):t("itinerary.labels.checkIn");
     return `
-      <aside class="itinerary-hotel-card" aria-label="Unterkunft">
-        <p class="eyebrow">${escapeHtml(phase)} · Unterkunft</p>
+      <aside class="itinerary-hotel-card" aria-label="${escapeHtml(t("itinerary.aria.accommodation"))}">
+        <p class="eyebrow">${escapeHtml(phase)} · ${escapeHtml(t("itinerary.labels.accommodation"))}</p>
         <strong>${escapeHtml(hotel.name)}</strong>
         ${hasDisplayValue(hotel.address)?`<p>${escapeHtml(hotel.address)}</p>`:""}
-        ${day===start&&hasDisplayValue(hotel.checkIn)?`<p>Check-in: ${escapeHtml(hotel.checkIn)}</p>`:""}
-        ${day===end&&hasDisplayValue(hotel.checkOut)?`<p>Check-out: ${escapeHtml(hotel.checkOut)}</p>`:""}
-        ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation</a>`:""}
+        ${day===start&&hasDisplayValue(hotel.checkIn)?`<p>${escapeHtml(t("itinerary.labels.checkIn"))}: ${escapeHtml(hotel.checkIn)}</p>`:""}
+        ${day===end&&hasDisplayValue(hotel.checkOut)?`<p>${escapeHtml(t("itinerary.labels.checkOut"))}: ${escapeHtml(hotel.checkOut)}</p>`:""}
+        ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.actions.navigation"))}</a>`:""}
       </aside>
     `;
   }
@@ -2681,7 +2812,7 @@
     const temp=tempMin!==null&&tempMax!==null?`${tempMin}–${tempMax}°C`:"";
     const label=[weather.symbol||weather.icon||"",weather.condition||weather.summary||"",temp].filter(Boolean).join(" ");
     if(!label.trim())return "";
-    return `<span class="itinerary-weather-badge" aria-label="Wetter">${escapeHtml(label.trim())}</span>`;
+    return `<span class="itinerary-weather-badge" aria-label="${escapeHtml(t("itinerary.aria.weather"))}">${escapeHtml(label.trim())}</span>`;
   }
 
   function itineraryHikeCompactMarkup(item){
@@ -2693,14 +2824,14 @@
     const mapBlock=companion?.map?.ok?`
       <div class="itinerary-hike-map travel-map-preview" data-hike-map-shell="${escapeHtml(mapId)}">
         <div class="hike-map-frame itinerary-hike-frame">
-          <div class="hike-leaflet-map" id="${escapeHtml(mapId)}" data-hike-map="${mapPayload}" role="region" aria-label="Kompakte Wanderkarte"></div>
+          <div class="hike-leaflet-map" id="${escapeHtml(mapId)}" data-hike-map="${mapPayload}" role="region" aria-label="${escapeHtml(t("itinerary.route.mapAria"))}"></div>
         </div>
       </div>
     `:"";
     return `
       <div class="itinerary-hike-compact">
         ${mapBlock}
-        <a class="button soft" href="#${detailId(item)}">Wanderdetails</a>
+        <a class="button soft" href="#${detailId(item)}">${escapeHtml(t("itinerary.actions.hikeDetails"))}</a>
       </div>
     `;
   }
@@ -2716,17 +2847,20 @@
       const itemIds=day.items.map(item=>item.id);
       const doneSet=lib?.readDoneSet?lib.readDoneSet(scope,itemIds):new Set();
       const doneCount=day.items.filter(item=>doneSet.has(String(item.id))).length;
-      const progress=lib?.progressLabel?lib.progressLabel(doneCount,day.items.length):`${doneCount} von ${day.items.length} Programmpunkten abgeschlossen`;
+      const progress=t("itinerary.days.progress",{done:doneCount,total:day.items.length});
       const dayState=dayTemporalState(day.dateValue);
       const weekday=weekdayLabel(day.dateValue);
       const weatherBadge=itineraryWeatherBadge(day.dateValue||day.items[0]?.dateValue||"");
       const hotelCard=itineraryHotelCard(day.dateValue);
+      const dayTitle=weekday
+        ?`${weekday} · ${day.date}`
+        :t("itinerary.days.titleWithDate",{n:index+1,date:day.date||""});
       return `
       <article class="itinerary-day day-card is-${escapeHtml(dayState)}${index===calendarState.dayIndex?" is-selected":""}" id="${itineraryDayDomId(index)}" data-itinerary-day="${index}" data-day-state="${escapeHtml(dayState)}" ${dayState==="today"?"data-itinerary-today=\"1\"":""}>
         <header class="itinerary-day-head day-head">
           <div>
             <p class="eyebrow">${escapeHtml(weekday||day.date)}</p>
-            <h3>${escapeHtml(weekday?`${weekday} · ${day.date}`:`Tag ${index+1} · ${day.date}`)}</h3>
+            <h3>${escapeHtml(dayTitle)}</h3>
             <p class="day-progress" data-day-progress>${escapeHtml(progress)}</p>
           </div>
           ${weatherBadge}
@@ -2738,6 +2872,7 @@
             const linked=linkedBookingForItem(item);
             const state=itemTemporalState(item,day.dateValue,nextId,now);
             const fields=itineraryFilledFields(item,linked);
+            const statusLabel=displayProgramStatus(item);
             return `
             <li class="itinerary-item day-item day-item-travel is-${escapeHtml(state)} ${done?"is-done":""}" data-item-state="${escapeHtml(state)}">
               <div class="itinerary-rail" aria-hidden="true">
@@ -2747,12 +2882,12 @@
                 <div class="itinerary-card-top">
                   <label class="day-item-done">
                     <input type="checkbox" data-program-done="${escapeHtml(item.id)}" ${done?"checked":""}>
-                    <span class="sr-only">Erledigt</span>
+                    <span class="sr-only">${escapeHtml(t("itinerary.actions.done"))}</span>
                   </label>
                   <div class="itinerary-card-heading">
                     <p class="itinerary-time">${escapeHtml(item.startTime||"")}${item.endTime?` – ${escapeHtml(item.endTime)}`:""}</p>
                     <h4>${escapeHtml(item.title||"")}</h4>
-                    ${hasDisplayValue(item.category)||programStatusLabel(item)?`<p class="itinerary-tags"><span class="tag">${escapeHtml([item.category,programStatusLabel(item)].filter(hasDisplayValue).join(" · "))}</span></p>`:""}
+                    ${hasDisplayValue(item.category)||statusLabel?`<p class="itinerary-tags"><span class="tag">${escapeHtml([item.category,statusLabel].filter(hasDisplayValue).join(" · "))}</span></p>`:""}
                   </div>
                 </div>
                 ${itineraryDescriptionMarkup(item)}
@@ -2761,7 +2896,7 @@
                 ${itineraryMapsButtons(item)}
                 ${itineraryHikeCompactMarkup(item)}
                 <div class="itinerary-card-actions card-actions day-item-actions">
-                  <a class="button soft" href="#${detailId(item)}">Details</a>
+                  <a class="button soft" href="#${detailId(item)}">${escapeHtml(t("itinerary.actions.details"))}</a>
                   ${travelActionsMarkup(item,{compact:true,mode:"secondary"})}
                 </div>
               </article>
@@ -2796,31 +2931,32 @@
         ?travelActionsMarkup(item,{mode:"secondary"})
         :travelActionsMarkup(item);
       const navFallback=(!omitTravelStats&&!travelLib()?.programItemActions&&(linked?.navigationUrl||itemNavigationUrl(item)))
-        ?`<a class="button primary" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">Navigation starten</a>`
+        ?`<a class="button primary" href="${linked?.navigationUrl||itemNavigationUrl(item)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.actions.openNavigation"))}</a>`
         :"";
       const primaryMeta=definitionList([
-        ["Datum",itemDate(item)],
-        ["Uhrzeit",`${item.startTime||""}${item.endTime?` - ${item.endTime}`:""}`],
-        ["Treffpunkt",item.meetingPoint]
+        [t("itinerary.labels.date"),itemDate(item)],
+        [t("itinerary.labels.time"),`${item.startTime||""}${item.endTime?` - ${item.endTime}`:""}`],
+        [t("itinerary.labels.meetingPoint"),item.meetingPoint]
       ]);
       const secondaryMeta=definitionList([
-        ["Dauer",item.duration],
+        [t("itinerary.labels.duration"),item.duration],
         ...travelMetaRows(item,{omitTravelStats,omitWeather}),
-        ["Anbieter",linked?.provider||""],
-        ["Kleidung / Ausrüstung",item.outfit],
-        ["Hinweise",item.notes],
-        ["Kontaktperson",item.contactPerson],
-        ["Telefon",item.phone],
-        ["Dokumente",item.documents&&item.documents.length?item.documents.join(", "):""]
+        [t("itinerary.labels.provider"),linked?.provider||""],
+        [t("itinerary.labels.outfit"),item.outfit],
+        [t("itinerary.labels.notes"),item.notes],
+        [t("itinerary.labels.contactPerson"),item.contactPerson],
+        [t("itinerary.labels.phone"),item.phone],
+        [t("itinerary.labels.documents"),item.documents&&item.documents.length?item.documents.join(", "):""]
       ]);
+      const statusLabel=displayProgramStatus(item);
       return `
         <article class="program-detail-card" id="${detailId(item)}">
-          <p class="eyebrow program-detail-eyebrow">${escapeHtml([item.category,programStatusLabel(item)].filter(hasDisplayValue).join(" · ")||"Programmpunkt")}</p>
+          <p class="eyebrow program-detail-eyebrow">${escapeHtml([item.category,statusLabel].filter(hasDisplayValue).join(" · ")||t("itinerary.labels.programItem"))}</p>
           <h3>${escapeHtml(item.title||"")}</h3>
           ${primaryMeta}
           <p class="program-detail-copy">${escapeHtml(item.description||"")}</p>
           ${companionParts.intro}
-          ${linked?.customerNote?`<p class="booking-customer-note"><strong>Hinweis:</strong> ${escapeHtml(linked.customerNote)}</p>`:""}
+          ${linked?.customerNote?`<p class="booking-customer-note"><strong>${escapeHtml(t("itinerary.labels.note"))}:</strong> ${escapeHtml(linked.customerNote)}</p>`:""}
           ${secondaryMeta}
           ${companionParts.route}
           <div class="card-actions program-detail-actions">
@@ -2829,11 +2965,11 @@
               ${secondaryActions}
             </div>
             <div class="program-detail-actions-tertiary">
-              <a class="button soft" href="#calendar">Zurück zum Kalender</a>
-              <a class="button soft" href="#overall-timeline">Zurück zur Gesamt-Timeline</a>
-              ${previous?`<a class="button soft" href="#${detailId(previous)}">Vorheriger Programmpunkt</a>`:""}
-              ${next?`<a class="button soft" href="#${detailId(next)}">Nächster Programmpunkt</a>`:""}
-              ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(resolveDocumentUrl(doc))}" target="_blank" rel="noopener noreferrer">Dokument oeffnen: ${escapeHtml(doc.title||doc.fileName||"Dokument")}</a>`).join("")}
+              <a class="button soft" href="#calendar">${escapeHtml(t("itinerary.actions.backToCalendar"))}</a>
+              <a class="button soft" href="#overall-timeline">${escapeHtml(t("itinerary.actions.backToTimeline"))}</a>
+              ${previous?`<a class="button soft" href="#${detailId(previous)}">${escapeHtml(t("itinerary.actions.previousItem"))}</a>`:""}
+              ${next?`<a class="button soft" href="#${detailId(next)}">${escapeHtml(t("itinerary.actions.nextItem"))}</a>`:""}
+              ${bookingDocs.map(doc=>`<a class="button soft" href="${escapeHtml(resolveDocumentUrl(doc))}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.actions.openDocumentNamed",{title:doc.title||doc.fileName||t("itinerary.labels.documents")}))}</a>`).join("")}
             </div>
           </div>
         </article>
@@ -2847,7 +2983,7 @@
     if(!grid)return;
     const bookings=portalBookings().sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
     if(!bookings.length){
-      grid.innerHTML=`<p class="muted">Aktuell sind keine Buchungen für Sie sichtbar.</p>`;
+      grid.innerHTML=`<p class="muted">${escapeHtml(t("itinerary.bookings.empty"))}</p>`;
       return;
     }
     const lib=window.ACTBookingLibrary;
@@ -2857,19 +2993,19 @@
       const navUrl=booking.navigationUrl||"";
       return `
         <article class="portal-booking-card">
-          <span class="tag">${escapeHtml(booking.type||"")} · ${meta.icon} ${escapeHtml(booking.bookingStatus||"")}</span>
-          <h3>${escapeHtml(booking.title||"Buchung")}</h3>
+          <span class="tag">${escapeHtml(booking.type||"")} · ${meta.icon} ${escapeHtml(translateProgramStatus(booking.bookingStatus)||booking.bookingStatus||"")}</span>
+          <h3>${escapeHtml(booking.title||t("itinerary.labels.booking"))}</h3>
           <p class="muted">${escapeHtml(booking.provider||"")}</p>
           ${definitionList([
-            ["Datum",booking.date?formatDateValue(booking.date):""],
-            ["Uhrzeit",booking.startTime?`${booking.startTime}${booking.endTime?` - ${booking.endTime}`:""}`:""],
-            ["Treffpunkt",booking.meetingPoint||""],
-            ["Adresse",booking.address||""],
-            ["Hinweis",booking.customerNote||""]
+            [t("itinerary.labels.date"),booking.date?formatDateValue(booking.date):""],
+            [t("itinerary.labels.time"),booking.startTime?`${booking.startTime}${booking.endTime?` - ${booking.endTime}`:""}`:""],
+            [t("itinerary.labels.meetingPoint"),booking.meetingPoint||""],
+            [t("itinerary.labels.address"),booking.address||""],
+            [t("itinerary.labels.note"),booking.customerNote||""]
           ])}
           <div class="card-actions">
-            ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation</a>`:""}
-            ${docs.map(doc=>`<a class="button soft" href="${escapeHtml(resolveDocumentUrl(doc))}" target="_blank" rel="noopener noreferrer">Dokument oeffnen</a>`).join("")}
+            ${navUrl?`<a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.actions.navigation"))}</a>`:""}
+            ${docs.map(doc=>`<a class="button soft" href="${escapeHtml(resolveDocumentUrl(doc))}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("itinerary.actions.openDocument"))}</a>`).join("")}
           </div>
         </article>
       `;
@@ -2908,11 +3044,11 @@
 
   function renderWeather(){
     setHtml("weatherCard",`
-      <p class="eyebrow">Wetter</p>
-      <h2>Reisewetter</h2>
-      <p id="weatherLocationLabel"><strong>Wetter für:</strong> ${escapeHtml(weatherRegionLabel())}</p>
+      <p class="eyebrow">${escapeHtml(t("today.weather.eyebrow"))}</p>
+      <h2>${escapeHtml(t("today.weather.cardTitle"))}</h2>
+      <p id="weatherLocationLabel"><strong>${escapeHtml(t("today.weather.forLocation"))}</strong> ${escapeHtml(weatherRegionLabel())}</p>
       <div class="weather-days" id="weatherDays">
-        <div class="weather-day"><strong>Live-Wetter wird geladen …</strong><span>Daten kommen direkt von Open-Meteo fuer Ihren Reisezeitraum.</span></div>
+        <div class="weather-day"><strong>${escapeHtml(t("today.weather.loadingTitle"))}</strong><span>${escapeHtml(t("today.weather.loadingCopy"))}</span></div>
       </div>
       <div id="weatherMeta"></div>
     `);
@@ -2920,7 +3056,7 @@
   }
 
   function weatherUnavailableMarkup(message){
-    return `<div class="weather-day"><strong>Keine belastbare Vorhersage</strong><span>${escapeHtml(message)}</span></div>`;
+    return `<div class="weather-day"><strong>${escapeHtml(t("today.weather.unavailableTitle"))}</strong><span>${escapeHtml(message)}</span></div>`;
   }
 
   function weatherDayMarkup(day){
@@ -2928,10 +3064,10 @@
       <div class="weather-day">
         <strong><span class="weather-symbol" aria-hidden="true">${escapeHtml(day.symbol||"◇")}</span>${escapeHtml(day.label)}</strong>
         <span>${escapeHtml(day.condition)}</span>
-        <span>${escapeHtml(Math.round(day.tempMin))}°C bis ${escapeHtml(Math.round(day.tempMax))}°C</span>
-        <span>Regen: ${escapeHtml(day.rainProbability??0)}%</span>
-        <span>Niederschlag: ${escapeHtml(day.precipitation??0)} mm</span>
-        <span>Wind: ${escapeHtml(Math.round(day.wind||0))} km/h</span>
+        <span>${escapeHtml(t("today.weather.tempRange",{min:Math.round(day.tempMin),max:Math.round(day.tempMax)}))}</span>
+        <span>${escapeHtml(t("today.weather.rain",{value:day.rainProbability??0}))}</span>
+        <span>${escapeHtml(t("today.weather.precipitation",{value:day.precipitation??0}))}</span>
+        <span>${escapeHtml(t("today.weather.wind",{value:Math.round(day.wind||0)}))}</span>
         <em>${escapeHtml(day.outfit)}</em>
       </div>
     `;
@@ -2962,16 +3098,16 @@
         }));
       }
       const heading=document.getElementById("weatherLocationLabel");
-      if(heading)heading.innerHTML=`<strong>Wetter für:</strong> ${escapeHtml(result.location.name)}`;
+      if(heading)heading.innerHTML=`<strong>${escapeHtml(t("today.weather.forLocation"))}</strong> ${escapeHtml(result.location.name)}`;
       target.innerHTML=days.map(weatherDayMarkup).join("");
       if(meta)meta.innerHTML=weatherMetaMarkup(result,result.range);
       safeRender("concierge",renderConciergeAssistant);
       safeRender("dayTimelines",renderDayTimelines);
     }catch(error){
       console.warn("[ACT Portal] Open-Meteo nicht verfügbar:",error&&error.message?error.message:"Fehler");
-      const message=error&&error.message?error.message:"Wetterdaten konnten nicht geladen werden.";
+      const message=error&&error.message?error.message:t("today.weather.loadFailed");
       target.innerHTML=weatherUnavailableMarkup(message);
-      if(meta)meta.innerHTML=`<p class="weather-meta"><span>Quelle: Open-Meteo (nicht verfuegbar)</span><span>${escapeHtml(weatherSearchName()||"Kein Wetter-Ort hinterlegt")}</span></p>`;
+      if(meta)meta.innerHTML=`<p class="weather-meta"><span>${escapeHtml(t("today.weather.sourceUnavailable"))}</span><span>${escapeHtml(weatherSearchName()||t("today.weather.noLocation"))}</span></p>`;
     }
   }
 
@@ -3018,17 +3154,23 @@
     if(button){
       button.disabled=true;
       button.setAttribute("aria-busy","true");
-      button.textContent="Wird geladen ...";
+      button.textContent=t("documents.loading.default");
     }
     try{
       const url=await fetchShareDocumentUrl(item);
-      if(!url)throw new Error("Dieses Dokument ist derzeit nicht verfuegbar.");
+      if(!url){
+        const err=new Error(t("documents.errors.unavailable"));
+        err.code="document-unavailable";
+        throw err;
+      }
       item.url=url;
       renderDocuments();
       window.open(url,"_blank","noopener,noreferrer");
     }catch(error){
       resetButton();
-      window.alert(error&&error.message?error.message:"Dieses Dokument ist derzeit nicht verfuegbar.");
+      window.alert(error&&error.code==="document-unavailable"
+        ?t("documents.errors.unavailable")
+        :t("documents.errors.openFailed"));
     }
   }
 

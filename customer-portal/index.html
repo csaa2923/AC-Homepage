@@ -89,10 +89,10 @@
     <section class="today-hero portal-hero" id="overview" aria-labelledby="portalTitle">
       <div class="today-hero-stage">
         <div class="hero-panel today-hero-panel">
-          <p class="eyebrow today-brand-eyebrow">Alpine Concierge Tirol</p>
+          <p class="eyebrow today-brand-eyebrow" data-i18n="today.hero.eyebrow">Alpine Concierge Tirol</p>
           <p class="eyebrow today-version-eyebrow" id="portalVersion">Version 1.0</p>
           <p class="admin-version-hint" id="adminVersionHint" hidden></p>
-          <h1 id="portalTitle">Willkommen</h1>
+          <h1 id="portalTitle" data-i18n="today.hero.title">Willkommen</h1>
           <p class="hero-subtitle" id="tripTitle"></p>
           <div class="hero-meta" id="heroMeta"></div>
           <div class="hero-actions">
@@ -104,38 +104,38 @@
     </section>
 
     <!-- 2 Concierge · 3 Next · 4 Wetter · 5 Quick Actions -->
-    <section class="today-primary-grid today-experience" aria-label="Heute im Fokus">
+    <section class="today-primary-grid today-experience" data-i18n-aria-label="today.focusAria" aria-label="Heute im Fokus">
       <div class="today-main-column">
-        <section class="today-concierge portal-section concierge-section" id="concierge" aria-labelledby="conciergeTitle">
+        <section class="today-concierge portal-section concierge-section" id="concierge" aria-labelledby="conciergeTitle" data-i18n-aria-label="today.aria.concierge">
           <div class="section-head">
-            <p class="eyebrow">Concierge</p>
-            <h2 id="conciergeTitle">Heute wichtig</h2>
+            <p class="eyebrow" data-i18n="today.concierge.eyebrow">Concierge</p>
+            <h2 id="conciergeTitle" data-i18n="today.concierge.title">Heute wichtig</h2>
           </div>
           <div id="conciergeRoot" data-concierge-root></div>
         </section>
 
-        <section class="today-next-event portal-section" aria-labelledby="todayNextTitle">
+        <section class="today-next-event portal-section" aria-labelledby="todayNextTitle" data-i18n-aria-label="today.aria.nextEvent">
           <div class="section-head">
-            <p class="eyebrow">Als Nächstes</p>
-            <h2 id="todayNextTitle">Nächster Programmpunkt</h2>
+            <p class="eyebrow" data-i18n="today.schedule.eyebrow">Als Nächstes</p>
+            <h2 id="todayNextTitle" data-i18n="today.schedule.title">Nächster Programmpunkt</h2>
           </div>
           <div class="next-event-card today-next-card" id="nextEventCard"></div>
         </section>
       </div>
 
       <aside class="today-side-column">
-        <section class="today-weather portal-section" aria-labelledby="todayWeatherTitle">
+        <section class="today-weather portal-section" aria-labelledby="todayWeatherTitle" data-i18n-aria-label="today.aria.weather">
           <div class="section-head">
-            <p class="eyebrow">Wetter</p>
-            <h2 id="todayWeatherTitle">Aktuelles Wetter</h2>
+            <p class="eyebrow" data-i18n="today.weather.eyebrow">Wetter</p>
+            <h2 id="todayWeatherTitle" data-i18n="today.weather.title">Aktuelles Wetter</h2>
           </div>
           <article class="info-card weather-card today-weather-card" id="weatherCard"></article>
         </section>
 
-        <section class="today-quick-actions portal-section" aria-labelledby="todayQuickTitle">
+        <section class="today-quick-actions portal-section" aria-labelledby="todayQuickTitle" data-i18n-aria-label="today.aria.quickActions">
           <div class="section-head">
-            <p class="eyebrow">Schnellzugriff</p>
-            <h2 id="todayQuickTitle">Weiter</h2>
+            <p class="eyebrow" data-i18n="today.quick.eyebrow">Schnellzugriff</p>
+            <h2 id="todayQuickTitle" data-i18n="today.quick.title">Weiter</h2>
           </div>
           <div class="today-quick-grid" id="todayQuickActions">
             <button type="button" class="today-quick-btn" data-app-nav="itinerary" data-i18n="today.quick.itinerary">
@@ -160,10 +160,10 @@
     </section>
 
     <!-- 6 Weitere Informationen -->
-    <section class="today-status portal-section status-section today-further" id="status" aria-labelledby="statusTitle">
+    <section class="today-status portal-section status-section today-further" id="status" aria-labelledby="statusTitle" data-i18n-aria-label="today.aria.status">
       <div class="section-head">
-        <p class="eyebrow">Weitere Informationen</p>
-        <h2 id="statusTitle">Wo Sie stehen</h2>
+        <p class="eyebrow" data-i18n="today.status.eyebrow">Weitere Informationen</p>
+        <h2 id="statusTitle" data-i18n="today.status.title">Wo Sie stehen</h2>
       </div>
       <div class="status-card today-status-card">
         <div class="status-topline">
@@ -176,29 +176,29 @@
     </section>
   </section>
 
-  <section id="viewItinerary" class="app-view itinerary-view" data-app-view="itinerary" data-view="itinerary" aria-label="Reiseplan" hidden>
+  <section id="viewItinerary" class="app-view itinerary-view" data-app-view="itinerary" data-view="itinerary" data-i18n-aria-label="itinerary.aria.view" aria-label="Reiseplan" hidden>
     <!-- 1 Hero -->
     <header class="itinerary-hero" aria-labelledby="dayTimelineTitle">
       <div class="itinerary-hero-stage">
-        <p class="eyebrow itinerary-brand-eyebrow">Alpine Concierge Tirol</p>
-        <h1 id="dayTimelineTitle">Reiseplan</h1>
-        <p class="itinerary-hero-copy">Ihr persönlicher Reisebegleiter – Tag für Tag.</p>
+        <p class="eyebrow itinerary-brand-eyebrow" data-i18n="itinerary.hero.eyebrow">Alpine Concierge Tirol</p>
+        <h1 id="dayTimelineTitle" data-i18n="itinerary.hero.title">Reiseplan</h1>
+        <p class="itinerary-hero-copy" data-i18n="itinerary.hero.subtitle">Ihr persönlicher Reisebegleiter – Tag für Tag.</p>
       </div>
     </header>
 
     <!-- 2 Reiseübersicht -->
-    <section class="itinerary-overview portal-section" aria-label="Reiseübersicht">
+    <section class="itinerary-overview portal-section" data-i18n-aria-label="itinerary.overview.aria" aria-label="Reiseübersicht">
       <div class="itinerary-overview-grid" id="itineraryOverview">
         <div class="itinerary-overview-item">
-          <span>Reisezeitraum</span>
+          <span data-i18n="itinerary.overview.period">Reisezeitraum</span>
           <strong id="itineraryPeriod"></strong>
         </div>
         <div class="itinerary-overview-item">
-          <span>Region</span>
+          <span data-i18n="itinerary.overview.region">Region</span>
           <strong id="itineraryRegion"></strong>
         </div>
         <div class="itinerary-overview-item">
-          <span>Reisedauer</span>
+          <span data-i18n="itinerary.overview.duration">Reisedauer</span>
           <strong id="itineraryDuration"></strong>
         </div>
       </div>
@@ -209,26 +209,26 @@
     </section>
 
     <!-- 3 Tagesnavigation -->
-    <section class="itinerary-day-nav portal-section" aria-label="Tagesnavigation">
+    <section class="itinerary-day-nav portal-section" data-i18n-aria-label="itinerary.navigation.aria" aria-label="Tagesnavigation">
       <div class="section-head itinerary-day-nav-head">
-        <p class="eyebrow">Tage</p>
-        <h2>Ihre Reisetage</h2>
+        <p class="eyebrow" data-i18n="itinerary.navigation.eyebrow">Tage</p>
+        <h2 data-i18n="itinerary.navigation.title">Ihre Reisetage</h2>
       </div>
-      <div class="day-selector itinerary-day-selector" id="calendarDaySelector" data-i18n-aria-label="aria.daySelector" aria-label="Tagesauswahl"></div>
+      <div class="day-selector itinerary-day-selector" id="calendarDaySelector" data-i18n-aria-label="itinerary.aria.daySelector" aria-label="Tagesauswahl"></div>
     </section>
 
     <!-- 4 Timeline + 5 Programmdetails -->
     <section class="itinerary-main-grid">
       <div class="itinerary-timeline-column">
-        <section class="portal-section itinerary-timeline-section" id="day-timeline" aria-label="Tages-Timeline">
+        <section class="portal-section itinerary-timeline-section" id="day-timeline" data-i18n-aria-label="itinerary.timeline.dayAria" aria-label="Tages-Timeline">
           <div class="day-timelines itinerary-day-timelines" id="dayTimelines"></div>
         </section>
       </div>
       <aside class="itinerary-details-column">
         <section class="portal-section itinerary-details-section" id="program-details" aria-labelledby="programDetailsTitle">
           <div class="section-head">
-            <p class="eyebrow">Details</p>
-            <h2 id="programDetailsTitle">Ihr Programmpunkt</h2>
+            <p class="eyebrow" data-i18n="itinerary.details.eyebrow">Details</p>
+            <h2 id="programDetailsTitle" data-i18n="itinerary.details.title">Ihr Programmpunkt</h2>
             <label class="detail-fields-filter itinerary-detail-toggle">
               <input type="checkbox" data-toggle-empty-fields>
               <span data-i18n="common.showAllFields">Alle Felder anzeigen</span>
@@ -242,8 +242,8 @@
     <!-- 6 Tagesabschluss / Buchungen -->
     <section class="portal-section itinerary-closing" id="bookings" aria-labelledby="bookingsTitle">
       <div class="section-head">
-        <p class="eyebrow">Abschluss</p>
-        <h2 id="bookingsTitle">Bestätigte Leistungen</h2>
+        <p class="eyebrow" data-i18n="itinerary.bookings.eyebrow">Abschluss</p>
+        <h2 id="bookingsTitle" data-i18n="itinerary.bookings.title">Bestätigte Leistungen</h2>
       </div>
       <div class="booking-grid" id="bookingGrid"></div>
     </section>
@@ -251,16 +251,16 @@
     <!-- Secondary: Kalender & Gesamt-Timeline -->
     <section class="portal-section calendar-section itinerary-secondary" id="calendar" aria-labelledby="calendarTitle">
       <div class="section-head">
-        <p class="eyebrow">Kalender</p>
-        <h2 id="calendarTitle">Ihre Reise als Kalender</h2>
+        <p class="eyebrow" data-i18n="itinerary.calendar.eyebrow">Kalender</p>
+        <h2 id="calendarTitle" data-i18n="itinerary.calendar.title">Ihre Reise als Kalender</h2>
       </div>
       <div class="calendar-panel">
-        <div class="calendar-toolbar" aria-label="Kalendersteuerung">
-          <div class="segmented-control" role="group" aria-label="Kalenderansicht">
-            <button class="active" type="button" data-calendar-view="trip">Gesamtreise</button>
-            <button type="button" data-calendar-view="day">Tagesansicht</button>
+        <div class="calendar-toolbar" data-i18n-aria-label="itinerary.calendar.toolbarAria" aria-label="Kalendersteuerung">
+          <div class="segmented-control" role="group" data-i18n-aria-label="itinerary.calendar.viewAria" aria-label="Kalenderansicht">
+            <button class="active" type="button" data-calendar-view="trip" data-i18n="itinerary.calendar.tripView">Gesamtreise</button>
+            <button type="button" data-calendar-view="day" data-i18n="itinerary.calendar.dayView">Tagesansicht</button>
           </div>
-          <button class="button soft" type="button" id="downloadTripCalendarButton">Gesamtreise in Kalender speichern</button>
+          <button class="button soft" type="button" id="downloadTripCalendarButton" data-i18n="itinerary.actions.saveTripCalendar">Gesamtreise in Kalender speichern</button>
         </div>
         <div class="calendar-view" id="tripCalendar"></div>
         <div class="calendar-view" id="dayCalendar" hidden></div>
@@ -269,8 +269,8 @@
 
     <section class="portal-section itinerary-secondary" id="overall-timeline" aria-labelledby="overallTimelineTitle">
       <div class="section-head">
-        <p class="eyebrow">Gesamt-Timeline</p>
-        <h2 id="overallTimelineTitle">Alle Programmpunkte chronologisch</h2>
+        <p class="eyebrow" data-i18n="itinerary.timeline.eyebrow">Gesamt-Timeline</p>
+        <h2 id="overallTimelineTitle" data-i18n="itinerary.timeline.title">Alle Programmpunkte chronologisch</h2>
       </div>
       <div class="overall-timeline" id="overallTimeline"></div>
     </section>
@@ -318,37 +318,37 @@
     </section>
   </section>
 
-  <section id="viewDocuments" class="app-view documents-view" data-app-view="documents" data-view="documents" aria-labelledby="documentTitle" hidden>
-    <header class="documents-hero" aria-label="Reiseunterlagen">
+  <section id="viewDocuments" class="app-view documents-view" data-app-view="documents" data-view="documents" data-i18n-aria-label="documents.aria.view" aria-labelledby="documentTitle" aria-label="Dokumente" hidden>
+    <header class="documents-hero" data-i18n-aria-label="documents.aria.hero" aria-label="Reiseunterlagen">
       <div class="documents-hero-stage">
-        <p class="eyebrow documents-brand-eyebrow">Alpine Concierge Tirol</p>
-        <h1 id="documentTitle">Ihre Reiseunterlagen</h1>
-        <p class="documents-hero-copy documents-intro">Alle wichtigen Dokumente an einem Ort.</p>
+        <p class="eyebrow documents-brand-eyebrow" data-i18n="documents.hero.eyebrow">Alpine Concierge Tirol</p>
+        <h1 id="documentTitle" data-i18n="documents.hero.title">Ihre Reiseunterlagen</h1>
+        <p class="documents-hero-copy documents-intro" data-i18n="documents.hero.subtitle">Alle wichtigen Dokumente an einem Ort.</p>
       </div>
     </header>
 
-    <section class="documents-overview portal-section" aria-labelledby="documentsOverviewTitle">
+    <section class="documents-overview portal-section" data-i18n-aria-label="documents.aria.overview" aria-labelledby="documentsOverviewTitle">
       <div class="section-head">
-        <p class="eyebrow">Übersicht</p>
-        <h2 id="documentsOverviewTitle">Ihre Kategorien</h2>
-        <p class="documents-overview-copy">Tickets, Voucher und persönliche Unterlagen – übersichtlich nach Thema.</p>
+        <p class="eyebrow" data-i18n="documents.overview.eyebrow">Übersicht</p>
+        <h2 id="documentsOverviewTitle" data-i18n="documents.overview.title">Ihre Kategorien</h2>
+        <p class="documents-overview-copy" data-i18n="documents.overview.copy">Tickets, Voucher und persönliche Unterlagen – übersichtlich nach Thema.</p>
       </div>
-      <div class="documents-category-nav" id="documentsCategoryNav" hidden></div>
+      <div class="documents-category-nav" id="documentsCategoryNav" data-i18n-aria-label="documents.aria.categoryNav" hidden></div>
     </section>
 
-    <section class="portal-section documents-center-section" id="documents" aria-label="Dokumentencenter">
+    <section class="portal-section documents-center-section" id="documents" data-i18n-aria-label="documents.aria.center" aria-label="Dokumentencenter">
       <div class="section-head documents-center-head">
-        <p class="eyebrow">Unterlagen</p>
-        <h2 id="documentsListTitle">Ihre Dokumente</h2>
+        <p class="eyebrow" data-i18n="documents.list.eyebrow">Unterlagen</p>
+        <h2 id="documentsListTitle" data-i18n="documents.list.title">Ihre Dokumente</h2>
       </div>
       <div class="documents-center" id="documentGrid"></div>
     </section>
 
-    <section class="documents-notes portal-section" aria-labelledby="documentsNotesTitle">
+    <section class="documents-notes portal-section" data-i18n-aria-label="documents.aria.notes" aria-labelledby="documentsNotesTitle">
       <article class="documents-note-card">
-        <p class="eyebrow">Concierge</p>
-        <h2 id="documentsNotesTitle">Fragen zu Ihren Unterlagen?</h2>
-        <p>Fehlt ein Ticket oder Voucher, melden Sie sich einfach bei Ihrem Concierge – wir helfen gerne weiter.</p>
+        <p class="eyebrow" data-i18n="documents.notes.eyebrow">Concierge</p>
+        <h2 id="documentsNotesTitle" data-i18n="documents.notes.title">Fragen zu Ihren Unterlagen?</h2>
+        <p data-i18n="documents.notes.copy">Fehlt ein Ticket oder Voucher, melden Sie sich einfach bei Ihrem Concierge – wir helfen gerne weiter.</p>
       </article>
     </section>
   </section>
@@ -426,11 +426,11 @@
 <script src="booking-library.js?v=1"></script>
 <script src="travel-actions-library.js?v=13"></script>
 <script src="concierge-assistant-library.js?v=2"></script>
-<script src="i18n/de.js?v=1"></script>
-<script src="i18n/en.js?v=1"></script>
-<script src="i18n/it.js?v=1"></script>
-<script src="i18n/fr.js?v=1"></script>
-<script src="i18n/portal-i18n.js?v=1"></script>
+<script src="i18n/de.js?v=4"></script>
+<script src="i18n/en.js?v=4"></script>
+<script src="i18n/it.js?v=4"></script>
+<script src="i18n/fr.js?v=4"></script>
+<script src="i18n/portal-i18n.js?v=3"></script>
 <script src="firebase-config.js"></script>
 <script src="firebase-service.js?v=24"></script>
 <script src="firebase-auth.js"></script>
@@ -438,6 +438,6 @@
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=65"></script>
+<script src="customer-portal.js?v=69"></script>
 </body>
 </html>

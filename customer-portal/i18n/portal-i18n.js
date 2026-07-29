@@ -252,6 +252,27 @@
     return start||end||"";
   }
 
+  function formatDateTime(value,options){
+    let date=null;
+    if(value instanceof Date)date=value;
+    else if(value!=null){
+      const parsed=new Date(value);
+      if(!Number.isNaN(parsed.getTime()))date=parsed;
+    }
+    if(!date)return value==null?"":String(value);
+    try{
+      return new Intl.DateTimeFormat(getLocale(),options||{
+        day:"2-digit",
+        month:"2-digit",
+        year:"numeric",
+        hour:"2-digit",
+        minute:"2-digit"
+      }).format(date);
+    }catch(_error){
+      return formatDate(date)+" "+formatTime(date);
+    }
+  }
+
   function applyDomTranslations(root){
     const scope=root&&root.querySelectorAll?root:document;
     scope.querySelectorAll("[data-i18n]").forEach(node=>{
@@ -321,6 +342,7 @@
     formatWeekday,
     formatMonth,
     formatDateRange,
+    formatDateTime,
     applyDomTranslations,
     syncLanguageControls,
     readStoredLanguage,

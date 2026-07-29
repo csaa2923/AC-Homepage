@@ -102,8 +102,8 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/function isImageDocument\(item\)/);
     assert.match(portalJs,/function isPdfDocument\(item\)/);
     assert.match(portalJs,/documents\.actions\.download/);
-    assert.match(portalJs,/errors\.documentUnavailable/);
-    assert.match(portalHtml,/customer-portal\.js\?v=65/);
+    assert.match(portalJs,/documents\.errors\.unavailable/);
+    assert.match(portalHtml,/customer-portal\.js\?v=69/);
     assert.match(portalHtml,/redact-allowlist\.js\?v=13/);
     assert.match(portalHtml,/travel-actions-library\.js\?v=13/);
     assert.match(portalHtml,/concierge-assistant-library\.js\?v=2/);
@@ -117,9 +117,9 @@ describe("portal document availability",()=>{
 
   it("portal renders hike companion with lazy map and toolbar",()=>{
     assert.match(portalJs,/function hikeCompanionParts\(/);
-    assert.match(portalJs,/Wanderübersicht|Wanderuebersicht/);
-    assert.match(portalJs,/Kurzinfo/);
-    assert.match(portalJs,/Hoehenprofil|Höhenprofil/);
+    assert.match(portalJs,/itinerary\.route\.overview/);
+    assert.match(portalJs,/itinerary\.route\.summary/);
+    assert.match(portalJs,/itinerary\.route\.elevation/);
     assert.match(portalJs,/data-hike-map/);
     assert.match(portalJs,/function mountHikeLeafletMap\(/);
     assert.match(portalJs,/function resolveHikeMapRoutePayload\(/);
@@ -130,12 +130,12 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/function observeLazyMaps\(/);
     assert.match(portalJs,/IntersectionObserver/);
     assert.match(portalJs,/L\.polyline|polyline\(/);
-    assert.match(portalJs,/Kartenleiste/);
+    assert.match(portalJs,/itinerary\.route\.toolbarAria/);
     assert.match(portalJs,/resolveHikeCompanion/);
     assert.match(portalJs,/function addHikeMarkersToMap\(/);
     assert.match(portalJs,/function bindHikeElevationInteractions\(/);
     assert.match(portalJs,/data-hike-live-location/);
-    assert.match(portalJs,/In Google Maps oeffnen/);
+    assert.match(portalJs,/itinerary\.route\.openGoogleMaps/);
     assert.match(portalJs,/GPX-Datei jetzt herunterladen und in Ihrer bevorzugten Navigations-App offline nutzen\./);
     assert.match(portalJs,/markerClusterGroup|L\.layerGroup/);
     assert.match(portalCss,/hike-companion/);

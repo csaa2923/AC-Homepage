@@ -17,6 +17,7 @@
   const root=document.getElementById("portalRoot");
   const travelLib=()=>window.ACTTravelActionsLibrary||null;
   const conciergeLib=()=>window.ACTConciergeAssistantLibrary||null;
+  const i18nLib=()=>window.ACTPortalI18n||null;
   const APP_VIEWS=["today","itinerary","discover","documents","service"];
   const APP_VIEW_LABELS={
     today:"Heute",
@@ -46,7 +47,7 @@
     contact:"service",
     actions:"service"
   };
-  const PORTAL_LANG_KEY="act_customer_portal_language";
+  const PORTAL_LANG_KEY=(i18nLib()&&i18nLib().STORAGE_KEY)||"act_customer_portal_language";
   const calendarState={
     view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
     dayIndex:0
@@ -186,19 +187,85 @@
     appViewState.navBound=true;
   }
 
+  function t(key,params){
+    const lib=i18nLib();
+    if(lib?.t)return lib.t(key,params);
+    return String(key||"");
+  }
+
   function normalizePortalLanguage(value){
-    return String(value||"").trim().toLowerCase()==="en"?"en":"de";
+    const lib=i18nLib();
+    if(lib?.normalizeLanguage)return lib.normalizeLanguage(value);
+    const raw=String(value||"").trim().toLowerCase().split(/[-_]/)[0];
+    return ["de","en","it","fr"].includes(raw)?raw:"de";
+  }
+
+  function syncAppViewLabels(){
+    APP_VIEW_LABELS.today=t("navigation.today");
+    APP_VIEW_LABELS.itinerary=t("navigation.itinerary");
+    APP_VIEW_LABELS.discover=t("navigation.discover");
+    APP_VIEW_LABELS.documents=t("navigation.documents");
+    APP_VIEW_LABELS.service=t("navigation.service");
+    if(window.ACTCustomerPortalViews){
+      window.ACTCustomerPortalViews.labels=Object.assign({},APP_VIEW_LABELS);
+    }
+  }
+
+  function applyPortalI18nDom(){
+    const lib=i18nLib();
+    if(lib?.applyDomTranslations)lib.applyDomTranslations(document);
+    else{
+      document.querySelectorAll("[data-i18n]").forEach(node=>{
+        const key=node.getAttribute("data-i18n");
+        if(!key)return;
+        const label=node.querySelector(".app-nav-label, .today-quick-label, [data-i18n-target]");
+        if(label)label.textContent=t(key);
+        else if(!node.children.length)node.textContent=t(key);
+      });
+    }
+    if(lib?.syncLanguageControls)lib.syncLanguageControls(document);
+    syncAppViewLabels();
   }
 
   function syncPortalLanguageUI(lang){
-    const active=normalizePortalLanguage(lang);
-    document.documentElement.lang=active;
-    document.body.setAttribute("data-portal-language",active);
+    const lib=i18nLib();
+    const active=lib?.setLanguage
+      ?lib.setLanguage(lang,{persist:false,updateDocument:true})
+      :normalizePortalLanguage(lang);
+    if(!lib?.setLanguage){
+      document.documentElement.lang=active;
+      document.body.setAttribute("data-portal-language",active);
+    }
+    applyPortalI18nDom();
     document.querySelectorAll("[data-portal-lang]").forEach(btn=>{
       const isActive=normalizePortalLanguage(btn.getAttribute("data-portal-lang"))===active;
       btn.classList.toggle("is-active",isActive);
       btn.setAttribute("aria-pressed",isActive?"true":"false");
+      if(isActive)btn.setAttribute("aria-current","true");
+      else btn.removeAttribute("aria-current");
+      const code=normalizePortalLanguage(btn.getAttribute("data-portal-lang"));
+      const titleKey=`language.${code}`;
+      const title=t(titleKey);
+      if(title&&title!==titleKey)btn.setAttribute("title",title);
     });
+  }
+
+  function resolvePortalLanguageFromContext(){
+    const lib=i18nLib();
+    const customerLanguage=customer?.portalLanguage||customer?.language||"";
+    if(lib?.resolveLanguage){
+      return lib.resolveLanguage({
+        customerLanguage,
+        storedLanguage:lib.readStoredLanguage?.()||"",
+        navigator:typeof navigator!=="undefined"?navigator:null
+      });
+    }
+    if(customerLanguage)return normalizePortalLanguage(customerLanguage);
+    try{
+      const stored=sessionStorage.getItem(PORTAL_LANG_KEY);
+      if(stored)return normalizePortalLanguage(stored);
+    }catch(_error){/* optional */}
+    return "de";
   }
 
   function bindPortalLanguageControls(){
@@ -209,12 +276,19 @@
       const btn=event.target.closest("[data-portal-lang]");
       if(!btn)return;
       const lang=normalizePortalLanguage(btn.getAttribute("data-portal-lang"));
-      try{sessionStorage.setItem(PORTAL_LANG_KEY,lang);}catch(_error){}
+      const lib=i18nLib();
+      if(lib?.setLanguage)lib.setLanguage(lang,{persist:true,updateDocument:true});
+      else{
+        try{sessionStorage.setItem(PORTAL_LANG_KEY,lang);}catch(_error){}
+      }
       syncPortalLanguageUI(lang);
+      if(customer&&root&&!root.querySelector(".not-found")){
+        renderPortal();
+      }else{
+        applyPortalI18nDom();
+      }
     });
-    let initial="de";
-    try{initial=sessionStorage.getItem(PORTAL_LANG_KEY)||"de";}catch(_error){initial="de";}
-    syncPortalLanguageUI(initial);
+    syncPortalLanguageUI(resolvePortalLanguageFromContext());
   }
 
   function initAppViewState(){
@@ -510,7 +584,10 @@
   function formatUploadDate(value){
     if(!hasDisplayValue(value))return "";
     const date=new Date(value);
-    return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString("de-DE");
+    if(Number.isNaN(date.getTime()))return String(value);
+    const lib=i18nLib();
+    if(lib?.formatDate)return lib.formatDate(date);
+    return date.toLocaleDateString("de-AT");
   }
 
   function formatDocumentFileSize(bytes){
@@ -643,12 +720,12 @@
     ].filter(hasDisplayValue);
     let actions="";
     if(url){
-      actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Dokument oeffnen: ${escapeHtml(displayTitle)}">Dokument oeffnen</a>
-        <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}" aria-label="Herunterladen: ${escapeHtml(displayTitle)}">Herunterladen</a>`;
+      actions=`<a class="button primary" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(t("documents.actions.openNamed",{title:displayTitle}))}">${escapeHtml(t("documents.actions.open"))}</a>
+        <a class="button soft" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}" aria-label="${escapeHtml(t("documents.actions.downloadNamed",{title:displayTitle}))}">${escapeHtml(t("documents.actions.download"))}</a>`;
     }else if(isShareAccess&&documentId){
-      actions=`<button class="button primary" type="button" data-open-portal-document="${escapeHtml(documentId)}" aria-label="Dokument oeffnen: ${escapeHtml(displayTitle)}">Dokument oeffnen</button>`;
+      actions=`<button class="button primary" type="button" data-open-portal-document="${escapeHtml(documentId)}" aria-label="${escapeHtml(t("documents.actions.openNamed",{title:displayTitle}))}">${escapeHtml(t("documents.actions.open"))}</button>`;
     }else{
-      actions=`<span class="button soft document-disabled" aria-disabled="true">Dieses Dokument ist derzeit nicht verfuegbar.</span>`;
+      actions=`<span class="button soft document-disabled" aria-disabled="true">${escapeHtml(t("errors.documentUnavailable"))}</span>`;
     }
     return `
       <article class="document-card documents-card ${url?"":"document-unavailable"}" data-document-id="${escapeHtml(documentId)}">
@@ -696,8 +773,8 @@
       target.innerHTML=`
         <div class="documents-empty document-card document-empty" role="status">
           <p class="eyebrow">Concierge</p>
-          <h3>Ihre Unterlagen folgen in Kürze</h3>
-          <p>Sobald Tickets, Voucher oder andere Reiseunterlagen für Sie freigegeben sind, finden Sie sie hier – klar sortiert und jederzeit griffbereit.</p>
+          <h3>${escapeHtml(t("documents.empty.title"))}</h3>
+          <p>${escapeHtml(t("documents.empty.copy"))}</p>
         </div>
       `;
       return;
@@ -706,11 +783,12 @@
     renderDocumentsCategoryNav(groups);
     target.innerHTML=groups.map(group=>{
       const id=documentGroupDomId(group.label);
+      const countLabel=t(group.items.length===1?"documents.count.one":"documents.count.other",{count:group.items.length});
       return `
       <section class="documents-group" id="${escapeHtml(id)}" aria-labelledby="${escapeHtml(id)}-title">
         <header class="documents-group-head">
           <h3 id="${escapeHtml(id)}-title">${escapeHtml(group.label)}</h3>
-          <p class="documents-group-count">${group.items.length} ${group.items.length===1?"Dokument":"Dokumente"}</p>
+          <p class="documents-group-count">${escapeHtml(countLabel)}</p>
         </header>
         <div class="documents-group-grid document-grid">
           ${group.items.map(renderDocumentCard).join("")}
@@ -945,8 +1023,8 @@
       `:`
         <article class="discover-featured-card discover-empty" role="status">
           <p class="eyebrow">Concierge</p>
-          <h3>Ihre Empfehlungen werden vorbereitet</h3>
-          <p class="discover-featured-copy">Sobald Ihr Concierge persönliche Tipps freigibt, erscheinen sie hier – kuratiert für Ihren Aufenthalt.</p>
+          <h3>${escapeHtml(t("discover.empty.title"))}</h3>
+          <p class="discover-featured-copy">${escapeHtml(t("discover.empty.copy"))}</p>
         </article>
       `;
     }
@@ -955,8 +1033,8 @@
       grid.innerHTML=`
         <article class="discover-empty" role="status">
           <p class="eyebrow">Concierge</p>
-          <h3>Noch keine Empfehlungen freigegeben</h3>
-          <p>Wir stellen gerade eine persönliche Auswahl für Sie zusammen. Schauen Sie später wieder vorbei – oder fragen Sie Ihren Concierge direkt.</p>
+          <h3>${escapeHtml(t("discover.empty.title"))}</h3>
+          <p>${escapeHtml(t("discover.empty.copy"))}</p>
         </article>
       `;
       renderDiscoverRegion();
@@ -1955,7 +2033,7 @@
   }
 
   function tripPeriod(){
-    if(customer.startDatePlain&&customer.endDatePlain)return `${formatDateValue(customer.startDatePlain)} - ${formatDateValue(customer.endDatePlain)}`;
+    if(customer.startDatePlain&&customer.endDatePlain)return formatDateRangeValue(customer.startDatePlain,customer.endDatePlain);
     if(customer.startDatePlain)return formatDateValue(customer.startDatePlain);
     if(hasDisplayValue(customer.travelPeriod))return customer.travelPeriod;
     return "";
@@ -1970,9 +2048,18 @@
   }
 
   function formatDateValue(dateValue){
-    if(!dateValue||!dateValue.includes("-"))return dateValue||"";
-    const [year,month,day]=dateValue.split("-");
+    if(!dateValue||!String(dateValue).includes("-"))return dateValue||"";
+    const lib=i18nLib();
+    if(lib?.formatDate)return lib.formatDate(dateValue);
+    const [year,month,day]=String(dateValue).split("-");
     return `${day}.${month}.${year}`;
+  }
+
+  function formatDateRangeValue(startValue,endValue){
+    const lib=i18nLib();
+    if(lib?.formatDateRange)return lib.formatDateRange(startValue,endValue);
+    if(startValue&&endValue&&startValue!==endValue)return `${formatDateValue(startValue)} - ${formatDateValue(endValue)}`;
+    return formatDateValue(startValue||endValue||"");
   }
 
   function itemDate(item){
@@ -2163,7 +2250,7 @@
     if(!card)return;
     const next=programItems()[0];
     if(!next){
-      card.innerHTML=`<p class="today-empty">Aktuell ist kein nächster Programmpunkt hinterlegt.</p>`;
+      card.innerHTML=`<p class="today-empty">${escapeHtml(t("today.next.empty"))}</p>`;
       return;
     }
     const navUrl=itemNavigationUrl(itemForTravelActions(next));
@@ -2223,10 +2310,12 @@
     selector.innerHTML=days.map((day,index)=>{
       const isActive=index===calendarState.dayIndex;
       const isToday=dayTemporalState(day.dateValue)==="today";
+      const dayLabel=t("itinerary.day.label",{n:index+1});
+      const ariaDay=t("itinerary.day.labelWithDate",{n:index+1,date:day.date||""})+(isToday?t("itinerary.day.todaySuffix"):"");
       return `
-      <button class="itinerary-day-chip${isActive?" active":""}${isToday?" is-today":""}" type="button" data-calendar-day="${index}" aria-pressed="${isActive?"true":"false"}"${isActive?` aria-current="date"`:""} aria-label="Tag ${index+1}, ${escapeHtml(day.date||"")}${isToday?", heute":""}">
-        <span class="itinerary-day-chip-index">Tag ${index+1}</span>
-        ${isToday?`<span class="itinerary-day-chip-today">Heute</span>`:""}
+      <button class="itinerary-day-chip${isActive?" active":""}${isToday?" is-today":""}" type="button" data-calendar-day="${index}" aria-pressed="${isActive?"true":"false"}"${isActive?` aria-current="date"`:""} aria-label="${escapeHtml(ariaDay)}">
+        <span class="itinerary-day-chip-index">${escapeHtml(dayLabel)}</span>
+        ${isToday?`<span class="itinerary-day-chip-today">${escapeHtml(t("navigation.today"))}</span>`:""}
         <strong class="itinerary-day-chip-date">${escapeHtml(day.date||"")}</strong>
       </button>
     `;
@@ -2241,7 +2330,7 @@
     const target=el("tripCalendar");
     if(!target)return;
     if(!days.length){
-      target.innerHTML=`<p class="today-empty">Noch keine Programmpunkte für den Kalender hinterlegt.</p>`;
+      target.innerHTML=`<p class="today-empty">${escapeHtml(t("itinerary.empty.calendar"))}</p>`;
       return;
     }
     const bounds=calendarBounds(programItems());
@@ -2268,7 +2357,7 @@
     if(!target)return;
     const day=days[calendarState.dayIndex]||days[0];
     if(!day){
-      target.innerHTML=`<p class="today-empty">Noch keine Programmpunkte für den Kalender hinterlegt.</p>`;
+      target.innerHTML=`<p class="today-empty">${escapeHtml(t("itinerary.empty.calendar"))}</p>`;
       return;
     }
     const bounds=calendarBounds(day.items||[]);
@@ -2431,6 +2520,8 @@
 
   function weekdayLabel(dateValue){
     if(!dateValue||!String(dateValue).includes("-"))return "";
+    const lib=i18nLib();
+    if(lib?.formatWeekday)return lib.formatWeekday(dateValue,{style:"long"});
     const [year,month,day]=String(dateValue).split("-").map(Number);
     if(!year||!month||!day)return "";
     return new Date(year,month-1,day).toLocaleDateString("de-DE",{weekday:"long"});
@@ -2680,7 +2771,7 @@
         </ol>
       </article>
     `;
-    }).join("")||`<p class="today-empty">Für diese Reise sind noch keine Programmpunkte hinterlegt.</p>`;
+    }).join("")||`<p class="today-empty">${escapeHtml(t("itinerary.empty.program"))}</p>`;
     observeLazyMaps(rootEl);
   }
 
@@ -2793,7 +2884,7 @@
       setHtml("hotelCard",`
         <p class="eyebrow">Unterkunft</p>
         <h2>Aufenthalt</h2>
-        <p class="service-empty-copy">Ihre Unterkunftsdaten werden gerade vorbereitet und erscheinen hier, sobald sie freigegeben sind.</p>
+        <p class="service-empty-copy">${escapeHtml(t("service.empty.hotel"))}</p>
       `);
       return;
     }
@@ -2922,7 +3013,7 @@
       if(!button||!button.isConnected)return;
       button.disabled=false;
       button.removeAttribute("aria-busy");
-      button.textContent="Dokument oeffnen";
+      button.textContent=t("documents.actions.open");
     };
     if(button){
       button.disabled=true;
@@ -2977,7 +3068,7 @@
         ["E-Mail",email?`<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`:""],
         ["Notfallkontakt",contact.emergency],
         ["Lokale Notrufnummern",contact.localEmergency]
-      ]):`<p class="service-empty-copy">Ihre persönliche Betreuung wird gerade vorbereitet.</p>`}
+      ]):`<p class="service-empty-copy">${escapeHtml(t("service.empty.care"))}</p>`}
       <div class="card-actions service-contact-actions-primary">${primaryActions}</div>
     `);
   }
@@ -3016,7 +3107,7 @@
         <time>${escapeHtml(item.date||"")}</time>
         <strong>${escapeHtml(historyDisplayText(item))}</strong>
       </article>
-    `).join(""):`<article class="history-item service-history-item service-history-empty"><p class="eyebrow">Concierge</p><strong>Noch keine Änderungen notiert</strong><p class="service-empty-copy">Sobald es Aktualisierungen zu Ihrer Reise gibt, erscheinen sie hier.</p></article>`);
+    `).join(""):`<article class="history-item service-history-item service-history-empty"><p class="eyebrow">Concierge</p><strong>${escapeHtml(t("service.empty.historyTitle"))}</strong><p class="service-empty-copy">${escapeHtml(t("service.empty.historyCopy"))}</p></article>`);
   }
 
   function isAppleMobile(){
@@ -3300,11 +3391,12 @@
 
   function renderPortal(){
     root.removeAttribute("aria-busy");
-    text("portalTitle",`Willkommen ${customer.customerName||"Gast"}`);
+    const guestName=customer.customerName||"Gast";
+    text("portalTitle",t("today.hero.welcome",{name:guestName}));
     text("tripTitle",customer.tripName||customer.tripTitle||"");
-    text("portalVersion",`Version ${customer.version||"1.0"}`);
-    text("publicationStatus",`Reisestatus: ${customer.status||"Noch nicht festgelegt"}`);
-    text("updatedAt",`Zuletzt aktualisiert: ${customer.updatedAt||""}`);
+    text("portalVersion",t("common.version",{version:customer.version||"1.0"}));
+    text("publicationStatus",t("today.status.label",{status:customer.status||t("today.status.defaultStatus")}));
+    text("updatedAt",t("today.status.updated",{date:customer.updatedAt||""}));
     safeRender("itineraryOverview",renderItineraryOverview);
     const whatsappHero=el("whatsappHero");
     if(whatsappHero)whatsappHero.href=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
@@ -3332,6 +3424,7 @@
     syncEmptyFieldsVisibility();
     hydrateShareDocumentUrls();
     applyAppViewVisibility();
+    applyPortalI18nDom();
   }
 
   function renderAdminVersionHint(){
@@ -3343,7 +3436,10 @@
     }
     hint.hidden=false;
     const stand=customer.updatedAt||customer.publishMeta?.lastPublishedAt||"";
-    const standText=stand?new Date(stand).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"}):stand;
+    const standDate=stand?new Date(stand):null;
+    const standText=standDate&&!Number.isNaN(standDate.getTime())
+      ?(i18nLib()?.formatDate?i18nLib().formatDate(standDate):standDate.toLocaleDateString("de-AT",{day:"2-digit",month:"2-digit",year:"numeric"}))
+      :stand;
     const sourceLabel=dataSource==="local-draft"
       ?"Entwurf (noch nicht veröffentlicht)"
       :dataSource==="firebase"
@@ -3370,10 +3466,12 @@
       if(!root.querySelector(".not-found")){
         root.removeAttribute("aria-busy");
         root.replaceChildren(document.getElementById("notFoundTemplate").content.cloneNode(true));
+        applyPortalI18nDom();
       }
       return;
     }
     customer=normalizeCustomerData(loaded,isShareAccess?loaded.customerId||"":customerId);
+    syncPortalLanguageUI(resolvePortalLanguageFromContext());
     renderPortal();
     applyAppViewVisibility();
   }

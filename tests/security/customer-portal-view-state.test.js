@@ -18,7 +18,7 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=63/);
+    assert.match(portalHtml, /customer-portal\.js\?v=65/);
     assert.match(portalHtml, /customer-portal\.css\?v=37/);
   });
 
@@ -111,6 +111,9 @@ describe("customer portal app navigation (4.1C)", () => {
     assert.match(portalHtml, /class="app-lang"/);
     assert.match(portalHtml, /data-portal-lang="de"/);
     assert.match(portalHtml, /data-portal-lang="en"/);
+    assert.match(portalHtml, /data-portal-lang="it"/);
+    assert.match(portalHtml, /data-portal-lang="fr"/);
+    assert.doesNotMatch(portalHtml, /data-portal-lang="nl"/);
     assert.match(portalJs, /function bindPortalLanguageControls\(/);
     assert.match(portalCss, /:focus-visible/);
   });
@@ -214,11 +217,12 @@ describe("customer portal documents view (4.4)", () => {
     assert.match(portalJs, /function renderDocumentCard\(/);
     assert.match(portalJs, /function documentTypeIcon\(/);
     assert.match(portalJs, /Allgemein/);
-    assert.match(portalJs, /Herunterladen/);
+    assert.match(portalJs, /documents\.actions\.download/);
+    assert.match(portalJs, /documents\.actions\.open/);
     assert.match(portalJs, /data-open-portal-document/);
     assert.match(portalJs, /resolveDocumentUrl/);
     assert.match(portalJs, /isPortalDocument/);
-    assert.match(portalJs, /Ihre Unterlagen folgen in Kürze|Noch keine Unterlagen freigegeben/);
+    assert.match(portalJs, /documents\.empty\.title/);
     assert.doesNotMatch(portalJs, /fetch\([^)]*document[^)]*\)[\s\S]{0,80}new XMLHttpRequest/);
   });
 
@@ -316,7 +320,7 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
     assert.match(portalJs, /safeRender\("documents",renderDocuments\)/);
     assert.match(portalJs, /safeRender\("dayTimelines",renderDayTimelines\)/);
     assert.match(portalJs, /safeRender\("programDetails",renderProgramDetails\)/);
-    assert.match(portalJs, /Willkommen \$\{customer\.customerName\|\|"Gast"\}/);
+    assert.match(portalJs, /today\.hero\.welcome/);
     assert.match(portalJs, /applyAppViewVisibility\(\)/);
     assert.doesNotMatch(portalJs, /getElementById\([^)]+\)\.(innerHTML|href)\s*=/);
   });
@@ -324,7 +328,7 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
   it("keeps calendar/weather empty-state guards and null-safe whatsapp links", () => {
     assert.match(portalJs, /function calendarBounds\(items\)/);
     assert.match(portalJs, /if\(!starts\.length\|\|!ends\.length\)/);
-    assert.match(portalJs, /Noch keine Programmpunkte für den Kalender/);
+    assert.match(portalJs, /itinerary\.empty\.calendar/);
     assert.match(portalJs, /String\(number\|\|""\)\.replace/);
     assert.match(portalJs, /safeRender\("concierge",renderConciergeAssistant\)/);
     assert.match(portalJs, /safeRender\("dayTimelines",renderDayTimelines\)/);
@@ -348,10 +352,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=63"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=65"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=63/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=65/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -437,7 +441,7 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
 
   it("bumps stylesheet pin only for the design pilot", () => {
     assert.match(portalHtml, /customer-portal\.css\?v=37/);
-    assert.match(portalHtml, /customer-portal\.js\?v=63/);
+    assert.match(portalHtml, /customer-portal\.js\?v=65/);
   });
 });
 
@@ -460,7 +464,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=63/);
+    assert.match(portalHtml, /customer-portal\.js\?v=65/);
   });
 });
 
@@ -551,8 +555,8 @@ describe("customer portal documents premium redesign (4.5D)", () => {
   });
 
   it("keeps open and download actions while refining card chrome", () => {
-    assert.match(portalJs, /Dokument oeffnen/);
-    assert.match(portalJs, /Herunterladen/);
+    assert.match(portalJs, /documents\.actions\.open/);
+    assert.match(portalJs, /documents\.actions\.download/);
     assert.match(portalJs, /data-open-portal-document/);
     assert.match(portalJs, /download="\$\{escapeHtml\(fileName\)\}"/);
     assert.match(portalJs, /documents-preview-pdf|documents-preview-image/);
@@ -589,7 +593,7 @@ describe("customer portal service premium redesign (4.5E)", () => {
     assert.match(portalJs, /data-action="\$\{action\}"/);
     assert.match(portalJs, /function renderHotel\(/);
     assert.match(portalJs, /Navigation öffnen/);
-    assert.match(portalJs, /Ihre persönliche Betreuung wird gerade vorbereitet/);
+    assert.match(portalJs, /service\.empty\.care/);
   });
 
   it("styles service layout for mobile and desktop sidebar", () => {
@@ -620,7 +624,7 @@ describe("customer portal discover premium redesign (4.5F)", () => {
     assert.match(portalJs, /customer\.activities/);
     assert.match(portalJs, /filterRecommendations/);
     assert.match(portalJs, /Heute empfehlen wir/);
-    assert.match(portalJs, /Noch keine Empfehlungen freigegeben/);
+    assert.match(portalJs, /discover\.empty\.title/);
     assert.match(portalJs, /data-discover-group/);
     assert.match(portalJs, /Mehr erfahren/);
     assert.match(portalJs, /Navigation/);
@@ -671,6 +675,6 @@ describe("customer portal premium polish (4.6)", () => {
     assert.match(portalJs, /whatsappLink\(/);
     assert.match(portalCss, /prefers-reduced-motion:reduce[\s\S]*\.button,/);
     assert.match(portalHtml, /customer-portal\.css\?v=37/);
-    assert.match(portalHtml, /customer-portal\.js\?v=63/);
+    assert.match(portalHtml, /customer-portal\.js\?v=65/);
   });
 });

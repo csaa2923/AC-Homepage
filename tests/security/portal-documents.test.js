@@ -101,9 +101,9 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/next\.uploadedAt=next\.uploadedAt\|\|next\.uploadDate\|\|next\.createdAt\|\|""/);
     assert.match(portalJs,/function isImageDocument\(item\)/);
     assert.match(portalJs,/function isPdfDocument\(item\)/);
-    assert.match(portalJs,/Herunterladen/);
-    assert.match(portalJs,/Dieses Dokument ist derzeit nicht verfuegbar\./);
-    assert.match(portalHtml,/customer-portal\.js\?v=64/);
+    assert.match(portalJs,/documents\.actions\.download/);
+    assert.match(portalJs,/errors\.documentUnavailable/);
+    assert.match(portalHtml,/customer-portal\.js\?v=65/);
     assert.match(portalHtml,/redact-allowlist\.js\?v=13/);
     assert.match(portalHtml,/travel-actions-library\.js\?v=13/);
     assert.match(portalHtml,/concierge-assistant-library\.js\?v=2/);

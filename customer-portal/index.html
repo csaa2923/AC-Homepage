@@ -17,60 +17,62 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
 </head>
 <body class="app-shell" data-active-view="today">
-<header class="portal-header app-topbar" aria-label="Kundenportal Kopfbereich">
-  <a class="portal-brand" href="../index.html" aria-label="Alpine Concierge Tirol">
+<header class="portal-header app-topbar" data-i18n-aria-label="aria.header" aria-label="Kundenportal Kopfbereich">
+  <a class="portal-brand" href="../index.html" data-i18n-aria-label="common.brand" aria-label="Alpine Concierge Tirol">
     <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol Logo" width="108" height="80" decoding="async">
   </a>
 
-  <nav class="app-desktop-nav" id="appDesktopNav" aria-label="Hauptnavigation">
-    <button type="button" class="app-nav-item is-active" data-app-nav="today" aria-current="page" aria-label="Heute">
+  <nav class="app-desktop-nav" id="appDesktopNav" data-i18n-aria-label="navigation.mainAria" aria-label="Hauptnavigation">
+    <button type="button" class="app-nav-item is-active" data-app-nav="today" aria-current="page" data-i18n="navigation.today" data-i18n-aria-label="navigation.today" aria-label="Heute">
       <span class="app-nav-icon" aria-hidden="true">🏠</span>
       <span class="app-nav-label">Heute</span>
     </button>
-    <button type="button" class="app-nav-item" data-app-nav="itinerary" aria-label="Reiseplan">
+    <button type="button" class="app-nav-item" data-app-nav="itinerary" data-i18n="navigation.itinerary" data-i18n-aria-label="navigation.itinerary" aria-label="Reiseplan">
       <span class="app-nav-icon" aria-hidden="true">🗓</span>
       <span class="app-nav-label">Reiseplan</span>
     </button>
-    <button type="button" class="app-nav-item" data-app-nav="discover" aria-label="Entdecken">
+    <button type="button" class="app-nav-item" data-app-nav="discover" data-i18n="navigation.discover" data-i18n-aria-label="navigation.discover" aria-label="Entdecken">
       <span class="app-nav-icon" aria-hidden="true">✨</span>
       <span class="app-nav-label">Entdecken</span>
     </button>
-    <button type="button" class="app-nav-item" data-app-nav="documents" aria-label="Dokumente">
+    <button type="button" class="app-nav-item" data-app-nav="documents" data-i18n="navigation.documents" data-i18n-aria-label="navigation.documents" aria-label="Dokumente">
       <span class="app-nav-icon" aria-hidden="true">📄</span>
       <span class="app-nav-label">Dokumente</span>
     </button>
-    <button type="button" class="app-nav-item" data-app-nav="service" aria-label="Service">
+    <button type="button" class="app-nav-item" data-app-nav="service" data-i18n="navigation.service" data-i18n-aria-label="navigation.service" aria-label="Service">
       <span class="app-nav-icon" aria-hidden="true">☎</span>
       <span class="app-nav-label">Service</span>
     </button>
   </nav>
 
-  <div class="app-lang" role="group" aria-label="Sprache">
-    <button type="button" class="app-lang-btn is-active" data-portal-lang="de" aria-pressed="true">DE</button>
-    <button type="button" class="app-lang-btn" data-portal-lang="en" aria-pressed="false">EN</button>
+  <div class="app-lang" role="group" data-i18n-aria-label="language.label" aria-label="Sprache">
+    <button type="button" class="app-lang-btn is-active" data-portal-lang="de" aria-pressed="true" aria-current="true" title="Deutsch">DE</button>
+    <button type="button" class="app-lang-btn" data-portal-lang="en" aria-pressed="false" title="English">EN</button>
+    <button type="button" class="app-lang-btn" data-portal-lang="it" aria-pressed="false" title="Italiano">IT</button>
+    <button type="button" class="app-lang-btn" data-portal-lang="fr" aria-pressed="false" title="Français">FR</button>
   </div>
 
-  <p class="secure-note app-secure-note">Diese Seite ist ausschlie&szlig;lich &uuml;ber Ihren pers&ouml;nlichen Link erreichbar.</p>
+  <p class="secure-note app-secure-note" data-i18n="common.secureNote">Diese Seite ist ausschlie&szlig;lich &uuml;ber Ihren pers&ouml;nlichen Link erreichbar.</p>
 </header>
 
-<nav class="app-bottom-nav" id="appBottomNav" aria-label="App-Navigation">
-  <button type="button" class="app-nav-item is-active" data-app-nav="today" aria-current="page" aria-label="Heute">
+<nav class="app-bottom-nav" id="appBottomNav" data-i18n-aria-label="navigation.appAria" aria-label="App-Navigation">
+  <button type="button" class="app-nav-item is-active" data-app-nav="today" aria-current="page" data-i18n="navigation.today" data-i18n-aria-label="navigation.today" aria-label="Heute">
     <span class="app-nav-icon" aria-hidden="true">🏠</span>
     <span class="app-nav-label">Heute</span>
   </button>
-  <button type="button" class="app-nav-item" data-app-nav="itinerary" aria-label="Reise">
+  <button type="button" class="app-nav-item" data-app-nav="itinerary" data-i18n="navigation.itineraryShort" data-i18n-aria-label="navigation.itineraryShort" aria-label="Reise">
     <span class="app-nav-icon" aria-hidden="true">🗓</span>
     <span class="app-nav-label">Reise</span>
   </button>
-  <button type="button" class="app-nav-item" data-app-nav="discover" aria-label="Entdecken">
+  <button type="button" class="app-nav-item" data-app-nav="discover" data-i18n="navigation.discover" data-i18n-aria-label="navigation.discover" aria-label="Entdecken">
     <span class="app-nav-icon" aria-hidden="true">✨</span>
     <span class="app-nav-label">Entdecken</span>
   </button>
-  <button type="button" class="app-nav-item" data-app-nav="documents" aria-label="Dokumente">
+  <button type="button" class="app-nav-item" data-app-nav="documents" data-i18n="navigation.documents" data-i18n-aria-label="navigation.documents" aria-label="Dokumente">
     <span class="app-nav-icon" aria-hidden="true">📄</span>
     <span class="app-nav-label">Dokumente</span>
   </button>
-  <button type="button" class="app-nav-item" data-app-nav="service" aria-label="Service">
+  <button type="button" class="app-nav-item" data-app-nav="service" data-i18n="navigation.service" data-i18n-aria-label="navigation.service" aria-label="Service">
     <span class="app-nav-icon" aria-hidden="true">☎</span>
     <span class="app-nav-label">Service</span>
   </button>
@@ -80,9 +82,9 @@
   Ops Ready 4.2: Today-View Premium-Struktur.
   Stabile DOM-IDs bleiben; Elemente werden nur umgeordnet, nicht dupliziert.
 -->
-<main id="portalRoot" class="customer-app" data-customer-app="1" data-view-mode="filtered" data-active-view="today" aria-live="polite">
+<main id="portalRoot" class="customer-app" data-customer-app="1" data-view-mode="filtered" data-active-view="today" aria-live="polite" aria-busy="true">
 
-  <section id="viewToday" class="app-view today-view is-active" data-app-view="today" data-view="today" aria-label="Heute">
+  <section id="viewToday" class="app-view today-view is-active" data-app-view="today" data-view="today" data-i18n-aria-label="navigation.today" aria-label="Heute">
     <!-- 1 Hero -->
     <section class="today-hero portal-hero" id="overview" aria-labelledby="portalTitle">
       <div class="today-hero-stage">
@@ -94,8 +96,8 @@
           <p class="hero-subtitle" id="tripTitle"></p>
           <div class="hero-meta" id="heroMeta"></div>
           <div class="hero-actions">
-            <a class="button primary" id="whatsappHero" href="#" target="_blank" rel="noopener noreferrer">WhatsApp &ouml;ffnen</a>
-            <button class="button soft" type="button" data-action="print">Drucken</button>
+            <a class="button primary" id="whatsappHero" href="#" target="_blank" rel="noopener noreferrer" data-i18n="common.whatsappOpen">WhatsApp &ouml;ffnen</a>
+            <button class="button soft" type="button" data-action="print" data-i18n="common.print">Drucken</button>
           </div>
         </div>
       </div>
@@ -136,21 +138,21 @@
             <h2 id="todayQuickTitle">Weiter</h2>
           </div>
           <div class="today-quick-grid" id="todayQuickActions">
-            <button type="button" class="today-quick-btn" data-app-nav="itinerary">
+            <button type="button" class="today-quick-btn" data-app-nav="itinerary" data-i18n="today.quick.itinerary">
               <span class="today-quick-icon" aria-hidden="true">🗓</span>
-              <span>Reiseplan</span>
+              <span class="today-quick-label">Reiseplan</span>
             </button>
-            <button type="button" class="today-quick-btn" data-app-nav="documents">
+            <button type="button" class="today-quick-btn" data-app-nav="documents" data-i18n="today.quick.documents">
               <span class="today-quick-icon" aria-hidden="true">📄</span>
-              <span>Dokumente</span>
+              <span class="today-quick-label">Dokumente</span>
             </button>
-            <button type="button" class="today-quick-btn" data-app-nav="service">
+            <button type="button" class="today-quick-btn" data-app-nav="service" data-i18n="today.quick.contact">
               <span class="today-quick-icon" aria-hidden="true">☎</span>
-              <span>Kontakt</span>
+              <span class="today-quick-label">Kontakt</span>
             </button>
-            <a class="today-quick-btn today-quick-link" id="whatsappQuick" href="#" target="_blank" rel="noopener noreferrer">
+            <a class="today-quick-btn today-quick-link" id="whatsappQuick" href="#" target="_blank" rel="noopener noreferrer" data-i18n="today.quick.whatsapp">
               <span class="today-quick-icon" aria-hidden="true">💬</span>
-              <span>WhatsApp</span>
+              <span class="today-quick-label">WhatsApp</span>
             </a>
           </div>
         </section>
@@ -202,7 +204,7 @@
       </div>
       <label class="detail-fields-filter itinerary-fields-toggle">
         <input type="checkbox" data-toggle-empty-fields>
-        <span>Alle Felder anzeigen</span>
+        <span data-i18n="common.showAllFields">Alle Felder anzeigen</span>
       </label>
     </section>
 
@@ -212,7 +214,7 @@
         <p class="eyebrow">Tage</p>
         <h2>Ihre Reisetage</h2>
       </div>
-      <div class="day-selector itinerary-day-selector" id="calendarDaySelector" aria-label="Tagesauswahl"></div>
+      <div class="day-selector itinerary-day-selector" id="calendarDaySelector" data-i18n-aria-label="aria.daySelector" aria-label="Tagesauswahl"></div>
     </section>
 
     <!-- 4 Timeline + 5 Programmdetails -->
@@ -229,7 +231,7 @@
             <h2 id="programDetailsTitle">Ihr Programmpunkt</h2>
             <label class="detail-fields-filter itinerary-detail-toggle">
               <input type="checkbox" data-toggle-empty-fields>
-              <span>Alle Felder anzeigen</span>
+              <span data-i18n="common.showAllFields">Alle Felder anzeigen</span>
             </label>
           </div>
           <div class="detail-card-grid" id="programDetails"></div>
@@ -402,17 +404,17 @@
 
 <template id="notFoundTemplate">
   <section class="portal-section not-found">
-    <h1>Portal nicht gefunden</h1>
-    <p>Bitte pr&uuml;fen Sie Ihren pers&ouml;nlichen Link oder kontaktieren Sie Alpine Concierge Tirol direkt.</p>
-    <a class="button primary" href="https://wa.me/4367761410679" target="_blank" rel="noopener">WhatsApp &ouml;ffnen</a>
+    <h1 data-i18n="errors.notFound.title">Portal nicht gefunden</h1>
+    <p data-i18n="errors.notFound.copy">Bitte pr&uuml;fen Sie Ihren pers&ouml;nlichen Link oder kontaktieren Sie Alpine Concierge Tirol direkt.</p>
+    <a class="button primary" href="https://wa.me/4367761410679" target="_blank" rel="noopener" data-i18n="common.whatsappOpen">WhatsApp &ouml;ffnen</a>
   </section>
 </template>
 
 <template id="shareErrorTemplate">
   <section class="portal-section not-found">
-    <h1>Portal nicht verf&uuml;gbar</h1>
-    <p id="shareErrorMessage">Dieser Portal-Link ist nicht g&uuml;ltig oder nicht mehr verf&uuml;gbar.</p>
-    <a class="button primary" href="https://wa.me/4367761410679" target="_blank" rel="noopener">Alpine Concierge Tirol kontaktieren</a>
+    <h1 data-i18n="errors.shareUnavailable.title">Portal nicht verf&uuml;gbar</h1>
+    <p id="shareErrorMessage" data-i18n="errors.shareUnavailable.copy">Dieser Portal-Link ist nicht g&uuml;ltig oder nicht mehr verf&uuml;gbar.</p>
+    <a class="button primary" href="https://wa.me/4367761410679" target="_blank" rel="noopener" data-i18n="common.contactWhatsApp">Alpine Concierge Tirol kontaktieren</a>
   </section>
 </template>
 
@@ -424,6 +426,11 @@
 <script src="booking-library.js?v=1"></script>
 <script src="travel-actions-library.js?v=13"></script>
 <script src="concierge-assistant-library.js?v=2"></script>
+<script src="i18n/de.js?v=1"></script>
+<script src="i18n/en.js?v=1"></script>
+<script src="i18n/it.js?v=1"></script>
+<script src="i18n/fr.js?v=1"></script>
+<script src="i18n/portal-i18n.js?v=1"></script>
 <script src="firebase-config.js"></script>
 <script src="firebase-service.js?v=24"></script>
 <script src="firebase-auth.js"></script>
@@ -431,6 +438,6 @@
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=64"></script>
+<script src="customer-portal.js?v=65"></script>
 </body>
 </html>

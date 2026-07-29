@@ -877,27 +877,74 @@
 
   function discoverCategoryLabel(category){
     const key=String(category||"").trim().toLowerCase();
-    const labels={
-      general:"Allgemein",
-      tip:"Tipp",
-      food:"Kulinarik",
-      viewpoint:"Aussicht",
-      family:"Familie",
-      evening:"Abend",
-      indoor:"Indoor",
-      warning:"Hinweis",
-      hike:"Wandern",
-      event:"Events",
-      transport:"Transfer",
-      restaurant:"Restaurant",
-      activity:"Aktivität",
-      culinary:"Kulinarik",
-      wellness:"Wellness",
-      nature:"Natur"
+    const keyMap={
+      general:"discover.categories.general",
+      tip:"discover.categories.tip",
+      tips:"discover.categories.tips",
+      food:"discover.categories.culinary",
+      culinary:"discover.categories.culinary",
+      viewpoint:"discover.categories.viewpoint",
+      family:"discover.categories.family",
+      children:"discover.categories.children",
+      kids:"discover.categories.children",
+      evening:"discover.categories.evening",
+      indoor:"discover.categories.indoor",
+      warning:"discover.categories.warning",
+      hike:"discover.categories.hike",
+      hiking:"discover.categories.hiking",
+      mountains:"discover.categories.mountains",
+      event:"discover.categories.event",
+      events:"discover.categories.events",
+      transport:"discover.categories.transport",
+      restaurant:"discover.categories.restaurant",
+      restaurants:"discover.categories.restaurants",
+      activity:"discover.categories.activity",
+      wellness:"discover.categories.wellness",
+      nature:"discover.categories.nature",
+      culture:"discover.categories.culture",
+      sights:"discover.categories.sights",
+      shopping:"discover.categories.shopping",
+      sport:"discover.categories.sport",
+      winter:"discover.categories.winter",
+      summer:"discover.categories.summer",
+      excursions:"discover.categories.excursions",
+      other:"discover.categories.other"
     };
-    if(labels[key])return labels[key];
+    if(keyMap[key])return t(keyMap[key]);
     const raw=String(category||"").trim();
-    return raw||"Empfehlung";
+    if(!raw)return t("discover.categories.recommendation");
+    const rawMap={
+      Kulinarik:"discover.categories.culinary",
+      Restaurants:"discover.categories.restaurants",
+      Restaurant:"discover.categories.restaurant",
+      Natur:"discover.categories.nature",
+      Wandern:"discover.categories.hiking",
+      Berge:"discover.categories.mountains",
+      Kultur:"discover.categories.culture",
+      "Sehenswürdigkeiten":"discover.categories.sights",
+      Wellness:"discover.categories.wellness",
+      Familie:"discover.categories.family",
+      Kinder:"discover.categories.children",
+      Shopping:"discover.categories.shopping",
+      Sport:"discover.categories.sport",
+      Winter:"discover.categories.winter",
+      Sommer:"discover.categories.summer",
+      Veranstaltungen:"discover.categories.events",
+      Geheimtipps:"discover.categories.tips",
+      "Ausflüge":"discover.categories.excursions",
+      Sonstiges:"discover.categories.other",
+      Allgemein:"discover.categories.general",
+      Tipp:"discover.categories.tip",
+      Aussicht:"discover.categories.viewpoint",
+      Abend:"discover.categories.evening",
+      Indoor:"discover.categories.indoor",
+      Hinweis:"discover.categories.warning",
+      Transfer:"discover.categories.transport",
+      "Aktivität":"discover.categories.activity",
+      Events:"discover.categories.event",
+      Empfehlung:"discover.categories.recommendation"
+    };
+    return rawMap[raw]?t(rawMap[raw]):raw;
   }
 
   function discoverGroupDomId(label){
@@ -1014,12 +1061,12 @@
     const category=discoverCategoryLabel(item.category);
     const detailHref=item.programItemId?`#${detailId({id:item.programItemId})}`:"";
     const primary=detailHref
-      ?`<a class="button primary" href="${escapeHtml(detailHref)}">Mehr erfahren</a>`
+      ?`<a class="button primary" href="${escapeHtml(detailHref)}" aria-label="${escapeHtml(t("discover.aria.learnMore"))}">${escapeHtml(t("discover.actions.learnMore"))}</a>`
       :(hasDisplayValue(item.description)
-        ?`<button class="button primary" type="button" data-discover-expand>Mehr erfahren</button>`
+        ?`<button class="button primary" type="button" data-discover-expand aria-label="${escapeHtml(t("discover.aria.learnMore"))}">${escapeHtml(t("discover.actions.learnMore"))}</button>`
         :"");
     const secondary=item.navigationUrl
-      ?`<a class="button soft" href="${escapeHtml(item.navigationUrl)}" target="_blank" rel="noopener noreferrer">Navigation</a>`
+      ?`<a class="button soft" href="${escapeHtml(item.navigationUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(t("discover.aria.navigation"))}">${escapeHtml(t("discover.actions.navigation"))}</a>`
       :"";
     const shortCopy=String(item.description||"").trim();
     const preview=shortCopy.length>140?`${shortCopy.slice(0,137).trim()}…`:shortCopy;
@@ -1049,7 +1096,7 @@
     nav.hidden=false;
     nav.innerHTML=groups.map(group=>{
       const id=discoverGroupDomId(group.label);
-      return `<button class="discover-category-chip" type="button" data-discover-group="${escapeHtml(id)}" aria-label="${escapeHtml(group.label)}: ${group.items.length}">
+      return `<button class="discover-category-chip" type="button" data-discover-group="${escapeHtml(id)}" aria-label="${escapeHtml(t("discover.aria.categoryChip",{label:group.label,count:group.items.length}))}">
         <span>${escapeHtml(group.label)}</span>
         <span class="discover-category-chip-count">${group.items.length}</span>
       </button>`;
@@ -1074,10 +1121,10 @@
       ?resolveNavigationUrl("",`${lat},${lng}`,region)
       :resolveNavigationUrl("","",region);
     card.innerHTML=`
-      <p class="eyebrow">Umgebung</p>
-      <h3>${escapeHtml(region||"Ihre Region")}</h3>
-      <p class="discover-region-copy">Persönlich ausgewählte Impulse rund um Ihren Aufenthaltsort – ruhig, regional und auf Ihre Reise abgestimmt.</p>
-      ${navUrl?`<div class="card-actions"><a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Region in Maps öffnen</a></div>`:""}
+      <p class="eyebrow">${escapeHtml(t("discover.recommendations.surroundingsEyebrow"))}</p>
+      <h3>${escapeHtml(region||t("discover.recommendations.regionFallback"))}</h3>
+      <p class="discover-region-copy">${escapeHtml(t("discover.recommendations.regionCopy"))}</p>
+      ${navUrl?`<div class="card-actions"><a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("discover.actions.openRegionMaps"))}</a></div>`:""}
     `;
   }
 
@@ -1092,14 +1139,14 @@
     if(featuredRoot){
       featuredRoot.innerHTML=featured?`
         <article class="discover-featured-card">
-          <p class="eyebrow">Heute empfehlen wir…</p>
+          <p class="eyebrow">${escapeHtml(t("discover.recommendations.featuredEyebrow"))}</p>
           <h3>${escapeHtml(featured.description||featured.title)}</h3>
           ${hasDisplayValue(featured.place)?`<p class="discover-card-place">${escapeHtml(featured.place)}</p>`:""}
           <p class="discover-featured-meta">${escapeHtml(discoverCategoryLabel(featured.category))}</p>
         </article>
       `:`
         <article class="discover-featured-card discover-empty" role="status">
-          <p class="eyebrow">Concierge</p>
+          <p class="eyebrow">${escapeHtml(t("discover.concierge.eyebrow"))}</p>
           <h3>${escapeHtml(t("discover.empty.title"))}</h3>
           <p class="discover-featured-copy">${escapeHtml(t("discover.empty.copy"))}</p>
         </article>
@@ -1109,7 +1156,7 @@
       renderDiscoverCategoryNav([]);
       grid.innerHTML=`
         <article class="discover-empty" role="status">
-          <p class="eyebrow">Concierge</p>
+          <p class="eyebrow">${escapeHtml(t("discover.concierge.eyebrow"))}</p>
           <h3>${escapeHtml(t("discover.empty.title"))}</h3>
           <p>${escapeHtml(t("discover.empty.copy"))}</p>
         </article>
@@ -3012,14 +3059,44 @@
     }).join("");
   }
 
+  function translateServiceCategory(value){
+    const raw=String(value||"").trim();
+    if(!raw)return "";
+    const map={
+      Reiseplanung:"service.categories.travelPlanning",
+      "Travel planning":"service.categories.travelPlanning",
+      Restaurantreservierung:"service.categories.restaurantReservation",
+      "Restaurant reservation":"service.categories.restaurantReservation",
+      Transfers:"service.categories.transfers",
+      Transfer:"service.categories.transfers",
+      Aktivitäten:"service.categories.activities",
+      Activities:"service.categories.activities",
+      Tickets:"service.categories.tickets",
+      Wellness:"service.categories.wellness",
+      Shopping:"service.categories.shopping",
+      Kinderbetreuung:"service.categories.childcare",
+      Childcare:"service.categories.childcare",
+      Haustierservice:"service.categories.petService",
+      "Pet service":"service.categories.petService",
+      Sonderwünsche:"service.categories.specialRequests",
+      "Special requests":"service.categories.specialRequests",
+      Notfallunterstützung:"service.categories.emergencySupport",
+      "Emergency support":"service.categories.emergencySupport",
+      Sonstiges:"service.categories.other",
+      Other:"service.categories.other"
+    };
+    const key=map[raw];
+    return key?t(key):raw;
+  }
+
   function renderHotel(){
     const hotel=customer.hotel||{};
     const hasHotel=[hotel.name,hotel.address,hotel.checkIn,hotel.checkOut,hotel.contact,hotel.voucherStatus]
       .some(hasDisplayValue);
     if(!hasHotel){
       setHtml("hotelCard",`
-        <p class="eyebrow">Unterkunft</p>
-        <h2>Aufenthalt</h2>
+        <p class="eyebrow">${escapeHtml(t("service.accommodation.eyebrow"))}</p>
+        <h2>${escapeHtml(t("service.accommodation.title"))}</h2>
         <p class="service-empty-copy">${escapeHtml(t("service.empty.hotel"))}</p>
       `);
       return;
@@ -3028,17 +3105,17 @@
     const stay=[hotel.checkIn,hotel.checkOut].filter(hasDisplayValue);
     const stayLabel=stay.length===2?`${stay[0]} – ${stay[1]}`:stay[0]||"";
     setHtml("hotelCard",`
-      <p class="eyebrow">Unterkunft</p>
-      <h2>${escapeHtml(hotel.name||"Unterkunft")}</h2>
+      <p class="eyebrow">${escapeHtml(t("service.accommodation.eyebrow"))}</p>
+      <h2>${escapeHtml(hotel.name||t("service.accommodation.fallbackName"))}</h2>
       ${stayLabel?`<p class="service-hotel-stay">${escapeHtml(stayLabel)}</p>`:""}
       ${hasDisplayValue(hotel.address)?`<p class="service-hotel-address">${escapeHtml(hotel.address)}</p>`:""}
       ${definitionList([
-        ...(stayLabel?[]:[["Check-in",hotel.checkIn],["Check-out",hotel.checkOut]]),
-        ["Kontakt",hotel.contact],
-        ["Voucher",hotel.voucherStatus],
-        ["Hinweise",hotel.notes||hotel.hint||hotel.importantNote||""]
+        ...(stayLabel?[]:[[t("service.accommodation.checkIn"),hotel.checkIn],[t("service.accommodation.checkOut"),hotel.checkOut]]),
+        [t("service.accommodation.contact"),hotel.contact],
+        [t("service.accommodation.voucher"),hotel.voucherStatus],
+        [t("service.accommodation.notes"),hotel.notes||hotel.hint||hotel.importantNote||""]
       ])}
-      ${navUrl?`<div class="card-actions service-hotel-actions"><a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a></div>`:""}
+      ${navUrl?`<div class="card-actions service-hotel-actions"><a class="button soft" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("service.accommodation.openNavigation"))}</a></div>`:""}
     `);
   }
 
@@ -3191,25 +3268,25 @@
     const hasReachability=[phone,email,whatsappDisplay,contact.emergency,contact.localEmergency].some(hasDisplayValue);
     const waHref=whatsappLink(customer.whatsapp,"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.");
     const primaryActions=[
-      `<a class="button primary" href="${waHref}" target="_blank" rel="noopener noreferrer">WhatsApp öffnen</a>`,
-      phoneHref?`<a class="button soft" href="${escapeHtml(phoneHref)}">Anrufen</a>`:"",
-      email?`<a class="button soft" href="mailto:${escapeHtml(email)}">E-Mail schreiben</a>`:""
+      `<a class="button primary" href="${waHref}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(t("service.aria.openWhatsApp"))}">${escapeHtml(t("service.actions.openWhatsApp"))}</a>`,
+      phoneHref?`<a class="button soft" href="${escapeHtml(phoneHref)}" aria-label="${escapeHtml(t("service.aria.call"))}">${escapeHtml(t("service.actions.call"))}</a>`:"",
+      email?`<a class="button soft" href="mailto:${escapeHtml(email)}" aria-label="${escapeHtml(t("service.aria.email"))}">${escapeHtml(t("service.actions.email"))}</a>`:""
     ].filter(Boolean).join("");
     setHtml("contactCard",`
       <div class="service-concierge-top">
         <img class="service-concierge-mark" src="../images/logo/logo.jpg" alt="" width="72" height="54" decoding="async">
         <div class="service-concierge-heading">
-          <p class="eyebrow">Persönliche Betreuung</p>
+          <p class="eyebrow">${escapeHtml(t("service.concierge.personalCare"))}</p>
           <h3>${escapeHtml(company)}</h3>
-          <p class="service-concierge-lead">Wir begleiten Ihre Reise persönlich – von der ersten Frage bis zum besonderen Moment vor Ort.</p>
+          <p class="service-concierge-lead">${escapeHtml(t("service.concierge.lead"))}</p>
         </div>
       </div>
       ${hasReachability?definitionList([
-        ["Telefon",phoneHref?`<a href="${escapeHtml(phoneHref)}">${escapeHtml(phone)}</a>`:phone],
-        ["WhatsApp",whatsappDisplay],
-        ["E-Mail",email?`<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`:""],
-        ["Notfallkontakt",contact.emergency],
-        ["Lokale Notrufnummern",contact.localEmergency]
+        [t("service.contact.phone"),phoneHref?`<a href="${escapeHtml(phoneHref)}">${escapeHtml(phone)}</a>`:phone],
+        [t("service.contact.whatsapp"),whatsappDisplay],
+        [t("service.contact.email"),email?`<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`:""],
+        [t("service.contact.emergency"),contact.emergency],
+        [t("service.contact.localEmergency"),contact.localEmergency]
       ]):`<p class="service-empty-copy">${escapeHtml(t("service.empty.care"))}</p>`}
       <div class="card-actions service-contact-actions-primary">${primaryActions}</div>
     `);
@@ -3217,19 +3294,19 @@
 
   function renderActions(){
     const actions=[
-      ["WhatsApp öffnen","whatsapp"],
-      ["Änderungswunsch senden","change"],
-      ["Programm bestätigen","confirm"],
-      ["Zahlung öffnen","payment"],
-      ["PDF herunterladen","pdf"],
-      ["Drucken","print"],
-      ["Kalender speichern","calendar"]
+      ["service.actions.openWhatsApp","whatsapp"],
+      ["service.actions.sendChange","change"],
+      ["service.actions.confirmProgram","confirm"],
+      ["service.actions.openPayment","payment"],
+      ["service.actions.downloadPdf","pdf"],
+      ["service.actions.print","print"],
+      ["service.actions.saveCalendar","calendar"]
     ];
-    setHtml("actionGrid",actions.map(([label,action])=>{
+    setHtml("actionGrid",actions.map(([labelKey,action])=>{
       const isPrimary=action==="whatsapp";
       const isTertiary=["payment","pdf","print","calendar"].includes(action);
       const className=`button ${isPrimary?"primary":"soft"}${isTertiary?" service-action-tertiary":""}`;
-      return `<button class="${className}" type="button" data-action="${action}">${label}</button>`;
+      return `<button class="${className}" type="button" data-action="${action}">${escapeHtml(t(labelKey))}</button>`;
     }).join(""));
   }
 
@@ -3238,7 +3315,7 @@
     const changes=Array.isArray(item.changes)?item.changes.filter(hasDisplayValue):[];
     if(changes.length)return changes.join(", ");
     if(hasDisplayValue(item.comment))return item.comment;
-    if(hasDisplayValue(item.version))return `Version ${item.version} veröffentlicht`;
+    if(hasDisplayValue(item.version))return t("service.history.publishedVersion",{version:item.version});
     return "";
   }
 
@@ -3249,7 +3326,7 @@
         <time>${escapeHtml(item.date||"")}</time>
         <strong>${escapeHtml(historyDisplayText(item))}</strong>
       </article>
-    `).join(""):`<article class="history-item service-history-item service-history-empty"><p class="eyebrow">Concierge</p><strong>${escapeHtml(t("service.empty.historyTitle"))}</strong><p class="service-empty-copy">${escapeHtml(t("service.empty.historyCopy"))}</p></article>`);
+    `).join(""):`<article class="history-item service-history-item service-history-empty"><p class="eyebrow">${escapeHtml(t("service.concierge.eyebrow"))}</p><strong>${escapeHtml(t("service.empty.historyTitle"))}</strong><p class="service-empty-copy">${escapeHtml(t("service.empty.historyCopy"))}</p></article>`);
   }
 
   function isAppleMobile(){

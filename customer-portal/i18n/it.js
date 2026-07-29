@@ -530,19 +530,324 @@
       }
     },
     service:{
-      hero:{title:"Il tuo concierge personale"},
+      hero:{
+        eyebrow:"Service",
+        title:"Il vostro concierge personale",
+        subtitle:"Siamo al vostro fianco per desideri, domande e momenti speciali.",
+        intro:"Siamo al vostro fianco per desideri, domande e momenti speciali."
+      },
+      overview:{
+        eyebrow:"Supporto",
+        title:"Cosa possiamo fare per voi",
+        copy:"Aiuto diretto per programma, modifiche e necessità pratiche – basta un passo.",
+        personalSupport:"Supporto personale",
+        weAreHere:"Siamo qui per voi",
+        individualCare:"Assistenza individuale",
+        yourRequest:"La vostra richiesta",
+        requestService:"Richiedere un servizio",
+        getSupport:"Ottenere assistenza",
+        personalRecommendation:"Raccomandazione personale",
+        discreetReliable:"Discreto e affidabile",
+        duringStay:"Durante il soggiorno"
+      },
+      concierge:{
+        eyebrow:"Concierge",
+        title:"Il vostro referente",
+        personalCare:"Assistenza personale",
+        lead:"Vi accompagniamo personalmente nel viaggio – dalla prima domanda al momento speciale sul posto.",
+        personalConcierge:"Il vostro concierge personale"
+      },
+      accommodation:{
+        eyebrow:"Alloggio",
+        title:"Soggiorno",
+        fallbackName:"Alloggio",
+        checkIn:"Check-in",
+        checkOut:"Check-out",
+        contact:"Contatto",
+        voucher:"Voucher",
+        notes:"Note",
+        openNavigation:"Apri navigazione"
+      },
+      history:{
+        eyebrow:"Note",
+        title:"Cronologia delle modifiche",
+        copy:"Aggiornamenti importanti sul vostro viaggio – in ordine cronologico e chiari.",
+        publishedVersion:"Versione {version} pubblicata"
+      },
+      categories:{
+        travelPlanning:"Pianificazione del viaggio",
+        restaurantReservation:"Prenotazione ristorante",
+        transfers:"Transfer",
+        activities:"Attività",
+        tickets:"Biglietti",
+        wellness:"Wellness",
+        shopping:"Shopping",
+        childcare:"Babysitting",
+        petService:"Servizio per animali",
+        specialRequests:"Richieste speciali",
+        emergencySupport:"Supporto di emergenza",
+        other:"Altro"
+      },
+      actions:{
+        sendRequest:"Invia richiesta",
+        openWhatsApp:"Apri WhatsApp",
+        call:"Chiama",
+        email:"Scrivi e-mail",
+        selectService:"Seleziona servizio",
+        showDetails:"Mostra dettagli",
+        learnMore:"Scopri di più",
+        back:"Indietro",
+        close:"Chiudi",
+        retry:"Riprova",
+        sendChange:"Invia richiesta di modifica",
+        confirmProgram:"Conferma programma",
+        openPayment:"Apri pagamento",
+        downloadPdf:"Scarica PDF",
+        print:"Stampa",
+        saveCalendar:"Salva calendario"
+      },
+      request:{
+        title:"Di cosa possiamo occuparci?",
+        message:"Il vostro messaggio",
+        preferredTime:"Orario desiderato",
+        priority:"Priorità",
+        contactMethod:"Canale di contatto",
+        send:"Invia messaggio",
+        preparing:"Richiesta in preparazione",
+        submitted:"Richiesta inviata",
+        failed:"Impossibile inviare la richiesta"
+      },
+      form:{
+        title:"Di cosa possiamo occuparci?",
+        message:"Il vostro messaggio",
+        preferredTime:"Orario desiderato",
+        priority:"Priorità",
+        contactMethod:"Canale di contatto",
+        send:"Invia messaggio"
+      },
+      status:{
+        preparing:"Richiesta in preparazione",
+        submitted:"Richiesta inviata",
+        failed:"Impossibile inviare la richiesta",
+        processing:"Richiesta in elaborazione"
+      },
+      contact:{
+        phone:"Telefono",
+        email:"E-mail",
+        whatsapp:"WhatsApp",
+        reachability:"Disponibilità",
+        personalContact:"Contatto personale",
+        responseTime:"Tempo di risposta",
+        urgentCases:"Nei casi urgenti",
+        emergency:"Contatto di emergenza",
+        localEmergency:"Numeri di emergenza locali"
+      },
       empty:{
-        hotel:"I dati della tua sistemazione sono in preparazione e appariranno qui non appena disponibili.",
-        care:"La tua assistenza personale è in preparazione.",
+        hotel:"I dati del vostro alloggio sono in preparazione e appariranno qui non appena disponibili.",
+        care:"La vostra assistenza personale è in preparazione.",
         historyTitle:"Nessuna modifica registrata",
-        historyCopy:"Gli aggiornamenti sul tuo viaggio appariranno qui."
+        historyCopy:"Gli aggiornamenti sul vostro viaggio appariranno qui.",
+        noServices:"Nessun servizio ancora disponibile",
+        preparing:"Le vostre offerte di servizio sono in preparazione",
+        noRecommendation:"Al momento nessuna raccomandazione disponibile",
+        contactConcierge:"Vi preghiamo di contattare il vostro concierge"
+      },
+      loading:{
+        default:"Caricamento …",
+        processing:"Richiesta in elaborazione",
+        refresh:"Aggiorna",
+        retry:"Riprova"
+      },
+      errors:{
+        loadFailed:"Impossibile caricare i dati",
+        actionFailed:"Azione non riuscita",
+        retry:"Vi preghiamo di riprovare",
+        unavailable:"Servizio attualmente non disponibile",
+        submitFailed:"Impossibile inviare la richiesta"
+      },
+      aria:{
+        view:"Service",
+        hero:"Service",
+        contact:"Contatto concierge",
+        accommodation:"Alloggio",
+        actions:"Azioni di servizio",
+        history:"Cronologia delle modifiche",
+        openWhatsApp:"Apri WhatsApp",
+        call:"Chiama",
+        email:"Scrivi e-mail"
       }
     },
     discover:{
-      hero:{title:"Scopri"},
+      hero:{
+        eyebrow:"Concierge",
+        title:"Scoprire",
+        subtitle:"Consigli speciali per il vostro soggiorno.",
+        intro:"Consigli speciali per il vostro soggiorno."
+      },
+      overview:{
+        eyebrow:"Selezione",
+        title:"Raccomandazioni",
+        personal:"Personale",
+        themes:"Temi",
+        categoriesTitle:"Le vostre categorie",
+        region:"Regione",
+        surroundings:"I vostri dintorni",
+        selectedForYou:"Selezionato personalmente per voi",
+        ourRecommendations:"Le nostre raccomandazioni",
+        specialExperiences:"Esperienze speciali",
+        discoverTirol:"Scoprite il Tirolo",
+        curatedForYou:"Curato per voi",
+        nearby:"Nelle vicinanze",
+        recommendedToday:"Consigliato oggi",
+        matchingTrip:"In linea con il vostro viaggio"
+      },
+      concierge:{
+        eyebrow:"Concierge",
+        insiderTip:"Consiglio dell'insider",
+        recommendation:"Raccomandazione del vostro concierge",
+        curated:"Curato per voi"
+      },
+      recommendations:{
+        featuredTitle:"Oggi vi consigliamo",
+        featuredEyebrow:"Oggi vi consigliamo…",
+        regionCopy:"Idee selezionate personalmente intorno al vostro soggiorno – calme, regionali e in linea con il viaggio.",
+        regionFallback:"La vostra regione",
+        surroundingsEyebrow:"Dintorni"
+      },
+      categories:{
+        culinary:"Cucina",
+        restaurants:"Ristoranti",
+        restaurant:"Ristorante",
+        nature:"Natura",
+        hiking:"Escursionismo",
+        hike:"Escursionismo",
+        mountains:"Montagne",
+        culture:"Cultura",
+        sights:"Attrazioni",
+        wellness:"Wellness",
+        family:"Famiglia",
+        children:"Bambini",
+        shopping:"Shopping",
+        sport:"Sport",
+        winter:"Inverno",
+        summer:"Estate",
+        events:"Eventi",
+        event:"Eventi",
+        tips:"Consigli segreti",
+        tip:"Consiglio",
+        excursions:"Escursioni",
+        other:"Altro",
+        general:"Generale",
+        viewpoint:"Belvedere",
+        evening:"Sera",
+        indoor:"Indoor",
+        warning:"Nota",
+        transport:"Transfer",
+        activity:"Attività",
+        recommendation:"Raccomandazione"
+      },
+      cards:{
+        learnMore:"Scopri di più",
+        showDetails:"Mostra dettagli",
+        openRoute:"Apri percorso",
+        openMap:"Apri mappa",
+        openWebsite:"Apri sito web",
+        call:"Chiama",
+        email:"Scrivi e-mail",
+        requestReservation:"Richiedi una prenotazione",
+        addToItinerary:"Aggiungi all'itinerario",
+        favorite:"Preferito",
+        recommended:"Consigliato",
+        new:"Nuovo"
+      },
+      actions:{
+        learnMore:"Scopri di più",
+        navigation:"Navigazione",
+        openRegionMaps:"Apri la regione in Maps",
+        startNavigation:"Avvia navigazione",
+        showDetails:"Mostra dettagli",
+        openRoute:"Apri percorso",
+        openMap:"Apri mappa",
+        openWebsite:"Apri sito web",
+        call:"Chiama",
+        email:"Scrivi e-mail",
+        requestReservation:"Richiedi una prenotazione",
+        addToItinerary:"Aggiungi all'itinerario"
+      },
+      labels:{
+        distance:"Distanza",
+        openingHours:"Orari di apertura",
+        duration:"Durata",
+        price:"Prezzo",
+        suitableFor:"Adatto a",
+        note:"Nota",
+        recommendation:"Raccomandazione"
+      },
+      status:{
+        favorite:"Preferito",
+        recommended:"Consigliato",
+        new:"Nuovo"
+      },
+      filters:{
+        all:"Tutti",
+        categories:"Categorie",
+        nearby:"Nelle vicinanze",
+        forToday:"Per oggi",
+        forFamilies:"Per famiglie",
+        badWeather:"Con cattivo tempo",
+        free:"Gratuito",
+        open:"Aperto",
+        reset:"Reimposta",
+        results:"Risultati",
+        noMatches:"Nessun risultato"
+      },
+      navigation:{
+        all:"Tutti",
+        categories:"Categorie",
+        results:"Risultati"
+      },
+      map:{
+        title:"Mappa",
+        location:"Posizione",
+        loading:"Caricamento mappa",
+        locationUnavailable:"Posizione non disponibile"
+      },
+      route:{
+        title:"Percorso",
+        startNavigation:"Avvia navigazione",
+        unavailable:"Percorso non disponibile"
+      },
       empty:{
         title:"Nessuna raccomandazione ancora",
-        copy:"I consigli personali appariranno qui non appena disponibili."
+        copy:"I consigli personali appariranno qui non appena disponibili.",
+        none:"Nessuna raccomandazione ancora disponibile",
+        preparing:"Le vostre raccomandazioni sono in preparazione",
+        noMatch:"Al momento nessuna esperienza adatta trovata",
+        conciergePreparing:"Il vostro concierge sta preparando suggerimenti personali per voi",
+        noResults:"Nessun risultato per questa selezione"
+      },
+      loading:{
+        default:"Caricamento …",
+        preparing:"Raccomandazioni in preparazione",
+        refresh:"Aggiorna",
+        retry:"Riprova"
+      },
+      errors:{
+        loadFailed:"Impossibile caricare i dati",
+        unavailable:"Raccomandazione non disponibile",
+        actionFailed:"Azione non riuscita",
+        retry:"Vi preghiamo di riprovare"
+      },
+      aria:{
+        view:"Scoprire",
+        hero:"Scoprire",
+        featured:"Raccomandazione personale",
+        categories:"Categorie",
+        list:"Raccomandazioni",
+        region:"I vostri dintorni",
+        categoryChip:"{label}: {count}",
+        learnMore:"Scopri di più",
+        navigation:"Navigazione"
       }
     },
     errors:{

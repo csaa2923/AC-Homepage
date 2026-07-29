@@ -598,3 +598,155 @@ describe("travel actions hike directions origin and destination", () => {
     assert.match(url, /H%C3%BCtte|Hutte/);
   });
 });
+
+const SAMPLE_KML_LINE = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <LineString>
+        <coordinates>
+          11.18544,47.33012,1180
+          11.18600,47.33100,1190
+          11.19000,47.34000,1200
+        </coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>`;
+
+function loadLibraryWithFetch(fetchImpl) {
+  const sandbox = {
+    window: {},
+    console,
+    Date,
+    Math,
+    JSON,
+    String,
+    Number,
+    Boolean,
+    Array,
+    Object,
+    fetch: fetchImpl
+  };
+  vm.runInNewContext(source, sandbox);
+  return sandbox.window.ACTTravelActionsLibrary;
+}
+
+describe("travel actions routePointsFromItem and GPX/KML ensure", () => {
+  it("uses item.routePoints when attachment tracks are missing", () => {
+    const lib = loadLibrary();
+    const points = lib.routePointsFromItem({
+      routePoints: [
+        {latitude: 47.1, longitude: 11.1},
+        {latitude: 47.2, longitude: 11.2}
+      ]
+    });
+    assert.equal(points.length, 2);
+    assert.equal(points[0].latitude, 47.1);
+    assert.equal(points[1].longitude, 11.2);
+  });
+
+  it("prefers persisted gpx routePoints over item.routePoints", () => {
+    const lib = loadLibrary();
+    const points = lib.routePointsFromItem({
+      routePoints: [
+        {latitude: 1, longitude: 1},
+        {latitude: 2, longitude: 2}
+      ],
+      gpxFile: {
+        url: "https://example.com/route.gpx",
+        routePoints: [
+          {latitude: 47.33, longitude: 11.18},
+          {latitude: 47.34, longitude: 11.19}
+        ]
+      }
+    });
+    assert.equal(points[0].latitude, 47.33);
+    assert.equal(points[1].latitude, 47.34);
+  });
+
+  it("keeps start-only items without inventing a second point", () => {
+    const lib = loadLibrary();
+    const points = lib.routePointsFromItem({
+      latitude: 47.33,
+      longitude: 11.18,
+      gpxFile: {
+        url: "https://example.com/route.gpx",
+        startLatitude: 47.33,
+        startLongitude: 11.18
+      }
+    });
+    assert.equal(points.length, 0);
+  });
+
+  it("ensureRoutePointsOnItem loads track from GPX url when points are missing", async () => {
+    const lib = loadLibraryWithFetch(async () => ({
+      ok: true,
+      text: async () => SAMPLE_GPX
+    }));
+    const item = {
+      category: "Wandern",
+      gpxFile: {
+        url: "https://example.com/only-file.gpx",
+        fileName: "only-file.gpx",
+        startLatitude: 47.33012,
+        startLongitude: 11.18544
+      }
+    };
+    const points = await lib.ensureRoutePointsOnItem(item);
+    assert.ok(points.length >= 2);
+    assert.equal(item.gpxFile.routePoints.length >= 2, true);
+  });
+
+  it("ensureRoutePointsOnItem loads track from KML url when points are missing", async () => {
+    const lib = loadLibraryWithFetch(async () => ({
+      ok: true,
+      text: async () => SAMPLE_KML_LINE
+    }));
+    const item = {
+      category: "Wandern",
+      kmlFile: {
+        url: "https://example.com/only-file.kml",
+        fileName: "only-file.kml",
+        startLatitude: 47.33012,
+        startLongitude: 11.18544
+      }
+    };
+    const points = await lib.ensureRoutePointsOnItem(item);
+    assert.ok(points.length >= 2);
+    assert.equal(item.kmlFile.routePoints.length >= 2, true);
+  });
+
+  it("ensureRoutePointsOnItem does not refetch when routePoints already persist", async () => {
+    let fetchCount = 0;
+    const lib = loadLibraryWithFetch(async () => {
+      fetchCount += 1;
+      return {ok: true, text: async () => SAMPLE_GPX};
+    });
+    const item = {
+      gpxFile: {
+        url: "https://example.com/route.gpx",
+        routePoints: [
+          {latitude: 47.33, longitude: 11.18},
+          {latitude: 47.34, longitude: 11.19}
+        ]
+      }
+    };
+    const points = await lib.ensureRoutePointsOnItem(item);
+    assert.equal(points.length, 2);
+    assert.equal(fetchCount, 0);
+  });
+
+  it("restaurant and hotel stay destination-only and ignore route ensure semantics", () => {
+    const lib = loadLibrary();
+    assert.equal(lib.isHikeLikeItem({category: "Restaurant", latitude: 47.26, longitude: 11.39}), false);
+    assert.equal(lib.isHikeLikeItem({category: "Hotel", address: "Seefeld"}), false);
+    const restaurant = lib.navigationUrlForDevice({
+      category: "Restaurant",
+      latitude: 47.26,
+      longitude: 11.39
+    }, "Mozilla/5.0 (Windows)");
+    assert.match(restaurant, /destination=/);
+    assert.doesNotMatch(restaurant, /origin=/);
+  });
+});

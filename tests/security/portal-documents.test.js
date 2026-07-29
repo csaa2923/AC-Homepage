@@ -103,9 +103,9 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/function isPdfDocument\(item\)/);
     assert.match(portalJs,/Herunterladen/);
     assert.match(portalJs,/Dieses Dokument ist derzeit nicht verfuegbar\./);
-    assert.match(portalHtml,/customer-portal\.js\?v=63/);
+    assert.match(portalHtml,/customer-portal\.js\?v=64/);
     assert.match(portalHtml,/redact-allowlist\.js\?v=13/);
-    assert.match(portalHtml,/travel-actions-library\.js\?v=11/);
+    assert.match(portalHtml,/travel-actions-library\.js\?v=13/);
     assert.match(portalHtml,/concierge-assistant-library\.js\?v=2/);
     assert.match(portalHtml,/leaflet@1\.9\.4/);
     assert.match(portalHtml,/leaflet\.markercluster@1\.5\.3/);
@@ -122,6 +122,11 @@ describe("portal document availability",()=>{
     assert.match(portalJs,/Hoehenprofil|Höhenprofil/);
     assert.match(portalJs,/data-hike-map/);
     assert.match(portalJs,/function mountHikeLeafletMap\(/);
+    assert.match(portalJs,/function resolveHikeMapRoutePayload\(/);
+    assert.match(portalJs,/ensureRoutePointsOnItem/);
+    assert.match(portalJs,/hikeMapEndpointsDiffer/);
+    assert.match(portalJs,/gpxFile:hikeMapRouteFilePayload\(source\?\.gpxFile\)/);
+    assert.match(portalJs,/function hikeMapPayloadFromCompanion\(/);
     assert.match(portalJs,/function observeLazyMaps\(/);
     assert.match(portalJs,/IntersectionObserver/);
     assert.match(portalJs,/L\.polyline|polyline\(/);

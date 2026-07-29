@@ -211,7 +211,11 @@
     if(fromGpx.length>=2)return fromGpx;
     const fromKml=routePointsFromAttachment(source.kmlFile);
     if(fromKml.length>=2)return fromKml;
-    return fromGpx.length?fromGpx:fromKml;
+    const fromItem=normalizeRoutePoints(source.routePoints);
+    if(fromItem.length>=2)return fromItem;
+    if(fromGpx.length)return fromGpx;
+    if(fromKml.length)return fromKml;
+    return fromItem;
   }
 
   function isFullRouteMapsUrl(url){

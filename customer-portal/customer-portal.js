@@ -1353,20 +1353,7 @@
       </div>
     `:"";
     const mapId=`hike-map-${String(item.id||Math.random()).replace(/[^\w-]/g,"")}`;
-    const mapPayload=companion?.map?.ok?escapeHtml(JSON.stringify({
-      mapId,
-      embedUrl:companion.map.embedUrl||"",
-      points:Array.isArray(companion.map.routePoints)?companion.map.routePoints:[],
-      bounds:companion.map.bounds||null,
-      markers:Array.isArray(companion.map.markers)?companion.map.markers:[],
-      loadOsmHighlights:true,
-      start:Number.isFinite(Number(companion.map.latitude))&&Number.isFinite(Number(companion.map.longitude))
-        ?{latitude:Number(companion.map.latitude),longitude:Number(companion.map.longitude)}
-        :null,
-      end:Number.isFinite(Number(companion.map.endLatitude))&&Number.isFinite(Number(companion.map.endLongitude))
-        ?{latitude:Number(companion.map.endLatitude),longitude:Number(companion.map.endLongitude)}
-        :null
-    })):"";
+    const mapPayload=hikeMapPayloadFromCompanion(mapId,companion,source,{loadOsmHighlights:true});
     const elevPayload=companion?.elevationProfile?.track?.length
       ?escapeHtml(JSON.stringify({mapId,track:companion.elevationProfile.track}))
       :"";
@@ -1559,17 +1546,142 @@
     });
   }
 
+  function hikeMapRouteFilePayload(file){
+    if(!file||typeof file!=="object")return null;
+    const url=String(file.url||file.downloadUrl||file.downloadURL||"").trim();
+    if(!/^https?:\/\//i.test(url))return null;
+    const next={
+      url,
+      downloadUrl:url,
+      fileName:String(file.fileName||file.title||"route").trim(),
+      mimeType:String(file.mimeType||file.contentType||"").trim()
+    };
+    if(Number.isFinite(Number(file.startLatitude))&&Number.isFinite(Number(file.startLongitude))){
+      next.startLatitude=Number(file.startLatitude);
+      next.startLongitude=Number(file.startLongitude);
+    }
+    if(Number.isFinite(Number(file.endLatitude))&&Number.isFinite(Number(file.endLongitude))){
+      next.endLatitude=Number(file.endLatitude);
+      next.endLongitude=Number(file.endLongitude);
+    }
+    if(file.bounds&&typeof file.bounds==="object")next.bounds=file.bounds;
+    return next;
+  }
+
+  function hikeMapPayloadFromCompanion(mapId,companion,source,{loadOsmHighlights=true}={}){
+    if(!companion?.map?.ok)return "";
+    const points=Array.isArray(companion.map.routePoints)?companion.map.routePoints:[];
+    const itemPoints=Array.isArray(source?.routePoints)?source.routePoints:points;
+    return escapeHtml(JSON.stringify({
+      mapId,
+      embedUrl:companion.map.embedUrl||"",
+      points,
+      routePoints:itemPoints,
+      bounds:companion.map.bounds||null,
+      markers:Array.isArray(companion.map.markers)?companion.map.markers:[],
+      loadOsmHighlights:Boolean(loadOsmHighlights),
+      gpxFile:hikeMapRouteFilePayload(source?.gpxFile),
+      kmlFile:hikeMapRouteFilePayload(source?.kmlFile),
+      start:Number.isFinite(Number(companion.map.latitude))&&Number.isFinite(Number(companion.map.longitude))
+        ?{latitude:Number(companion.map.latitude),longitude:Number(companion.map.longitude)}
+        :null,
+      end:Number.isFinite(Number(companion.map.endLatitude))&&Number.isFinite(Number(companion.map.endLongitude))
+        ?{latitude:Number(companion.map.endLatitude),longitude:Number(companion.map.endLongitude)}
+        :null
+    }));
+  }
+
+  function hikeMapPointPairs(points){
+    return (Array.isArray(points)?points:[])
+      .map(point=>[Number(point.latitude??point.lat),Number(point.longitude??point.lng??point.lon)])
+      .filter(pair=>Number.isFinite(pair[0])&&Number.isFinite(pair[1])&&!(pair[0]===0&&pair[1]===0));
+  }
+
+  function hikeMapBoundsFromPairs(latLngs){
+    if(!latLngs.length)return null;
+    return latLngs.reduce((bounds,pair)=>({
+      minLat:Math.min(bounds.minLat,pair[0]),
+      minLng:Math.min(bounds.minLng,pair[1]),
+      maxLat:Math.max(bounds.maxLat,pair[0]),
+      maxLng:Math.max(bounds.maxLng,pair[1])
+    }),{minLat:latLngs[0][0],minLng:latLngs[0][1],maxLat:latLngs[0][0],maxLng:latLngs[0][1]});
+  }
+
+  function hikeMapEndpointsDiffer(start,end){
+    if(!start||!end)return false;
+    const startLat=Number(start.latitude);
+    const startLng=Number(start.longitude);
+    const endLat=Number(end.latitude);
+    const endLng=Number(end.longitude);
+    if(![startLat,startLng,endLat,endLng].every(Number.isFinite))return false;
+    return Math.abs(startLat-endLat)>1e-5||Math.abs(startLng-endLng)>1e-5;
+  }
+
+  function hikeMapCoord(point){
+    if(!point||typeof point!=="object")return null;
+    const latitude=Number(point.latitude??point.lat);
+    const longitude=Number(point.longitude??point.lng??point.lon);
+    if(!Number.isFinite(latitude)||!Number.isFinite(longitude))return null;
+    if(latitude===0&&longitude===0)return null;
+    return {latitude,longitude};
+  }
+
+  async function resolveHikeMapRoutePayload(payload){
+    const lib=travelLib();
+    let points=Array.isArray(payload?.points)?payload.points:[];
+    let start=hikeMapCoord(payload?.start);
+    let end=hikeMapCoord(payload?.end);
+    let bounds=payload?.bounds&&typeof payload.bounds==="object"?payload.bounds:null;
+    const routeSource={
+      routePoints:Array.isArray(payload?.routePoints)?payload.routePoints:points,
+      gpxFile:payload?.gpxFile||null,
+      kmlFile:payload?.kmlFile||null,
+      startLatitude:start?.latitude,
+      startLongitude:start?.longitude,
+      endLatitude:end?.latitude,
+      endLongitude:end?.longitude,
+      latitude:start?.latitude,
+      longitude:start?.longitude
+    };
+    if(points.length<2&&lib?.routePointsFromItem){
+      const existing=lib.routePointsFromItem(routeSource);
+      if(Array.isArray(existing)&&existing.length)points=existing;
+    }
+    if(points.length<2&&lib?.ensureRoutePointsOnItem&&(routeSource.gpxFile||routeSource.kmlFile)){
+      try{
+        const loaded=await lib.ensureRoutePointsOnItem(routeSource);
+        if(Array.isArray(loaded)&&loaded.length)points=loaded;
+      }catch(_error){
+        // Keep start-only map when GPX/KML cannot be fetched.
+      }
+    }
+    const latLngs=hikeMapPointPairs(points);
+    if(latLngs.length){
+      if(!start)start=hikeMapCoord(points[0]);
+      const last=hikeMapCoord(points[points.length-1]);
+      if(last)end=last;
+      if(!bounds||latLngs.length>=2){
+        const fromPoints=hikeMapBoundsFromPairs(latLngs);
+        if(fromPoints)bounds=fromPoints;
+      }
+    }
+    return {points,latLngs,start,end,bounds};
+  }
+
   async function mountHikeLeafletMap(el){
     if(!el||el.dataset.hikeReady==="1")return;
     el.dataset.hikeReady="1";
     let payload={};
     try{payload=JSON.parse(el.getAttribute("data-hike-map")||"{}");}catch(_error){payload={};}
     const mapId=payload.mapId||el.id||`hike-${Date.now()}`;
-    const points=Array.isArray(payload.points)?payload.points:[];
-    const latLngs=points
-      .map(point=>[Number(point.latitude??point.lat),Number(point.longitude??point.lng??point.lon)])
-      .filter(pair=>Number.isFinite(pair[0])&&Number.isFinite(pair[1])&&!(pair[0]===0&&pair[1]===0));
-    const bounds=payload.bounds&&typeof payload.bounds==="object"?payload.bounds:null;
+    const resolved=await resolveHikeMapRoutePayload(payload);
+    const points=resolved.points;
+    const latLngs=resolved.latLngs;
+    const bounds=resolved.bounds;
+    const start=resolved.start;
+    const end=resolved.end;
+    payload={...payload,points,bounds,start,end};
+    try{el.setAttribute("data-hike-map",JSON.stringify(payload));}catch(_error){/* ignore oversized attribute write */}
     const L=window.L;
 
     if(!L){
@@ -1609,8 +1721,8 @@
         lineCap:"round"
       }).addTo(map);
     }
-    if(payload.start&&Number.isFinite(Number(payload.start.latitude))&&Number.isFinite(Number(payload.start.longitude))){
-      L.circleMarker([Number(payload.start.latitude),Number(payload.start.longitude)],{
+    if(start){
+      L.circleMarker([start.latitude,start.longitude],{
         radius:7,
         color:"#1f6b57",
         fillColor:"#1f6b57",
@@ -1618,8 +1730,8 @@
         weight:2
       }).addTo(map).bindTooltip("Start",{direction:"top",offset:[0,-6]});
     }
-    if(payload.end&&Number.isFinite(Number(payload.end.latitude))&&Number.isFinite(Number(payload.end.longitude))){
-      L.circleMarker([Number(payload.end.latitude),Number(payload.end.longitude)],{
+    if(end&&hikeMapEndpointsDiffer(start,end)){
+      L.circleMarker([end.latitude,end.longitude],{
         radius:7,
         color:"#8b3d31",
         fillColor:"#8b3d31",
@@ -1628,7 +1740,7 @@
       }).addTo(map).bindTooltip("Ziel",{direction:"top",offset:[0,-6]});
     }
 
-    hikeMapRegistry.set(mapId,{map,points,bounds,end:payload.end||null,markers:[]});
+    hikeMapRegistry.set(mapId,{map,points,bounds,end:end||null,markers:[]});
 
     const adminMarkers=Array.isArray(payload.markers)?payload.markers:[];
     addHikeMarkersToMap(map,adminMarkers,points,mapId);
@@ -1643,6 +1755,8 @@
       fitPairs.push([Number(bounds.maxLat),Number(bounds.maxLng)]);
     }else if(latLngs.length){
       latLngs.forEach(pair=>fitPairs.push(pair));
+    }else if(start){
+      fitPairs.push([start.latitude,start.longitude]);
     }
     if(fitPairs.length>=2){
       map.fitBounds(fitPairs,{padding:[18,18],maxZoom:16,animate:false});
@@ -2481,22 +2595,10 @@
 
   function itineraryHikeCompactMarkup(item){
     if(!isHikeProgramItem(item))return "";
-    const companion=travelLib()?.resolveHikeCompanion?.(itemForTravelActions(item));
+    const source=itemForTravelActions(item);
+    const companion=travelLib()?.resolveHikeCompanion?.(source);
     const mapId=`itinerary-hike-${String(item.id||"").replace(/[^\w-]/g,"")}`;
-    const mapPayload=companion?.map?.ok?escapeHtml(JSON.stringify({
-      mapId,
-      embedUrl:companion.map.embedUrl||"",
-      points:Array.isArray(companion.map.routePoints)?companion.map.routePoints:[],
-      bounds:companion.map.bounds||null,
-      markers:Array.isArray(companion.map.markers)?companion.map.markers:[],
-      loadOsmHighlights:false,
-      start:Number.isFinite(Number(companion.map.latitude))&&Number.isFinite(Number(companion.map.longitude))
-        ?{latitude:Number(companion.map.latitude),longitude:Number(companion.map.longitude)}
-        :null,
-      end:Number.isFinite(Number(companion.map.endLatitude))&&Number.isFinite(Number(companion.map.endLongitude))
-        ?{latitude:Number(companion.map.endLatitude),longitude:Number(companion.map.endLongitude)}
-        :null
-    })):"";
+    const mapPayload=hikeMapPayloadFromCompanion(mapId,companion,source,{loadOsmHighlights:false});
     const mapBlock=companion?.map?.ok?`
       <div class="itinerary-hike-map travel-map-preview" data-hike-map-shell="${escapeHtml(mapId)}">
         <div class="hike-map-frame itinerary-hike-frame">

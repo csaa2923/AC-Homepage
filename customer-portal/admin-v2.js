@@ -118,6 +118,7 @@
   const CUSTOMER_NOT_FOUND_ERROR="Der ausgewaehlte Kunde konnte nicht gefunden werden.";
   const PUBLISH_EDITOR="Alpine Concierge Tirol";
   const SHARE_TOKEN_KEY="act_portal_share_session";
+  let mobileSheetReturnFocus=null;
   const detailTabs=[
     ["kunde","Kunde"],
     ["reise","Reise"],
@@ -566,7 +567,7 @@
     const raw=String(hashValue||"").replace(/^#/,"").replace(/^\/+/,"")||"dashboard";
     const parts=raw.split("/").filter(Boolean);
     const main=parts[0]||"dashboard";
-    if(["dashboard","customers","bookings","calendar","documents","settings","communication"].includes(main)&&parts.length===1){
+    if(["dashboard","customers","bookings","calendar","documents","settings","communication","tasks"].includes(main)&&parts.length===1){
       return {route:main==="calendar"?"bookings":main,customerId:"",tab:""};
     }
     if(main==="customers"&&parts[1]){
@@ -2852,6 +2853,7 @@
     if(filter==="visible")state.documentVisibility="visible";
     if(filter==="internal")state.documentVisibility="internal";
     renderDocuments();
+    renderTasks();
   }
 
   function publishWorkflow(){
@@ -3882,6 +3884,7 @@
   function setScreenVisibility(loginVisible){
     const login=byId("loginScreen");
     const shell=byId("adminShell");
+    const mobileNav=byId("adminMobileNav");
     if(login){
       login.hidden=!loginVisible;
       login.setAttribute("aria-hidden",loginVisible?"false":"true");
@@ -3890,6 +3893,7 @@
       shell.hidden=loginVisible;
       shell.setAttribute("aria-hidden",loginVisible?"true":"false");
     }
+    if(mobileNav)mobileNav.hidden=loginVisible;
   }
 
   function resetHorizontalScroll(){
@@ -4270,6 +4274,8 @@
     const weatherAvailable=workspaceWeatherAvailable(customer);
     const lastCommunication=workspaceLastCommunication(customer);
     const published=isPublished(customer);
+    const publishState=publicationStatus(customer);
+    const weatherLabel=cleanValue(customer.weather?.summary||customer.weather?.condition||customer.weatherLocationName||customer.weatherRegion);
     const tripTiming=tripDays===null
       ?"Reisestart offen"
       :tripDays>1?`Beginnt in ${tripDays} Tagen`
@@ -4294,7 +4300,11 @@
       documents,
       missingRequired,
       weatherAvailable,
+      weatherLabel:weatherLabel||"Noch offen",
       lastCommunication,
+      adults:trip.adults||"0",
+      children:trip.children||"0",
+      publicationLabel:publishState.key==="pending"?"Änderungen offen":published?"Aktiv":publishState.label||"Entwurf",
       warnings,
       tasks:warnings.slice(0,4).map((item,index)=>({...item,label:index===0?"Als Nächstes":"Offen"})),
       activities:[
@@ -4371,7 +4381,7 @@
       `).join("")
       :`<div class="v2-workspace-clear"><strong>Workspace bereit</strong><span>Keine kritischen Hinweise erkannt.</span></div>`;
     const tasks=workspace.tasks.length
-      ?workspace.tasks.map(item=>`
+      ?workspace.tasks.slice(0,3).map(item=>`
         <button class="v2-workspace-task" type="button" data-detail-tab="${escapeHtml(item.tab)}">
           <span class="v2-workspace-task-state"></span>
           <span><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.title)}</strong></span>
@@ -4396,7 +4406,7 @@
           ${workspaceFact(isPublished(customer)?"Aktiv":"Entwurf","Veröffentlichung")}
           ${workspaceFact(workspace.openBookings?`${workspace.openBookings} offen`:"Keine offenen","Buchungen")}
           ${workspaceFact(workspace.documents.missing?`${workspace.documents.missing} fehlen`:`${workspace.documents.total} vorhanden`,"Dokumente")}
-          ${workspaceFact(workspace.weatherAvailable?"Verfügbar":"Noch offen","Wetter")}
+          ${workspaceFact(workspace.weatherLabel,"Wetter")}
           ${workspaceFact(workspace.lastCommunication||"Nicht dokumentiert","Letzte Kommunikation")}
         </div>
         <div class="v2-workspace-alerts" aria-label="Warnungen">${warningMarkup}</div>
@@ -4404,6 +4414,7 @@
           <section class="v2-workspace-panel">
             <div class="v2-workspace-section-head compact"><h4>Aufgaben</h4><span>${workspace.tasks.length}</span></div>
             <div class="v2-workspace-task-list">${tasks}</div>
+            <button class="v2-link-button v2-workspace-all-tasks" type="button" data-mobile-route="tasks">Alle Aufgaben anzeigen</button>
           </section>
           <section class="v2-workspace-panel">
             <div class="v2-workspace-section-head compact"><h4>Aktivität</h4></div>
@@ -4416,6 +4427,73 @@
 
   function workspaceFact(value,label){
     return `<div class="v2-concierge-fact"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  }
+
+  function workspaceStatusCard(label,value,tone,tab){
+    return `<button class="workspace-status-card ${escapeHtml(tone)}" type="button" data-detail-tab="${escapeHtml(tab)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></button>`;
+  }
+
+  function workspaceQuickAction(label,tab,count,icon){
+    return `<button class="workspace-quick-action" type="button" data-detail-tab="${escapeHtml(tab)}"><span class="workspace-quick-icon" aria-hidden="true">${escapeHtml(icon)}</span><strong>${escapeHtml(label)}</strong>${Number(count)>0?`<small>${escapeHtml(String(count))}</small>`:""}</button>`;
+  }
+
+  function allWorkspaceTasks(){
+    return state.customers.filter(customer=>!isArchivedCustomer(customer)).flatMap(customer=>
+      customerWorkspaceViewModel(customer).tasks.map(task=>({...task,customerId:customer.customerId,customerName:customer.customerName||"Unbenannter Kunde"}))
+    );
+  }
+
+  function renderTasks(){
+    const root=byId("tasksRoot");
+    if(!root)return;
+    const tasks=allWorkspaceTasks();
+    root.innerHTML=`<section class="v2-document-page workspace-tasks-page">
+      <div class="v2-section-toolbar"><div><p class="v2-eyebrow">Arbeitsvorrat</p><h2>Offene Aufgaben</h2><p class="v2-muted">Aus bereits geladenen Kunden-, Buchungs- und Dokumentdaten abgeleitet.</p></div>${badge(`${tasks.length} offen`)}</div>
+      <div class="workspace-task-page-list">${tasks.length?tasks.map(task=>`<button type="button" data-mobile-customer-task="${escapeHtml(task.customerId)}" data-task-tab="${escapeHtml(task.tab)}"><span class="v2-workspace-task-state"></span><span><small>${escapeHtml(task.customerName)}</small><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(task.detail)}</span></span><span aria-hidden="true">→</span></button>`).join(""):`<article class="v2-empty"><h3>Keine offenen Aufgaben</h3><p>Alle aus den vorhandenen Daten ableitbaren Punkte sind erledigt.</p></article>`}</div>
+    </section>`;
+  }
+
+  function renderMobileNavigation(){
+    const isMobile=typeof window.matchMedia!=="function"||window.matchMedia("(max-width:820px), (max-width:920px) and (max-height:520px)").matches;
+    const taskCount=isMobile?allWorkspaceTasks().length:0;
+    const badgeEl=byId("mobileTaskBadge");
+    if(badgeEl){badgeEl.textContent=String(taskCount);badgeEl.hidden=taskCount===0;}
+    const active=state.route==="customerDetail"?"customers":state.route;
+    all("[data-mobile-route]").forEach(button=>{
+      const route=button.dataset.mobileRoute;
+      const selected=route===active;
+      button.classList.toggle("active",selected);
+      if(button.closest(".admin-mobile-nav")){
+        if(selected)button.setAttribute("aria-current","page");
+        else button.removeAttribute("aria-current");
+      }
+    });
+    const moreButton=document.querySelector('[data-mobile-sheet-open="mobileMoreSheet"]');
+    const moreSelected=["bookings","communication","documents","settings"].includes(active);
+    if(moreButton){
+      moreButton.classList.toggle("active",moreSelected);
+      if(moreSelected)moreButton.setAttribute("aria-current","page");
+      else moreButton.removeAttribute("aria-current");
+    }
+  }
+
+  function openMobileSheet(id,trigger){
+    const sheet=byId(id);
+    if(!sheet)return;
+    closeMobileSheet(false);
+    mobileSheetReturnFocus=trigger||document.activeElement;
+    sheet.hidden=false;
+    document.body.classList.add("mobile-sheet-open");
+    window.setTimeout(()=>sheet.querySelector(".admin-mobile-sheet-panel")?.focus(),0);
+  }
+
+  function closeMobileSheet(restoreFocus=true){
+    const sheet=document.querySelector(".admin-mobile-action-sheet:not([hidden])");
+    if(!sheet)return;
+    sheet.hidden=true;
+    document.body.classList.remove("mobile-sheet-open");
+    if(restoreFocus&&mobileSheetReturnFocus?.focus)mobileSheetReturnFocus.focus();
+    mobileSheetReturnFocus=null;
   }
 
   function renderCustomerDetail(){
@@ -4455,9 +4533,8 @@
     root.innerHTML=`
       <header class="v2-detail-head v2-workspace-head">
         <div class="v2-workspace-breadcrumb">
-          <button class="v2-link-button" type="button" data-v2-route="customers">Kunden</button>
-          <span aria-hidden="true">/</span>
-          <strong>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</strong>
+          <div><button class="v2-link-button" type="button" data-v2-route="customers">Kunden</button><span aria-hidden="true">›</span><strong>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</strong></div>
+          <button class="workspace-mobile-more" type="button" aria-label="Weitere Kundenaktionen" data-workspace-more-toggle>•••</button>
         </div>
         ${flash}
         <div class="v2-detail-hero">
@@ -4470,6 +4547,11 @@
             <div class="v2-workspace-statusline" aria-label="Kundenstatus">
               ${workspace.statuses.map(item=>workspaceStatusChip(item)).join("")}
             </div>
+            <dl class="workspace-customer-summary">
+              <div><dt>Zeitraum</dt><dd>${escapeHtml(displayValue(formatPeriod(customer),"Noch nicht geplant"))}</dd></div>
+              <div><dt>Region</dt><dd>${escapeHtml(displayValue(customer.region,"Nicht hinterlegt"))}</dd></div>
+              <div><dt>Reisende</dt><dd>${escapeHtml(`${workspace.adults} Erwachsene · ${workspace.children} Kinder`)}</dd></div>
+            </dl>
             <div class="v2-workspace-primary-actions" aria-label="Schnellaktionen">
               <button class="v2-button primary" type="button" data-detail-tab="programm">Programm</button>
               <button class="v2-button soft" type="button" data-detail-tab="buchungen">Buchung</button>
@@ -4496,8 +4578,24 @@
           ${summaryItem("Letzte Aenderung",timestampValue(customer)?formatDate(new Date(timestampValue(customer)).toISOString()):displayValue(customer.updatedAt))}
           ${summaryItem("Concierge",displayValue(customer.concierge||customer.conciergeName,"Nicht zugewiesen"))}
         </div>
+        <section class="workspace-status-grid" aria-label="Workspace Status">
+          ${workspaceStatusCard("Reise",workspace.tripTiming,workspace.tripTiming==="Reisestart offen"?"muted":"info","reise")}
+          ${workspaceStatusCard("Veröffentlichung",workspace.publicationLabel,workspace.publicationLabel==="Aktiv"?"success":"warning","veroeffentlichung")}
+          ${workspaceStatusCard("Wetter",workspace.weatherLabel,workspace.weatherAvailable?"success":"muted","concierge")}
+          ${workspaceStatusCard("Dokumente",workspace.documents.critical?`${workspace.documents.critical} kritisch`:workspace.documents.missing?`${workspace.documents.missing} fehlen`:"Vollständig",workspace.documents.critical?"critical":workspace.documents.missing?"warning":"success","dokumente")}
+        </section>
+        <section class="workspace-quick-actions" aria-labelledby="workspaceQuickTitle">
+          <div class="v2-workspace-section-head compact"><h3 id="workspaceQuickTitle">Schnellzugriff</h3></div>
+          <div>
+            ${workspaceQuickAction("Programm","programm",workspace.tabCounts.programm,"P")}
+            ${workspaceQuickAction("Buchungen","buchungen",workspace.tabCounts.buchungen,"B")}
+            ${workspaceQuickAction("Dokumente","dokumente",workspace.tabCounts.dokumente,"D")}
+            ${workspaceQuickAction("Kommunikation","kommunikation",workspace.tabCounts.kommunikation==="–"?0:workspace.tabCounts.kommunikation,"K")}
+            ${workspaceQuickAction("Veröffentlichung","veroeffentlichung",0,"V")}
+          </div>
+        </section>
         ${customerWorkspaceOverviewMarkup(customer,workspace)}
-        <details class="v2-workspace-more">
+        <details class="v2-workspace-more" id="workspaceMoreActions">
           <summary>Weitere Aktionen</summary>
           <div class="v2-detail-actions">
             ${customerLifecycleActionsMarkup(customer)}
@@ -5657,6 +5755,8 @@
     renderCustomerDetail();
     window.ACTAdminV2Bookings?.renderBookingEditor?.();
     renderNewCustomerWizard();
+    if(state.route==="tasks")renderTasks();
+    renderMobileNavigation();
   }
 
   function routeTo(route,{replace=false}={}){
@@ -5688,6 +5788,7 @@
       const active=parsed.route==="customerDetail"?button.dataset.v2Route==="customers":button.dataset.v2Route===parsed.route;
       button.classList.toggle("active",active);
     });
+    renderMobileNavigation();
     const title=parsed.route==="customerDetail"?"Kundendetail":byId(viewId)?.dataset.title||"Dashboard";
     byId("pageTitle").textContent=title;
     if(replace)history.replaceState({route:parsed.route},"",nextHash);
@@ -6900,6 +7001,39 @@
     byId("resetFiltersButton").addEventListener("click",resetFilters);
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);
     document.addEventListener("click",event=>{
+      const sheetOpen=event.target.closest("[data-mobile-sheet-open]");
+      if(sheetOpen){openMobileSheet(sheetOpen.dataset.mobileSheetOpen,sheetOpen);return;}
+      if(event.target.closest("[data-mobile-sheet-close]")){closeMobileSheet();return;}
+      if(event.target.closest(".admin-mobile-action-sheet [data-new-customer]")){closeMobileSheet(false);openNewCustomer();return;}
+      if(event.target.closest('.admin-mobile-action-sheet [data-booking-action="create"]')){
+        closeMobileSheet(false);
+        window.ACTAdminV2Bookings?.handleClick?.(event);
+        return;
+      }
+      const mobileRoute=event.target.closest("[data-mobile-route]");
+      if(mobileRoute){
+        closeMobileSheet(false);
+        routeTo(mobileRoute.dataset.mobileRoute);
+        return;
+      }
+      const mobileCustomerTab=event.target.closest("[data-mobile-customer-tab]");
+      if(mobileCustomerTab){
+        closeMobileSheet(false);
+        const tab=mobileCustomerTab.dataset.mobileCustomerTab;
+        if(state.selectedCustomerId)routeTo(`customers/${encodeURIComponent(state.selectedCustomerId)}/${tab}`);
+        else routeTo(tab==="kommunikation"?"communication":"documents");
+        return;
+      }
+      const taskTarget=event.target.closest("[data-mobile-customer-task]");
+      if(taskTarget){
+        routeTo(`customers/${encodeURIComponent(taskTarget.dataset.mobileCustomerTask)}/${taskTarget.dataset.taskTab||"kunde"}`);
+        return;
+      }
+      if(event.target.closest("[data-workspace-more-toggle]")){
+        const details=byId("workspaceMoreActions");
+        if(details){details.open=!details.open;if(details.open)details.querySelector("button,a")?.focus();}
+        return;
+      }
       if(event.target.closest("[data-travel-open-maps]")){
         openTravelMapsFromEvent(event);
         return;
@@ -7177,6 +7311,16 @@
       }
     });
     document.addEventListener("keydown",event=>{
+      const openSheet=document.querySelector(".admin-mobile-action-sheet:not([hidden])");
+      if(event.key==="Escape"&&openSheet){event.preventDefault();closeMobileSheet();return;}
+      if(event.key==="Tab"&&openSheet){
+        const focusable=Array.from(openSheet.querySelectorAll('button:not([disabled]),a[href],[tabindex="0"]')).filter(item=>item.offsetParent!==null);
+        if(focusable.length){
+          const first=focusable[0],last=focusable[focusable.length-1];
+          if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+          else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+        }
+      }
       if((event.key==="Enter"||event.key===" ")&&event.target.matches("[data-open-editor]")){
         event.preventDefault();
         openCustomerDetail(event.target.dataset.openEditor);

@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=45">
+<link rel="stylesheet" href="admin-v2.css?v=46">
 </head>
 <body>
 <main>
@@ -189,6 +189,10 @@
         <div id="documentsRoot"></div>
       </section>
 
+      <section class="v2-view" id="tasksView" data-title="Aufgaben">
+        <div id="tasksRoot"></div>
+      </section>
+
       <section class="v2-view" id="settingsView" data-title="Einstellungen">
         <div class="v2-placeholder">
           <h2>Einstellungen</h2>
@@ -202,7 +206,61 @@
       </section>
     </section>
   </section>
+
+  <nav class="admin-mobile-nav" id="adminMobileNav" aria-label="Mobile Hauptnavigation" hidden>
+    <button type="button" class="admin-mobile-nav-item" data-mobile-route="dashboard" aria-label="Übersicht">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20H5a1 1 0 0 1-1-1z"/><path d="M9 20v-6h6v6"/></svg>
+      <span>Übersicht</span>
+    </button>
+    <button type="button" class="admin-mobile-nav-item" data-mobile-route="customers" aria-label="Kunden">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19"/><path d="M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/></svg>
+      <span>Kunden</span>
+    </button>
+    <button type="button" class="admin-mobile-nav-item admin-mobile-nav-plus" data-mobile-sheet-open="mobilePlusSheet" aria-label="Neue Aktion öffnen" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      <span>Neu</span>
+    </button>
+    <button type="button" class="admin-mobile-nav-item" data-mobile-route="tasks" aria-label="Aufgaben">
+      <span class="admin-mobile-nav-icon-wrap">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h10M9 12h10M9 19h10"/><path d="m4 5 1 1 2-2M4 12l1 1 2-2M4 19l1 1 2-2"/></svg>
+        <small id="mobileTaskBadge" hidden>0</small>
+      </span>
+      <span>Aufgaben</span>
+    </button>
+    <button type="button" class="admin-mobile-nav-item" data-mobile-sheet-open="mobileMoreSheet" aria-label="Mehr Bereiche öffnen" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+      <span>Mehr</span>
+    </button>
+  </nav>
 </main>
+
+<div class="admin-mobile-action-sheet" id="mobilePlusSheet" role="dialog" aria-modal="true" aria-labelledby="mobilePlusTitle" hidden>
+  <button class="admin-mobile-sheet-backdrop" type="button" data-mobile-sheet-close aria-label="Menü schließen"></button>
+  <section class="admin-mobile-sheet-panel" tabindex="-1">
+    <div class="admin-mobile-sheet-handle" aria-hidden="true"></div>
+    <header><div><p class="v2-eyebrow">Schnell anlegen</p><h2 id="mobilePlusTitle">Neue Aktion</h2></div><button class="v2-button soft" type="button" data-mobile-sheet-close>Schließen</button></header>
+    <div class="admin-mobile-sheet-actions">
+      <button type="button" data-new-customer><strong>Neuer Kunde</strong><span>Kunden und Reise anlegen</span></button>
+      <button type="button" data-booking-action="create"><strong>Neue Buchung</strong><span>Für den aktuellen Kunden</span></button>
+      <button type="button" data-mobile-customer-tab="dokumente"><strong>Dokument hochladen</strong><span>Dokumente des Kunden öffnen</span></button>
+      <button type="button" data-mobile-customer-tab="kommunikation"><strong>Nachricht vorbereiten</strong><span>Kommunikation öffnen</span></button>
+    </div>
+  </section>
+</div>
+
+<div class="admin-mobile-action-sheet" id="mobileMoreSheet" role="dialog" aria-modal="true" aria-labelledby="mobileMoreTitle" hidden>
+  <button class="admin-mobile-sheet-backdrop" type="button" data-mobile-sheet-close aria-label="Menü schließen"></button>
+  <section class="admin-mobile-sheet-panel" tabindex="-1">
+    <div class="admin-mobile-sheet-handle" aria-hidden="true"></div>
+    <header><div><p class="v2-eyebrow">Admin 2.0</p><h2 id="mobileMoreTitle">Mehr Bereiche</h2></div><button class="v2-button soft" type="button" data-mobile-sheet-close>Schließen</button></header>
+    <div class="admin-mobile-sheet-actions">
+      <button type="button" data-mobile-route="bookings"><strong>Buchungen</strong><span>Alle Buchungen verwalten</span></button>
+      <button type="button" data-mobile-route="communication"><strong>Kommunikation</strong><span>Nachrichten und Vorlagen</span></button>
+      <button type="button" data-mobile-route="documents"><strong>Dokumente</strong><span>Zentrale Dokumentenansicht</span></button>
+      <button type="button" data-mobile-route="settings"><strong>Einstellungen</strong><span>System und Stammdaten</span></button>
+    </div>
+  </section>
+</div>
 
 <div class="v2-wizard-overlay" id="newCustomerWizard" hidden>
   <div class="v2-wizard-dialog" role="dialog" aria-modal="true" aria-labelledby="wizardTitle">
@@ -246,6 +304,6 @@
 <script src="admin-v2-qr.js?v=3"></script>
 <script src="admin-v2-pdf.js?v=2"></script>
 <script src="admin-v2-communication.js?v=7"></script>
-<script src="admin-v2.js?v=63"></script>
+<script src="admin-v2.js?v=64"></script>
 </body>
 </html>

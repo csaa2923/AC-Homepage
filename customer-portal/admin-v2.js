@@ -127,7 +127,7 @@
     ["buchungen","Buchungen"],
     ["dokumente","Dokumente"],
     ["kommunikation","Kommunikation"],
-    ["veroeffentlichung","Veroeffentlichung"]
+    ["veroeffentlichung","Veröffentlichung"]
   ];
   let activeLoginAttempt=0;
   let customerSavePromise=null;
@@ -4437,6 +4437,22 @@
     return `<button class="workspace-quick-action" type="button" data-detail-tab="${escapeHtml(tab)}"><span class="workspace-quick-icon" aria-hidden="true">${escapeHtml(icon)}</span><strong>${escapeHtml(label)}</strong>${Number(count)>0?`<small>${escapeHtml(String(count))}</small>`:""}</button>`;
   }
 
+  function customerWorkspaceTabAction(tab){
+    if(tab!=="kunde")return "";
+    if(!state.customerEditMode){
+      return `<div class="v2-workspace-tab-action">
+        <button class="v2-button primary" type="button" data-customer-edit-action="edit">Bearbeiten</button>
+        <span class="v2-edit-status ${escapeHtml(state.customerEditMessageKind)}" aria-live="polite">${escapeHtml(state.customerEditMessage)}</span>
+      </div>`;
+    }
+    const saveLabel=state.customerEditSaving?"Wird gespeichert …":hasDirtyCustomerEdit()?"Änderungen speichern":"Speichern";
+    return `<div class="v2-workspace-tab-action">
+      <button class="v2-button primary" type="submit" form="customerEditForm" data-customer-edit-action="save" ${state.customerEditSaving?"disabled aria-busy=\"true\"":""}>${saveLabel}</button>
+      <button class="v2-button soft" type="button" data-customer-edit-action="cancel" ${state.customerEditSaving?"disabled":""}>Abbrechen</button>
+      <span class="v2-edit-status ${escapeHtml(state.customerEditMessageKind)}" aria-live="polite">${escapeHtml(state.customerEditMessage)}</span>
+    </div>`;
+  }
+
   function allWorkspaceTasks(){
     return state.customers.filter(customer=>!isArchivedCustomer(customer)).flatMap(customer=>
       customerWorkspaceViewModel(customer).tasks.map(task=>({...task,customerId:customer.customerId,customerName:customer.customerName||"Unbenannter Kunde"}))
@@ -4534,7 +4550,10 @@
       <header class="v2-detail-head v2-workspace-head">
         <div class="v2-workspace-breadcrumb">
           <div><button class="v2-link-button" type="button" data-v2-route="customers">Kunden</button><span aria-hidden="true">›</span><strong>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</strong></div>
-          <button class="workspace-mobile-more" type="button" aria-label="Weitere Kundenaktionen" data-workspace-more-toggle>•••</button>
+          <div class="v2-workspace-header-actions">
+            ${customerWorkspaceTabAction(tab)}
+            <button class="workspace-mobile-more" type="button" aria-label="Weitere Kundenaktionen" aria-controls="workspaceMoreActions" aria-expanded="false" data-workspace-more-toggle>•••</button>
+          </div>
         </div>
         ${flash}
         <div class="v2-detail-hero">
@@ -4594,26 +4613,31 @@
             ${workspaceQuickAction("Veröffentlichung","veroeffentlichung",0,"V")}
           </div>
         </section>
-        ${customerWorkspaceOverviewMarkup(customer,workspace)}
         <details class="v2-workspace-more" id="workspaceMoreActions">
           <summary>Weitere Aktionen</summary>
           <div class="v2-detail-actions">
             ${customerLifecycleActionsMarkup(customer)}
             <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Classic Admin – Übergangslösung</a>
             <span class="v2-workspace-customer-id">Kunden-ID: <strong class="v2-technical-id">${escapeHtml(customer.customerId||"Nicht hinterlegt")}</strong></span>
+            <span class="v2-workspace-customer-id">Letzte Änderung: <strong>${escapeHtml(displayValue(customer.updatedAt||customer.updated,"Nicht hinterlegt"))}</strong></span>
           </div>
         </details>
       </header>
-      <div class="v2-detail-tabs v2-workspace-tabs" role="tablist" aria-label="Kundendetailbereiche">
-        ${detailTabs.map(([key,label])=>`
-          <button class="v2-tab" type="button" role="tab" id="tab-${key}" aria-selected="${key===tab?"true":"false"}" aria-controls="panel-${key}" data-detail-tab="${key}">
-            <span>${escapeHtml(label)}</span>${workspace.tabCounts[key]!==undefined?`<small>${escapeHtml(String(workspace.tabCounts[key]))}</small>`:""}
-          </button>
-        `).join("")}
+      <div class="v2-workspace-content-flow">
+        <div class="v2-workspace-navigation">
+          <div class="v2-detail-tabs v2-workspace-tabs" role="tablist" aria-label="Kundendetailbereiche">
+            ${detailTabs.map(([key,label])=>`
+              <button class="v2-tab" type="button" role="tab" id="tab-${key}" aria-selected="${key===tab?"true":"false"}" ${key===tab?'aria-current="page"':""} aria-controls="panel-${key}" data-detail-tab="${key}">
+                <span>${escapeHtml(label)}</span>${workspace.tabCounts[key]!==undefined?`<small>${escapeHtml(String(workspace.tabCounts[key]))}</small>`:""}
+              </button>
+            `).join("")}
+          </div>
+        </div>
+        <div class="v2-workspace-overview-slot">${customerWorkspaceOverviewMarkup(customer,workspace)}</div>
+        <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
+          ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
+        </section>
       </div>
-      <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
-      </section>
     `;
   }
 
@@ -5229,7 +5253,7 @@
     const contact=customer.contact&&typeof customer.contact==="object"?customer.contact:{};
     if(state.customerEditMode)return customerEditFormMarkup(customer);
     return `
-      <div class="v2-tab-actions">
+      <div class="v2-tab-actions v2-customer-mobile-actions">
         <button class="v2-button primary" type="button" data-customer-edit-action="edit">Bearbeiten</button>
         <span class="v2-edit-status ${state.customerEditMessageKind}" id="customerEditStatus" aria-live="polite">${escapeHtml(state.customerEditMessage)}</span>
       </div>
@@ -6667,6 +6691,13 @@
     }
     const dirty=hasDirtyCustomerEdit();
     setCustomerEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
+    const workspaceSave=document.querySelector('.v2-workspace-tab-action [form="customerEditForm"]');
+    if(workspaceSave)workspaceSave.textContent=dirty?"Änderungen speichern":"Speichern";
+    const workspaceStatus=document.querySelector(".v2-workspace-tab-action .v2-edit-status");
+    if(workspaceStatus){
+      workspaceStatus.textContent=dirty?"Ungespeicherte Änderungen":"";
+      workspaceStatus.className=`v2-edit-status${dirty?" dirty":""}`;
+    }
     if(field.name==="imageUrl"){
       const preview=document.querySelector(".v2-customer-image-preview img");
       if(preview)preview.src=cleanValue(field.value)||customerImage(customerById(state.selectedCustomerId)||{});
@@ -7031,7 +7062,12 @@
       }
       if(event.target.closest("[data-workspace-more-toggle]")){
         const details=byId("workspaceMoreActions");
-        if(details){details.open=!details.open;if(details.open)details.querySelector("button,a")?.focus();}
+        const toggle=event.target.closest("[data-workspace-more-toggle]");
+        if(details){
+          details.open=!details.open;
+          toggle.setAttribute("aria-expanded",details.open?"true":"false");
+          if(details.open)details.querySelector("button,a")?.focus();
+        }
         return;
       }
       if(event.target.closest("[data-travel-open-maps]")){
@@ -7319,6 +7355,17 @@
           const first=focusable[0],last=focusable[focusable.length-1];
           if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
           else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+        }
+      }
+      const activeTab=event.target.closest('.v2-workspace-tabs [role="tab"]');
+      if(activeTab&&["ArrowLeft","ArrowRight","Home","End"].includes(event.key)){
+        const tabs=Array.from(activeTab.closest('[role="tablist"]').querySelectorAll('[role="tab"]'));
+        const current=tabs.indexOf(activeTab);
+        const next=event.key==="Home"?tabs[0]:event.key==="End"?tabs[tabs.length-1]:tabs[(current+(event.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];
+        if(next){
+          event.preventDefault();
+          next.focus({preventScroll:true});
+          next.scrollIntoView({block:"nearest",inline:"nearest"});
         }
       }
       if((event.key==="Enter"||event.key===" ")&&event.target.matches("[data-open-editor]")){

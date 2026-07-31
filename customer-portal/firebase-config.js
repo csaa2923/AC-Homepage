@@ -1,10 +1,12 @@
 (function(){
   const isLocalHost=/^(localhost|127\.0\.0\.1)$/.test(String(window.location.hostname||""));
+  const useEmulator=isLocalHost&&new URLSearchParams(window.location.search).get("emulator")==="1";
   const portalShare={
     functionsRegion:"europe-west1",
     allowLegacyCustomerParam:false
   };
-  if(isLocalHost){
+  // Localhost uses real Firebase by default. Emulators only with ?emulator=1.
+  if(useEmulator){
     Object.assign(portalShare,{
       useFunctionsEmulator:true,
       functionsEmulatorHost:"http://127.0.0.1:5001/alpine-concierge-tirol/europe-west1",

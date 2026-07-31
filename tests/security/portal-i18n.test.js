@@ -165,12 +165,12 @@ describe("portal i18n foundation (5.0A)", () => {
   });
 
   it("wires i18n scripts, language controls, and cache pins in portal html/js", () => {
-    assert.match(portalHtml, /i18n\/de\.js\?v=4/);
-    assert.match(portalHtml, /i18n\/en\.js\?v=4/);
-    assert.match(portalHtml, /i18n\/it\.js\?v=4/);
-    assert.match(portalHtml, /i18n\/fr\.js\?v=4/);
+    assert.match(portalHtml, /i18n\/de\.js\?v=7/);
+    assert.match(portalHtml, /i18n\/en\.js\?v=7/);
+    assert.match(portalHtml, /i18n\/it\.js\?v=7/);
+    assert.match(portalHtml, /i18n\/fr\.js\?v=7/);
     assert.match(portalHtml, /i18n\/portal-i18n\.js\?v=3/);
-    assert.match(portalHtml, /customer-portal\.js\?v=69/);
+    assert.match(portalHtml, /customer-portal\.js\?v=72/);
     assert.match(portalHtml, /data-portal-lang="de"/);
     assert.match(portalHtml, /data-portal-lang="en"/);
     assert.match(portalHtml, /data-portal-lang="it"/);
@@ -933,5 +933,408 @@ describe("portal documents i18n (5.0B.3)", () => {
     assert.doesNotMatch(portalJs, /t\(\"item\.title\"\)/);
     assert.doesNotMatch(portalJs, /t\(`item\.title`\)/);
     assert.match(portalJs, /download="\$\{escapeHtml\(downloadName\)\}"/);
+  });
+});
+
+describe("portal service i18n (5.0B.4)", () => {
+  const langs = ["de", "en", "it", "fr"];
+
+  function assertAll(key, expected) {
+    const i18n = loadI18n();
+    langs.forEach((lang) => {
+      i18n.setLanguage(lang, {persist: false});
+      assert.equal(i18n.t(key), expected[lang], `${lang}:${key}`);
+      assert.notEqual(i18n.t(key), "", `${lang}:${key} empty`);
+    });
+  }
+
+  it("translates service hero in all four languages", () => {
+    assertAll("service.hero.eyebrow", {
+      de: "Service",
+      en: "Service",
+      it: "Service",
+      fr: "Service"
+    });
+    assertAll("service.hero.title", {
+      de: "Ihr persönlicher Concierge",
+      en: "Your personal concierge",
+      it: "Il vostro concierge personale",
+      fr: "Votre concierge personnel"
+    });
+    assertAll("service.hero.subtitle", {
+      de: "Wir sind für Ihre Wünsche, Fragen und besonderen Momente an Ihrer Seite.",
+      en: "We are here for your wishes, questions and special moments.",
+      it: "Siamo al vostro fianco per desideri, domande e momenti speciali.",
+      fr: "Nous sommes à vos côtés pour vos souhaits, questions et moments particuliers."
+    });
+  });
+
+  it("translates service categories in all four languages", () => {
+    assertAll("service.categories.travelPlanning", {
+      de: "Reiseplanung",
+      en: "Travel planning",
+      it: "Pianificazione del viaggio",
+      fr: "Planification du voyage"
+    });
+    assertAll("service.categories.restaurantReservation", {
+      de: "Restaurantreservierung",
+      en: "Restaurant reservation",
+      it: "Prenotazione ristorante",
+      fr: "Réservation de restaurant"
+    });
+    assertAll("service.categories.transfers", {
+      de: "Transfers",
+      en: "Transfers",
+      it: "Transfer",
+      fr: "Transferts"
+    });
+    assertAll("service.categories.emergencySupport", {
+      de: "Notfallunterstützung",
+      en: "Emergency support",
+      it: "Supporto di emergenza",
+      fr: "Assistance d'urgence"
+    });
+    assertAll("service.categories.other", {
+      de: "Sonstiges",
+      en: "Other",
+      it: "Altro",
+      fr: "Divers"
+    });
+  });
+
+  it("translates contact actions and request labels", () => {
+    assertAll("service.actions.openWhatsApp", {
+      de: "WhatsApp öffnen",
+      en: "Open WhatsApp",
+      it: "Apri WhatsApp",
+      fr: "Ouvrir WhatsApp"
+    });
+    assertAll("service.actions.call", {
+      de: "Anrufen",
+      en: "Call",
+      it: "Chiama",
+      fr: "Appeler"
+    });
+    assertAll("service.actions.email", {
+      de: "E-Mail schreiben",
+      en: "Write email",
+      it: "Scrivi e-mail",
+      fr: "Écrire un e-mail"
+    });
+    assertAll("service.request.title", {
+      de: "Worum dürfen wir uns kümmern?",
+      en: "How may we help you?",
+      it: "Di cosa possiamo occuparci?",
+      fr: "De quoi pouvons-nous nous occuper ?"
+    });
+    assertAll("service.request.send", {
+      de: "Nachricht senden",
+      en: "Send message",
+      it: "Invia messaggio",
+      fr: "Envoyer le message"
+    });
+    assertAll("service.contact.phone", {
+      de: "Telefon",
+      en: "Phone",
+      it: "Telefono",
+      fr: "Téléphone"
+    });
+  });
+
+  it("translates status, empty, loading and error strings", () => {
+    assertAll("service.status.submitted", {
+      de: "Anfrage wurde übermittelt",
+      en: "Request has been submitted",
+      it: "Richiesta inviata",
+      fr: "Demande envoyée"
+    });
+    assertAll("service.empty.noServices", {
+      de: "Noch keine Services vorhanden",
+      en: "No services available yet",
+      it: "Nessun servizio ancora disponibile",
+      fr: "Aucun service disponible pour le moment"
+    });
+    assertAll("service.empty.contactConcierge", {
+      de: "Bitte kontaktieren Sie Ihren Concierge",
+      en: "Please contact your concierge",
+      it: "Vi preghiamo di contattare il vostro concierge",
+      fr: "Veuillez contacter votre concierge"
+    });
+    assertAll("service.loading.processing", {
+      de: "Anfrage wird verarbeitet",
+      en: "Request is being processed",
+      it: "Richiesta in elaborazione",
+      fr: "Demande en cours de traitement"
+    });
+    assertAll("service.errors.loadFailed", {
+      de: "Daten konnten nicht geladen werden",
+      en: "The data could not be loaded",
+      it: "Impossibile caricare i dati",
+      fr: "Les données n'ont pas pu être chargées"
+    });
+    assertAll("service.errors.unavailable", {
+      de: "Service derzeit nicht verfügbar",
+      en: "Service currently unavailable",
+      it: "Servizio attualmente non disponibile",
+      fr: "Service actuellement indisponible"
+    });
+  });
+
+  it("translates service aria labels", () => {
+    assertAll("service.aria.view", {
+      de: "Service",
+      en: "Service",
+      it: "Service",
+      fr: "Service"
+    });
+    assertAll("service.aria.contact", {
+      de: "Concierge-Kontakt",
+      en: "Concierge contact",
+      it: "Contatto concierge",
+      fr: "Contact concierge"
+    });
+    assertAll("service.aria.actions", {
+      de: "Serviceaktionen",
+      en: "Service actions",
+      it: "Azioni di servizio",
+      fr: "Actions de service"
+    });
+  });
+
+  it("updates service strings on language switch without reload hooks", () => {
+    const i18n = loadI18n();
+    i18n.setLanguage("de", {persist: false});
+    assert.equal(i18n.t("service.hero.title"), "Ihr persönlicher Concierge");
+    i18n.setLanguage("en", {persist: false});
+    assert.equal(i18n.t("service.hero.title"), "Your personal concierge");
+    i18n.setLanguage("it", {persist: false});
+    assert.equal(i18n.t("service.hero.title"), "Il vostro concierge personale");
+    i18n.setLanguage("fr", {persist: false});
+    assert.equal(i18n.t("service.hero.title"), "Votre concierge personnel");
+    assert.match(portalJs, /renderContact\(\)/);
+    assert.match(portalJs, /renderActions\(\)/);
+    assert.match(portalJs, /syncPortalLanguageUI/);
+    assert.match(portalJs, /renderPortal\(\)/);
+  });
+
+  it("keeps customer data untranslated and falls back to German service keys", () => {
+    const sandbox = {
+      window: {ACTPortalI18nCatalogs: {}},
+      console: {warn(){}},
+      Date, Math, JSON, String, Number, Boolean, Array, Object, Intl, Set,
+      document: {documentElement: {lang: "de"}, body: {setAttribute(){}, getAttribute(){return null;}}, querySelectorAll(){return [];}},
+      sessionStorage: {getItem(){return null;}, setItem(){}, removeItem(){}},
+      navigator: {language: "en", languages: ["en"]}
+    };
+    for (const file of ["de.js", "en.js", "it.js", "fr.js", "portal-i18n.js"]) {
+      vm.runInNewContext(readFileSync(join(root, "customer-portal/i18n", file), "utf8"), sandbox);
+    }
+    const i18n = sandbox.window.ACTPortalI18n;
+    delete sandbox.window.ACTPortalI18nCatalogs.en.service.hero.title;
+    i18n.setLanguage("en", {persist: false});
+    assert.equal(i18n.t("service.hero.title"), "Ihr persönlicher Concierge");
+    assert.equal(i18n.t("service.categories.other"), "Other");
+    assert.match(portalHtml, /id="viewService"/);
+    assert.match(portalHtml, /id="contactCard"/);
+    assert.match(portalHtml, /id="actionGrid"/);
+    assert.match(portalHtml, /data-i18n="service\.hero\.title"/);
+    assert.match(portalHtml, /data-i18n-aria-label="service\.aria\.view"/);
+    assert.match(portalJs, /function renderContact\(/);
+    assert.match(portalJs, /function renderActions\(/);
+    assert.match(portalJs, /function renderHotel\(/);
+    assert.match(portalJs, /function translateServiceCategory\(/);
+    assert.match(portalJs, /data-action="\$\{action\}"/);
+    assert.match(portalJs, /contact\.phone|customer\.whatsapp|hotel\.name/);
+    assert.doesNotMatch(portalJs, /t\(contact\.phone\)/);
+    assert.doesNotMatch(portalJs, /t\(hotel\.name\)/);
+    assert.match(portalJs, /return key\?t\(key\):raw/);
+  });
+});
+
+describe("portal discover i18n (5.0B.5)", () => {
+  const langs = ["de", "en", "it", "fr"];
+
+  function assertAll(key, expected) {
+    const i18n = loadI18n();
+    langs.forEach((lang) => {
+      i18n.setLanguage(lang, {persist: false});
+      assert.equal(i18n.t(key), expected[lang], `${lang}:${key}`);
+      assert.notEqual(i18n.t(key), "", `${lang}:${key} empty`);
+    });
+  }
+
+  it("translates discover hero in all four languages", () => {
+    assertAll("discover.hero.eyebrow", {
+      de: "Concierge",
+      en: "Concierge",
+      it: "Concierge",
+      fr: "Concierge"
+    });
+    assertAll("discover.hero.title", {
+      de: "Entdecken",
+      en: "Discover",
+      it: "Scoprire",
+      fr: "Découvrir"
+    });
+    assertAll("discover.hero.subtitle", {
+      de: "Besondere Empfehlungen für Ihren Aufenthalt.",
+      en: "Special recommendations for your stay.",
+      it: "Consigli speciali per il vostro soggiorno.",
+      fr: "Des recommandations particulières pour votre séjour."
+    });
+  });
+
+  it("translates known discover categories in all four languages", () => {
+    assertAll("discover.categories.culinary", {
+      de: "Kulinarik",
+      en: "Culinary",
+      it: "Cucina",
+      fr: "Gastronomie"
+    });
+    assertAll("discover.categories.hiking", {
+      de: "Wandern",
+      en: "Hiking",
+      it: "Escursionismo",
+      fr: "Randonnée"
+    });
+    assertAll("discover.categories.family", {
+      de: "Familie",
+      en: "Family",
+      it: "Famiglia",
+      fr: "Famille"
+    });
+    assertAll("discover.categories.tips", {
+      de: "Geheimtipps",
+      en: "Hidden gems",
+      it: "Consigli segreti",
+      fr: "Bons plans"
+    });
+    assertAll("discover.categories.other", {
+      de: "Sonstiges",
+      en: "Other",
+      it: "Altro",
+      fr: "Divers"
+    });
+  });
+
+  it("translates card actions, labels, filters and map/route strings", () => {
+    assertAll("discover.actions.learnMore", {
+      de: "Mehr erfahren",
+      en: "Learn more",
+      it: "Scopri di più",
+      fr: "En savoir plus"
+    });
+    assertAll("discover.actions.navigation", {
+      de: "Navigation",
+      en: "Navigation",
+      it: "Navigazione",
+      fr: "Navigation"
+    });
+    assertAll("discover.labels.distance", {
+      de: "Entfernung",
+      en: "Distance",
+      it: "Distanza",
+      fr: "Distance"
+    });
+    assertAll("discover.filters.all", {
+      de: "Alle",
+      en: "All",
+      it: "Tutti",
+      fr: "Tous"
+    });
+    assertAll("discover.map.loading", {
+      de: "Karte wird geladen",
+      en: "Loading map",
+      it: "Caricamento mappa",
+      fr: "Chargement de la carte"
+    });
+    assertAll("discover.route.unavailable", {
+      de: "Route nicht verfügbar",
+      en: "Route unavailable",
+      it: "Percorso non disponibile",
+      fr: "Itinéraire indisponible"
+    });
+  });
+
+  it("translates empty, loading, errors and aria", () => {
+    assertAll("discover.empty.none", {
+      de: "Noch keine Empfehlungen vorhanden",
+      en: "No recommendations available yet",
+      it: "Nessuna raccomandazione ancora disponibile",
+      fr: "Aucune recommandation disponible pour le moment"
+    });
+    assertAll("discover.empty.conciergePreparing", {
+      de: "Ihr Concierge stellt persönliche Vorschläge für Sie zusammen",
+      en: "Your concierge is putting together personal suggestions for you",
+      it: "Il vostro concierge sta preparando suggerimenti personali per voi",
+      fr: "Votre concierge prépare des suggestions personnelles pour vous"
+    });
+    assertAll("discover.loading.preparing", {
+      de: "Empfehlungen werden vorbereitet",
+      en: "Recommendations are being prepared",
+      it: "Raccomandazioni in preparazione",
+      fr: "Recommandations en cours de préparation"
+    });
+    assertAll("discover.errors.loadFailed", {
+      de: "Daten konnten nicht geladen werden",
+      en: "The data could not be loaded",
+      it: "Impossibile caricare i dati",
+      fr: "Les données n'ont pas pu être chargées"
+    });
+    assertAll("discover.aria.featured", {
+      de: "Persönliche Empfehlung",
+      en: "Personal recommendation",
+      it: "Raccomandazione personale",
+      fr: "Recommandation personnelle"
+    });
+  });
+
+  it("updates discover strings on language switch without reload hooks", () => {
+    const i18n = loadI18n();
+    i18n.setLanguage("de", {persist: false});
+    assert.equal(i18n.t("discover.hero.title"), "Entdecken");
+    i18n.setLanguage("en", {persist: false});
+    assert.equal(i18n.t("discover.hero.title"), "Discover");
+    i18n.setLanguage("it", {persist: false});
+    assert.equal(i18n.t("discover.hero.title"), "Scoprire");
+    i18n.setLanguage("fr", {persist: false});
+    assert.equal(i18n.t("discover.hero.title"), "Découvrir");
+    assert.match(portalJs, /renderDiscover\(\)/);
+    assert.match(portalJs, /syncPortalLanguageUI/);
+    assert.match(portalJs, /renderPortal\(\)/);
+  });
+
+  it("keeps recommendation titles and free categories untranslated with German fallback", () => {
+    const sandbox = {
+      window: {ACTPortalI18nCatalogs: {}},
+      console: {warn(){}},
+      Date, Math, JSON, String, Number, Boolean, Array, Object, Intl, Set,
+      document: {documentElement: {lang: "de"}, body: {setAttribute(){}, getAttribute(){return null;}}, querySelectorAll(){return [];}},
+      sessionStorage: {getItem(){return null;}, setItem(){}, removeItem(){}},
+      navigator: {language: "en", languages: ["en"]}
+    };
+    for (const file of ["de.js", "en.js", "it.js", "fr.js", "portal-i18n.js"]) {
+      vm.runInNewContext(readFileSync(join(root, "customer-portal/i18n", file), "utf8"), sandbox);
+    }
+    const i18n = sandbox.window.ACTPortalI18n;
+    delete sandbox.window.ACTPortalI18nCatalogs.en.discover.hero.title;
+    i18n.setLanguage("en", {persist: false});
+    assert.equal(i18n.t("discover.hero.title"), "Entdecken");
+    assert.match(portalHtml, /id="discover"/);
+    assert.match(portalHtml, /id="discoverFeatured"/);
+    assert.match(portalHtml, /id="discoverGrid"/);
+    assert.match(portalHtml, /data-i18n="discover\.hero\.title"/);
+    assert.match(portalHtml, /data-i18n-aria-label="discover\.aria\.view"/);
+    assert.match(portalJs, /function renderDiscover\(/);
+    assert.match(portalJs, /function discoverCategoryLabel\(/);
+    assert.match(portalJs, /function discoverCardMarkup\(/);
+    assert.match(portalJs, /item\.title/);
+    assert.match(portalJs, /item\.place/);
+    assert.match(portalJs, /featured\.description\|\|featured\.title/);
+    assert.doesNotMatch(portalJs, /(?:^|[^A-Za-z])t\(item\.title\)/);
+    assert.doesNotMatch(portalJs, /(?:^|[^A-Za-z])t\(item\.place\)/);
+    assert.match(portalJs, /data-discover-expand/);
+    assert.match(portalJs, /data-discover-group/);
+    assert.match(portalJs, /return rawMap\[raw\]\?t\(rawMap\[raw\]\):raw/);
   });
 });

@@ -118,6 +118,7 @@
   const CUSTOMER_NOT_FOUND_ERROR="Der ausgewaehlte Kunde konnte nicht gefunden werden.";
   const PUBLISH_EDITOR="Alpine Concierge Tirol";
   const SHARE_TOKEN_KEY="act_portal_share_session";
+  let mobileSheetReturnFocus=null;
   const detailTabs=[
     ["kunde","Kunde"],
     ["reise","Reise"],
@@ -126,7 +127,7 @@
     ["buchungen","Buchungen"],
     ["dokumente","Dokumente"],
     ["kommunikation","Kommunikation"],
-    ["veroeffentlichung","Veroeffentlichung"]
+    ["veroeffentlichung","Veröffentlichung"]
   ];
   let activeLoginAttempt=0;
   let customerSavePromise=null;
@@ -566,7 +567,7 @@
     const raw=String(hashValue||"").replace(/^#/,"").replace(/^\/+/,"")||"dashboard";
     const parts=raw.split("/").filter(Boolean);
     const main=parts[0]||"dashboard";
-    if(["dashboard","customers","bookings","calendar","documents","settings","communication"].includes(main)&&parts.length===1){
+    if(["dashboard","customers","bookings","calendar","documents","settings","communication","tasks"].includes(main)&&parts.length===1){
       return {route:main==="calendar"?"bookings":main,customerId:"",tab:""};
     }
     if(main==="customers"&&parts[1]){
@@ -2852,6 +2853,7 @@
     if(filter==="visible")state.documentVisibility="visible";
     if(filter==="internal")state.documentVisibility="internal";
     renderDocuments();
+    renderTasks();
   }
 
   function publishWorkflow(){
@@ -3882,6 +3884,7 @@
   function setScreenVisibility(loginVisible){
     const login=byId("loginScreen");
     const shell=byId("adminShell");
+    const mobileNav=byId("adminMobileNav");
     if(login){
       login.hidden=!loginVisible;
       login.setAttribute("aria-hidden",loginVisible?"false":"true");
@@ -3890,6 +3893,7 @@
       shell.hidden=loginVisible;
       shell.setAttribute("aria-hidden",loginVisible?"true":"false");
     }
+    if(mobileNav)mobileNav.hidden=loginVisible;
   }
 
   function resetHorizontalScroll(){
@@ -4260,6 +4264,254 @@
     `).join("");
   }
 
+  function customerWorkspaceViewModel(customer){
+    const trip=buildTripViewModel(customer);
+    const tripDays=daysUntil(trip.start);
+    const bookings=arrayValue(customer.bookings).filter(item=>!item.archived&&!item.archivedAt);
+    const openBookings=bookings.filter(item=>!workspaceBookingComplete(item));
+    const documents=documentQualitySummary(customer);
+    const missingRequired=workspaceMissingRequired(customer,trip);
+    const weatherAvailable=workspaceWeatherAvailable(customer);
+    const lastCommunication=workspaceLastCommunication(customer);
+    const published=isPublished(customer);
+    const publishState=publicationStatus(customer);
+    const weatherLabel=cleanValue(customer.weather?.summary||customer.weather?.condition||customer.weatherLocationName||customer.weatherRegion);
+    const tripTiming=tripDays===null
+      ?"Reisestart offen"
+      :tripDays>1?`Beginnt in ${tripDays} Tagen`
+      :tripDays===1?"Beginnt morgen"
+      :tripDays===0?"Beginnt heute"
+      :isActiveTrip(customer)?"Reise läuft"
+      :`Reise vor ${Math.abs(tripDays)} Tagen gestartet`;
+    const travelers=trip.total
+      ?`${trip.total} ${Number(trip.total)===1?"Person":"Personen"}`
+      :displayValue(customer.companions,"Nicht hinterlegt");
+    const warnings=[
+      ...(missingRequired.length?[{tone:"critical",title:`${missingRequired.length} Pflichtangaben fehlen`,detail:missingRequired.join(", "),tab:"kunde"}]:[]),
+      ...(documents.missing?[{tone:"warning",title:`${documents.missing} erwartete Dokumente fehlen`,detail:"Programmpunkte und Dokumentzuordnung prüfen.",tab:"dokumente"}]:[]),
+      ...(documents.critical?[{tone:"critical",title:`${documents.critical} kritische Dokumente`,detail:"Ablauf, Datei oder Freigabe prüfen.",tab:"dokumente"}]:[]),
+      ...(openBookings.length?[{tone:"warning",title:`${openBookings.length} offene Buchungen`,detail:"Status und nächste Fristen prüfen.",tab:"buchungen"}]:[]),
+      ...(!programCount(customer)?[{tone:"warning",title:"Programm noch leer",detail:"Reiseablauf für den Kunden vorbereiten.",tab:"programm"}]:[])
+    ];
+    return {
+      tripTiming,
+      travelers,
+      openBookings:openBookings.length,
+      documents,
+      missingRequired,
+      weatherAvailable,
+      weatherLabel:weatherLabel||"Noch offen",
+      lastCommunication,
+      adults:trip.adults||"0",
+      children:trip.children||"0",
+      publicationLabel:publishState.key==="pending"?"Änderungen offen":published?"Aktiv":publishState.label||"Entwurf",
+      warnings,
+      tasks:warnings.slice(0,4).map((item,index)=>({...item,label:index===0?"Als Nächstes":"Offen"})),
+      activities:[
+        ...(timestampValue(customer)?[{label:"Kundendaten aktualisiert",value:formatDate(new Date(timestampValue(customer)).toISOString())}]:[]),
+        ...(customer.publishMeta?.lastPublishedAt?[{label:"Zuletzt veröffentlicht",value:formatDate(customer.publishMeta.lastPublishedAt)}]:[]),
+        ...(lastCommunication?[{label:"Letzte Kommunikation",value:lastCommunication}]:[])
+      ].slice(0,3),
+      statuses:[
+        {label:customer.status||"Status offen",tone:isArchivedCustomer(customer)?"muted":"info"},
+        {label:published?"Veröffentlichung aktiv":publicationState(customer),tone:published?"success":"warning"},
+        {label:weatherAvailable?"Wetter verfügbar":"Wetter offen",tone:weatherAvailable?"success":"muted"}
+      ],
+      tabCounts:{
+        programm:programCount(customer),
+        buchungen:bookings.length,
+        dokumente:documents.total,
+        kommunikation:lastCommunication?"1":"–",
+        veroeffentlichung:published?"Live":"Entwurf"
+      }
+    };
+  }
+
+  function workspaceBookingComplete(booking){
+    const status=normalizeText(booking.bookingStatus||booking.status||"");
+    return Boolean(booking.completedAt||booking.archivedAt||["bestaetigt","bestatigt","bestätigt","bezahlt","abgeschlossen","confirmed","paid","completed"].includes(status));
+  }
+
+  function workspaceMissingRequired(customer,trip){
+    return [
+      [customer.customerName,"Kundenname"],
+      [customer.email||customer.contact?.email,"E-Mail"],
+      [customer.phone||customer.contact?.phone,"Telefon"],
+      [trip.title,"Reisename"],
+      [trip.start,"Reisebeginn"],
+      [trip.end,"Reiseende"],
+      [trip.region,"Region"]
+    ].filter(([value])=>!cleanValue(value)).map(([,label])=>label);
+  }
+
+  function workspaceWeatherAvailable(customer){
+    const weather=customer.weather;
+    return Boolean(
+      cleanValue(customer.weatherLocationName||customer.weatherRegion)
+      ||cleanValue(weather?.summary||weather?.condition)
+      ||arrayValue(weather?.days).length
+    );
+  }
+
+  function workspaceLastCommunication(customer){
+    const entries=[
+      ...arrayValue(customer.communications),
+      ...arrayValue(customer.communicationHistory),
+      ...arrayValue(customer.crm?.communications)
+    ];
+    const latest=[...entries].sort((a,b)=>(dateValue(b?.createdAt||b?.date||b?.timestamp)?.getTime()||0)-(dateValue(a?.createdAt||a?.date||a?.timestamp)?.getTime()||0))[0];
+    if(latest){
+      const value=latest.createdAt||latest.date||latest.timestamp;
+      return `${cleanValue(latest.type||latest.channel||"Kontakt")}${value?` · ${formatDate(value)}`:""}`;
+    }
+    return cleanValue(customer.lastCommunicationAt)?formatDate(customer.lastCommunicationAt):"";
+  }
+
+  function workspaceStatusChip(item){
+    return `<span class="v2-workspace-status ${escapeHtml(item.tone||"muted")}"><i aria-hidden="true"></i>${escapeHtml(item.label)}</span>`;
+  }
+
+  function customerWorkspaceOverviewMarkup(customer,workspace){
+    const warningMarkup=workspace.warnings.length
+      ?workspace.warnings.slice(0,3).map(item=>`
+        <button class="v2-workspace-alert ${escapeHtml(item.tone)}" type="button" data-detail-tab="${escapeHtml(item.tab)}">
+          <span aria-hidden="true">!</span>
+          <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span>
+        </button>
+      `).join("")
+      :`<div class="v2-workspace-clear"><strong>Workspace bereit</strong><span>Keine kritischen Hinweise erkannt.</span></div>`;
+    const tasks=workspace.tasks.length
+      ?workspace.tasks.slice(0,3).map(item=>`
+        <button class="v2-workspace-task" type="button" data-detail-tab="${escapeHtml(item.tab)}">
+          <span class="v2-workspace-task-state"></span>
+          <span><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.title)}</strong></span>
+          <span aria-hidden="true">→</span>
+        </button>
+      `).join("")
+      :`<p class="v2-muted">Aktuell keine offenen Aufgaben.</p>`;
+    const activities=workspace.activities.length
+      ?workspace.activities.map(item=>`<li><span></span><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.value)}</small></div></li>`).join("")
+      :`<li><span></span><div><strong>Noch keine Aktivität</strong><small>Änderungen werden hier zusammengefasst.</small></div></li>`;
+    return `
+      <section class="v2-concierge-overview-card" aria-labelledby="conciergeOverviewTitle">
+        <div class="v2-workspace-section-head">
+          <div>
+            <p class="v2-eyebrow">Concierge Overview</p>
+            <h3 id="conciergeOverviewTitle">Heute wichtig</h3>
+          </div>
+          <span class="v2-workspace-health ${workspace.warnings.length?"attention":"ready"}">${workspace.warnings.length?`${workspace.warnings.length} Hinweise`:"Alles im Blick"}</span>
+        </div>
+        <div class="v2-concierge-facts">
+          ${workspaceFact(workspace.tripTiming,"Reise")}
+          ${workspaceFact(isPublished(customer)?"Aktiv":"Entwurf","Veröffentlichung")}
+          ${workspaceFact(workspace.openBookings?`${workspace.openBookings} offen`:"Keine offenen","Buchungen")}
+          ${workspaceFact(workspace.documents.missing?`${workspace.documents.missing} fehlen`:`${workspace.documents.total} vorhanden`,"Dokumente")}
+          ${workspaceFact(workspace.weatherLabel,"Wetter")}
+          ${workspaceFact(workspace.lastCommunication||"Nicht dokumentiert","Letzte Kommunikation")}
+        </div>
+        <div class="v2-workspace-alerts" aria-label="Warnungen">${warningMarkup}</div>
+        <div class="v2-workspace-lower">
+          <section class="v2-workspace-panel">
+            <div class="v2-workspace-section-head compact"><h4>Aufgaben</h4><span>${workspace.tasks.length}</span></div>
+            <div class="v2-workspace-task-list">${tasks}</div>
+            <button class="v2-link-button v2-workspace-all-tasks" type="button" data-mobile-route="tasks">Alle Aufgaben anzeigen</button>
+          </section>
+          <section class="v2-workspace-panel">
+            <div class="v2-workspace-section-head compact"><h4>Aktivität</h4></div>
+            <ol class="v2-workspace-activity">${activities}</ol>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
+  function workspaceFact(value,label){
+    return `<div class="v2-concierge-fact"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  }
+
+  function workspaceStatusCard(label,value,tone,tab){
+    return `<button class="workspace-status-card ${escapeHtml(tone)}" type="button" data-detail-tab="${escapeHtml(tab)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></button>`;
+  }
+
+  function workspaceQuickAction(label,tab,count,icon){
+    return `<button class="workspace-quick-action" type="button" data-detail-tab="${escapeHtml(tab)}"><span class="workspace-quick-icon" aria-hidden="true">${escapeHtml(icon)}</span><strong>${escapeHtml(label)}</strong>${Number(count)>0?`<small>${escapeHtml(String(count))}</small>`:""}</button>`;
+  }
+
+  function customerWorkspaceTabAction(tab){
+    if(tab!=="kunde")return "";
+    if(!state.customerEditMode){
+      return `<div class="v2-workspace-tab-action">
+        <button class="v2-button primary" type="button" data-customer-edit-action="edit">Bearbeiten</button>
+        <span class="v2-edit-status ${escapeHtml(state.customerEditMessageKind)}" aria-live="polite">${escapeHtml(state.customerEditMessage)}</span>
+      </div>`;
+    }
+    const saveLabel=state.customerEditSaving?"Wird gespeichert …":hasDirtyCustomerEdit()?"Änderungen speichern":"Speichern";
+    return `<div class="v2-workspace-tab-action">
+      <button class="v2-button primary" type="submit" form="customerEditForm" data-customer-edit-action="save" ${state.customerEditSaving?"disabled aria-busy=\"true\"":""}>${saveLabel}</button>
+      <button class="v2-button soft" type="button" data-customer-edit-action="cancel" ${state.customerEditSaving?"disabled":""}>Abbrechen</button>
+      <span class="v2-edit-status ${escapeHtml(state.customerEditMessageKind)}" aria-live="polite">${escapeHtml(state.customerEditMessage)}</span>
+    </div>`;
+  }
+
+  function allWorkspaceTasks(){
+    return state.customers.filter(customer=>!isArchivedCustomer(customer)).flatMap(customer=>
+      customerWorkspaceViewModel(customer).tasks.map(task=>({...task,customerId:customer.customerId,customerName:customer.customerName||"Unbenannter Kunde"}))
+    );
+  }
+
+  function renderTasks(){
+    const root=byId("tasksRoot");
+    if(!root)return;
+    const tasks=allWorkspaceTasks();
+    root.innerHTML=`<section class="v2-document-page workspace-tasks-page">
+      <div class="v2-section-toolbar"><div><p class="v2-eyebrow">Arbeitsvorrat</p><h2>Offene Aufgaben</h2><p class="v2-muted">Aus bereits geladenen Kunden-, Buchungs- und Dokumentdaten abgeleitet.</p></div>${badge(`${tasks.length} offen`)}</div>
+      <div class="workspace-task-page-list">${tasks.length?tasks.map(task=>`<button type="button" data-mobile-customer-task="${escapeHtml(task.customerId)}" data-task-tab="${escapeHtml(task.tab)}"><span class="v2-workspace-task-state"></span><span><small>${escapeHtml(task.customerName)}</small><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(task.detail)}</span></span><span aria-hidden="true">→</span></button>`).join(""):`<article class="v2-empty"><h3>Keine offenen Aufgaben</h3><p>Alle aus den vorhandenen Daten ableitbaren Punkte sind erledigt.</p></article>`}</div>
+    </section>`;
+  }
+
+  function renderMobileNavigation(){
+    const isMobile=typeof window.matchMedia!=="function"||window.matchMedia("(max-width:820px), (max-width:920px) and (max-height:520px)").matches;
+    const taskCount=isMobile?allWorkspaceTasks().length:0;
+    const badgeEl=byId("mobileTaskBadge");
+    if(badgeEl){badgeEl.textContent=String(taskCount);badgeEl.hidden=taskCount===0;}
+    const active=state.route==="customerDetail"?"customers":state.route;
+    all("[data-mobile-route]").forEach(button=>{
+      const route=button.dataset.mobileRoute;
+      const selected=route===active;
+      button.classList.toggle("active",selected);
+      if(button.closest(".admin-mobile-nav")){
+        if(selected)button.setAttribute("aria-current","page");
+        else button.removeAttribute("aria-current");
+      }
+    });
+    const moreButton=document.querySelector('[data-mobile-sheet-open="mobileMoreSheet"]');
+    const moreSelected=["bookings","communication","documents","settings"].includes(active);
+    if(moreButton){
+      moreButton.classList.toggle("active",moreSelected);
+      if(moreSelected)moreButton.setAttribute("aria-current","page");
+      else moreButton.removeAttribute("aria-current");
+    }
+  }
+
+  function openMobileSheet(id,trigger){
+    const sheet=byId(id);
+    if(!sheet)return;
+    closeMobileSheet(false);
+    mobileSheetReturnFocus=trigger||document.activeElement;
+    sheet.hidden=false;
+    document.body.classList.add("mobile-sheet-open");
+    window.setTimeout(()=>sheet.querySelector(".admin-mobile-sheet-panel")?.focus(),0);
+  }
+
+  function closeMobileSheet(restoreFocus=true){
+    const sheet=document.querySelector(".admin-mobile-action-sheet:not([hidden])");
+    if(!sheet)return;
+    sheet.hidden=true;
+    document.body.classList.remove("mobile-sheet-open");
+    if(restoreFocus&&mobileSheetReturnFocus?.focus)mobileSheetReturnFocus.focus();
+    mobileSheetReturnFocus=null;
+  }
+
   function renderCustomerDetail(){
     const root=byId("customerDetailRoot");
     if(!root)return;
@@ -4292,21 +4544,39 @@
       return;
     }
     const tab=detailTabs.some(([key])=>key===state.selectedTab)?state.selectedTab:"kunde";
+    const workspace=customerWorkspaceViewModel(customer);
     const flash=state.detailFlashMessage?`<p class="v2-edit-status ${escapeHtml(state.detailFlashKind||"success")}" role="status">${escapeHtml(state.detailFlashMessage)}</p>`:"";
     root.innerHTML=`
-      <header class="v2-detail-head">
-        <div class="v2-detail-actions">
-          <button class="v2-button soft" type="button" data-v2-route="customers">Zur Kundenuebersicht</button>
-          ${customerLifecycleActionsMarkup(customer)}
-          <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Classic Admin – Uebergangsloesung</a>
+      <header class="v2-detail-head v2-workspace-head">
+        <div class="v2-workspace-breadcrumb">
+          <div><button class="v2-link-button" type="button" data-v2-route="customers">Kunden</button><span aria-hidden="true">›</span><strong>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</strong></div>
+          <div class="v2-workspace-header-actions">
+            ${customerWorkspaceTabAction(tab)}
+            <button class="workspace-mobile-more" type="button" aria-label="Weitere Kundenaktionen" aria-controls="workspaceMoreActions" aria-expanded="false" data-workspace-more-toggle>•••</button>
+          </div>
         </div>
         ${flash}
         <div class="v2-detail-hero">
-          <div class="v2-detail-title">
-            <p class="v2-eyebrow">Kundendetail</p>
-            <h2>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</h2>
-            <p>${escapeHtml(displayValue(customer.tripName||customer.tripTitle,"Kein Reisetitel"))}</p>
-            <div class="v2-meta">${badge(customer.status||"Status nicht hinterlegt")}${badge(publicationState(customer))}</div>
+          <div class="v2-detail-title v2-workspace-identity">
+            <p class="v2-eyebrow">Customer Workspace</p>
+            <div>
+              <h2>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</h2>
+              <p>${escapeHtml(displayValue(customer.tripName||customer.tripTitle,"Kein Reisetitel"))}</p>
+            </div>
+            <div class="v2-workspace-statusline" aria-label="Kundenstatus">
+              ${workspace.statuses.map(item=>workspaceStatusChip(item)).join("")}
+            </div>
+            <dl class="workspace-customer-summary">
+              <div><dt>Zeitraum</dt><dd>${escapeHtml(displayValue(formatPeriod(customer),"Noch nicht geplant"))}</dd></div>
+              <div><dt>Region</dt><dd>${escapeHtml(displayValue(customer.region,"Nicht hinterlegt"))}</dd></div>
+              <div><dt>Reisende</dt><dd>${escapeHtml(`${workspace.adults} Erwachsene · ${workspace.children} Kinder`)}</dd></div>
+            </dl>
+            <div class="v2-workspace-primary-actions" aria-label="Schnellaktionen">
+              <button class="v2-button primary" type="button" data-detail-tab="programm">Programm</button>
+              <button class="v2-button soft" type="button" data-detail-tab="buchungen">Buchung</button>
+              <button class="v2-button soft" type="button" data-detail-tab="dokumente">Dokument</button>
+              <button class="v2-button soft" type="button" data-detail-tab="kommunikation">Nachricht</button>
+            </div>
           </div>
           <figure class="v2-detail-cover">
             <img src="${escapeHtml(customerImage(customer))}" alt="">
@@ -4320,22 +4590,54 @@
           </figure>
         </div>
         <div class="v2-detail-summary" aria-label="Kundenzusammenfassung">
-          ${summaryItem("Region",displayValue(customer.region,"Keine Region"))}
+          ${summaryItem("Reise",workspace.tripTiming)}
           ${summaryItem("Reisezeitraum",displayValue(formatPeriod(customer),"Kein Reisezeitraum"))}
+          ${summaryItem("Region",displayValue(customer.region,"Keine Region"))}
+          ${summaryItem("Reisende",workspace.travelers)}
           ${summaryItem("Letzte Aenderung",timestampValue(customer)?formatDate(new Date(timestampValue(customer)).toISOString()):displayValue(customer.updatedAt))}
-          ${summaryItem("Kunden-ID",customer.customerId||"Nicht hinterlegt","v2-technical-id")}
+          ${summaryItem("Concierge",displayValue(customer.concierge||customer.conciergeName,"Nicht zugewiesen"))}
         </div>
+        <section class="workspace-status-grid" aria-label="Workspace Status">
+          ${workspaceStatusCard("Reise",workspace.tripTiming,workspace.tripTiming==="Reisestart offen"?"muted":"info","reise")}
+          ${workspaceStatusCard("Veröffentlichung",workspace.publicationLabel,workspace.publicationLabel==="Aktiv"?"success":"warning","veroeffentlichung")}
+          ${workspaceStatusCard("Wetter",workspace.weatherLabel,workspace.weatherAvailable?"success":"muted","concierge")}
+          ${workspaceStatusCard("Dokumente",workspace.documents.critical?`${workspace.documents.critical} kritisch`:workspace.documents.missing?`${workspace.documents.missing} fehlen`:"Vollständig",workspace.documents.critical?"critical":workspace.documents.missing?"warning":"success","dokumente")}
+        </section>
+        <section class="workspace-quick-actions" aria-labelledby="workspaceQuickTitle">
+          <div class="v2-workspace-section-head compact"><h3 id="workspaceQuickTitle">Schnellzugriff</h3></div>
+          <div>
+            ${workspaceQuickAction("Programm","programm",workspace.tabCounts.programm,"P")}
+            ${workspaceQuickAction("Buchungen","buchungen",workspace.tabCounts.buchungen,"B")}
+            ${workspaceQuickAction("Dokumente","dokumente",workspace.tabCounts.dokumente,"D")}
+            ${workspaceQuickAction("Kommunikation","kommunikation",workspace.tabCounts.kommunikation==="–"?0:workspace.tabCounts.kommunikation,"K")}
+            ${workspaceQuickAction("Veröffentlichung","veroeffentlichung",0,"V")}
+          </div>
+        </section>
+        <details class="v2-workspace-more" id="workspaceMoreActions">
+          <summary>Weitere Aktionen</summary>
+          <div class="v2-detail-actions">
+            ${customerLifecycleActionsMarkup(customer)}
+            <a class="v2-button soft" href="${escapeHtml(classicEditorUrl(customer.customerId))}" data-classic-editor="${escapeHtml(customer.customerId)}">Classic Admin – Übergangslösung</a>
+            <span class="v2-workspace-customer-id">Kunden-ID: <strong class="v2-technical-id">${escapeHtml(customer.customerId||"Nicht hinterlegt")}</strong></span>
+            <span class="v2-workspace-customer-id">Letzte Änderung: <strong>${escapeHtml(displayValue(customer.updatedAt||customer.updated,"Nicht hinterlegt"))}</strong></span>
+          </div>
+        </details>
       </header>
-      <div class="v2-detail-tabs" role="tablist" aria-label="Kundendetailbereiche">
-        ${detailTabs.map(([key,label])=>`
-          <button class="v2-tab" type="button" role="tab" id="tab-${key}" aria-selected="${key===tab?"true":"false"}" aria-controls="panel-${key}" data-detail-tab="${key}">
-            ${escapeHtml(label)}
-          </button>
-        `).join("")}
+      <div class="v2-workspace-content-flow">
+        <div class="v2-workspace-navigation">
+          <div class="v2-detail-tabs v2-workspace-tabs" role="tablist" aria-label="Kundendetailbereiche">
+            ${detailTabs.map(([key,label])=>`
+              <button class="v2-tab" type="button" role="tab" id="tab-${key}" aria-selected="${key===tab?"true":"false"}" ${key===tab?'aria-current="page"':""} aria-controls="panel-${key}" data-detail-tab="${key}">
+                <span>${escapeHtml(label)}</span>${workspace.tabCounts[key]!==undefined?`<small>${escapeHtml(String(workspace.tabCounts[key]))}</small>`:""}
+              </button>
+            `).join("")}
+          </div>
+        </div>
+        <div class="v2-workspace-overview-slot">${customerWorkspaceOverviewMarkup(customer,workspace)}</div>
+        <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
+          ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
+        </section>
       </div>
-      <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-        ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
-      </section>
     `;
   }
 
@@ -4951,7 +5253,7 @@
     const contact=customer.contact&&typeof customer.contact==="object"?customer.contact:{};
     if(state.customerEditMode)return customerEditFormMarkup(customer);
     return `
-      <div class="v2-tab-actions">
+      <div class="v2-tab-actions v2-customer-mobile-actions">
         <button class="v2-button primary" type="button" data-customer-edit-action="edit">Bearbeiten</button>
         <span class="v2-edit-status ${state.customerEditMessageKind}" id="customerEditStatus" aria-live="polite">${escapeHtml(state.customerEditMessage)}</span>
       </div>
@@ -5477,6 +5779,8 @@
     renderCustomerDetail();
     window.ACTAdminV2Bookings?.renderBookingEditor?.();
     renderNewCustomerWizard();
+    if(state.route==="tasks")renderTasks();
+    renderMobileNavigation();
   }
 
   function routeTo(route,{replace=false}={}){
@@ -5508,6 +5812,7 @@
       const active=parsed.route==="customerDetail"?button.dataset.v2Route==="customers":button.dataset.v2Route===parsed.route;
       button.classList.toggle("active",active);
     });
+    renderMobileNavigation();
     const title=parsed.route==="customerDetail"?"Kundendetail":byId(viewId)?.dataset.title||"Dashboard";
     byId("pageTitle").textContent=title;
     if(replace)history.replaceState({route:parsed.route},"",nextHash);
@@ -6386,6 +6691,13 @@
     }
     const dirty=hasDirtyCustomerEdit();
     setCustomerEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
+    const workspaceSave=document.querySelector('.v2-workspace-tab-action [form="customerEditForm"]');
+    if(workspaceSave)workspaceSave.textContent=dirty?"Änderungen speichern":"Speichern";
+    const workspaceStatus=document.querySelector(".v2-workspace-tab-action .v2-edit-status");
+    if(workspaceStatus){
+      workspaceStatus.textContent=dirty?"Ungespeicherte Änderungen":"";
+      workspaceStatus.className=`v2-edit-status${dirty?" dirty":""}`;
+    }
     if(field.name==="imageUrl"){
       const preview=document.querySelector(".v2-customer-image-preview img");
       if(preview)preview.src=cleanValue(field.value)||customerImage(customerById(state.selectedCustomerId)||{});
@@ -6720,6 +7032,44 @@
     byId("resetFiltersButton").addEventListener("click",resetFilters);
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);
     document.addEventListener("click",event=>{
+      const sheetOpen=event.target.closest("[data-mobile-sheet-open]");
+      if(sheetOpen){openMobileSheet(sheetOpen.dataset.mobileSheetOpen,sheetOpen);return;}
+      if(event.target.closest("[data-mobile-sheet-close]")){closeMobileSheet();return;}
+      if(event.target.closest(".admin-mobile-action-sheet [data-new-customer]")){closeMobileSheet(false);openNewCustomer();return;}
+      if(event.target.closest('.admin-mobile-action-sheet [data-booking-action="create"]')){
+        closeMobileSheet(false);
+        window.ACTAdminV2Bookings?.handleClick?.(event);
+        return;
+      }
+      const mobileRoute=event.target.closest("[data-mobile-route]");
+      if(mobileRoute){
+        closeMobileSheet(false);
+        routeTo(mobileRoute.dataset.mobileRoute);
+        return;
+      }
+      const mobileCustomerTab=event.target.closest("[data-mobile-customer-tab]");
+      if(mobileCustomerTab){
+        closeMobileSheet(false);
+        const tab=mobileCustomerTab.dataset.mobileCustomerTab;
+        if(state.selectedCustomerId)routeTo(`customers/${encodeURIComponent(state.selectedCustomerId)}/${tab}`);
+        else routeTo(tab==="kommunikation"?"communication":"documents");
+        return;
+      }
+      const taskTarget=event.target.closest("[data-mobile-customer-task]");
+      if(taskTarget){
+        routeTo(`customers/${encodeURIComponent(taskTarget.dataset.mobileCustomerTask)}/${taskTarget.dataset.taskTab||"kunde"}`);
+        return;
+      }
+      if(event.target.closest("[data-workspace-more-toggle]")){
+        const details=byId("workspaceMoreActions");
+        const toggle=event.target.closest("[data-workspace-more-toggle]");
+        if(details){
+          details.open=!details.open;
+          toggle.setAttribute("aria-expanded",details.open?"true":"false");
+          if(details.open)details.querySelector("button,a")?.focus();
+        }
+        return;
+      }
       if(event.target.closest("[data-travel-open-maps]")){
         openTravelMapsFromEvent(event);
         return;
@@ -6997,6 +7347,27 @@
       }
     });
     document.addEventListener("keydown",event=>{
+      const openSheet=document.querySelector(".admin-mobile-action-sheet:not([hidden])");
+      if(event.key==="Escape"&&openSheet){event.preventDefault();closeMobileSheet();return;}
+      if(event.key==="Tab"&&openSheet){
+        const focusable=Array.from(openSheet.querySelectorAll('button:not([disabled]),a[href],[tabindex="0"]')).filter(item=>item.offsetParent!==null);
+        if(focusable.length){
+          const first=focusable[0],last=focusable[focusable.length-1];
+          if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+          else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+        }
+      }
+      const activeTab=event.target.closest('.v2-workspace-tabs [role="tab"]');
+      if(activeTab&&["ArrowLeft","ArrowRight","Home","End"].includes(event.key)){
+        const tabs=Array.from(activeTab.closest('[role="tablist"]').querySelectorAll('[role="tab"]'));
+        const current=tabs.indexOf(activeTab);
+        const next=event.key==="Home"?tabs[0]:event.key==="End"?tabs[tabs.length-1]:tabs[(current+(event.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];
+        if(next){
+          event.preventDefault();
+          next.focus({preventScroll:true});
+          next.scrollIntoView({block:"nearest",inline:"nearest"});
+        }
+      }
       if((event.key==="Enter"||event.key===" ")&&event.target.matches("[data-open-editor]")){
         event.preventDefault();
         openCustomerDetail(event.target.dataset.openEditor);
@@ -7024,7 +7395,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,renderCustomerDetail};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

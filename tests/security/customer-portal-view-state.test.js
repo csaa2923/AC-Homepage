@@ -18,7 +18,7 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=69/);
+    assert.match(portalHtml, /customer-portal\.js\?v=72/);
     assert.match(portalHtml, /customer-portal\.css\?v=37/);
   });
 
@@ -357,10 +357,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=69"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=72"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=69/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=72/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -446,7 +446,7 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
 
   it("bumps stylesheet pin only for the design pilot", () => {
     assert.match(portalHtml, /customer-portal\.css\?v=37/);
-    assert.match(portalHtml, /customer-portal\.js\?v=69/);
+    assert.match(portalHtml, /customer-portal\.js\?v=72/);
   });
 });
 
@@ -469,7 +469,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=69/);
+    assert.match(portalHtml, /customer-portal\.js\?v=72/);
   });
 });
 
@@ -583,7 +583,7 @@ describe("customer portal documents premium redesign (4.5D)", () => {
 describe("customer portal service premium redesign (4.5E)", () => {
   it("composes service hero, concierge, accommodation and actions", () => {
     assert.match(portalHtml, /id="viewService"[\s\S]*service-hero[\s\S]*id="serviceHeroTitle"[\s\S]*id="contactCard"[\s\S]*id="hotelCard"[\s\S]*id="actionGrid"[\s\S]*id="historyList"/);
-    assert.match(portalHtml, /Ihr persönlicher Concierge/);
+    assert.match(portalHtml, /service\.hero\.title|Ihr persönlicher Concierge/);
     assert.match(portalHtml, /id="contact"[^>]*data-app-view="service"/);
     assert.match(portalHtml, /id="accommodation"[^>]*data-app-view="service"/);
     assert.match(portalHtml, /id="actions"[^>]*data-app-view="service"/);
@@ -591,13 +591,13 @@ describe("customer portal service premium redesign (4.5E)", () => {
 
   it("keeps whatsapp, phone, email and data-action handlers", () => {
     assert.match(portalJs, /function renderContact\(/);
-    assert.match(portalJs, /WhatsApp öffnen/);
+    assert.match(portalJs, /service\.actions\.openWhatsApp/);
     assert.match(portalJs, /whatsappLink\(/);
     assert.match(portalJs, /mailto:/);
     assert.match(portalJs, /function serviceTelHref\(/);
     assert.match(portalJs, /data-action="\$\{action\}"/);
     assert.match(portalJs, /function renderHotel\(/);
-    assert.match(portalJs, /Navigation öffnen|today\.actions\.openNavigation|common\.actions\.openNavigation/);
+    assert.match(portalJs, /service\.accommodation\.openNavigation/);
     assert.match(portalJs, /service\.empty\.care/);
   });
 
@@ -618,7 +618,7 @@ describe("customer portal discover premium redesign (4.5F)", () => {
     assert.match(portalHtml, /id="discoverFeatured"/);
     assert.match(portalHtml, /id="discoverCategoryNav"/);
     assert.match(portalHtml, /id="discoverGrid"/);
-    assert.match(portalHtml, /Besondere Empfehlungen für Ihren Aufenthalt/);
+    assert.match(portalHtml, /discover\.hero\.subtitle|Besondere Empfehlungen für Ihren Aufenthalt/);
     assert.match(portalJs, /function renderDiscover\(/);
     assert.match(portalJs, /safeRender\("discover",renderDiscover\)/);
   });
@@ -628,11 +628,11 @@ describe("customer portal discover premium redesign (4.5F)", () => {
     assert.match(portalJs, /customer\.restaurants/);
     assert.match(portalJs, /customer\.activities/);
     assert.match(portalJs, /filterRecommendations/);
-    assert.match(portalJs, /Heute empfehlen wir/);
+    assert.match(portalJs, /discover\.recommendations\.featuredEyebrow/);
     assert.match(portalJs, /discover\.empty\.title/);
     assert.match(portalJs, /data-discover-group/);
-    assert.match(portalJs, /Mehr erfahren/);
-    assert.match(portalJs, /Navigation/);
+    assert.match(portalJs, /discover\.actions\.learnMore/);
+    assert.match(portalJs, /discover\.actions\.navigation/);
   });
 
   it("styles discover cards for mobile and desktop", () => {
@@ -680,6 +680,6 @@ describe("customer portal premium polish (4.6)", () => {
     assert.match(portalJs, /whatsappLink\(/);
     assert.match(portalCss, /prefers-reduced-motion:reduce[\s\S]*\.button,/);
     assert.match(portalHtml, /customer-portal\.css\?v=37/);
-    assert.match(portalHtml, /customer-portal\.js\?v=69/);
+    assert.match(portalHtml, /customer-portal\.js\?v=72/);
   });
 });

@@ -33,10 +33,23 @@
       notAvailable:"Not available",
       secureNote:"This page is only accessible via your personal link.",
       brand:"Alpine Concierge Tirol",
+      guest:"Guest",
       whatsappOpen:"Open WhatsApp",
       contactWhatsApp:"Contact Alpine Concierge Tirol",
       showAllFields:"Show all fields",
       version:"Version {version}",
+      messages:{
+        whatsappQuestion:"Hello Alpine Concierge Tirol, I have a question about my travel programme.",
+        whatsappChange:"Hello Alpine Concierge Tirol, I would like to request a change to my travel programme."
+      },
+      alerts:{
+        confirmThanks:"Thank you. The real confirmation will be connected in a later step.",
+        paymentLater:"Payment will be connected in a later step.",
+        pdfLater:"PDF generation will be connected in a later step.",
+        documentPlaceholder:"{name}: Document placeholder for step 1.",
+        calendarMissing:"No exportable calendar events available.",
+        calendarFailed:"The calendar file could not be created."
+      },
       actions:{
         showDetails:"View details",
         openNavigation:"Open navigation",
@@ -55,7 +68,9 @@
       loading:{
         default:"Loading …",
         preparing:"Preparing your data …",
-        weather:"Loading weather …"
+        weather:"Loading weather …",
+        portalTitle:"Loading data …",
+        tripPreparing:"Your personal travel programme is being prepared."
       },
       errors:{
         loadFailed:"The data could not be loaded.",
@@ -356,7 +371,19 @@
         elevationAria:"Interactive elevation profile",
         toolbarAria:"Map toolbar",
         showLocation:"Show my location",
-        openGoogleMaps:"Open in Google Maps"
+        openGoogleMaps:"Open in Google Maps",
+        mapNotReady:"The map is not loaded yet.",
+        locationUnsupported:"Location is not supported on this device.",
+        locationDetecting:"Detecting location …",
+        yourLocation:"Your location",
+        locationFailed:"Location could not be determined. Please check permissions.",
+        locationActive:"Location active (local only, not stored)",
+        toDestination:"{km} km to destination",
+        toHut:"{km} km to nearest hut",
+        toParking:"{km} km to parking",
+        elevationDistance:"Elevation {elevation} · Distance {distance}",
+        start:"Start",
+        end:"Finish"
       },
       calendar:{
         eyebrow:"Calendar",
@@ -365,7 +392,9 @@
         viewAria:"Calendar view",
         tripView:"Full trip",
         dayView:"Day view",
-        allDay:"All day"
+        allDay:"All day",
+        exportMissing:"No exportable calendar events available.",
+        exportFailed:"The calendar file could not be created."
       },
       timeline:{
         eyebrow:"Full timeline",
@@ -530,19 +559,324 @@
       }
     },
     service:{
-      hero:{title:"Your personal concierge"},
+      hero:{
+        eyebrow:"Service",
+        title:"Your personal concierge",
+        subtitle:"We are here for your wishes, questions and special moments.",
+        intro:"We are here for your wishes, questions and special moments."
+      },
+      overview:{
+        eyebrow:"Support",
+        title:"How we can help you",
+        copy:"Direct help with your programme, changes and practical needs – one step is enough.",
+        personalSupport:"Personal support",
+        weAreHere:"We are here for you",
+        individualCare:"Individual care",
+        yourRequest:"Your request",
+        requestService:"Request a service",
+        getSupport:"Get support",
+        personalRecommendation:"Personal recommendation",
+        discreetReliable:"Discreet and reliable",
+        duringStay:"During your stay"
+      },
+      concierge:{
+        eyebrow:"Concierge",
+        title:"Your contact",
+        personalCare:"Personal care",
+        lead:"We accompany your trip personally – from the first question to the special moment on site.",
+        personalConcierge:"Your personal concierge"
+      },
+      accommodation:{
+        eyebrow:"Accommodation",
+        title:"Stay",
+        fallbackName:"Accommodation",
+        checkIn:"Check-in",
+        checkOut:"Check-out",
+        contact:"Contact",
+        voucher:"Voucher",
+        notes:"Notes",
+        openNavigation:"Open navigation"
+      },
+      history:{
+        eyebrow:"Notes",
+        title:"Change history",
+        copy:"Important updates about your trip – chronological and clear.",
+        publishedVersion:"Version {version} published"
+      },
+      categories:{
+        travelPlanning:"Travel planning",
+        restaurantReservation:"Restaurant reservation",
+        transfers:"Transfers",
+        activities:"Activities",
+        tickets:"Tickets",
+        wellness:"Wellness",
+        shopping:"Shopping",
+        childcare:"Childcare",
+        petService:"Pet service",
+        specialRequests:"Special requests",
+        emergencySupport:"Emergency support",
+        other:"Other"
+      },
+      actions:{
+        sendRequest:"Send request",
+        openWhatsApp:"Open WhatsApp",
+        call:"Call",
+        email:"Write email",
+        selectService:"Select service",
+        showDetails:"View details",
+        learnMore:"Learn more",
+        back:"Back",
+        close:"Close",
+        retry:"Try again",
+        sendChange:"Send change request",
+        confirmProgram:"Confirm programme",
+        openPayment:"Open payment",
+        downloadPdf:"Download PDF",
+        print:"Print",
+        saveCalendar:"Save calendar"
+      },
+      request:{
+        title:"How may we help you?",
+        message:"Your message",
+        preferredTime:"Preferred time",
+        priority:"Priority",
+        contactMethod:"Contact method",
+        send:"Send message",
+        preparing:"Request is being prepared",
+        submitted:"Request has been submitted",
+        failed:"Request could not be submitted"
+      },
+      form:{
+        title:"How may we help you?",
+        message:"Your message",
+        preferredTime:"Preferred time",
+        priority:"Priority",
+        contactMethod:"Contact method",
+        send:"Send message"
+      },
+      status:{
+        preparing:"Request is being prepared",
+        submitted:"Request has been submitted",
+        failed:"Request could not be submitted",
+        processing:"Request is being processed"
+      },
+      contact:{
+        phone:"Phone",
+        email:"Email",
+        whatsapp:"WhatsApp",
+        reachability:"Availability",
+        personalContact:"Personal contact",
+        responseTime:"Response time",
+        urgentCases:"In urgent cases",
+        emergency:"Emergency contact",
+        localEmergency:"Local emergency numbers"
+      },
       empty:{
         hotel:"Your accommodation details are being prepared and will appear here once released.",
         care:"Your personal care details are being prepared.",
         historyTitle:"No changes noted yet",
-        historyCopy:"Updates about your trip will appear here."
+        historyCopy:"Updates about your trip will appear here.",
+        noServices:"No services available yet",
+        preparing:"Your service offers are being prepared",
+        noRecommendation:"No recommendation currently available",
+        contactConcierge:"Please contact your concierge"
+      },
+      loading:{
+        default:"Loading …",
+        processing:"Request is being processed",
+        refresh:"Refresh",
+        retry:"Try again"
+      },
+      errors:{
+        loadFailed:"The data could not be loaded",
+        actionFailed:"Action failed",
+        retry:"Please try again",
+        unavailable:"Service currently unavailable",
+        submitFailed:"Request could not be submitted"
+      },
+      aria:{
+        view:"Service",
+        hero:"Service",
+        contact:"Concierge contact",
+        accommodation:"Accommodation",
+        actions:"Service actions",
+        history:"Change history",
+        openWhatsApp:"Open WhatsApp",
+        call:"Call",
+        email:"Write email"
       }
     },
     discover:{
-      hero:{title:"Discover"},
+      hero:{
+        eyebrow:"Concierge",
+        title:"Discover",
+        subtitle:"Special recommendations for your stay.",
+        intro:"Special recommendations for your stay."
+      },
+      overview:{
+        eyebrow:"Selection",
+        title:"Recommendations",
+        personal:"Personal",
+        themes:"Themes",
+        categoriesTitle:"Your categories",
+        region:"Region",
+        surroundings:"Your surroundings",
+        selectedForYou:"Personally selected for you",
+        ourRecommendations:"Our recommendations",
+        specialExperiences:"Special experiences",
+        discoverTirol:"Discover Tyrol",
+        curatedForYou:"Curated for you",
+        nearby:"Nearby",
+        recommendedToday:"Recommended today",
+        matchingTrip:"Matched to your trip"
+      },
+      concierge:{
+        eyebrow:"Concierge",
+        insiderTip:"Insider tip",
+        recommendation:"Your concierge's recommendation",
+        curated:"Curated for you"
+      },
+      recommendations:{
+        featuredTitle:"We recommend today",
+        featuredEyebrow:"We recommend today…",
+        regionCopy:"Personally selected ideas around your stay – calm, regional and matched to your trip.",
+        regionFallback:"Your region",
+        surroundingsEyebrow:"Surroundings"
+      },
+      categories:{
+        culinary:"Culinary",
+        restaurants:"Restaurants",
+        restaurant:"Restaurant",
+        nature:"Nature",
+        hiking:"Hiking",
+        hike:"Hiking",
+        mountains:"Mountains",
+        culture:"Culture",
+        sights:"Sights",
+        wellness:"Wellness",
+        family:"Family",
+        children:"Children",
+        shopping:"Shopping",
+        sport:"Sport",
+        winter:"Winter",
+        summer:"Summer",
+        events:"Events",
+        event:"Events",
+        tips:"Hidden gems",
+        tip:"Tip",
+        excursions:"Excursions",
+        other:"Other",
+        general:"General",
+        viewpoint:"Viewpoint",
+        evening:"Evening",
+        indoor:"Indoor",
+        warning:"Note",
+        transport:"Transfer",
+        activity:"Activity",
+        recommendation:"Recommendation"
+      },
+      cards:{
+        learnMore:"Learn more",
+        showDetails:"View details",
+        openRoute:"Open route",
+        openMap:"Open map",
+        openWebsite:"Open website",
+        call:"Call",
+        email:"Write email",
+        requestReservation:"Request a reservation",
+        addToItinerary:"Add to itinerary",
+        favorite:"Favourite",
+        recommended:"Recommended",
+        new:"New"
+      },
+      actions:{
+        learnMore:"Learn more",
+        navigation:"Navigation",
+        openRegionMaps:"Open region in Maps",
+        startNavigation:"Start navigation",
+        showDetails:"View details",
+        openRoute:"Open route",
+        openMap:"Open map",
+        openWebsite:"Open website",
+        call:"Call",
+        email:"Write email",
+        requestReservation:"Request a reservation",
+        addToItinerary:"Add to itinerary"
+      },
+      labels:{
+        distance:"Distance",
+        openingHours:"Opening hours",
+        duration:"Duration",
+        price:"Price",
+        suitableFor:"Suitable for",
+        note:"Note",
+        recommendation:"Recommendation"
+      },
+      status:{
+        favorite:"Favourite",
+        recommended:"Recommended",
+        new:"New"
+      },
+      filters:{
+        all:"All",
+        categories:"Categories",
+        nearby:"Nearby",
+        forToday:"For today",
+        forFamilies:"For families",
+        badWeather:"For bad weather",
+        free:"Free",
+        open:"Open",
+        reset:"Reset",
+        results:"Results",
+        noMatches:"No matches"
+      },
+      navigation:{
+        all:"All",
+        categories:"Categories",
+        results:"Results"
+      },
+      map:{
+        title:"Map",
+        location:"Location",
+        loading:"Loading map",
+        locationUnavailable:"Location unavailable"
+      },
+      route:{
+        title:"Route",
+        startNavigation:"Start navigation",
+        unavailable:"Route unavailable"
+      },
       empty:{
         title:"No recommendations yet",
-        copy:"Personal tips will appear here once they are released."
+        copy:"Personal tips will appear here once they are released.",
+        none:"No recommendations available yet",
+        preparing:"Your recommendations are being prepared",
+        noMatch:"No matching experiences found at the moment",
+        conciergePreparing:"Your concierge is putting together personal suggestions for you",
+        noResults:"No results for this selection"
+      },
+      loading:{
+        default:"Loading …",
+        preparing:"Recommendations are being prepared",
+        refresh:"Refresh",
+        retry:"Try again"
+      },
+      errors:{
+        loadFailed:"The data could not be loaded",
+        unavailable:"Recommendation unavailable",
+        actionFailed:"Action failed",
+        retry:"Please try again"
+      },
+      aria:{
+        view:"Discover",
+        hero:"Discover",
+        featured:"Personal recommendation",
+        categories:"Categories",
+        list:"Recommendations",
+        region:"Your surroundings",
+        categoryChip:"{label}: {count}",
+        learnMore:"Learn more",
+        navigation:"Navigation"
       }
     },
     errors:{
@@ -554,6 +888,7 @@
         title:"Portal unavailable",
         copy:"This portal link is invalid or no longer available."
       },
+      temporarilyUnavailable:"Portal access is temporarily unavailable.",
       documentUnavailable:"Document not available"
     },
     aria:{

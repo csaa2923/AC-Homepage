@@ -34,10 +34,23 @@
       notAvailable:"Nicht verfügbar",
       secureNote:"Diese Seite ist ausschließlich über Ihren persönlichen Link erreichbar.",
       brand:"Alpine Concierge Tirol",
+      guest:"Gast",
       whatsappOpen:"WhatsApp öffnen",
       contactWhatsApp:"Alpine Concierge Tirol kontaktieren",
       showAllFields:"Alle Felder anzeigen",
       version:"Version {version}",
+      messages:{
+        whatsappQuestion:"Hallo Alpine Concierge Tirol, ich habe eine Frage zu meinem Reiseprogramm.",
+        whatsappChange:"Hallo Alpine Concierge Tirol, ich habe einen Änderungswunsch zu meinem Reiseprogramm."
+      },
+      alerts:{
+        confirmThanks:"Danke. Die echte Bestätigung wird in einem späteren Schritt angebunden.",
+        paymentLater:"Zahlungsfunktion wird in einem späteren Schritt angebunden.",
+        pdfLater:"PDF-Erstellung wird in einem späteren Schritt angebunden.",
+        documentPlaceholder:"{name}: Dokument-Platzhalter für Schritt 1.",
+        calendarMissing:"Keine exportierbaren Kalendertermine vorhanden.",
+        calendarFailed:"Kalenderdatei konnte nicht erstellt werden."
+      },
       actions:{
         showDetails:"Details anzeigen",
         openNavigation:"Navigation öffnen",
@@ -56,7 +69,9 @@
       loading:{
         default:"Wird geladen …",
         preparing:"Daten werden vorbereitet …",
-        weather:"Wetter wird geladen …"
+        weather:"Wetter wird geladen …",
+        portalTitle:"Daten werden geladen …",
+        tripPreparing:"Ihr persönliches Reiseprogramm wird vorbereitet."
       },
       errors:{
         loadFailed:"Daten konnten nicht geladen werden.",
@@ -357,7 +372,19 @@
         elevationAria:"Interaktives Höhenprofil",
         toolbarAria:"Kartenleiste",
         showLocation:"Meinen Standort zeigen",
-        openGoogleMaps:"In Google Maps öffnen"
+        openGoogleMaps:"In Google Maps öffnen",
+        mapNotReady:"Karte ist noch nicht geladen.",
+        locationUnsupported:"Standort wird von diesem Gerät nicht unterstützt.",
+        locationDetecting:"Standort wird ermittelt …",
+        yourLocation:"Ihr Standort",
+        locationFailed:"Standort konnte nicht ermittelt werden. Bitte Berechtigung prüfen.",
+        locationActive:"Standort aktiv (nur lokal, nicht gespeichert)",
+        toDestination:"{km} km bis Ziel",
+        toHut:"{km} km bis nächste Hütte",
+        toParking:"{km} km bis Parkplatz",
+        elevationDistance:"Höhe {elevation} · Distanz {distance}",
+        start:"Start",
+        end:"Ziel"
       },
       calendar:{
         eyebrow:"Kalender",
@@ -366,7 +393,9 @@
         viewAria:"Kalenderansicht",
         tripView:"Gesamtreise",
         dayView:"Tagesansicht",
-        allDay:"Ganztägig"
+        allDay:"Ganztägig",
+        exportMissing:"Keine exportierbaren Kalendertermine vorhanden.",
+        exportFailed:"Kalenderdatei konnte nicht erstellt werden."
       },
       timeline:{
         eyebrow:"Gesamt-Timeline",
@@ -531,19 +560,324 @@
       }
     },
     service:{
-      hero:{title:"Ihr persönlicher Concierge"},
+      hero:{
+        eyebrow:"Service",
+        title:"Ihr persönlicher Concierge",
+        subtitle:"Wir sind für Ihre Wünsche, Fragen und besonderen Momente an Ihrer Seite.",
+        intro:"Wir sind für Ihre Wünsche, Fragen und besonderen Momente an Ihrer Seite."
+      },
+      overview:{
+        eyebrow:"Unterstützung",
+        title:"Was wir für Sie tun können",
+        copy:"Direkte Hilfe zu Programm, Änderungen und praktischen Anliegen – ein Schritt genügt.",
+        personalSupport:"Persönliche Unterstützung",
+        weAreHere:"Wir sind für Sie da",
+        individualCare:"Individuelle Betreuung",
+        yourRequest:"Ihre Anfrage",
+        requestService:"Service anfragen",
+        getSupport:"Unterstützung erhalten",
+        personalRecommendation:"Persönliche Empfehlung",
+        discreetReliable:"Diskret und zuverlässig",
+        duringStay:"Während Ihres Aufenthalts"
+      },
+      concierge:{
+        eyebrow:"Concierge",
+        title:"Ihr Ansprechpartner",
+        personalCare:"Persönliche Betreuung",
+        lead:"Wir begleiten Ihre Reise persönlich – von der ersten Frage bis zum besonderen Moment vor Ort.",
+        personalConcierge:"Ihr persönlicher Concierge"
+      },
+      accommodation:{
+        eyebrow:"Unterkunft",
+        title:"Aufenthalt",
+        fallbackName:"Unterkunft",
+        checkIn:"Check-in",
+        checkOut:"Check-out",
+        contact:"Kontakt",
+        voucher:"Voucher",
+        notes:"Hinweise",
+        openNavigation:"Navigation öffnen"
+      },
+      history:{
+        eyebrow:"Hinweise",
+        title:"Änderungsverlauf",
+        copy:"Wichtige Aktualisierungen zu Ihrer Reise – chronologisch und übersichtlich.",
+        publishedVersion:"Version {version} veröffentlicht"
+      },
+      categories:{
+        travelPlanning:"Reiseplanung",
+        restaurantReservation:"Restaurantreservierung",
+        transfers:"Transfers",
+        activities:"Aktivitäten",
+        tickets:"Tickets",
+        wellness:"Wellness",
+        shopping:"Shopping",
+        childcare:"Kinderbetreuung",
+        petService:"Haustierservice",
+        specialRequests:"Sonderwünsche",
+        emergencySupport:"Notfallunterstützung",
+        other:"Sonstiges"
+      },
+      actions:{
+        sendRequest:"Anfrage senden",
+        openWhatsApp:"WhatsApp öffnen",
+        call:"Anrufen",
+        email:"E-Mail schreiben",
+        selectService:"Service auswählen",
+        showDetails:"Details anzeigen",
+        learnMore:"Mehr erfahren",
+        back:"Zurück",
+        close:"Schließen",
+        retry:"Erneut versuchen",
+        sendChange:"Änderungswunsch senden",
+        confirmProgram:"Programm bestätigen",
+        openPayment:"Zahlung öffnen",
+        downloadPdf:"PDF herunterladen",
+        print:"Drucken",
+        saveCalendar:"Kalender speichern"
+      },
+      request:{
+        title:"Worum dürfen wir uns kümmern?",
+        message:"Ihre Nachricht",
+        preferredTime:"Gewünschter Zeitpunkt",
+        priority:"Priorität",
+        contactMethod:"Kontaktweg",
+        send:"Nachricht senden",
+        preparing:"Anfrage wird vorbereitet",
+        submitted:"Anfrage wurde übermittelt",
+        failed:"Anfrage konnte nicht übermittelt werden"
+      },
+      form:{
+        title:"Worum dürfen wir uns kümmern?",
+        message:"Ihre Nachricht",
+        preferredTime:"Gewünschter Zeitpunkt",
+        priority:"Priorität",
+        contactMethod:"Kontaktweg",
+        send:"Nachricht senden"
+      },
+      status:{
+        preparing:"Anfrage wird vorbereitet",
+        submitted:"Anfrage wurde übermittelt",
+        failed:"Anfrage konnte nicht übermittelt werden",
+        processing:"Anfrage wird verarbeitet"
+      },
+      contact:{
+        phone:"Telefon",
+        email:"E-Mail",
+        whatsapp:"WhatsApp",
+        reachability:"Erreichbarkeit",
+        personalContact:"Persönlicher Kontakt",
+        responseTime:"Antwortzeit",
+        urgentCases:"In dringenden Fällen",
+        emergency:"Notfallkontakt",
+        localEmergency:"Lokale Notrufnummern"
+      },
       empty:{
         hotel:"Ihre Unterkunftsdaten werden gerade vorbereitet und erscheinen hier, sobald sie freigegeben sind.",
         care:"Ihre persönliche Betreuung wird gerade vorbereitet.",
         historyTitle:"Noch keine Änderungen notiert",
-        historyCopy:"Sobald es Aktualisierungen zu Ihrer Reise gibt, erscheinen sie hier."
+        historyCopy:"Sobald es Aktualisierungen zu Ihrer Reise gibt, erscheinen sie hier.",
+        noServices:"Noch keine Services vorhanden",
+        preparing:"Ihre Serviceangebote werden vorbereitet",
+        noRecommendation:"Aktuell keine Empfehlung verfügbar",
+        contactConcierge:"Bitte kontaktieren Sie Ihren Concierge"
+      },
+      loading:{
+        default:"Wird geladen …",
+        processing:"Anfrage wird verarbeitet",
+        refresh:"Aktualisieren",
+        retry:"Erneut versuchen"
+      },
+      errors:{
+        loadFailed:"Daten konnten nicht geladen werden",
+        actionFailed:"Aktion fehlgeschlagen",
+        retry:"Bitte versuchen Sie es erneut",
+        unavailable:"Service derzeit nicht verfügbar",
+        submitFailed:"Anfrage konnte nicht übermittelt werden"
+      },
+      aria:{
+        view:"Service",
+        hero:"Service",
+        contact:"Concierge-Kontakt",
+        accommodation:"Unterkunft",
+        actions:"Serviceaktionen",
+        history:"Änderungsverlauf",
+        openWhatsApp:"WhatsApp öffnen",
+        call:"Anrufen",
+        email:"E-Mail schreiben"
       }
     },
     discover:{
-      hero:{title:"Entdecken"},
+      hero:{
+        eyebrow:"Concierge",
+        title:"Entdecken",
+        subtitle:"Besondere Empfehlungen für Ihren Aufenthalt.",
+        intro:"Besondere Empfehlungen für Ihren Aufenthalt."
+      },
+      overview:{
+        eyebrow:"Auswahl",
+        title:"Empfehlungen",
+        personal:"Persönlich",
+        themes:"Themen",
+        categoriesTitle:"Ihre Kategorien",
+        region:"Region",
+        surroundings:"Ihre Umgebung",
+        selectedForYou:"Persönlich für Sie ausgewählt",
+        ourRecommendations:"Unsere Empfehlungen",
+        specialExperiences:"Besondere Erlebnisse",
+        discoverTirol:"Entdecken Sie Tirol",
+        curatedForYou:"Für Sie kuratiert",
+        nearby:"In Ihrer Nähe",
+        recommendedToday:"Heute empfohlen",
+        matchingTrip:"Passend zu Ihrer Reise"
+      },
+      concierge:{
+        eyebrow:"Concierge",
+        insiderTip:"Insider-Tipp",
+        recommendation:"Empfehlung Ihres Concierge",
+        curated:"Für Sie kuratiert"
+      },
+      recommendations:{
+        featuredTitle:"Heute empfehlen wir",
+        featuredEyebrow:"Heute empfehlen wir…",
+        regionCopy:"Persönlich ausgewählte Impulse rund um Ihren Aufenthaltsort – ruhig, regional und auf Ihre Reise abgestimmt.",
+        regionFallback:"Ihre Region",
+        surroundingsEyebrow:"Umgebung"
+      },
+      categories:{
+        culinary:"Kulinarik",
+        restaurants:"Restaurants",
+        restaurant:"Restaurant",
+        nature:"Natur",
+        hiking:"Wandern",
+        hike:"Wandern",
+        mountains:"Berge",
+        culture:"Kultur",
+        sights:"Sehenswürdigkeiten",
+        wellness:"Wellness",
+        family:"Familie",
+        children:"Kinder",
+        shopping:"Shopping",
+        sport:"Sport",
+        winter:"Winter",
+        summer:"Sommer",
+        events:"Veranstaltungen",
+        event:"Events",
+        tips:"Geheimtipps",
+        tip:"Tipp",
+        excursions:"Ausflüge",
+        other:"Sonstiges",
+        general:"Allgemein",
+        viewpoint:"Aussicht",
+        evening:"Abend",
+        indoor:"Indoor",
+        warning:"Hinweis",
+        transport:"Transfer",
+        activity:"Aktivität",
+        recommendation:"Empfehlung"
+      },
+      cards:{
+        learnMore:"Mehr erfahren",
+        showDetails:"Details anzeigen",
+        openRoute:"Route öffnen",
+        openMap:"Karte öffnen",
+        openWebsite:"Website öffnen",
+        call:"Anrufen",
+        email:"E-Mail schreiben",
+        requestReservation:"Reservierung anfragen",
+        addToItinerary:"Zum Reiseplan hinzufügen",
+        favorite:"Favorit",
+        recommended:"Empfohlen",
+        new:"Neu"
+      },
+      actions:{
+        learnMore:"Mehr erfahren",
+        navigation:"Navigation",
+        openRegionMaps:"Region in Maps öffnen",
+        startNavigation:"Navigation starten",
+        showDetails:"Details anzeigen",
+        openRoute:"Route öffnen",
+        openMap:"Karte öffnen",
+        openWebsite:"Website öffnen",
+        call:"Anrufen",
+        email:"E-Mail schreiben",
+        requestReservation:"Reservierung anfragen",
+        addToItinerary:"Zum Reiseplan hinzufügen"
+      },
+      labels:{
+        distance:"Entfernung",
+        openingHours:"Öffnungszeiten",
+        duration:"Dauer",
+        price:"Preis",
+        suitableFor:"Geeignet für",
+        note:"Hinweis",
+        recommendation:"Empfehlung"
+      },
+      status:{
+        favorite:"Favorit",
+        recommended:"Empfohlen",
+        new:"Neu"
+      },
+      filters:{
+        all:"Alle",
+        categories:"Kategorien",
+        nearby:"In der Nähe",
+        forToday:"Für heute",
+        forFamilies:"Für Familien",
+        badWeather:"Bei Schlechtwetter",
+        free:"Kostenlos",
+        open:"Geöffnet",
+        reset:"Zurücksetzen",
+        results:"Ergebnisse",
+        noMatches:"Keine Treffer"
+      },
+      navigation:{
+        all:"Alle",
+        categories:"Kategorien",
+        results:"Ergebnisse"
+      },
+      map:{
+        title:"Karte",
+        location:"Standort",
+        loading:"Karte wird geladen",
+        locationUnavailable:"Standort nicht verfügbar"
+      },
+      route:{
+        title:"Route",
+        startNavigation:"Navigation starten",
+        unavailable:"Route nicht verfügbar"
+      },
       empty:{
         title:"Noch keine Empfehlungen",
-        copy:"Persönliche Tipps erscheinen hier, sobald sie freigegeben sind."
+        copy:"Persönliche Tipps erscheinen hier, sobald sie freigegeben sind.",
+        none:"Noch keine Empfehlungen vorhanden",
+        preparing:"Ihre Empfehlungen werden vorbereitet",
+        noMatch:"Aktuell keine passenden Erlebnisse gefunden",
+        conciergePreparing:"Ihr Concierge stellt persönliche Vorschläge für Sie zusammen",
+        noResults:"Keine Ergebnisse für diese Auswahl"
+      },
+      loading:{
+        default:"Wird geladen …",
+        preparing:"Empfehlungen werden vorbereitet",
+        refresh:"Aktualisieren",
+        retry:"Erneut versuchen"
+      },
+      errors:{
+        loadFailed:"Daten konnten nicht geladen werden",
+        unavailable:"Empfehlung nicht verfügbar",
+        actionFailed:"Aktion fehlgeschlagen",
+        retry:"Bitte versuchen Sie es erneut"
+      },
+      aria:{
+        view:"Entdecken",
+        hero:"Entdecken",
+        featured:"Persönliche Empfehlung",
+        categories:"Kategorien",
+        list:"Empfehlungen",
+        region:"Ihre Umgebung",
+        categoryChip:"{label}: {count}",
+        learnMore:"Mehr erfahren",
+        navigation:"Navigation"
       }
     },
     errors:{
@@ -555,6 +889,7 @@
         title:"Portal nicht verfügbar",
         copy:"Dieser Portal-Link ist nicht gültig oder nicht mehr verfügbar."
       },
+      temporarilyUnavailable:"Portal-Zugang ist vorübergehend nicht verfügbar.",
       documentUnavailable:"Dokument nicht verfügbar"
     },
     aria:{

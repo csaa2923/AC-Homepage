@@ -2573,21 +2573,16 @@
     return "Gueltig";
   }
 
-  function documentStatusBadge(doc){
-    const status=documentStatus(doc);
-    return status?badge(status):"";
-  }
-
   function documentIssueListMarkup(doc,quality,{customer=null,index=0,edit=false}={}){
     const issues=arrayValue(quality?.issues);
     if(!issues.length)return "";
     return `
-      <details class="v2-document-issues" open>
-        <summary>${issues.length} Hinweis${issues.length===1?"":"e"} direkt bearbeiten</summary>
+      <details class="v2-document-issues">
+        <summary>${issues.length} Hinweis${issues.length===1?"":"e"}</summary>
         <ul>
           ${issues.map(issue=>{
             const field=documentIssueField(issue);
-            return `<li><span>${escapeHtml(issue)}</span>${customer&&!edit?`<button class="v2-link-button" type="button" data-document-edit-action="edit-issue" data-document-customer="${escapeHtml(customer.customerId)}" data-document-index="${index}" data-document-field="${escapeHtml(field)}">Jetzt ergaenzen</button>`:""}</li>`;
+            return `<li><span>${escapeHtml(issue)}</span>${customer&&!edit?`<button class="v2-link-button" type="button" data-document-edit-action="edit-issue" data-document-customer="${escapeHtml(customer.customerId)}" data-document-index="${index}" data-document-field="${escapeHtml(field)}">Ergaenzen</button>`:""}</li>`;
           }).join("")}
         </ul>
       </details>
@@ -3700,37 +3695,51 @@
     const currentQuality=quality||documentQuality(doc,{programItems:customer?flattenProgramItems(customer):[]});
     const inferred=currentQuality.inferred;
     const completeness=documentCompleteness(doc,currentQuality);
+    const trip=customer?buildTripViewModel(customer):{};
+    const title=doc.title||doc.fileName||"Dokument";
+    const fileName=doc.fileName||"";
+    const tripLabel=firstValue(trip.title,trip.destination,trip.period);
     return `
       <article class="v2-document-card">
-        ${documentPreview(doc)}
+        <header class="v2-document-heading">
+          ${documentPreview(doc)}
+          <div>
+            <h3>${escapeHtml(title)}</h3>
+            ${fileName?`<p class="v2-document-filename" title="${escapeHtml(fileName)}">${escapeHtml(fileName)}</p>`:""}
+            <p class="v2-document-context">${escapeHtml([customer?.customerName,tripLabel].filter(Boolean).join(" · ")||"Keine Reisezuordnung")}</p>
+          </div>
+        </header>
         <div class="v2-document-body">
-          <div class="v2-meta">${badge(doc.category||"Sonstiges")}${badge(doc.documentType||"Dokument")}${documentStatusBadge(doc)}${badge(currentQuality.label)}${badge(doc.visibility==="Intern"?"Nur intern":"Fuer Kunden sichtbar")}</div>
-          <h3>${escapeHtml(doc.title||doc.fileName||"Dokument")}</h3>
-          <p>${escapeHtml([customer?.customerName,doc.fileName,doc.description].filter(Boolean).join(" · "))}</p>
+          <div class="v2-meta v2-document-statuses" aria-label="Dokumentstatus">${badge(doc.category||"Sonstiges")}${badge(doc.visibility==="Intern"?"Nur intern":"Fuer Kunden sichtbar")}${badge(currentQuality.label)}</div>
           <div class="v2-quality-meter" aria-label="Dokumentenqualitaet ${escapeHtml(completeness.percent)} Prozent">
             <span style="width:${escapeHtml(completeness.percent)}%"></span>
             <strong>${escapeHtml(completeness.percent)}%</strong>
             <small>${escapeHtml(completeness.done)} von ${escapeHtml(completeness.total)} Angaben vollstaendig</small>
           </div>
-          ${inferred?`<p class="v2-document-suggestion">Vorschlag: ${escapeHtml(inferred.assignmentType)}${inferred.programTitle?` · ${escapeHtml(inferred.programTitle)}`:""} · ${escapeHtml(inferred.reason)}${customer&&!edit?` <button class="v2-link-button" type="button" data-document-edit-action="apply-suggestion" data-document-customer="${escapeHtml(customer.customerId)}" data-document-index="${index}">Uebernehmen</button>`:""}</p>`:""}
-          ${documentIssueListMarkup(doc,currentQuality,{customer,index,edit})}
-          <div class="v2-document-info">
-            ${doc.issuer?`<span>Aussteller: ${escapeHtml(doc.issuer)}</span>`:""}
-            ${doc.referenceNumber?`<span>Referenz: ${escapeHtml(doc.referenceNumber)}</span>`:""}
-            <span>Ablauf: ${escapeHtml(doc.expiryDate?formatDate(doc.expiryDate):"Kein Ablaufdatum")}</span>
-            ${doc.uploadedAt?`<span>Upload: ${escapeHtml(formatUploadDate(doc.uploadedAt))}</span>`:""}
-            ${doc.size||doc.fileSize?`<span>Groesse: ${escapeHtml(doc.size||doc.fileSize)}</span>`:""}
-            ${doc.assignmentType?`<span>Zuordnung: ${escapeHtml(doc.assignmentType)}</span>`:""}
-            ${doc.status?`<span>Status: ${escapeHtml(doc.status)}</span>`:""}
-          </div>
-          ${normalizeTags(doc.tags).length?`<div class="v2-read-list">${normalizeTags(doc.tags).map(tag=>badge(tag)).join("")}</div>`:""}
           <div class="v2-document-actions">
+            ${customer&&!edit?`<button class="v2-button primary" type="button" data-document-edit-action="edit-one" data-document-customer="${escapeHtml(customer.customerId)}" data-document-index="${index}">Dokument bearbeiten</button>`:""}
             ${openUrl?`<a class="v2-button soft" href="${escapeHtml(openUrl)}" target="_blank" rel="noopener noreferrer">Oeffnen</a>`:""}
-            ${downloadUrl?`<a class="v2-button soft" href="${escapeHtml(downloadUrl)}" download>Download</a>`:""}
+            ${downloadUrl?`<a class="v2-button soft" href="${escapeHtml(downloadUrl)}" download>Herunterladen</a>`:""}
             ${!currentQuality.explicit&&!currentQuality.inferred&&customer?`<button class="v2-button soft" type="button" data-open-documents="${escapeHtml(customer.customerId)}">Zuordnen</button>`:""}
-            ${customer&&!edit?`<button class="v2-button primary" type="button" data-document-edit-action="edit-one" data-document-customer="${escapeHtml(customer.customerId)}" data-document-index="${index}">Details bearbeiten</button>`:""}
             ${edit?`<span class="v2-muted">Metadaten werden hier bearbeitet.</span>`:""}
           </div>
+          <details class="v2-document-details">
+            <summary>Weitere Details</summary>
+            <div class="v2-document-info">
+              <span>Typ: ${escapeHtml(doc.documentType||"Dokument")}</span>
+              <span>Ablauf: ${escapeHtml(doc.expiryDate?formatDate(doc.expiryDate):"Kein Ablaufdatum")}</span>
+              ${doc.issuer?`<span>Aussteller: ${escapeHtml(doc.issuer)}</span>`:""}
+              ${doc.referenceNumber?`<span>Referenz: ${escapeHtml(doc.referenceNumber)}</span>`:""}
+              ${doc.uploadedAt?`<span>Upload: ${escapeHtml(formatUploadDate(doc.uploadedAt))}</span>`:""}
+              ${doc.size||doc.fileSize?`<span>Groesse: ${escapeHtml(doc.size||doc.fileSize)}</span>`:""}
+              ${doc.assignmentType?`<span>Zuordnung: ${escapeHtml(doc.assignmentType)}</span>`:""}
+              ${doc.status?`<span>Status: ${escapeHtml(doc.status)}</span>`:""}
+            </div>
+            ${doc.description?`<p>${escapeHtml(doc.description)}</p>`:""}
+            ${normalizeTags(doc.tags).length?`<div class="v2-read-list">${normalizeTags(doc.tags).map(tag=>badge(tag)).join("")}</div>`:""}
+          </details>
+          ${documentIssueListMarkup(doc,currentQuality,{customer,index,edit})}
+          ${inferred?`<details class="v2-document-suggestion"><summary>Automatischer Vorschlag</summary><p>${escapeHtml(inferred.assignmentType)}${inferred.programTitle?` · ${escapeHtml(inferred.programTitle)}`:""} · ${escapeHtml(inferred.reason)}</p>${customer&&!edit?`<button class="v2-link-button" type="button" data-document-edit-action="apply-suggestion" data-document-customer="${escapeHtml(customer.customerId)}" data-document-index="${index}">Uebernehmen</button>`:""}</details>`:""}
         </div>
       </article>
     `;

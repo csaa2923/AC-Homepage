@@ -3,10 +3,13 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 import {dirname,join} from "node:path";
+import {createRequire} from "node:module";
 import vm from "node:vm";
 
+const require=createRequire(import.meta.url);
 const root=join(dirname(fileURLToPath(import.meta.url)),"../..");
 const source=readFileSync(join(root,"customer-portal/concierge-intelligence-library.js"),"utf8");
+const serverLibrary=require(join(root,"functions/lib/concierge-intelligence-library.js"));
 
 function loadLibrary(){
   const sandbox={window:{},console,Date,Math,JSON,String,Number,Boolean,Array,Object};
@@ -129,5 +132,21 @@ describe("concierge intelligence library",()=>{
     assert.equal(first.map(item=>item.id).join(","),second.map(item=>item.id).join(","));
     assert.ok(score.score>=0&&score.score<=100);
     assert.equal(score.score,0);
+  });
+
+  it("keeps the deployable Functions library aligned with the browser intelligence rules",()=>{
+    const browser=loadLibrary();
+    const customer={children:2,conciergeRecommendations:[]};
+    const options={
+      now,
+      trip:{start:"2026-07-12",end:"2026-07-17",children:"2"},
+      workspace:{missingRequired:["Telefon"],documents:{critical:1,missing:0}},
+      publication:{key:"draft",changeCount:1},
+      programItems:[{title:"Gipfelwanderung",category:"Wandern"}],
+      bookingSummaries:[{id:"booking-1",title:"Hotel",type:"Hotel",dueDate:"2026-07-11",open:true,blockers:[{code:"confirmation_missing"}]}],
+      lastCommunicationAt:"2026-06-20"
+    };
+    const browserResult=JSON.parse(JSON.stringify(browser.analyzeCustomerReadiness(customer,options)));
+    assert.deepEqual(serverLibrary.analyzeCustomerReadiness(customer,options),browserResult);
   });
 });

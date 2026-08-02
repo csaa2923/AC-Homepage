@@ -1,5 +1,5 @@
 const {HttpsError}=require("firebase-functions/v2/https");
-const intelligence=require("../../customer-portal/concierge-intelligence-library");
+const intelligence=require("./concierge-intelligence-library");
 
 const MAX_CONTEXT_BYTES=24000;
 const MAX_ITEMS=40;

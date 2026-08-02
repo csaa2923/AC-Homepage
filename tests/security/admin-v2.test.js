@@ -38,9 +38,23 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
     assert.match(html,/admin-v2\.js\?v=73/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
+    assert.match(html,/concierge-intelligence-library\.js\?v=1/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
     assert.match(html,/class="v2-nav-icon"/);
+  });
+
+  it("connects concierge intelligence only to existing customer workspace models",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/function customerConciergeReadiness\(customer,workspace\)/);
+    assert.match(js,/trip:buildTripViewModel\(customer\)/);
+    assert.match(js,/workspace,/);
+    assert.match(js,/publication:publicationStatus\(customer\)/);
+    assert.match(js,/programItems:flattenProgramItems\(customer\)/);
+    assert.match(js,/bookingLibrary\?\.getBookingOperationalBlockers\?\.\(booking\)\|\|\[\]/);
+    assert.match(js,/function workspaceLatestCommunicationValue\(customer\)/);
+    assert.match(js,/library\.analyzeCustomerReadiness\(customer,/);
+    assert.match(js,/Concierge Intelligence/);
   });
 
   it("keeps dashboard as cockpit and customer cards in the customer view only",()=>{
@@ -77,14 +91,13 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/if\(state\.route==="dashboard"\)renderOperationsDashboard\(\)/);
   });
 
-  it("derives dashboard operations from the shared customer workspace status model",()=>{
+  it("derives dashboard priorities from the shared concierge intelligence model",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
-    assert.match(js,/workspace:customerWorkspaceViewModel\(customer\)/);
-    assert.match(js,/workspace\.documents\.critical/);
-    assert.match(js,/workspace\.missingRequired\.length/);
-    assert.match(js,/workspace\.openBookings/);
-    assert.match(js,/publication\.key==="pending"/);
-    assert.match(js,/workspace\.lastCommunication/);
+    assert.match(js,/const workspace=customerWorkspaceViewModel\(customer\)/);
+    assert.match(js,/intelligence:customerConciergeReadiness\(customer,workspace\)/);
+    assert.match(js,/row\.intelligence\?\.insights\|\|\[\]/);
+    assert.match(js,/insight\.severity!=="recommendation"/);
+    assert.match(js,/tab:insight\.targetTab/);
     assert.match(js,/dashboardPriorityEntries\(rows\)/);
     assert.match(js,/\.sort\(\(a,b\)=>a\.rank-b\.rank/);
     assert.doesNotMatch(js,/loadCustomersForAdmin\([\s\S]{0,300}renderOperationsDashboard/);

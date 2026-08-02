@@ -4153,26 +4153,30 @@
   }
 
   function dashboardCustomerRows(){
-    return state.customers.filter(customer=>!isArchivedCustomer(customer)).map(customer=>({
-      customer,
-      workspace:customerWorkspaceViewModel(customer),
-      publication:publicationStatus(customer),
-      trip:buildTripViewModel(customer)
-    }));
+    return state.customers.filter(customer=>!isArchivedCustomer(customer)).map(customer=>{
+      const workspace=customerWorkspaceViewModel(customer);
+      return {
+        customer,
+        workspace,
+        publication:publicationStatus(customer),
+        trip:buildTripViewModel(customer),
+        intelligence:customerConciergeReadiness(customer,workspace)
+      };
+    });
   }
 
   function dashboardPriorityEntries(rows){
     return rows.flatMap(row=>{
-      const {customer,workspace,publication,trip}=row;
-      const tripDays=dashboardDateOffset(trip.start);
-      const entries=[];
-      if(workspace.documents.critical)entries.push({rank:1,tone:"critical",reason:`${workspace.documents.critical} kritische Dokumente`,urgency:"Kritisch",tab:"dokumente",row});
-      if(workspace.missingRequired.length)entries.push({rank:2,tone:"critical",reason:`${workspace.missingRequired.length} Pflichtangaben fehlen`,urgency:"Kritisch",tab:"kunde",row});
-      if(workspace.openBookings)entries.push({rank:3,tone:"warning",reason:`${workspace.openBookings} offene ${workspace.openBookings===1?"Buchung":"Buchungen"}`,urgency:tripDays!==null&&tripDays<=7?"Hoch":"Prüfen",tab:"buchungen",row});
-      if(publication.key==="pending")entries.push({rank:4,tone:"warning",reason:`${publication.changeCount||1} unveröffentlichte ${publication.changeCount===1?"Änderung":"Änderungen"}`,urgency:tripDays!==null&&tripDays<=7?"Hoch":"Prüfen",tab:"veroeffentlichung",row});
-      if(!workspace.lastCommunication&&(isActiveTrip(customer)||(tripDays!==null&&tripDays>=0&&tripDays<=7)))entries.push({rank:5,tone:"info",reason:"Letzte Kommunikation nicht dokumentiert",urgency:"Prüfen",tab:"kommunikation",row});
-      if(tripDays!==null&&tripDays>=0&&tripDays<=7&&workspace.warnings.length)entries.push({rank:6,tone:"warning",reason:`Reise beginnt ${tripDays===0?"heute":tripDays===1?"morgen":`in ${tripDays} Tagen`} – Vorbereitung offen`,urgency:tripDays<=1?"Heute":"Hoch",tab:"reise",row});
-      return entries;
+      return (row.intelligence?.insights||[])
+        .filter(insight=>insight.severity!=="recommendation")
+        .map(insight=>({
+          rank:insight.severity==="critical"?1:3,
+          tone:insight.severity==="critical"?"critical":"warning",
+          reason:insight.title,
+          urgency:insight.severity==="critical"?"Kritisch":"Prüfen",
+          tab:insight.targetTab,
+          row
+        }));
     }).sort((a,b)=>a.rank-b.rank||(dashboardDateOffset(a.row.trip.start)??99)-(dashboardDateOffset(b.row.trip.start)??99)||timestampValue(b.row.customer)-timestampValue(a.row.customer));
   }
 
@@ -4465,6 +4469,16 @@
     );
   }
 
+  function workspaceLatestCommunicationValue(customer){
+    const entries=[
+      ...arrayValue(customer.communications),
+      ...arrayValue(customer.communicationHistory),
+      ...arrayValue(customer.crm?.communications)
+    ];
+    const latest=[...entries].sort((a,b)=>(dateValue(b?.createdAt||b?.date||b?.timestamp)?.getTime()||0)-(dateValue(a?.createdAt||a?.date||a?.timestamp)?.getTime()||0))[0];
+    return latest?.createdAt||latest?.date||latest?.timestamp||customer.lastCommunicationAt||"";
+  }
+
   function workspaceLastCommunication(customer){
     const entries=[
       ...arrayValue(customer.communications),
@@ -4472,11 +4486,34 @@
       ...arrayValue(customer.crm?.communications)
     ];
     const latest=[...entries].sort((a,b)=>(dateValue(b?.createdAt||b?.date||b?.timestamp)?.getTime()||0)-(dateValue(a?.createdAt||a?.date||a?.timestamp)?.getTime()||0))[0];
-    if(latest){
-      const value=latest.createdAt||latest.date||latest.timestamp;
-      return `${cleanValue(latest.type||latest.channel||"Kontakt")}${value?` · ${formatDate(value)}`:""}`;
-    }
-    return cleanValue(customer.lastCommunicationAt)?formatDate(customer.lastCommunicationAt):"";
+    const value=workspaceLatestCommunicationValue(customer);
+    return latest
+      ?`${cleanValue(latest.type||latest.channel||"Kontakt")}${value?` · ${formatDate(value)}`:""}`
+      :(cleanValue(value)?formatDate(value):"");
+  }
+
+  function customerConciergeReadiness(customer,workspace){
+    const library=window.ACTConciergeIntelligenceLibrary;
+    if(!library?.analyzeCustomerReadiness)return null;
+    const bookingLibrary=window.ACTBookingLibrary;
+    const bookingSummaries=arrayValue(customer.bookings).map(booking=>({
+      id:booking.bookingId||booking.id,
+      title:booking.title||booking.provider||booking.type,
+      type:booking.type,
+      dueDate:dashboardBookingDueDate(booking),
+      open:bookingLibrary?.isBookingOpen?bookingLibrary.isBookingOpen(booking):!workspaceBookingComplete(booking),
+      ignored:bookingLibrary?.isBookingIgnored?bookingLibrary.isBookingIgnored(booking):Boolean(booking.archived||booking.archivedAt),
+      blockers:bookingLibrary?.getBookingOperationalBlockers?.(booking)||[]
+    }));
+    return library.analyzeCustomerReadiness(customer,{
+      now:new Date(),
+      trip:buildTripViewModel(customer),
+      workspace,
+      publication:publicationStatus(customer),
+      programItems:flattenProgramItems(customer),
+      bookingSummaries,
+      lastCommunicationAt:workspaceLatestCommunicationValue(customer)
+    });
   }
 
   function workspaceStatusChip(item){
@@ -4484,6 +4521,7 @@
   }
 
   function customerWorkspaceOverviewMarkup(customer,workspace){
+    const intelligence=customerConciergeReadiness(customer,workspace);
     const warningMarkup=workspace.warnings.length
       ?workspace.warnings.slice(0,3).map(item=>`
         <button class="v2-workspace-alert ${escapeHtml(item.tone)}" type="button" data-detail-tab="${escapeHtml(item.tab)}">
@@ -4504,6 +4542,14 @@
     const activities=workspace.activities.length
       ?workspace.activities.map(item=>`<li><span></span><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.value)}</small></div></li>`).join("")
       :`<li><span></span><div><strong>Noch keine Aktivität</strong><small>Änderungen werden hier zusammengefasst.</small></div></li>`;
+    const insightMarkup=intelligence?.insights.length
+      ?intelligence.insights.slice(0,5).map(insight=>`
+        <button class="v2-workspace-alert ${escapeHtml(insight.severity==="recommendation"?"recommendation":insight.severity==="important"?"warning":"critical")}" type="button" data-detail-tab="${escapeHtml(insight.targetTab)}">
+          <span aria-hidden="true">${escapeHtml(insight.severity==="critical"?"!":"→")}</span>
+          <span><strong>${escapeHtml(insight.title)}</strong><small>${escapeHtml(`${insight.description} ${insight.actionLabel}.`)}</small></span>
+        </button>
+      `).join("")
+      :`<div class="v2-workspace-clear"><strong>Concierge-Readiness vollständig</strong><span>Keine weiteren Hinweise aus den vorhandenen Daten erkannt.</span></div>`;
     return `
       <section class="v2-concierge-overview-card" aria-labelledby="conciergeOverviewTitle">
         <div class="v2-workspace-section-head">
@@ -4522,6 +4568,15 @@
           ${workspaceFact(workspace.lastCommunication||"Nicht dokumentiert","Letzte Kommunikation")}
         </div>
         <div class="v2-workspace-alerts" aria-label="Warnungen">${warningMarkup}</div>
+        ${intelligence?`
+          <section class="v2-concierge-intelligence" aria-labelledby="conciergeIntelligenceTitle">
+            <div class="v2-workspace-section-head compact">
+              <div><p class="v2-eyebrow">Concierge Intelligence</p><h4 id="conciergeIntelligenceTitle">Nächste Schritte</h4></div>
+              <span class="v2-workspace-health ${intelligence.quality.level==="ready"?"ready":"attention"}">${escapeHtml(`${intelligence.quality.score}/100`)}</span>
+            </div>
+            <div class="v2-workspace-alerts" aria-label="Concierge Hinweise">${insightMarkup}</div>
+          </section>
+        `:""}
         <div class="v2-workspace-lower">
           <section class="v2-workspace-panel">
             <div class="v2-workspace-section-head compact"><h4>Aufgaben</h4><span>${workspace.tasks.length}</span></div>

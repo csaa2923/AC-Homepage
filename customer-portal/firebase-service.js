@@ -1166,19 +1166,6 @@
       functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
     }
 
-    async function analyzeConciergeTrip(customerId,language="de"){
-      const ready=await ensureDb();
-      const functionsModule=await importFunctionsModule();
-      const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
-      const shareCfg=portalShareConfig();
-      if(shareCfg.useFunctionsEmulator&&functionsModule.connectFunctionsEmulator){
-        const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
-        const [fnHost,fnPort]=host.split(":");
-        functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
-      }
-      const result=await functionsModule.httpsCallable(functions,"analyzeConciergeTrip",{timeout:35000})({customerId,mode:"trip_review",language});
-      return result.data||{};
-    }
     const callable=functionsModule.httpsCallable(functions,"createPortalShare");
     const result=await callable({customerId,forceNew:Boolean(options.forceNew)});
     return result.data||{};
@@ -1192,6 +1179,23 @@
       throw new Error("Es gibt noch keine veröffentlichte Live-Version.");
     }
     return createPortalShareViaCallable(customerId,options);
+  }
+
+  async function analyzeConciergeTrip(customerId,language="de"){
+    const id=String(customerId||"").trim();
+    if(!id)throw new Error("Kunden-ID fehlt.");
+    const ready=await ensureDb();
+    const functionsModule=await importFunctionsModule();
+    const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
+    const shareCfg=portalShareConfig();
+    if(shareCfg.useFunctionsEmulator&&functionsModule.connectFunctionsEmulator){
+      const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
+      const [fnHost,fnPort]=host.split(":");
+      functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
+    }
+    const callable=functionsModule.httpsCallable(functions,"analyzeConciergeTrip",{timeout:35000});
+    const result=await callable({customerId:id,mode:"trip_review",language});
+    return result.data||{};
   }
 
   async function refreshPortalShares(customerId){

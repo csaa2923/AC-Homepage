@@ -4462,7 +4462,7 @@
   function customerWorkspaceStartVisible(){
     const topbar=document.querySelector(".v2-topbar");
     if(!topbar)return false;
-    const gap=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--workspace-header-gap"))||0;
+    const gap=parseFloat(getComputedStyle(topbar).scrollMarginTop)||0;
     const rect=topbar.getBoundingClientRect();
     return rect.top>=gap&&rect.bottom<=window.innerHeight;
   }

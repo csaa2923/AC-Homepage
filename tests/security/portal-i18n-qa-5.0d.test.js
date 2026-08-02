@@ -280,6 +280,6 @@ describe("portal i18n QA production gate (5.0D)", () => {
     assert.match(portalHtml, /i18n\/it\.js\?v=9/);
     assert.match(portalHtml, /i18n\/fr\.js\?v=9/);
     assert.match(portalHtml, /i18n\/portal-i18n\.js\?v=3/);
-    assert.match(portalHtml, /customer-portal\.js\?v=74/);
+    assert.match(portalHtml, /customer-portal\.js\?v=75/);
   });
 });

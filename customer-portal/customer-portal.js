@@ -53,6 +53,9 @@
     view:window.matchMedia&&window.matchMedia("(max-width: 719px)").matches?"day":"trip",
     dayIndex:0
   };
+  const CALENDAR_HOUR_HEIGHT=72;
+  const CALENDAR_EVENT_MIN_HEIGHT=116;
+  const CALENDAR_EVENT_GAP=8;
   const detailFieldsState={
     showEmpty:false,
     bound:false
@@ -2322,29 +2325,52 @@
     return {startHour,endHour,hours:Math.max(4,endHour-startHour)};
   }
 
-  function calendarEventStyle(item,bounds){
+  function calendarEventMetrics(item,bounds){
+    if(item._isContinuation)return {top:0,height:96};
     const start=timeToMinutes(item.startTime);
     const end=eventEndMinutes(item);
-    const top=((start-bounds.startHour*60)/60)*72;
-    const height=Math.max(44,((end-start)/60)*72);
-    return `top:${top}px;height:${height}px`;
+    const safeStart=Number.isFinite(start)?start:bounds.startHour*60;
+    const safeEnd=Number.isFinite(end)&&end>safeStart?end:safeStart+30;
+    return {
+      top:Math.max(0,((safeStart-bounds.startHour*60)/60)*CALENDAR_HOUR_HEIGHT),
+      height:Math.max(CALENDAR_EVENT_MIN_HEIGHT,((safeEnd-safeStart)/60)*CALENDAR_HOUR_HEIGHT)
+    };
+  }
+
+  function calendarDayLayout(items,bounds){
+    let occupiedUntil=0;
+    const placements=(Array.isArray(items)?items:[]).map((item,index)=>({item,index,...calendarEventMetrics(item,bounds)}))
+      .sort((a,b)=>a.top-b.top||a.index-b.index)
+      .map(entry=>{
+        const top=Math.max(entry.top,occupiedUntil);
+        occupiedUntil=top+entry.height+CALENDAR_EVENT_GAP;
+        return {...entry,top};
+      });
+    return {
+      placements,
+      height:Math.max(bounds.hours*CALENDAR_HOUR_HEIGHT,occupiedUntil)
+    };
   }
 
   function hourLabels(bounds){
     return Array.from({length:bounds.hours+1},(_,index)=>bounds.startHour+index).map((hour,index)=>`
-      <span style="top:${index*72}px">${String(hour).padStart(2,"0")}:00</span>
+      <span style="top:${index*CALENDAR_HOUR_HEIGHT}px">${String(hour).padStart(2,"0")}:00</span>
     `).join("");
   }
 
-  function calendarBlock(item,bounds){
+  function calendarBlock(item,placement){
     const continuation=item._isContinuation;
     const timeLabel=continuation?t("itinerary.calendar.allDay"):item.startTime;
     const titleLabel=continuation?`${item.title} ${t("itinerary.status.continuation")}`:item.title;
+    const statusLabel=displayProgramStatus(item);
+    const categoryLabel=String(item.category||"").trim();
+    const accessibleLabel=[timeLabel,titleLabel,categoryLabel,statusLabel].filter(Boolean).join(", ");
     return `
-      <a class="calendar-event ${item.colorClass||"type-concierge"}${continuation?" is-continuation":""}" href="#${detailId(item)}" style="${continuation?"top:0;height:48px":calendarEventStyle(item,bounds)}">
-        <strong>${timeLabel} ${titleLabel}</strong>
-        <span>${item.meetingPoint||""}</span>
-        <em>${displayProgramStatus(item)}</em>
+      <a class="calendar-event ${item.colorClass||"type-concierge"}${continuation?" is-continuation":""}" href="#${detailId(item)}" style="top:${placement.top}px;height:${placement.height}px" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(titleLabel)}">
+        <span class="calendar-event-time">${escapeHtml(timeLabel||"")}</span>
+        <strong class="calendar-event-title">${escapeHtml(titleLabel||"")}</strong>
+        ${categoryLabel?`<span class="calendar-event-category">${escapeHtml(categoryLabel)}</span>`:""}
+        <em class="calendar-event-status">${escapeHtml(statusLabel||"")}</em>
       </a>
     `;
   }
@@ -2522,15 +2548,17 @@
       return;
     }
     const bounds=calendarBounds(programItems());
+    const layouts=days.map(day=>calendarDayLayout(day.items,bounds));
+    const calendarHeight=Math.max(...layouts.map(layout=>layout.height),bounds.hours*CALENDAR_HOUR_HEIGHT);
     target.innerHTML=`
-      <div class="calendar-grid" style="--calendar-height:${bounds.hours*72}px;--calendar-days:${days.length}">
+      <div class="calendar-grid" style="--calendar-height:${calendarHeight}px;--calendar-days:${days.length}">
         <div class="calendar-time-axis">${hourLabels(bounds)}</div>
         <div class="calendar-day-columns">
-          ${days.map(day=>`
+          ${days.map((day,index)=>`
             <section class="calendar-day-column">
               <header>${day.date}</header>
               <div class="calendar-day-body">
-                ${day.items.map(item=>calendarBlock(item,bounds)).join("")}
+                ${layouts[index].placements.map(placement=>calendarBlock(placement.item,placement)).join("")}
               </div>
             </section>
           `).join("")}
@@ -2549,17 +2577,18 @@
       return;
     }
     const bounds=calendarBounds(day.items||[]);
+    const layout=calendarDayLayout(day.items||[],bounds);
     target.innerHTML=`
       <div class="single-day-calendar">
         <header>
           <p class="eyebrow">${escapeHtml(t("itinerary.days.label",{n:(calendarState.dayIndex||0)+1}))}</p>
           <h3>${day.date}</h3>
         </header>
-        <div class="calendar-grid day-only" style="--calendar-height:${bounds.hours*72}px;--calendar-days:1">
+        <div class="calendar-grid day-only" style="--calendar-height:${layout.height}px;--calendar-days:1">
           <div class="calendar-time-axis">${hourLabels(bounds)}</div>
           <section class="calendar-day-column">
             <div class="calendar-day-body">
-              ${(day.items||[]).map(item=>calendarBlock(item,bounds)).join("")}
+              ${layout.placements.map(placement=>calendarBlock(placement.item,placement)).join("")}
             </div>
           </section>
         </div>

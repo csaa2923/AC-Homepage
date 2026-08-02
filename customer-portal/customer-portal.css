@@ -529,6 +529,13 @@ h3{font-size:24px;color:var(--green)}
   color:#102820;
 }
 .calendar-view[hidden]{display:none}
+#tripCalendar{
+  max-width:100%;
+  overflow-x:auto;
+  overscroll-behavior-inline:contain;
+  scrollbar-gutter:stable;
+  padding-bottom:8px;
+}
 .calendar-grid{
   display:grid;
   grid-template-columns:54px 1fr;
@@ -550,6 +557,7 @@ h3{font-size:24px;color:var(--green)}
 }
 .calendar-day-columns{
   display:grid;
+  grid-template-columns:repeat(var(--calendar-days),minmax(280px,1fr));
   gap:10px;
 }
 .calendar-day-column{
@@ -592,9 +600,23 @@ h3{font-size:24px;color:var(--green)}
   box-shadow:0 10px 20px rgba(5,24,19,.10);
   overflow:hidden;
 }
-.calendar-event strong{font-size:13px;line-height:1.25}
+.calendar-event:focus-visible{
+  outline:3px solid rgba(16,40,32,.45);
+  outline-offset:2px;
+  z-index:2;
+}
+.calendar-event strong{font-size:13px;line-height:1.3}
 .calendar-event span,.calendar-event em{font-size:12px;line-height:1.25;color:#415a53;font-style:normal}
-.calendar-event em{font-weight:900}
+.calendar-event-time{font-weight:900}
+.calendar-event-title{
+  display:-webkit-box;
+  overflow:hidden;
+  overflow-wrap:anywhere;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+}
+.calendar-event-category{overflow-wrap:anywhere}
+.calendar-event em{display:block;font-weight:900;overflow-wrap:anywhere}
 .calendar-event.is-continuation{
   opacity:.88;
   border-left-style:dashed;
@@ -1323,7 +1345,7 @@ h3{font-size:24px;color:var(--green)}
   .action-grid{display:grid;grid-template-columns:1fr 1fr}
   .calendar-panel{padding:22px}
   .calendar-toolbar{grid-template-columns:auto minmax(0,1fr);align-items:center}
-  .calendar-day-columns{grid-template-columns:repeat(var(--calendar-days),minmax(170px,1fr))}
+  .calendar-day-columns{grid-template-columns:repeat(var(--calendar-days),minmax(280px,1fr))}
   .calendar-grid:not(.day-only){grid-template-columns:64px minmax(0,1fr)}
   .timeline-link{grid-template-columns:150px 82px minmax(0,1fr) minmax(180px,.8fr) auto;align-items:center}
   .day-item{grid-template-columns:80px minmax(0,1fr) auto;align-items:center}

@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=74/);
-    assert.match(portalHtml, /customer-portal\.css\?v=39/);
+    assert.match(portalHtml, /customer-portal\.js\?v=75/);
+    assert.match(portalHtml, /customer-portal\.css\?v=40/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -360,10 +360,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=74"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=75"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=74/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=75/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -448,8 +448,8 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=39/);
-    assert.match(portalHtml, /customer-portal\.js\?v=74/);
+    assert.match(portalHtml, /customer-portal\.css\?v=40/);
+    assert.match(portalHtml, /customer-portal\.js\?v=75/);
   });
 });
 
@@ -472,7 +472,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=74/);
+    assert.match(portalHtml, /customer-portal\.js\?v=75/);
   });
 });
 
@@ -565,6 +565,32 @@ describe("customer portal completed itinerary items", () => {
     assert.match(portalJs, /program-detail-card is-completed/);
     assert.match(portalCss, /\.itinerary-item\.is-collapsed \.itinerary-card/);
     assert.match(portalCss, /\.itinerary-completed-toggle:focus-visible/);
+  });
+});
+
+describe("customer portal readable calendar cards", () => {
+  it("uses content-aware collision-free calendar placement", () => {
+    assert.match(portalJs, /const CALENDAR_EVENT_MIN_HEIGHT=116/);
+    assert.match(portalJs, /function calendarEventMetrics\(/);
+    assert.match(portalJs, /Math\.max\(CALENDAR_EVENT_MIN_HEIGHT/);
+    assert.match(portalJs, /function calendarDayLayout\(/);
+    assert.match(portalJs, /Math\.max\(entry\.top,occupiedUntil\)/);
+    assert.match(portalJs, /occupiedUntil=top\+entry\.height\+CALENDAR_EVENT_GAP/);
+  });
+
+  it("keeps full calendar labels accessible through existing detail links", () => {
+    assert.match(portalJs, /href="#\$\{detailId\(item\)\}"/);
+    assert.match(portalJs, /aria-label="\$\{escapeHtml\(accessibleLabel\)\}"/);
+    assert.match(portalJs, /title="\$\{escapeHtml\(titleLabel\)\}"/);
+    assert.match(portalJs, /calendar-event-status/);
+    assert.match(portalCss, /\.calendar-event:focus-visible/);
+  });
+
+  it("limits visible titles cleanly and preserves readable day widths", () => {
+    assert.match(portalCss, /overflow-wrap:anywhere/);
+    assert.match(portalCss, /-webkit-line-clamp:2/);
+    assert.match(portalCss, /grid-template-columns:repeat\(var\(--calendar-days\),minmax\(280px,1fr\)\)/);
+    assert.match(portalCss, /#tripCalendar\{[\s\S]*overflow-x:auto/);
   });
 });
 
@@ -698,7 +724,7 @@ describe("customer portal premium polish (4.6)", () => {
     assert.match(portalJs, /data-discover-group/);
     assert.match(portalJs, /whatsappLink\(/);
     assert.match(portalCss, /prefers-reduced-motion:reduce[\s\S]*\.button,/);
-    assert.match(portalHtml, /customer-portal\.css\?v=39/);
-    assert.match(portalHtml, /customer-portal\.js\?v=74/);
+    assert.match(portalHtml, /customer-portal\.css\?v=40/);
+    assert.match(portalHtml, /customer-portal\.js\?v=75/);
   });
 });

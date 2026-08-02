@@ -55,6 +55,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function workspaceLatestCommunicationValue\(customer\)/);
     assert.match(js,/library\.analyzeCustomerReadiness\(customer,/);
     assert.match(js,/Concierge Intelligence/);
+    assert.match(js,/Reise mit AI analysieren/);
+    assert.match(js,/data-ai-target-tab/);
+    assert.match(js,/analyzeConciergeTrip/);
+    assert.match(js,/AI_TARGET_TABS/);
   });
 
   it("keeps dashboard as cockpit and customer cards in the customer view only",()=>{

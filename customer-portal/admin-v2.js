@@ -12,6 +12,10 @@
     filtersExpanded:false,
     selectedCustomerId:"",
     selectedTab:"kunde",
+    aiAnalysis:null,
+    aiAnalysisCustomerId:"",
+    aiAnalysisBusy:false,
+    aiAnalysisError:"",
     communicationMessage:"",
     communicationMessageKind:"",
     communicationEmailTemplate:"general",
@@ -4550,6 +4554,14 @@
         </button>
       `).join("")
       :`<div class="v2-workspace-clear"><strong>Concierge-Readiness vollständig</strong><span>Keine weiteren Hinweise aus den vorhandenen Daten erkannt.</span></div>`;
+    const aiAnalysis=state.aiAnalysisCustomerId===customer.customerId?state.aiAnalysis:null;
+    const aiMarkup=aiAnalysis?`
+      <section class="v2-ai-analysis" aria-labelledby="aiAnalysisTitle">
+        <p class="v2-eyebrow">AI-Vorschlag</p><h4 id="aiAnalysisTitle">${escapeHtml(aiAnalysis.summary)}</h4>
+        <p>${escapeHtml(aiAnalysis.disclaimer||"AI-Vorschlag – bitte fachlich prüfen")}</p>
+        ${arrayValue(aiAnalysis.nextActions).map(item=>`<button class="v2-workspace-task" type="button" data-ai-target-tab="${escapeHtml(item.targetTab)}"><span class="v2-workspace-task-state"></span><span><small>AI-Nächster Schritt</small><strong>${escapeHtml(item.title)}</strong></span><span aria-hidden="true">→</span></button>`).join("")}
+        <button class="v2-button soft" type="button" data-ai-copy="${escapeHtml(aiAnalysis.conciergeNoteDraft||aiAnalysis.summary)}">Entwurf kopieren</button>
+      </section>`:"";
     return `
       <section class="v2-concierge-overview-card" aria-labelledby="conciergeOverviewTitle">
         <div class="v2-workspace-section-head">
@@ -4574,7 +4586,10 @@
               <div><p class="v2-eyebrow">Concierge Intelligence</p><h4 id="conciergeIntelligenceTitle">Nächste Schritte</h4></div>
               <span class="v2-workspace-health ${intelligence.quality.level==="ready"?"ready":"attention"}">${escapeHtml(`${intelligence.quality.score}/100`)}</span>
             </div>
+            <button class="v2-button soft" type="button" data-ai-analyze ${state.aiAnalysisBusy?"disabled":""}>${state.aiAnalysisBusy?"AI analysiert...":"Reise mit AI analysieren"}</button>
+            ${state.aiAnalysisError?`<p class="v2-edit-status error">${escapeHtml(state.aiAnalysisError)}</p>`:""}
             <div class="v2-workspace-alerts" aria-label="Concierge Hinweise">${insightMarkup}</div>
+            ${aiMarkup}
           </section>
         `:""}
         <div class="v2-workspace-lower">
@@ -4594,6 +4609,30 @@
 
   function workspaceFact(value,label){
     return `<div class="v2-concierge-fact"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  }
+
+  const AI_TARGET_TABS={customer:"kunde",trip:"reise",program:"programm",concierge:"concierge",bookings:"buchungen",documents:"dokumente",communication:"kommunikation",publishing:"veroeffentlichung"};
+
+  async function analyzeSelectedCustomerWithAi(){
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer||state.aiAnalysisBusy)return;
+    state.aiAnalysisBusy=true;
+    state.aiAnalysisError="";
+    render();
+    try{
+      const language=["de","en","it","fr"].includes(customer.portalLanguage)?customer.portalLanguage:"de";
+      const result=await window.ACTFirebaseService?.analyzeConciergeTrip?.(customer.customerId,language);
+      if(!result?.analysis)throw new Error("AI Concierge ist vorübergehend nicht verfügbar.");
+      state.aiAnalysis=result.analysis;
+      state.aiAnalysisCustomerId=customer.customerId;
+    }catch(error){
+      state.aiAnalysisError=error?.message==="AI Concierge ist noch nicht konfiguriert."
+        ?"AI Concierge ist noch nicht konfiguriert."
+        :"AI Concierge ist vorübergehend nicht verfügbar.";
+    }finally{
+      state.aiAnalysisBusy=false;
+      render();
+    }
   }
 
   function workspaceStatusCard(label,value,tone,tab){
@@ -7498,6 +7537,11 @@
       if(event.target.closest("a"))return;
       const open=event.target.closest("[data-open-editor]");
       if(open){openCustomerDetail(open.dataset.openEditor);return;}
+      if(event.target.closest("[data-ai-analyze]")){analyzeSelectedCustomerWithAi();return;}
+      const aiTarget=event.target.closest("[data-ai-target-tab]");
+      if(aiTarget&&state.selectedCustomerId){openWorkspaceTab(AI_TARGET_TABS[aiTarget.dataset.aiTargetTab]||"kunde");return;}
+      const aiCopy=event.target.closest("[data-ai-copy]");
+      if(aiCopy&&navigator.clipboard?.writeText){navigator.clipboard.writeText(aiCopy.dataset.aiCopy).catch(()=>{});return;}
       const tab=event.target.closest("[data-detail-tab]");
       if(tab&&state.selectedCustomerId){openWorkspaceTab(tab.dataset.detailTab);return;}
       if(event.target.closest("[data-new-customer]"))openNewCustomer();

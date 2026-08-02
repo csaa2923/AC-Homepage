@@ -1,7 +1,8 @@
 const fs=require("fs");
 const path=require("path");
 const {HttpsError}=require("firebase-functions/v2/https");
-const {isEmulator,portalShareSecret}=require("./secrets");
+const {isEmulator,portalShareSecret,openAiApiKey}=require("./secrets");
+const {buildAiConciergeContext,buildIntelligence,checkRateLimit:checkAiRateLimit,requestAnalysis}=require("./lib/conciergeAi");
 
 function loadLocalEmulatorSecret(){
   const file=path.join(__dirname,".secret.local");
@@ -190,11 +191,11 @@ async function portalShare(req,res){
   }
   const rateKey=`${resolveClientIp(req)}:${shareId}`;
   if(!checkRateLimit(rateKey)){
-    return neutralError(429,res,"Zu viele Anfragen. Bitte versuchen Sie es später erneut.",{retryAfter:60});
+    return neutralError(429,res,"Zu viele Anfragen. Bitte versuchen Sie es spï¿½ter erneut.",{retryAfter:60});
   }
   try{
     const secret=getSecret();
-    if(!secret)return neutralError(503,res,"Portal-Zugang ist vorübergehend nicht verfügbar.");
+    if(!secret)return neutralError(503,res,"Portal-Zugang ist vorï¿½bergehend nicht verfï¿½gbar.");
     const bundle=await loadShareBundle(shareId);
     const validation=validateShareAccessLocal(bundle?.share,rawToken,secret);
     if(!validation.ok||!bundle?.snapshot?.data){
@@ -222,7 +223,7 @@ async function portalShare(req,res){
     });
   }catch(error){
     console.error("[portalShare] request failed:",error&&error.code?error.code:"",error&&error.message?error.message:"");
-    return neutralError(500,res,"Dieser Portal-Link ist vorübergehend nicht verfügbar.");
+    return neutralError(500,res,"Dieser Portal-Link ist vorï¿½bergehend nicht verfï¿½gbar.");
   }
 }
 
@@ -439,11 +440,11 @@ async function portalDocument(req,res){
   }
   const rateKey=`doc:${resolveClientIp(req)}:${shareId}`;
   if(!checkRateLimit(rateKey)){
-    return neutralError(429,res,"Zu viele Anfragen. Bitte versuchen Sie es später erneut.",{retryAfter:60});
+    return neutralError(429,res,"Zu viele Anfragen. Bitte versuchen Sie es spï¿½ter erneut.",{retryAfter:60});
   }
   try{
     const secret=getSecret();
-    if(!secret)return neutralError(503,res,"Portal-Zugang ist vorübergehend nicht verfügbar.");
+    if(!secret)return neutralError(503,res,"Portal-Zugang ist vorï¿½bergehend nicht verfï¿½gbar.");
     const bundle=await loadShareBundle(shareId);
     const validation=validateShareAccessLocal(bundle?.share,rawToken,secret);
     if(!validation.ok||!bundle?.snapshot?.data){
@@ -478,7 +479,7 @@ async function portalDocument(req,res){
       }
     }
     if(!url){
-      return neutralError(404,res,"Dieses Dokument ist derzeit nicht verfügbar.");
+      return neutralError(404,res,"Dieses Dokument ist derzeit nicht verfï¿½gbar.");
     }
     applySecurityHeaders(res);
     res.status(200).json({
@@ -491,13 +492,46 @@ async function portalDocument(req,res){
     });
   }catch(error){
     console.error("[portalDocument] request failed:",error&&error.code?error.code:"",error&&error.message?error.message:"");
-    return neutralError(500,res,"Dieses Dokument ist derzeit nicht verfügbar.");
+    return neutralError(500,res,"Dieses Dokument ist derzeit nicht verfï¿½gbar.");
   }
 }
 
 async function revokePortalShare(request){
   if(!isAdminAuth(request.auth)){
     throw new HttpsError("permission-denied","Keine Admin-Berechtigung.");
+  }
+
+  function aiKey(){
+    const configured=String(process.env.OPENAI_API_KEY||"").trim();
+    if(configured)return configured;
+    try{return String(openAiApiKey?.value()||"").trim();}catch(_){return "";}
+  }
+
+  async function analyzeConciergeTrip(request){
+    if(!isAdminAuth(request.auth))throw new HttpsError("permission-denied","Keine Admin-Berechtigung.");
+    const customerId=String(request.data?.customerId||"").trim();
+    if(!customerId||!/^[a-zA-Z0-9_-]+$/.test(customerId))throw new HttpsError("invalid-argument","customerId fehlt oder ist ungÃ¼ltig.");
+    if(request.data?.mode!=="trip_review")throw new HttpsError("invalid-argument","Analysemodus ist ungÃ¼ltig.");
+    if(!checkAiRateLimit(request.auth.uid))throw new HttpsError("resource-exhausted","Zu viele AI-Analysen. Bitte kurz warten.");
+    const key=aiKey();
+    if(!key)throw new HttpsError("failed-precondition","AI Concierge ist noch nicht konfiguriert.");
+    const customerSnap=await getDb().collection("customers").doc(customerId).get();
+    if(!customerSnap.exists)throw new HttpsError("not-found","Kunde nicht gefunden.");
+    const customer=customerSnap.data().draftData||customerSnap.data().publishedData||customerSnap.data();
+    const language=["de","en","it","fr"].includes(String(request.data?.language||"").toLowerCase())?String(request.data.language).toLowerCase():"de";
+    try{
+      const intelligenceResult=buildIntelligence(customer);
+      const context=buildAiConciergeContext(customer,intelligenceResult);
+      const analysis=await requestAnalysis({apiKey:key,model:process.env.OPENAI_MODEL||"gpt-4o-mini",context,language});
+      console.info("[analyzeConciergeTrip] completed",request.auth.uid,customerId);
+      return {analysis};
+    }catch(error){
+      if(error instanceof HttpsError)throw error;
+      if(error?.message==="timeout")throw new HttpsError("deadline-exceeded","AI Concierge ist vorÃ¼bergehend nicht erreichbar.");
+      if(error instanceof SyntaxError||error?.message==="invalid response")throw new HttpsError("internal","Die AI-Antwort konnte nicht geprÃ¼ft werden.");
+      console.error("[analyzeConciergeTrip] failed",error?.code||"unknown");
+      throw new HttpsError("unavailable","AI Concierge ist vorÃ¼bergehend nicht erreichbar.");
+    }
   }
   const shareId=sanitizeShareId(request.data?.shareId);
   if(!shareId)throw new HttpsError("invalid-argument","shareId fehlt.");
@@ -519,5 +553,6 @@ module.exports={
   portalDocument,
   createPortalShare,
   refreshPortalShares,
-  revokePortalShare
+  revokePortalShare,
+  analyzeConciergeTrip
 };

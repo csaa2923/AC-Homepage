@@ -1,5 +1,5 @@
 const {onRequest,onCall}=require("firebase-functions/v2/https");
-const {functionSecrets}=require("./secrets");
+const {functionSecrets,aiFunctionSecrets}=require("./secrets");
 
 let impl;
 function loadImpl(){
@@ -32,3 +32,10 @@ exports.refreshPortalShares=onCall({
 exports.revokePortalShare=onCall({
   region:"europe-west1"
 },(request)=>loadImpl().revokePortalShare(request));
+
+exports.analyzeConciergeTrip=onCall({
+  region:"europe-west1",
+  secrets:aiFunctionSecrets(),
+  timeoutSeconds:30,
+  memory:"512MiB"
+},(request)=>loadImpl().analyzeConciergeTrip(request));

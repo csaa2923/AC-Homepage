@@ -406,10 +406,12 @@
     };
   }
 
-  window.ACTConciergeIntelligenceLibrary={
+  const api={
     analyzeCustomerReadiness,
     calculateConciergeQualityScore,
     getConciergeInsights,
     getRecommendedNextActions
   };
+  if(typeof window!=="undefined")window.ACTConciergeIntelligenceLibrary=api;
+  if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })();

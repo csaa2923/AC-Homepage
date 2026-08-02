@@ -4620,6 +4620,8 @@
     state.aiAnalysisError="";
     render();
     try{
+      const authCheck=await withTimeout(window.ACTFirebaseAuth?.requireAdmin?.(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck?.allowed)throw new Error(authCheck?.message||"Bitte erneut mit einem Admin-Konto anmelden.");
       const language=["de","en","it","fr"].includes(customer.portalLanguage)?customer.portalLanguage:"de";
       const result=await window.ACTFirebaseService?.analyzeConciergeTrip?.(customer.customerId,language);
       if(!result?.analysis)throw new Error("AI Concierge ist vorübergehend nicht verfügbar.");

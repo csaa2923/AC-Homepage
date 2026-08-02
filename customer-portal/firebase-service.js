@@ -1164,7 +1164,44 @@
         state.functionsModule.connectFunctionsEmulator(state.functions,fnHost||"127.0.0.1",Number(fnPort||5001));
       }
     }
-    return {functions:state.functions,functionsModule:state.functionsModule};
+    return {functions:state.functions,functionsModule:state.functionsModule,auth:ready.auth,authModule:ready.modules.authModule};
+  }
+
+  async function callableUserContext(auth,authModule){
+    let user=auth&&auth.currentUser;
+    if(!user&&authModule&&typeof authModule.onAuthStateChanged==="function"){
+      user=await new Promise((resolve,reject)=>{
+        let unsubscribe;
+        let settled=false;
+        const finish=value=>{
+          settled=true;
+          if(unsubscribe)unsubscribe();
+          resolve(value||null);
+        };
+        unsubscribe=authModule.onAuthStateChanged(auth,finish,reject);
+        if(settled&&unsubscribe)unsubscribe();
+      });
+    }
+    const diagnostic={
+      currentUserPresent:Boolean(user),
+      uidPresent:Boolean(user&&user.uid),
+      idTokenAvailable:false
+    };
+    if(!user||!user.uid){
+      console.warn("[ACT Firebase] Callable Auth-Prüfung",diagnostic);
+      throw new Error("AI Concierge abgebrochen: Kein angemeldeter Firebase-Benutzer vorhanden.");
+    }
+    try{
+      diagnostic.idTokenAvailable=Boolean(await user.getIdToken());
+    }catch(error){
+      console.warn("[ACT Firebase] Callable Auth-Prüfung",diagnostic);
+      throw new Error("AI Concierge abgebrochen: Firebase-ID-Token konnte nicht abgerufen werden.");
+    }
+    console.info("[ACT Firebase] Callable Auth-Prüfung",diagnostic);
+    if(!diagnostic.idTokenAvailable){
+      throw new Error("AI Concierge abgebrochen: Firebase-ID-Token fehlt.");
+    }
+    return user;
   }
 
   function portalSharesCollectionRef(ready){
@@ -1192,7 +1229,8 @@
   async function analyzeConciergeTrip(customerId,language="de"){
     const id=String(customerId||"").trim();
     if(!id)throw new Error("Kunden-ID fehlt.");
-    const {functions,functionsModule}=await callableFunctionsContext();
+    const {functions,functionsModule,auth,authModule}=await callableFunctionsContext();
+    await callableUserContext(auth,authModule);
     const callable=functionsModule.httpsCallable(functions,"analyzeConciergeTrip",{timeout:35000});
     const result=await callable({customerId:id,mode:"trip_review",language});
     return result.data||{};

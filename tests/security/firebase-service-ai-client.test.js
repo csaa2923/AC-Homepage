@@ -40,4 +40,13 @@ describe("firebase service AI callable client",()=>{
     assert.match(source,/callable\(\{customerId:id,mode:"trip_review",language\}\)/);
     assert.doesNotMatch(source,/fetch\([^)]*analyzeConciergeTrip|cloudfunctions\.net\/analyzeConciergeTrip/);
   });
+
+  it("waits for Firebase auth and requires an ID token before invoking the AI callable",()=>{
+    assert.match(source,/async function callableUserContext\(auth,authModule\)/);
+    assert.match(source,/authModule\.onAuthStateChanged\(auth,finish,reject\)/);
+    assert.match(source,/currentUserPresent:Boolean\(user\)/);
+    assert.match(source,/uidPresent:Boolean\(user&&user\.uid\)/);
+    assert.match(source,/diagnostic\.idTokenAvailable=Boolean\(await user\.getIdToken\(\)\)/);
+    assert.match(source,/await callableUserContext\(auth,authModule\);[\s\S]*httpsCallable\(functions,"analyzeConciergeTrip"/);
+  });
 });

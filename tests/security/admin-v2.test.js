@@ -34,8 +34,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=10/);
     assert.match(html,/admin-v2\.css\?v=55/);
-    assert.match(html,/class="v2-login-logo"[^>]+alt="Alpine Concierge Tirol"[^>]+width="190" height="190"/);
-    assert.match(css,/\.v2-login-logo\{[^}]*width:clamp\(170px,42vw,200px\)[^}]*height:auto[^}]*object-fit:contain/);
+    assert.match(html,/class="v2-login-logo"[^>]+src="\.\.\/images\/logo\/alpine-concierge-logo-transparent\.png"[^>]+alt="Alpine Concierge Tirol"[^>]+width="1536" height="1024"/);
+    assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
     assert.match(html,/admin-v2\.js\?v=73/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);

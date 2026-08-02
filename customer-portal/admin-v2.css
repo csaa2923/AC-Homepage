@@ -38,7 +38,7 @@ h3{font-size:21px;margin-bottom:8px}
 p{color:var(--muted);line-height:1.55}
 .v2-login{min-height:100dvh;display:grid;place-items:center;padding:calc(24px + var(--mobile-safe-top)) 24px calc(24px + var(--mobile-safe-bottom))}
 .v2-login-card{width:min(460px,100%);padding:28px;border:1px solid var(--line);border-radius:24px;background:var(--surface);box-shadow:var(--shadow)}
-.v2-login-logo{display:block;width:clamp(170px,42vw,200px);height:auto;max-width:100%;margin:0 auto 28px;border-radius:28px;object-fit:contain}
+.v2-login-logo{display:block;width:min(100%,320px);height:clamp(160px,28vw,214px);margin:0 auto 20px;object-fit:contain;object-position:center}
 .v2-login-card form,.v2-filterbar{display:grid;gap:12px}
 .v2-login-card label,.v2-filterbar label{display:grid;gap:6px;color:var(--muted);font-weight:750}
 .v2-login-card input,.v2-filterbar input,.v2-filterbar select,.v2-search input{min-height:46px;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:#fbfcfa;color:var(--ink)}

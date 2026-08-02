@@ -4049,7 +4049,7 @@
       state.loading=false;
       setStatus(state.customers.length?`${state.customers.length} Kunden aus Firebase geladen.`:"Noch keine Kunden in Firebase vorhanden.");
       render();
-      if(state.route==="customerDetail")scheduleWorkspaceContentScroll();
+      if(state.route==="customerDetail")scheduleCustomerWorkspaceStartScroll();
     }catch(error){
       state.loading=false;
       state.error="Die Kundendaten konnten nicht geladen werden. Bitte erneut versuchen.";
@@ -4457,6 +4457,28 @@
     const scrollOffset=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--workspace-scroll-offset"))||0;
     const bottomReserve=window.matchMedia("(max-width:767px), (max-width:920px) and (max-height:520px)").matches?90:20;
     return rect.top>=scrollOffset&&rect.bottom<=window.innerHeight-bottomReserve;
+  }
+
+  function customerWorkspaceStartVisible(){
+    const topbar=document.querySelector(".v2-topbar");
+    if(!topbar)return false;
+    const gap=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--workspace-header-gap"))||0;
+    const rect=topbar.getBoundingClientRect();
+    return rect.top>=gap&&rect.bottom<=window.innerHeight;
+  }
+
+  function scrollToCustomerWorkspaceStart(){
+    const topbar=document.querySelector(".v2-topbar");
+    if(!topbar||customerWorkspaceStartVisible())return;
+    const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    topbar.scrollIntoView({block:"start",behavior:reduced?"auto":"smooth"});
+  }
+
+  function scheduleCustomerWorkspaceStartScroll(){
+    const request=++workspaceScrollRequest;
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
+      if(request===workspaceScrollRequest)scrollToCustomerWorkspaceStart();
+    }));
   }
 
   function scrollToWorkspaceContent(){
@@ -5910,7 +5932,7 @@
 
   function openCustomerDetail(id){
     if(!id)return;
-    routeTo(`customers/${encodeURIComponent(id)}/kunde`);
+    if(routeTo(`customers/${encodeURIComponent(id)}/kunde`))scheduleCustomerWorkspaceStartScroll();
   }
 
   const WIZARD_STEPS=[
@@ -7442,7 +7464,9 @@
     byId("regionFilter").addEventListener("change",event=>{state.region=event.target.value;renderCustomers();});
     byId("sortSelect").addEventListener("change",event=>{state.sort=event.target.value;renderCustomers();});
     window.addEventListener("popstate",()=>{
+      const target=parseRoute(location.hash||"#dashboard");
       if(!routeTo(location.hash||"#dashboard",{replace:true}))history.pushState({route:state.route},"",currentRouteHash());
+      else if(target.route==="customerDetail"&&target.tab==="kunde")scheduleCustomerWorkspaceStartScroll();
     });
     window.addEventListener("beforeunload",event=>{
       if(!hasDirtyEdits())return;
@@ -7457,7 +7481,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,workspacePanelStartVisible,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,workspacePanelStartVisible,customerWorkspaceStartVisible,scrollToCustomerWorkspaceStart,scheduleCustomerWorkspaceStartScroll,openCustomerDetail,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

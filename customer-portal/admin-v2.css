@@ -1,4 +1,5 @@
 :root{
+  --workspace-header-gap:24px;
   --workspace-scroll-offset:112px;
   --bg:#f6f8f5;
   --surface:#fff;
@@ -62,6 +63,7 @@ p{color:var(--muted);line-height:1.55}
 .admin-mobile-action-sheet[hidden]{display:none!important}
 .v2-main{min-width:0;max-width:100%;padding:calc(26px + var(--mobile-safe-top)) clamp(16px,3vw,38px) 48px}
 .v2-topbar,.v2-section-toolbar,.v2-panel-head{min-width:0;max-width:100%;display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
+.v2-topbar{scroll-margin-top:var(--workspace-header-gap)}
 .v2-topbar>*,.v2-section-toolbar>*{min-width:0;max-width:100%}
 .v2-top-actions{min-width:0;max-width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .v2-search{min-height:48px;min-width:0;max-width:100%;display:flex;align-items:center;gap:8px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);width:min(360px,44vw)}

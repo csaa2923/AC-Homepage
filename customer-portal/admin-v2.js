@@ -119,6 +119,7 @@
   const PUBLISH_EDITOR="Alpine Concierge Tirol";
   const SHARE_TOKEN_KEY="act_portal_share_session";
   let mobileSheetReturnFocus=null;
+  let workspaceScrollRequest=0;
   const detailTabs=[
     ["kunde","Kunde"],
     ["reise","Reise"],
@@ -4448,21 +4449,48 @@
     return `<button class="workspace-quick-action" type="button" data-workspace-quick-tab="${escapeHtml(tab)}" aria-label="${escapeHtml(`${label} öffnen`)}"><span class="workspace-quick-icon" aria-hidden="true">${escapeHtml(icon)}</span><strong>${escapeHtml(label)}</strong>${Number(count)>0?`<small>${escapeHtml(String(count))}</small>`:""}</button>`;
   }
 
-  function scrollToWorkspaceTab(){
-    if(!window.matchMedia("(max-width:767px), (max-width:920px) and (max-height:520px)").matches)return;
-    const target=document.querySelector(".v2-workspace-navigation");
-    const activeTab=target?.querySelector('[role="tab"][aria-selected="true"]');
-    activeTab?.scrollIntoView({block:"nearest",inline:"nearest",behavior:"auto"});
-    if(!target)return;
+  function workspacePanelStartVisible(panel){
+    if(!panel)return false;
+    const heading=panel.querySelector("h1,h2,h3")||panel;
+    const rect=heading.getBoundingClientRect();
+    const navigation=document.querySelector(".v2-workspace-navigation");
+    const stickyOffset=navigation&&getComputedStyle(navigation).position==="sticky"?navigation.getBoundingClientRect().height+12:12;
+    const bottomReserve=window.matchMedia("(max-width:767px), (max-width:920px) and (max-height:520px)").matches?90:20;
+    return rect.top>=stickyOffset&&rect.bottom<=window.innerHeight-bottomReserve;
+  }
+
+  function scrollToWorkspaceContent(){
+    const navigation=document.querySelector(".v2-workspace-navigation");
+    const tablist=navigation?.querySelector(".v2-workspace-tabs");
+    const activeTab=tablist?.querySelector('[role="tab"][aria-selected="true"]');
+    if(tablist&&activeTab){
+      const left=activeTab.offsetLeft;
+      const right=left+activeTab.offsetWidth;
+      if(left<tablist.scrollLeft)tablist.scrollLeft=left;
+      else if(right>tablist.scrollLeft+tablist.clientWidth)tablist.scrollLeft=right-tablist.clientWidth;
+    }
+    const panel=document.querySelector(".v2-tab-panel");
+    if(!panel||workspacePanelStartVisible(panel))return;
     const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    target.scrollIntoView({block:"start",behavior:reduced?"auto":"smooth"});
+    panel.scrollIntoView({block:"start",behavior:reduced?"auto":"smooth"});
+  }
+
+  function scheduleWorkspaceContentScroll(){
+    const request=++workspaceScrollRequest;
+    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
+      if(request===workspaceScrollRequest)scrollToWorkspaceContent();
+    }));
+  }
+
+  function openWorkspaceTab(tab){
+    if(!state.selectedCustomerId||!detailTabs.some(([key])=>key===tab))return false;
+    const changed=routeTo(`customers/${encodeURIComponent(state.selectedCustomerId)}/${tab}`);
+    if(changed)scheduleWorkspaceContentScroll();
+    return changed;
   }
 
   function openWorkspaceQuickTab(tab){
-    if(!state.selectedCustomerId||!detailTabs.some(([key])=>key===tab))return false;
-    const changed=routeTo(`customers/${encodeURIComponent(state.selectedCustomerId)}/${tab}`);
-    if(changed)window.requestAnimationFrame(()=>window.requestAnimationFrame(scrollToWorkspaceTab));
-    return changed;
+    return openWorkspaceTab(tab);
   }
 
   function customerWorkspaceTabAction(tab){
@@ -7291,7 +7319,7 @@
       const open=event.target.closest("[data-open-editor]");
       if(open){openCustomerDetail(open.dataset.openEditor);return;}
       const tab=event.target.closest("[data-detail-tab]");
-      if(tab&&state.selectedCustomerId){routeTo(`customers/${encodeURIComponent(state.selectedCustomerId)}/${tab.dataset.detailTab}`);return;}
+      if(tab&&state.selectedCustomerId){openWorkspaceTab(tab.dataset.detailTab);return;}
       if(event.target.closest("[data-new-customer]"))openNewCustomer();
       if(event.target.id==="retryInlineButton"&&confirmDiscardCustomerEdit())loadCustomers();
       if(event.target.id==="retryDetailButton"&&confirmDiscardCustomerEdit())loadCustomers();
@@ -7429,7 +7457,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,openWorkspaceQuickTab,renderCustomerDetail};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,workspacePanelStartVisible,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

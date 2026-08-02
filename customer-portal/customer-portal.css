@@ -2429,6 +2429,17 @@ h3{font-size:24px;color:var(--green)}
   text-decoration:line-through;
   opacity:.75;
 }
+.itinerary-card-body{display:grid;gap:14px;margin-top:14px}
+.itinerary-card-body[hidden]{display:none}
+.itinerary-completed-toggle{width:100%;min-height:44px;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.itinerary-completed-toggle:focus-visible{outline:3px solid rgba(216,183,106,.5);outline-offset:4px;border-radius:8px}
+.itinerary-completed-toggle-label{display:inline-flex;align-items:center;min-height:32px;margin-top:8px;color:var(--act-forest);font-family:var(--act-font-sans);font-size:13px;font-weight:750;text-decoration:underline;text-underline-offset:3px}
+.itinerary-item.is-done .itinerary-tags .tag{color:var(--act-forest);background:#e8efeb}
+.itinerary-item.is-collapsed .itinerary-card{padding-block:14px;background:#f4f6f3;box-shadow:none}
+.itinerary-item.is-collapsed .itinerary-card-top{align-items:center}
+.itinerary-item.is-collapsed .itinerary-time{margin-bottom:3px}
+.itinerary-item.is-collapsed .itinerary-tags{margin-top:5px}
+.itinerary-item.is-collapsed .itinerary-completed-toggle-label{margin-top:5px}
 
 /* 6 Closing + secondary */
 .itinerary-closing{
@@ -2598,6 +2609,9 @@ h3{font-size:24px;color:var(--green)}
   line-height:1.15;
   overflow-wrap:anywhere;
 }
+.itinerary-view .program-detail-card.is-completed{gap:8px;padding:16px 18px;background:#f4f6f3;box-shadow:none}
+.itinerary-view .program-detail-card.is-completed > h3{font-size:clamp(21px,2.5vw,26px);text-decoration:line-through;opacity:.8}
+.itinerary-view .program-detail-card.is-completed .program-detail-completed-summary{margin:0;color:var(--act-muted);font-weight:700}
 .itinerary-view .program-detail-copy{
   margin:0;
   color:var(--act-muted);

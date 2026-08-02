@@ -329,6 +329,8 @@
       },
       actions:{
         details:"Dettagli",
+        showDetails:"Mostra dettagli",
+        hideDetails:"Nascondi dettagli",
         showMore:"Mostra di più",
         showLess:"Mostra meno",
         readDescription:"Leggi descrizione",

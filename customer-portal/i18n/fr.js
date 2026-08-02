@@ -329,6 +329,8 @@
       },
       actions:{
         details:"Détails",
+        showDetails:"Afficher les détails",
+        hideDetails:"Masquer les détails",
         showMore:"Afficher plus",
         showLess:"Afficher moins",
         readDescription:"Lire la description",

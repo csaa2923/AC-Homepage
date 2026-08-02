@@ -57,6 +57,7 @@
     showEmpty:false,
     bound:false
   };
+  const expandedCompletedProgramItems=new Set();
 
   function normalizeAppView(view){
     const value=String(view||"").trim().toLowerCase();
@@ -2925,12 +2926,15 @@
         <ol class="itinerary-track day-items">
           ${day.items.map(item=>{
             const done=doneSet.has(String(item.id));
+            const expanded=!done||expandedCompletedProgramItems.has(String(item.id));
             const linked=linkedBookingForItem(item);
             const state=itemTemporalState(item,day.dateValue,nextId,now);
             const fields=itineraryFilledFields(item,linked);
             const statusLabel=displayProgramStatus(item);
+            const bodyId=`${detailId(item)}-card-body`;
+            const compactStatus=done?t("itinerary.status.completed"):statusLabel;
             return `
-            <li class="itinerary-item day-item day-item-travel is-${escapeHtml(state)} ${done?"is-done":""}" data-item-state="${escapeHtml(state)}">
+            <li class="itinerary-item day-item day-item-travel is-${escapeHtml(state)} ${done?"is-done":""} ${done&&!expanded?"is-collapsed":""}" data-item-state="${escapeHtml(state)}">
               <div class="itinerary-rail" aria-hidden="true">
                 <span class="itinerary-dot"></span>
               </div>
@@ -2940,20 +2944,23 @@
                     <input type="checkbox" data-program-done="${escapeHtml(item.id)}" ${done?"checked":""}>
                     <span class="sr-only">${escapeHtml(t("itinerary.actions.done"))}</span>
                   </label>
-                  <div class="itinerary-card-heading">
+                  ${done?`<button class="itinerary-card-heading itinerary-completed-toggle" type="button" data-completed-item-toggle="${escapeHtml(item.id)}" aria-expanded="${expanded?"true":"false"}" aria-controls="${escapeHtml(bodyId)}">`:`<div class="itinerary-card-heading">`}
                     <p class="itinerary-time">${escapeHtml(item.startTime||"")}${item.endTime?` – ${escapeHtml(item.endTime)}`:""}</p>
                     <h4>${escapeHtml(item.title||"")}</h4>
-                    ${hasDisplayValue(item.category)||statusLabel?`<p class="itinerary-tags"><span class="tag">${escapeHtml([item.category,statusLabel].filter(hasDisplayValue).join(" · "))}</span></p>`:""}
-                  </div>
+                    <p class="itinerary-tags"><span class="tag">${escapeHtml([item.category||t("itinerary.labels.programItem"),compactStatus].filter(hasDisplayValue).join(" · "))}</span></p>
+                    ${done?`<span class="itinerary-completed-toggle-label">${escapeHtml(t(expanded?"itinerary.actions.hideDetails":"itinerary.actions.showDetails"))}</span>`:""}
+                  ${done?`</button>`:`</div>`}
                 </div>
-                ${itineraryDescriptionMarkup(item)}
-                ${fields.length?`<dl class="itinerary-fields field-list">${fields.map(field=>`<div${field.meaningful?"":` data-empty-field="1"`}><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`).join("")}</dl>`:""}
-                ${itineraryDocumentStrip(item,linked)}
-                ${itineraryMapsButtons(item)}
-                ${itineraryHikeCompactMarkup(item)}
-                <div class="itinerary-card-actions card-actions day-item-actions">
-                  <a class="button soft" href="#${detailId(item)}">${escapeHtml(t("itinerary.actions.details"))}</a>
-                  ${travelActionsMarkup(item,{compact:true,mode:"secondary"})}
+                <div class="itinerary-card-body" id="${escapeHtml(bodyId)}" ${expanded?"":"hidden"}>
+                  ${itineraryDescriptionMarkup(item)}
+                  ${fields.length?`<dl class="itinerary-fields field-list">${fields.map(field=>`<div${field.meaningful?"":` data-empty-field="1"`}><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`).join("")}</dl>`:""}
+                  ${itineraryDocumentStrip(item,linked)}
+                  ${itineraryMapsButtons(item)}
+                  ${itineraryHikeCompactMarkup(item)}
+                  <div class="itinerary-card-actions card-actions day-item-actions">
+                    ${done?"":`<a class="button soft" href="#${detailId(item)}">${escapeHtml(t("itinerary.actions.details"))}</a>`}
+                    ${travelActionsMarkup(item,{compact:true,mode:"secondary"})}
+                  </div>
                 </div>
               </article>
             </li>
@@ -2974,7 +2981,17 @@
     const items=programItems();
     const detailsRoot=el("programDetails");
     if(!detailsRoot)return;
+    const doneSet=travelLib()?.readDoneSet?.(progressScopeId(),items.map(item=>item.id))||new Set();
     detailsRoot.innerHTML=items.map((item,index)=>{
+      if(doneSet.has(String(item.id))){
+        return `
+          <article class="program-detail-card is-completed" id="${detailId(item)}" aria-label="${escapeHtml(t("itinerary.status.completed"))}">
+            <p class="eyebrow program-detail-eyebrow">✓ ${escapeHtml(t("itinerary.status.completed"))}</p>
+            <h3>${escapeHtml(item.title||"")}</h3>
+            <p class="program-detail-completed-summary">${escapeHtml([item.startTime||"",item.category||t("itinerary.labels.programItem")].filter(Boolean).join(" · "))}</p>
+          </article>
+        `;
+      }
       const previous=items[index-1];
       const next=items[index+1];
       const linked=linkedBookingForItem(item);
@@ -3514,9 +3531,20 @@
       if(!doneToggle)return;
       const lib=travelLib();
       lib?.writeDoneState?.(progressScopeId(),doneToggle.dataset.programDone,doneToggle.checked);
+      expandedCompletedProgramItems.delete(String(doneToggle.dataset.programDone||""));
       renderDayTimelines();
+      renderProgramDetails();
     });
     document.addEventListener("click",async event=>{
+      const completedToggle=event.target.closest("[data-completed-item-toggle]");
+      if(completedToggle){
+        event.preventDefault();
+        const itemId=String(completedToggle.getAttribute("data-completed-item-toggle")||"");
+        if(expandedCompletedProgramItems.has(itemId))expandedCompletedProgramItems.delete(itemId);
+        else expandedCompletedProgramItems.add(itemId);
+        renderDayTimelines();
+        return;
+      }
       const liveButton=event.target.closest("[data-hike-live-location]");
       if(liveButton){
         event.preventDefault();

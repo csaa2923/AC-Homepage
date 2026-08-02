@@ -330,6 +330,8 @@
       },
       actions:{
         details:"Details",
+        showDetails:"Details anzeigen",
+        hideDetails:"Details ausblenden",
         showMore:"Mehr anzeigen",
         showLess:"Weniger anzeigen",
         readDescription:"Beschreibung lesen",

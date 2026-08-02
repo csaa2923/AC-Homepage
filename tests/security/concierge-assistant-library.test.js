@@ -266,7 +266,7 @@ describe("smart concierge assistant", () => {
 
   it("wires portal and admin surfaces without redesign hooks", () => {
     assert.match(portalHtml, /concierge-assistant-library\.js\?v=2/);
-    assert.match(portalHtml, /customer-portal\.js\?v=72/);
+    assert.match(portalHtml, /customer-portal\.js\?v=73/);
     assert.match(portalHtml, /id="concierge"/);
     assert.match(portalHtml, /redact-allowlist\.js\?v=13/);
     assert.match(portalJs, /function renderConciergeAssistant\(/);
@@ -279,7 +279,7 @@ describe("smart concierge assistant", () => {
     assert.match(portalCss, /min-width:900px/);
     assert.doesNotMatch(portalJs, /openai|chatgpt|hallucin|Notification\(|pushManager/i);
     assert.match(adminHtml, /concierge-assistant-library\.js\?v=2/);
-    assert.match(adminHtml, /admin-v2\.js\?v=71/);
+    assert.match(adminHtml, /admin-v2\.js\?v=72/);
     assert.match(adminHtml, /redact-allowlist\.js\?v=13/);
     assert.match(adminJs, /\["concierge","Concierge"\]/);
     assert.match(adminJs, /function conciergeTabMarkup\(/);

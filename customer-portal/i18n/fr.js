@@ -86,7 +86,7 @@
       hero:{
         eyebrow:"Alpine Concierge Tirol",
         title:"Bienvenue",
-        welcome:"Bienvenue {name}",
+        welcome:"Bienvenue, {name}",
         subtitle:"Votre accompagnateur de voyage personnel pour aujourd'hui."
       },
       focusAria:"Aujourd'hui en un coup d'œil",

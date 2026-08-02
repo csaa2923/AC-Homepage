@@ -12,6 +12,7 @@
   const isAdminPreview=portalParams.isAdminPreview;
   const isShareAccess=Boolean(portalParams.shareId&&portalParams.rawToken);
   let customer=null;
+  let portalGreetingName="";
   let dataSource="demo";
   let liveWeatherByDate={};
   const root=document.getElementById("portalRoot");
@@ -598,6 +599,14 @@
     ).trim();
     next.whatsapp=String(next.whatsapp||next.contact?.whatsapp||base.whatsapp||"").trim()||base.whatsapp;
     return next;
+  }
+
+  function resolvePortalGreetingName(data){
+    if(!data||typeof data!=="object")return "";
+    const fullName=[data.firstName,data.lastName].map(value=>String(value||"").trim()).filter(Boolean).join(" ");
+    return [data.customerName,fullName,data.name]
+      .map(value=>String(value||"").trim())
+      .find(Boolean)||"";
   }
 
   function formatUploadDate(value){
@@ -3610,8 +3619,7 @@
 
   function renderPortal(){
     root.removeAttribute("aria-busy");
-    const guestName=customer.customerName||t("common.guest");
-    text("portalTitle",t("today.hero.welcome",{name:guestName}));
+    text("portalTitle",portalGreetingName?t("today.hero.welcome",{name:portalGreetingName}):t("today.hero.title"));
     text("tripTitle",customer.tripName||customer.tripTitle||"");
     text("portalVersion",t("common.version",{version:customer.version||"1.0"}));
     text("publicationStatus",t("today.status.label",{status:customer.status||t("today.status.defaultStatus")}));
@@ -3689,6 +3697,7 @@
       }
       return;
     }
+    portalGreetingName=resolvePortalGreetingName(loaded);
     customer=normalizeCustomerData(loaded,isShareAccess?loaded.customerId||"":customerId);
     syncPortalLanguageUI(resolvePortalLanguageFromContext());
     renderPortal();

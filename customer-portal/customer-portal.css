@@ -1574,10 +1574,11 @@ h3{font-size:24px;color:var(--green)}
   font-family:var(--act-font-serif);
   font-size:clamp(36px,10vw,64px);
   color:var(--act-on-dark);
-  max-width:min(14ch,100%);
+  max-width:min(20ch,100%);
   line-height:1.05;
   overflow-wrap:anywhere;
-  word-break:break-word;
+  word-break:normal;
+  text-wrap:balance;
   text-shadow:0 10px 36px rgba(0,0,0,.35);
 }
 .today-hero-panel .hero-subtitle{
@@ -1876,7 +1877,7 @@ h3{font-size:24px;color:var(--green)}
     align-items:flex-end;
   }
   .today-hero-panel{width:min(820px,100%)}
-  .today-hero-panel h1{font-size:clamp(48px,6vw,72px);max-width:12ch}
+  .today-hero-panel h1{font-size:clamp(48px,6vw,72px);max-width:18ch}
   .today-primary-grid,
   .today-experience{
     grid-template-columns:minmax(0,1.55fr) minmax(300px,.7fr);
@@ -4058,4 +4059,3 @@ h3{font-size:24px;color:var(--green)}
     transform:none !important;
   }
 }
-

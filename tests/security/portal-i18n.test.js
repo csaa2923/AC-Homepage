@@ -145,6 +145,21 @@ describe("portal i18n foundation (5.0A)", () => {
     assert.equal(value.includes("&lt;"), false);
   });
 
+  it("personalizes the hero greeting in all languages without changing the name", () => {
+    const i18n = loadI18n();
+    const name = "Momo Holzer-Öztürk";
+    const expected = {
+      de: `Willkommen, ${name}`,
+      en: `Welcome, ${name}`,
+      it: `Ti diamo il benvenuto, ${name}`,
+      fr: `Bienvenue, ${name}`
+    };
+    for (const [lang, greeting] of Object.entries(expected)) {
+      i18n.setLanguage(lang, {persist: false});
+      assert.equal(i18n.t("today.hero.welcome", {name}), greeting);
+    }
+  });
+
   it("resolves language priority customer > stored > browser > de", () => {
     const i18n = loadI18n();
     assert.equal(i18n.resolveLanguage({
@@ -165,12 +180,12 @@ describe("portal i18n foundation (5.0A)", () => {
   });
 
   it("wires i18n scripts, language controls, and cache pins in portal html/js", () => {
-    assert.match(portalHtml, /i18n\/de\.js\?v=7/);
-    assert.match(portalHtml, /i18n\/en\.js\?v=7/);
-    assert.match(portalHtml, /i18n\/it\.js\?v=7/);
-    assert.match(portalHtml, /i18n\/fr\.js\?v=7/);
+    assert.match(portalHtml, /i18n\/de\.js\?v=8/);
+    assert.match(portalHtml, /i18n\/en\.js\?v=8/);
+    assert.match(portalHtml, /i18n\/it\.js\?v=8/);
+    assert.match(portalHtml, /i18n\/fr\.js\?v=8/);
     assert.match(portalHtml, /i18n\/portal-i18n\.js\?v=3/);
-    assert.match(portalHtml, /customer-portal\.js\?v=72/);
+    assert.match(portalHtml, /customer-portal\.js\?v=73/);
     assert.match(portalHtml, /data-portal-lang="de"/);
     assert.match(portalHtml, /data-portal-lang="en"/);
     assert.match(portalHtml, /data-portal-lang="it"/);
@@ -339,7 +354,7 @@ describe("portal today i18n (5.0B.1)", () => {
     i18n.setLanguage("en", {persist: false});
     assert.equal(i18n.t("today.schedule.title"), "Nächster Programmpunkt");
     assert.match(portalJs, /today\.hero\.welcome/);
-    assert.match(portalJs, /customer\.customerName/);
+    assert.match(portalJs, /resolvePortalGreetingName/);
     assert.match(portalJs, /next\.title/);
     assert.match(portalJs, /data-action="print"|data-action/);
     assert.match(portalHtml, /id="viewToday"/);

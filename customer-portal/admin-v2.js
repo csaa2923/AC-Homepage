@@ -4555,12 +4555,16 @@
       `).join("")
       :`<div class="v2-workspace-clear"><strong>Concierge-Readiness vollständig</strong><span>Keine weiteren Hinweise aus den vorhandenen Daten erkannt.</span></div>`;
     const aiAnalysis=state.aiAnalysisCustomerId===customer.customerId?state.aiAnalysis:null;
+    const urgencyLabels={immediate:"Sofort",this_week:"Diese Woche",before_trip:"Vor Reise",optional:"Optional"};
+    const impactLabels={high:"Hohe Wirkung",medium:"Mittlere Wirkung",low:"Geringe Wirkung"};
     const aiMarkup=aiAnalysis?`
       <section class="v2-ai-analysis" aria-labelledby="aiAnalysisTitle">
         <p class="v2-eyebrow">AI-Vorschlag</p><h4 id="aiAnalysisTitle">${escapeHtml(aiAnalysis.summary)}</h4>
         <p>${escapeHtml(aiAnalysis.disclaimer||"AI-Vorschlag – bitte fachlich prüfen")}</p>
-        ${arrayValue(aiAnalysis.nextActions).map(item=>`<button class="v2-workspace-task" type="button" data-ai-target-tab="${escapeHtml(item.targetTab)}"><span class="v2-workspace-task-state"></span><span><small>AI-Nächster Schritt</small><strong>${escapeHtml(item.title)}</strong></span><span aria-hidden="true">→</span></button>`).join("")}
-        <button class="v2-button soft" type="button" data-ai-copy="${escapeHtml(aiAnalysis.conciergeNoteDraft||aiAnalysis.summary)}">Entwurf kopieren</button>
+        ${arrayValue(aiAnalysis.strengths).length?`<h5>Stärken</h5><ul>${arrayValue(aiAnalysis.strengths).map(item=>`<li><strong>${escapeHtml(item.title)}</strong> ${escapeHtml(item.description)}</li>`).join("")}</ul>`:""}
+        ${arrayValue(aiAnalysis.concerns).length?`<h5>Hinweise</h5><ul>${arrayValue(aiAnalysis.concerns).map(item=>`<li><strong>${escapeHtml(item.title)}</strong> ${escapeHtml(item.description)}</li>`).join("")}</ul>`:""}
+        ${arrayValue(aiAnalysis.nextActions).map(item=>`<button class="v2-workspace-task" type="button" data-ai-target-tab="${escapeHtml(item.targetTab)}"><span class="v2-workspace-task-state"></span><span><small>${escapeHtml(`${urgencyLabels[item.urgency]||"Optional"} · ${impactLabels[item.impact]||"Geringe Wirkung"}`)}</small><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></span><span aria-hidden="true">→</span></button>`).join("")}
+        <button class="v2-button soft" type="button" data-ai-copy="${escapeHtml(aiAnalysis.conciergeNoteDraft||aiAnalysis.summary)}">Concierge-Entwurf kopieren</button>
       </section>`:"";
     return `
       <section class="v2-concierge-overview-card" aria-labelledby="conciergeOverviewTitle">

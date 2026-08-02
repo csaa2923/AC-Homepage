@@ -36,7 +36,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/admin-v2\.css\?v=55/);
     assert.match(html,/class="v2-login-logo"[^>]+src="\.\.\/images\/logo\/alpine-concierge-logo-transparent\.png"[^>]+alt="Alpine Concierge Tirol"[^>]+width="1536" height="1024"/);
     assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
-    assert.match(html,/admin-v2\.js\?v=73/);
+    assert.match(html,/admin-v2\.js\?v=74/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(html,/concierge-intelligence-library\.js\?v=1/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
@@ -60,6 +60,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/analyzeConciergeTrip/);
     assert.match(js,/ACTFirebaseAuth\?\.requireAdmin\?\.\(\)/);
     assert.match(js,/AI_TARGET_TABS/);
+    assert.match(js,/Concierge-Entwurf kopieren/);
+    assert.match(js,/Sofort/);
+    assert.match(js,/Hohe Wirkung/);
   });
 
   it("keeps dashboard as cockpit and customer cards in the customer view only",()=>{
@@ -610,7 +613,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
     assert.match(html,/firebase-service\.js\?v=29/);
-    assert.match(html,/admin-v2\.js\?v=73/);
+    assert.match(html,/admin-v2\.js\?v=74/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);

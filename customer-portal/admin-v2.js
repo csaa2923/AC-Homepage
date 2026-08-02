@@ -386,7 +386,7 @@
     return generatedProgramDays(customer).reduce((sum,day)=>sum+day.items.length,0);
   }
 
-  function customerImage(customer){
+  function customerImageUrl(customer){
     const candidates=[
       customer.image,
       customer.imageUrl,
@@ -395,7 +395,18 @@
       customer.publishedSnapshot?.image,
       customer.publishedSnapshot?.heroImage
     ];
-    return candidates.find(Boolean)||"../images/hero/hero.jpg";
+    return cleanValue(candidates.find(Boolean));
+  }
+
+  function customerImage(customer){
+    return customerImageUrl(customer)||"../images/hero/hero.jpg";
+  }
+
+  function customerInitials(customer){
+    const name=cleanValue(customer?.customerName||customer?.name);
+    const parts=name.split(/\s+/).filter(Boolean);
+    if(!parts.length)return "AC";
+    return `${parts[0][0]||""}${parts.length>1?parts[parts.length-1][0]||"":""}`.toUpperCase();
   }
 
   function badgeClass(value){
@@ -4434,7 +4445,24 @@
   }
 
   function workspaceQuickAction(label,tab,count,icon){
-    return `<button class="workspace-quick-action" type="button" data-detail-tab="${escapeHtml(tab)}"><span class="workspace-quick-icon" aria-hidden="true">${escapeHtml(icon)}</span><strong>${escapeHtml(label)}</strong>${Number(count)>0?`<small>${escapeHtml(String(count))}</small>`:""}</button>`;
+    return `<button class="workspace-quick-action" type="button" data-workspace-quick-tab="${escapeHtml(tab)}" aria-label="${escapeHtml(`${label} öffnen`)}"><span class="workspace-quick-icon" aria-hidden="true">${escapeHtml(icon)}</span><strong>${escapeHtml(label)}</strong>${Number(count)>0?`<small>${escapeHtml(String(count))}</small>`:""}</button>`;
+  }
+
+  function scrollToWorkspaceTab(){
+    if(!window.matchMedia("(max-width:767px), (max-width:920px) and (max-height:520px)").matches)return;
+    const target=document.querySelector(".v2-workspace-navigation");
+    const activeTab=target?.querySelector('[role="tab"][aria-selected="true"]');
+    activeTab?.scrollIntoView({block:"nearest",inline:"nearest",behavior:"auto"});
+    if(!target)return;
+    const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({block:"start",behavior:reduced?"auto":"smooth"});
+  }
+
+  function openWorkspaceQuickTab(tab){
+    if(!state.selectedCustomerId||!detailTabs.some(([key])=>key===tab))return false;
+    const changed=routeTo(`customers/${encodeURIComponent(state.selectedCustomerId)}/${tab}`);
+    if(changed)window.requestAnimationFrame(()=>window.requestAnimationFrame(scrollToWorkspaceTab));
+    return changed;
   }
 
   function customerWorkspaceTabAction(tab){
@@ -4578,16 +4606,20 @@
               <button class="v2-button soft" type="button" data-detail-tab="kommunikation">Nachricht</button>
             </div>
           </div>
-          <figure class="v2-detail-cover">
-            <img src="${escapeHtml(customerImage(customer))}" alt="">
+          <div class="v2-detail-cover-column">
+            <figure class="v2-detail-cover">
+              ${customerImageUrl(customer)
+                ?`<img src="${escapeHtml(customerImageUrl(customer))}" alt="Kundenbild von ${escapeHtml(displayValue(customer.customerName,"Kunde"))}">`
+                :`<span class="v2-customer-initials" role="img" aria-label="Kein Kundenbild vorhanden – Initialen ${escapeHtml(customerInitials(customer))}">${escapeHtml(customerInitials(customer))}</span>`}
+            </figure>
             ${!state.customerEditMode?`
-              <div class="v2-detail-cover-actions">
+              <div class="v2-detail-cover-actions" aria-label="Kundenbild Aktionen">
                 <label class="v2-button soft" for="customerImageUploadInput">Bild aendern</label>
                 <input class="v2-file-input" id="customerImageUploadInput" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-customer-image-upload ${state.customerEditSaving?"disabled":""}>
-                ${cleanValue(customer.image||customer.imageUrl||customer.heroImage||customer.coverImage)?`<button class="v2-button soft" type="button" data-customer-edit-action="remove-image" ${state.customerEditSaving?"disabled":""}>Entfernen</button>`:""}
+                ${customerImageUrl(customer)?`<button class="v2-button soft" type="button" data-customer-edit-action="remove-image" ${state.customerEditSaving?"disabled":""}>Entfernen</button>`:""}
               </div>
             `:""}
-          </figure>
+          </div>
         </div>
         <div class="v2-detail-summary" aria-label="Kundenzusammenfassung">
           ${summaryItem("Reise",workspace.tripTiming)}
@@ -7060,6 +7092,8 @@
         routeTo(`customers/${encodeURIComponent(taskTarget.dataset.mobileCustomerTask)}/${taskTarget.dataset.taskTab||"kunde"}`);
         return;
       }
+      const workspaceQuick=event.target.closest("[data-workspace-quick-tab]");
+      if(workspaceQuick){openWorkspaceQuickTab(workspaceQuick.dataset.workspaceQuickTab);return;}
       if(event.target.closest("[data-workspace-more-toggle]")){
         const details=byId("workspaceMoreActions");
         const toggle=event.target.closest("[data-workspace-more-toggle]");
@@ -7395,7 +7429,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,renderCustomerDetail};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,openWorkspaceQuickTab,renderCustomerDetail};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

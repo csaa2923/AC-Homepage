@@ -33,8 +33,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=10/);
-    assert.match(html,/admin-v2\.css\?v=47/);
-    assert.match(html,/admin-v2\.js\?v=65/);
+    assert.match(html,/admin-v2\.css\?v=48/);
+    assert.match(html,/admin-v2\.js\?v=66/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
@@ -216,6 +216,41 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.workspace-status-grid\{display:grid;grid-template-columns:1fr 1fr/);
     assert.match(css,/\.workspace-quick-actions>div:last-child\{display:grid;grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
     assert.match(html,/class="v2-sidebar"/);
+  });
+
+  it("shows a real customer image or accessible initials without action overlays",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    assert.match(js,/function customerImageUrl\(customer\)/);
+    assert.match(js,/function customerInitials\(customer\)/);
+    assert.match(js,/customerImageUrl\(customer\)\s*\?`<img/);
+    assert.match(js,/alt="Kundenbild von \$\{escapeHtml/);
+    assert.match(js,/class="v2-customer-initials" role="img"/);
+    assert.match(js,/aria-label="Kein Kundenbild vorhanden – Initialen/);
+    assert.match(css,/\.v2-detail-cover\{[^}]*aspect-ratio:1[^}]*overflow:hidden/);
+    assert.match(css,/\.v2-detail-cover img\{[^}]*object-fit:cover/);
+    assert.match(css,/\.v2-detail-cover-actions\{position:static/);
+    assert.doesNotMatch(css,/\.v2-detail-cover-actions\{position:absolute/);
+    assert.match(css,/@media \(min-width:768px\)\{[\s\S]*?\.v2-detail-cover,\.v2-detail-cover img,\.v2-customer-initials\{min-height:150px;height:150px\}/);
+  });
+
+  it("routes all five workspace quick actions through the existing customer detail route",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    for(const [label,tab] of [["Programm","programm"],["Buchungen","buchungen"],["Dokumente","dokumente"],["Kommunikation","kommunikation"],["Veröffentlichung","veroeffentlichung"]]){
+      assert.match(js,new RegExp(`workspaceQuickAction\\("${label}","${tab}"`));
+    }
+    assert.match(js,/data-workspace-quick-tab="\$\{escapeHtml\(tab\)\}"/);
+    assert.match(js,/function openWorkspaceQuickTab\(tab\)/);
+    assert.match(js,/routeTo\(`customers\/\$\{encodeURIComponent\(state\.selectedCustomerId\)\}\/\$\{tab\}`\)/);
+    assert.match(js,/workspaceQuick=event\.target\.closest\("\[data-workspace-quick-tab\]"\)/);
+    assert.equal((js.match(/workspaceQuick=event\.target\.closest/g)||[]).length,1);
+    assert.match(js,/requestAnimationFrame\(\(\)=>window\.requestAnimationFrame\(scrollToWorkspaceTab\)\)/);
+    assert.match(js,/function scrollToWorkspaceTab\(\)/);
+    assert.match(js,/prefers-reduced-motion: reduce/);
+    assert.match(js,/target\.scrollIntoView\(\{block:"start",behavior:reduced\?"auto":"smooth"\}\)/);
+    assert.match(css,/\.v2-workspace-navigation\{scroll-margin-top:8px\}/);
+    assert.match(js,/window\.addEventListener\("popstate"/);
   });
 
   it("renders the trip tab read-only from the already loaded customer object",()=>{
@@ -474,12 +509,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=47/);
+    assert.match(html,/admin-v2\.css\?v=48/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
     assert.match(html,/firebase-service\.js\?v=26/);
-    assert.match(html,/admin-v2\.js\?v=65/);
+    assert.match(html,/admin-v2\.js\?v=66/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -595,7 +630,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-service\.js\?v=26/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=65/);
+    assert.match(html,/admin-v2\.js\?v=66/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -707,8 +742,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=47/);
-    assert.match(html,/admin-v2\.js\?v=65/);
+    assert.match(html,/admin-v2\.css\?v=48/);
+    assert.match(html,/admin-v2\.js\?v=66/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -924,8 +959,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=65/);
-    assert.match(html,/admin-v2\.css\?v=47/);
+    assert.match(html,/admin-v2\.js\?v=66/);
+    assert.match(html,/admin-v2\.css\?v=48/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);
     assert.match(js,/ACTAdminV2Communication\?\.bind/);

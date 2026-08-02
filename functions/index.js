@@ -35,6 +35,7 @@ exports.revokePortalShare=onCall({
 
 exports.analyzeConciergeTrip=onCall({
   region:"europe-west1",
+  cors:true,
   secrets:aiFunctionSecrets(),
   timeoutSeconds:30,
   memory:"512MiB"

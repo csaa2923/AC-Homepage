@@ -8,6 +8,8 @@
     db:null,
     storage:null,
     modules:null,
+    functions:null,
+    functionsModule:null,
     user:null,
     bucket:"",
     initPromise:null
@@ -1150,22 +1152,28 @@
     return import(`https://www.gstatic.com/firebasejs/${version}/firebase-functions.js`);
   }
 
+  async function callableFunctionsContext(){
+    const ready=await ensureDb();
+    if(!state.functionsModule)state.functionsModule=await importFunctionsModule();
+    if(!state.functions){
+      state.functions=state.functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
+      const shareCfg=portalShareConfig();
+      if(shareCfg.useFunctionsEmulator&&state.functionsModule.connectFunctionsEmulator){
+        const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
+        const [fnHost,fnPort]=host.split(":");
+        state.functionsModule.connectFunctionsEmulator(state.functions,fnHost||"127.0.0.1",Number(fnPort||5001));
+      }
+    }
+    return {functions:state.functions,functionsModule:state.functionsModule};
+  }
+
   function portalSharesCollectionRef(ready){
     const {firestoreModule}=ready.modules;
     return firestoreModule.collection(ready.db,"portalShares");
   }
 
   async function createPortalShareViaCallable(customerId,options={}){
-    const ready=await ensureDb();
-    const functionsModule=await importFunctionsModule();
-    const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
-    const shareCfg=portalShareConfig();
-    if(shareCfg.useFunctionsEmulator&&functionsModule.connectFunctionsEmulator){
-      const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
-      const [fnHost,fnPort]=host.split(":");
-      functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
-    }
-
+    const {functions,functionsModule}=await callableFunctionsContext();
     const callable=functionsModule.httpsCallable(functions,"createPortalShare");
     const result=await callable({customerId,forceNew:Boolean(options.forceNew)});
     return result.data||{};
@@ -1184,15 +1192,7 @@
   async function analyzeConciergeTrip(customerId,language="de"){
     const id=String(customerId||"").trim();
     if(!id)throw new Error("Kunden-ID fehlt.");
-    const ready=await ensureDb();
-    const functionsModule=await importFunctionsModule();
-    const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
-    const shareCfg=portalShareConfig();
-    if(shareCfg.useFunctionsEmulator&&functionsModule.connectFunctionsEmulator){
-      const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
-      const [fnHost,fnPort]=host.split(":");
-      functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
-    }
+    const {functions,functionsModule}=await callableFunctionsContext();
     const callable=functionsModule.httpsCallable(functions,"analyzeConciergeTrip",{timeout:35000});
     const result=await callable({customerId:id,mode:"trip_review",language});
     return result.data||{};
@@ -1201,15 +1201,7 @@
   async function refreshPortalShares(customerId){
     const id=String(customerId||"").trim();
     if(!id)throw new Error("Kunden-ID fehlt.");
-    const ready=await ensureDb();
-    const functionsModule=await importFunctionsModule();
-    const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
-    const shareCfg=portalShareConfig();
-    if(shareCfg.useFunctionsEmulator&&functionsModule.connectFunctionsEmulator){
-      const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
-      const [fnHost,fnPort]=host.split(":");
-      functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
-    }
+    const {functions,functionsModule}=await callableFunctionsContext();
     const callable=functionsModule.httpsCallable(functions,"refreshPortalShares");
     const result=await callable({customerId:id});
     return result.data||{};
@@ -1228,15 +1220,7 @@
   }
 
   async function revokePortalShare(shareId){
-    const functionsModule=await importFunctionsModule();
-    const ready=await ensureDb();
-    const functions=functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
-    const shareCfg=portalShareConfig();
-    if(shareCfg.useFunctionsEmulator&&functionsModule.connectFunctionsEmulator){
-      const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
-      const [fnHost,fnPort]=host.split(":");
-      functionsModule.connectFunctionsEmulator(functions,fnHost||"127.0.0.1",Number(fnPort||5001));
-    }
+    const {functions,functionsModule}=await callableFunctionsContext();
     const callable=functionsModule.httpsCallable(functions,"revokePortalShare");
     const result=await callable({shareId});
     return result.data||{};

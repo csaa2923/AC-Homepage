@@ -33,8 +33,11 @@ describe("firebase service AI callable client",()=>{
   });
 
   it("uses the europe-west1 callable with an explicit trip_review payload",()=>{
-    assert.match(source,/getFunctions\(ready\.app,portalShareConfig\(\)\.functionsRegion\|\|"europe-west1"\)/);
+    assert.match(source,/function callableFunctionsContext\(\)/);
+    assert.match(source,/state\.functionsModule\.getFunctions\(ready\.app,portalShareConfig\(\)\.functionsRegion\|\|"europe-west1"\)/);
+    assert.equal((source.match(/getFunctions\(/g)||[]).length,1);
     assert.match(source,/httpsCallable\(functions,"analyzeConciergeTrip",\{timeout:35000\}\)/);
     assert.match(source,/callable\(\{customerId:id,mode:"trip_review",language\}\)/);
+    assert.doesNotMatch(source,/fetch\([^)]*analyzeConciergeTrip|cloudfunctions\.net\/analyzeConciergeTrip/);
   });
 });

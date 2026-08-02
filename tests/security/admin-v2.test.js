@@ -33,7 +33,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=10/);
-    assert.match(html,/admin-v2\.css\?v=52/);
+    assert.match(html,/admin-v2\.css\?v=53/);
+    assert.match(html,/class="v2-login-logo"[^>]+alt="Alpine Concierge Tirol"[^>]+width="190" height="190"/);
+    assert.match(css,/\.v2-login-logo\{[^}]*width:clamp\(170px,42vw,200px\)[^}]*height:auto[^}]*object-fit:contain/);
     assert.match(html,/admin-v2\.js\?v=71/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
@@ -537,7 +539,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=52/);
+    assert.match(html,/admin-v2\.css\?v=53/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
@@ -770,7 +772,7 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=52/);
+    assert.match(html,/admin-v2\.css\?v=53/);
     assert.match(html,/admin-v2\.js\?v=71/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
@@ -988,7 +990,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
     assert.match(html,/admin-v2\.js\?v=71/);
-    assert.match(html,/admin-v2\.css\?v=52/);
+    assert.match(html,/admin-v2\.css\?v=53/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);
     assert.match(js,/ACTAdminV2Communication\?\.bind/);

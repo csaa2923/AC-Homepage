@@ -4049,6 +4049,7 @@
       state.loading=false;
       setStatus(state.customers.length?`${state.customers.length} Kunden aus Firebase geladen.`:"Noch keine Kunden in Firebase vorhanden.");
       render();
+      if(state.route==="customerDetail")scheduleWorkspaceContentScroll();
     }catch(error){
       state.loading=false;
       state.error="Die Kundendaten konnten nicht geladen werden. Bitte erneut versuchen.";
@@ -4453,10 +4454,9 @@
     if(!panel)return false;
     const heading=panel.querySelector("h1,h2,h3")||panel;
     const rect=heading.getBoundingClientRect();
-    const navigation=document.querySelector(".v2-workspace-navigation");
-    const stickyOffset=navigation&&getComputedStyle(navigation).position==="sticky"?navigation.getBoundingClientRect().height+12:12;
+    const scrollOffset=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--workspace-scroll-offset"))||0;
     const bottomReserve=window.matchMedia("(max-width:767px), (max-width:920px) and (max-height:520px)").matches?90:20;
-    return rect.top>=stickyOffset&&rect.bottom<=window.innerHeight-bottomReserve;
+    return rect.top>=scrollOffset&&rect.bottom<=window.innerHeight-bottomReserve;
   }
 
   function scrollToWorkspaceContent(){

@@ -1,4 +1,5 @@
 :root{
+  --workspace-scroll-offset:112px;
   --bg:#f6f8f5;
   --surface:#fff;
   --surface-soft:#eef3ed;
@@ -190,7 +191,7 @@ p{color:var(--muted);line-height:1.55}
 .v2-workspace-tabs .v2-tab{display:inline-flex;align-items:center;gap:8px}
 .v2-workspace-tabs .v2-tab small{display:grid;place-items:center;min-width:23px;height:23px;padding:0 6px;border-radius:999px;background:#edf2ed;color:var(--muted);font-size:11px}
 .v2-workspace-tabs .v2-tab[aria-selected="true"] small{background:rgba(255,255,255,.18);color:#fff}
-.v2-tab-panel{display:grid;gap:16px;scroll-margin-top:78px}
+.v2-tab-panel{display:grid;gap:16px;scroll-margin-top:var(--workspace-scroll-offset)}
 .v2-tab-actions.v2-customer-mobile-actions{display:none}
 .v2-tab-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .v2-concierge-overview-card{display:grid;gap:14px;padding:18px;border:1px solid rgba(31,107,84,.16);border-radius:20px;background:rgba(255,255,255,.76)}
@@ -513,8 +514,6 @@ p{color:var(--muted);line-height:1.55}
   .v2-workspace-navigation{position:relative;top:auto;order:2;margin-bottom:12px;padding-top:8px}
   .v2-tab-panel{order:3}
   .v2-workspace-tabs{padding-bottom:8px}
-  .v2-workspace-navigation{scroll-margin-top:8px}
-  .v2-tab-panel{scroll-margin-top:76px}
   .v2-tab{padding:0 14px}
   .v2-tab-actions.v2-customer-mobile-actions{display:flex}
   .v2-tab-actions,.v2-edit-head{align-items:stretch;flex-direction:column}

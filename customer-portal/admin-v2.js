@@ -4280,8 +4280,23 @@
   function customerWorkspaceViewModel(customer){
     const trip=buildTripViewModel(customer);
     const tripDays=daysUntil(trip.start);
-    const bookings=arrayValue(customer.bookings).filter(item=>!item.archived&&!item.archivedAt);
-    const openBookings=bookings.filter(item=>!workspaceBookingComplete(item));
+    const bookingLibrary=window.ACTBookingLibrary;
+    const bookings=arrayValue(customer.bookings).filter(item=>bookingLibrary?.isBookingIgnored?!bookingLibrary.isBookingIgnored(item):!item.archived&&!item.archivedAt);
+    const openBookings=bookings.filter(item=>bookingLibrary?.isBookingOpen?bookingLibrary.isBookingOpen(item):!workspaceBookingComplete(item));
+    const bookingBlockers=bookings.flatMap(booking=>(bookingLibrary?.getBookingOperationalBlockers?.(booking)||[]).map(blocker=>({booking,blocker})));
+    const blockerGroups=bookingBlockers.reduce((groups,item)=>{
+      const current=groups.get(item.blocker.code)||{...item.blocker,bookings:new Set()};
+      current.bookings.add(item.booking);
+      groups.set(item.blocker.code,current);
+      return groups;
+    },new Map());
+    const bookingBlockerWarnings=Array.from(blockerGroups.values()).map(item=>({
+      tone:item.code==="manual_critical"?"critical":"warning",
+      title:`${item.bookings.size} ${item.bookings.size===1?"Buchung":"Buchungen"}: ${item.label}`,
+      detail:"Operativen Buchungsblocker prüfen.",
+      tab:"buchungen"
+    }));
+    const actionableBookings=new Set([...openBookings,...bookingBlockers.map(item=>item.booking)]);
     const documents=documentQualitySummary(customer);
     const missingRequired=workspaceMissingRequired(customer,trip);
     const weatherAvailable=workspaceWeatherAvailable(customer);
@@ -4303,7 +4318,8 @@
       ...(missingRequired.length?[{tone:"critical",title:`${missingRequired.length} Pflichtangaben fehlen`,detail:missingRequired.join(", "),tab:"kunde"}]:[]),
       ...(documents.missing?[{tone:"warning",title:`${documents.missing} erwartete Dokumente fehlen`,detail:"Programmpunkte und Dokumentzuordnung prüfen.",tab:"dokumente"}]:[]),
       ...(documents.critical?[{tone:"critical",title:`${documents.critical} kritische Dokumente`,detail:"Ablauf, Datei oder Freigabe prüfen.",tab:"dokumente"}]:[]),
-      ...(openBookings.length?[{tone:"warning",title:`${openBookings.length} offene Buchungen`,detail:"Status und nächste Fristen prüfen.",tab:"buchungen"}]:[]),
+      ...(openBookings.length?[{tone:"warning",title:`${openBookings.length} ${openBookings.length===1?"offene Buchung":"offene Buchungen"}`,detail:"Status und nächste Fristen prüfen.",tab:"buchungen"}]:[]),
+      ...bookingBlockerWarnings,
       ...(!programCount(customer)?[{tone:"warning",title:"Programm noch leer",detail:"Reiseablauf für den Kunden vorbereiten.",tab:"programm"}]:[])
     ];
     return {
@@ -4332,7 +4348,7 @@
       ],
       tabCounts:{
         programm:programCount(customer),
-        buchungen:bookings.length,
+        buchungen:actionableBookings.size,
         dokumente:documents.total,
         kommunikation:lastCommunication?"1":"–",
         veroeffentlichung:published?"Live":"Entwurf"
@@ -4341,6 +4357,7 @@
   }
 
   function workspaceBookingComplete(booking){
+    if(window.ACTBookingLibrary?.isBookingOpen)return !window.ACTBookingLibrary.isBookingOpen(booking);
     const status=normalizeText(booking.bookingStatus||booking.status||"");
     return Boolean(booking.completedAt||booking.archivedAt||["bestaetigt","bestatigt","bestätigt","bezahlt","abgeschlossen","confirmed","paid","completed"].includes(status));
   }

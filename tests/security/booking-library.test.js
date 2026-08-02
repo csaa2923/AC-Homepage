@@ -181,11 +181,70 @@ describe("booking library ops ready 2",()=>{
     assert.equal(customer.bookings.length,1);
     assert.equal(customer.bookings[0].title,"A2");
   });
+
+  it("classifies paid, ignored, partial and legacy bookings centrally",()=>{
+    const lib=loadLibrary();
+    for(const booking of [
+      {paymentStatus:"bezahlt"},
+      {paymentStatus:"paid"},
+      {paymentState:"fully paid"},
+      {paid:true},
+      {isPaid:true},
+      {amountDue:0},
+      {balance:"0,00"}
+    ]){
+      assert.equal(lib.isBookingPaid(booking),true,JSON.stringify(booking));
+      assert.equal(lib.isBookingOpen(booking),false,JSON.stringify(booking));
+    }
+    for(const booking of [
+      {status:"storniert"},
+      {cancelled:true},
+      {archived:true},
+      {archivedAt:"2026-08-01"}
+    ]){
+      assert.equal(lib.isBookingIgnored(booking),true,JSON.stringify(booking));
+      assert.equal(lib.isBookingOpen(booking),false,JSON.stringify(booking));
+    }
+    assert.equal(lib.getBookingOpenReason({paymentStatus:"teilweise bezahlt"}),"Zahlung teilweise offen");
+    assert.equal(lib.isBookingOpen({paymentStatus:"teilweise bezahlt"}),true);
+    assert.equal(lib.isBookingOpen({paymentStatus:"Offen"}),true);
+    assert.equal(lib.isBookingOpen({bookingStatus:"Bestätigt"}),false);
+    assert.equal(lib.isBookingOpen({confirmed:true}),false);
+    assert.equal(lib.isBookingOpen({bookingStatus:"Angefragt"}),true);
+    const legacyConfirmed=lib.normalizeBooking({bookingStatus:"Bestätigt"});
+    const normalizedAgain=lib.normalizeBooking(legacyConfirmed);
+    assert.equal(normalizedAgain.paymentStatus,"");
+    assert.equal(lib.isBookingOpen(normalizedAgain),false);
+  });
+
+  it("keeps operational blockers separate from the paid state",()=>{
+    const lib=loadLibrary();
+    const paidWithVoucherBlocker={paymentStatus:"vollständig bezahlt",voucherRequired:true,documents:[]};
+    assert.equal(lib.isBookingPaid(paidWithVoucherBlocker),true);
+    assert.equal(lib.isBookingOpen(paidWithVoucherBlocker),false);
+    assert.deepEqual(Array.from(lib.getBookingOperationalBlockers(paidWithVoucherBlocker),item=>item.code),["voucher_missing"]);
+    assert.equal(lib.getBookingOpenReason(paidWithVoucherBlocker),"");
+    assert.match(lib.bookingWarnings(paidWithVoucherBlocker).join(" "),/Voucher fehlt/);
+  });
+
+  it("uses the same open-payment rule in booking warnings and dashboard",()=>{
+    const lib=loadLibrary();
+    const bookings=[
+      {bookingId:"paid",paymentStatus:"paid"},
+      {bookingId:"partial",paymentStatus:"Anzahlung bezahlt"},
+      {bookingId:"zero",amountDue:0},
+      {bookingId:"open",paymentStatus:"Offen"}
+    ];
+    const dashboard=lib.buildBookingDashboard(bookings);
+    assert.deepEqual(Array.from(dashboard.paymentOpen,item=>item.bookingId),["partial","open"]);
+    assert.doesNotMatch(lib.bookingWarnings(bookings[0]).join(" "),/Zahlung offen/);
+    assert.match(lib.bookingWarnings(bookings[1]).join(" "),/teilweise offen/);
+  });
 });
 
 describe("admin v2 bookings wiring",()=>{
   it("loads booking scripts and exposes bookings route/tab",()=>{
-    assert.match(adminHtml,/booking-library\.js\?v=2/);
+    assert.match(adminHtml,/booking-library\.js\?v=3/);
     assert.match(adminHtml,/admin-v2-bookings\.js\?v=3/);
     assert.match(adminHtml,/data-v2-route="bookings"/);
     assert.match(adminHtml,/id="bookingsView"/);
@@ -193,6 +252,12 @@ describe("admin v2 bookings wiring",()=>{
     assert.match(adminV2,/\["buchungen","Buchungen"\]/);
     assert.match(adminV2,/ACTAdminV2Bookings/);
     assert.match(adminV2,/bookingDocUploading/);
+    assert.match(adminV2,/bookingLibrary\?\.isBookingOpen\?bookingLibrary\.isBookingOpen\(item\)/);
+    assert.match(adminV2,/getBookingOperationalBlockers/);
+    assert.match(adminV2,/bookingBlockerWarnings/);
+    assert.match(adminV2,/buchungen:actionableBookings\.size/);
+    assert.match(source,/paymentOpen:list\.filter\(isBookingOpen\)/);
+    assert.match(source,/operationalBlockers:list\.filter/);
     assert.match(bookingsUi,/mergeBookingPreserve/);
     assert.match(bookingsUi,/saveDraftCustomer/);
     assert.match(bookingsUi,/saveBookingRecord/);

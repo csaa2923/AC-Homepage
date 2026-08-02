@@ -34,7 +34,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=10/);
     assert.match(html,/admin-v2\.css\?v=52/);
-    assert.match(html,/admin-v2\.js\?v=70/);
+    assert.match(html,/admin-v2\.js\?v=71/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);
@@ -542,7 +542,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
     assert.match(html,/firebase-service\.js\?v=26/);
-    assert.match(html,/admin-v2\.js\?v=70/);
+    assert.match(html,/admin-v2\.js\?v=71/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -658,7 +658,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-service\.js\?v=26/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=70/);
+    assert.match(html,/admin-v2\.js\?v=71/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -771,7 +771,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     assert.match(html,/admin-v2\.css\?v=52/);
-    assert.match(html,/admin-v2\.js\?v=70/);
+    assert.match(html,/admin-v2\.js\?v=71/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -987,7 +987,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=70/);
+    assert.match(html,/admin-v2\.js\?v=71/);
     assert.match(html,/admin-v2\.css\?v=52/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);

@@ -146,6 +146,82 @@
     return aliasLookup(PAYMENT_STATUS_ALIASES,raw)||raw;
   }
 
+  function normalizedState(value){
+    return String(value??"").trim().toLocaleLowerCase("de-DE").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[_-]+/g," ").replace(/\s+/g," ");
+  }
+
+  function booleanTrue(value){
+    return value===true||value===1||normalizedState(value)==="true"||normalizedState(value)==="ja";
+  }
+
+  function numericAmount(value){
+    if(value===null||value===undefined||String(value).trim()==="")return null;
+    const normalized=String(value).trim().replace(/\s/g,"").replace(/\.(?=\d{3}(?:\D|$))/g,"").replace(",",".").replace(/[^0-9.-]/g,"");
+    const amount=Number(normalized);
+    return Number.isFinite(amount)?amount:null;
+  }
+
+  function bookingStates(booking){
+    return [booking?.paymentStatus,booking?.paymentState,booking?.bookingStatus,booking?.status].map(normalizedState).filter(Boolean);
+  }
+
+  function isBookingIgnored(booking){
+    if(!booking)return true;
+    if(booleanTrue(booking.archived)||booking.archivedAt||booleanTrue(booking.cancelled)||booleanTrue(booking.canceled))return true;
+    return bookingStates(booking).some(value=>["storniert","cancelled","canceled","archiviert","archived","refunded","ruckerstattet"].includes(value));
+  }
+
+  function isBookingPaid(booking){
+    if(!booking)return false;
+    if(booleanTrue(booking.paid)||booleanTrue(booking.isPaid))return true;
+    if(bookingStates(booking).some(value=>["bezahlt","vollstandig bezahlt","paid","fully paid","payment complete","zahlung abgeschlossen","inklusive","included"].includes(value)))return true;
+    const amounts=[booking.amountDue,booking.balance].map(numericAmount).filter(value=>value!==null);
+    return amounts.length>0&&amounts.every(value=>value<=0);
+  }
+
+  function isBookingClosed(booking){
+    if(isBookingIgnored(booking))return true;
+    if(booking?.completedAt||booleanTrue(booking?.completed)||booleanTrue(booking?.isCompleted))return true;
+    return bookingStates(booking).some(value=>["abgeschlossen","completed","done"].includes(value));
+  }
+
+  function bookingDocumentMatches(booking,pattern){
+    return (Array.isArray(booking?.documents)?booking.documents:[]).some(item=>pattern.test(`${item?.type||""} ${item?.title||""} ${item?.category||""}`));
+  }
+
+  function getBookingOperationalBlockers(booking){
+    if(!booking||isBookingIgnored(booking))return [];
+    const blockers=[];
+    const add=(code,label)=>{if(!blockers.some(item=>item.code===code))blockers.push({code,label});};
+    const confirmedMissing=booking.confirmed===false||booking.isConfirmed===false||booleanTrue(booking.confirmationMissing)||(booleanTrue(booking.confirmationRequired)&&!String(booking.confirmationNumber||booking.confirmationCode||"").trim());
+    const voucherMissing=booleanTrue(booking.voucherMissing)||booleanTrue(booking.missingVoucher)||(booleanTrue(booking.voucherRequired)&&!booking.voucher&&!booking.voucherNumber&&!booking.voucherUrl&&!bookingDocumentMatches(booking,/voucher/i));
+    const documentMissing=booleanTrue(booking.documentMissing)||booleanTrue(booking.missingDocument)||(booleanTrue(booking.documentRequired||booking.documentsRequired)&&!(booking.documents||[]).length);
+    const serviceMissing=booking.serviceConfirmed===false||booking.performanceConfirmed===false||booking.fulfilled===false||booleanTrue(booking.serviceConfirmationMissing);
+    const critical=booleanTrue(booking.critical)||booleanTrue(booking.isCritical)||["kritisch","critical","blocked","blockiert"].includes(normalizedState(booking.criticalStatus||booking.riskStatus||booking.manualStatus));
+    if(confirmedMissing)add("confirmation_missing","Bestätigung fehlt");
+    if(voucherMissing)add("voucher_missing","Voucher fehlt");
+    if(documentMissing)add("document_missing","Buchungsdokument fehlt");
+    if(serviceMissing)add("service_unconfirmed","Leistung noch nicht bestätigt");
+    if(critical)add("manual_critical","Manuell als kritisch markiert");
+    return blockers;
+  }
+
+  function getBookingOpenReason(booking){
+    if(!booking||isBookingIgnored(booking)||isBookingClosed(booking)||isBookingPaid(booking))return "";
+    const states=bookingStates(booking);
+    if(states.some(value=>["teilbezahlt","teilweise bezahlt","partial","partially paid","anzahlung bezahlt","restzahlung offen"].includes(value)))return "Zahlung teilweise offen";
+    const due=[booking.amountDue,booking.balance].map(numericAmount).find(value=>value!==null&&value>0);
+    if(due!==undefined)return "Offener Betrag vorhanden";
+    if(states.some(value=>["offen","open","unpaid","unbezahlt","anzahlungsrechnung gesendet","vor ort zu zahlen"].includes(value)))return "Zahlung offen";
+    if(booleanTrue(booking.confirmed)||booleanTrue(booking.isConfirmed))return "";
+    if(states.some(value=>["bestaetigt","bestatigt","confirmed","reserviert","reserved"].includes(value)))return "";
+    return "Buchungsstatus offen";
+  }
+
+  function isBookingOpen(booking){
+    return Boolean(getBookingOpenReason(booking));
+  }
+
   function normalizeBooking(raw,customer){
     const incoming=raw&&typeof raw==="object"?raw:{};
     const base=defaultBooking(customer);
@@ -157,7 +233,8 @@
     next.title=String(next.title||"").trim();
     next.provider=String(next.provider||"").trim();
     next.bookingStatus=canonicalBookingStatus(next.bookingStatus||next.status||"Geplant");
-    next.paymentStatus=canonicalPaymentStatus(next.paymentStatus||"Offen");
+    const paymentValue=incoming.paymentStatus??incoming.paymentState;
+    next.paymentStatus=paymentValue===undefined||String(paymentValue).trim()===""?"":canonicalPaymentStatus(paymentValue);
     next.currency=String(next.currency||"EUR").trim()||"EUR";
     next.documents=Array.isArray(next.documents)?next.documents.map(normalizeDocument):[];
     next.archived=!!next.archived;
@@ -257,7 +334,9 @@
     if(!booking.confirmationNumber&&/Bestätigt|Reserviert|Bezahlt/i.test(booking.bookingStatus))warnings.push("Bestätigungsnummer fehlt.");
     if(!booking.documents?.length)warnings.push("Dokument fehlt.");
     if(booking.cancellationDeadline&&daysUntil(booking.cancellationDeadline)!==null&&daysUntil(booking.cancellationDeadline)<=3)warnings.push("Stornofrist bald erreicht.");
-    if(/Offen|Restzahlung|Anzahlung/i.test(booking.paymentStatus))warnings.push("Zahlung offen.");
+    const openReason=getBookingOpenReason(booking);
+    if(openReason)warnings.push(`${openReason}.`);
+    getBookingOperationalBlockers(booking).forEach(item=>warnings.push(`${item.label}.`));
     return warnings;
   }
 
@@ -414,7 +493,8 @@
       waitlist:list.filter(item=>item.bookingStatus==="Warteliste"),
       dueToday:list.filter(item=>item.date===today),
       cancellationSoon:list.filter(item=>deadlineTone(item.cancellationDeadline)==="soon"||deadlineTone(item.cancellationDeadline)==="overdue"),
-      paymentOpen:list.filter(item=>/Offen|Restzahlung|Anzahlung/i.test(item.paymentStatus)),
+      paymentOpen:list.filter(isBookingOpen),
+      operationalBlockers:list.filter(item=>getBookingOperationalBlockers(item).length),
       withoutDocument:list.filter(item=>!item.documents?.length),
       withoutProgram:list.filter(item=>!item.programItemId),
       missingConfirmation:list.filter(item=>!item.confirmationNumber&&/Bestätigt|Reserviert/i.test(item.bookingStatus))
@@ -467,6 +547,12 @@
     mergeBookingPreserve,
     canonicalBookingStatus,
     canonicalPaymentStatus,
+    isBookingIgnored,
+    isBookingPaid,
+    isBookingClosed,
+    isBookingOpen,
+    getBookingOpenReason,
+    getBookingOperationalBlockers,
     normalizeDocument,
     statusMeta,
     validateBooking,

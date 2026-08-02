@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=54">
+<link rel="stylesheet" href="admin-v2.css?v=55">
 </head>
 <body>
 <main>
@@ -92,39 +92,48 @@
       <div class="v2-status" id="loadStatus" aria-live="polite"></div>
 
       <section class="v2-view active" id="dashboardView" data-title="Dashboard">
-        <div class="v2-dashboard-hero">
+        <header class="v2-dashboard-hero">
           <div>
             <p class="v2-eyebrow">Concierge Cockpit</p>
-            <h2>Heute im Blick</h2>
-            <p>Kompakte Tagesuebersicht fuer Reisen, Status und naechste Schritte.</p>
+            <h2 id="dashboardGreeting">Guten Tag</h2>
+            <p class="v2-dashboard-date" id="dashboardDate"></p>
+            <p id="dashboardSummary">Die operative Übersicht wird vorbereitet.</p>
           </div>
           <div class="v2-dashboard-actions">
             <button class="v2-button primary" type="button" data-new-customer>Neuen Kunden anlegen</button>
             <button class="v2-button soft" type="button" data-v2-route="customers">Kunden ansehen</button>
           </div>
-        </div>
+        </header>
 
-        <div class="v2-metric-grid" id="metricGrid"></div>
-
-        <div class="v2-dashboard-grid">
-          <section class="v2-panel">
-            <div class="v2-panel-head">
-              <div>
-                <p class="v2-eyebrow">Heute</p>
-                <h3>Reisen des Tages</h3>
-              </div>
-            </div>
-            <div class="v2-list" id="todayList"></div>
-          </section>
-          <section class="v2-panel">
-            <div class="v2-panel-head">
-              <div>
-                <p class="v2-eyebrow">Aktivitaet</p>
-                <h3>Letzte Aktivitaeten</h3>
-              </div>
-            </div>
-            <div class="v2-list" id="activityList"></div>
-          </section>
+        <div class="v2-operations-layout">
+          <main class="v2-operations-main">
+            <section class="v2-panel v2-dashboard-today" aria-labelledby="dashboardTodayTitle">
+              <div class="v2-panel-head"><div><p class="v2-eyebrow">Heute</p><h3 id="dashboardTodayTitle">Operativer Tagesplan</h3></div></div>
+              <div class="v2-dashboard-today-grid" id="todayList"></div>
+            </section>
+            <section class="v2-panel v2-dashboard-priorities" aria-labelledby="dashboardPriorityTitle">
+              <div class="v2-panel-head"><div><p class="v2-eyebrow">Prioritäten</p><h3 id="dashboardPriorityTitle">Als Nächstes erforderlich</h3></div></div>
+              <div class="v2-list" id="priorityList"></div>
+            </section>
+            <section class="v2-panel v2-dashboard-next" aria-labelledby="dashboardNextTitle">
+              <div class="v2-panel-head"><div><p class="v2-eyebrow">Nächste 7 Tage</p><h3 id="dashboardNextTitle">Bevorstehende Termine</h3></div></div>
+              <div class="v2-list v2-dashboard-timeline" id="nextSevenDaysList"></div>
+            </section>
+            <section class="v2-panel v2-dashboard-attention" aria-labelledby="dashboardAttentionTitle">
+              <div class="v2-panel-head"><div><p class="v2-eyebrow">Kunden</p><h3 id="dashboardAttentionTitle">Mit Handlungsbedarf</h3></div><button class="v2-button soft" type="button" data-filter-preset="attention">Alle anzeigen</button></div>
+              <div class="v2-dashboard-customer-list" id="attentionCustomerList"></div>
+            </section>
+          </main>
+          <aside class="v2-operations-side" aria-label="Status und Aktivität">
+            <section class="v2-panel v2-dashboard-metrics" aria-labelledby="dashboardMetricsTitle">
+              <div class="v2-panel-head"><div><p class="v2-eyebrow">Status</p><h3 id="dashboardMetricsTitle">Kennzahlen</h3></div></div>
+              <div class="v2-metric-grid" id="metricGrid"></div>
+            </section>
+            <section class="v2-panel v2-dashboard-activity" aria-labelledby="dashboardActivityTitle">
+              <div class="v2-panel-head"><div><p class="v2-eyebrow">Aktivität</p><h3 id="dashboardActivityTitle">Zuletzt aktualisiert</h3></div></div>
+              <div class="v2-list" id="activityList"></div>
+            </section>
+          </aside>
         </div>
       </section>
 
@@ -306,6 +315,6 @@
 <script src="admin-v2-qr.js?v=3"></script>
 <script src="admin-v2-pdf.js?v=2"></script>
 <script src="admin-v2-communication.js?v=7"></script>
-<script src="admin-v2.js?v=72"></script>
+<script src="admin-v2.js?v=73"></script>
 </body>
 </html>

@@ -4071,6 +4071,9 @@
   function renderSkeletons(){
     byId("metricGrid").innerHTML=[1,2,3,4,5,6].map(()=>`<article class="v2-card v2-metric v2-skeleton"></article>`).join("");
     byId("todayList").innerHTML=`<article class="v2-card v2-skeleton"></article>`;
+    byId("priorityList").innerHTML=`<article class="v2-card v2-skeleton"></article>`;
+    byId("nextSevenDaysList").innerHTML=`<article class="v2-card v2-skeleton"></article>`;
+    byId("attentionCustomerList").innerHTML=`<article class="v2-card v2-skeleton"></article>`;
     byId("activityList").innerHTML=`<article class="v2-card v2-skeleton"></article>`;
     byId("customerGrid").innerHTML=[1,2,3].map(()=>`<article class="v2-card v2-skeleton"></article>`).join("");
     const detailRoot=byId("customerDetailRoot");
@@ -4109,6 +4112,12 @@
     else if(state.status==="upcoming")list=list.filter(isUpcomingTrip);
     else if(state.status==="arrivals")list=list.filter(isArrivalToday);
     else if(state.status==="departures")list=list.filter(isDepartureToday);
+    else if(state.status==="open-bookings")list=list.filter(customer=>customerWorkspaceViewModel(customer).openBookings>0);
+    else if(state.status==="pending-publication")list=list.filter(customer=>publicationStatus(customer).key==="pending");
+    else if(state.status==="attention")list=list.filter(customer=>{
+      const workspace=customerWorkspaceViewModel(customer);
+      return workspace.warnings.length>0||publicationStatus(customer).key==="pending"||!workspace.lastCommunication;
+    });
     else if(state.status==="draft")list=list.filter(customer=>!isPublished(customer));
     else if(state.status==="published")list=list.filter(isPublished);
     else if(state.status&&state.status!=="archived")list=list.filter(customer=>String(customer.status||"")===state.status);
@@ -4126,81 +4135,145 @@
     return ad-bd||String(a.customerName||"").localeCompare(String(b.customerName||""),"de");
   }
 
-  function renderMetrics(){
-    const data=stats();
+  function dashboardDateOffset(value){
+    const date=dateValue(value);
+    if(!date)return null;
+    const today=new Date();
+    today.setHours(0,0,0,0);
+    date.setHours(0,0,0,0);
+    return Math.round((date.getTime()-today.getTime())/86400000);
+  }
+
+  function dashboardProgramDate(item){
+    return item.dayDate||item.dateValue||item.date||item.startDate||item.start;
+  }
+
+  function dashboardBookingDueDate(booking){
+    return booking.dueDate||booking.paymentDueDate||booking.bookingDeadline||booking.deadline||booking.confirmationDueDate;
+  }
+
+  function dashboardCustomerRows(){
+    return state.customers.filter(customer=>!isArchivedCustomer(customer)).map(customer=>({
+      customer,
+      workspace:customerWorkspaceViewModel(customer),
+      publication:publicationStatus(customer),
+      trip:buildTripViewModel(customer)
+    }));
+  }
+
+  function dashboardPriorityEntries(rows){
+    return rows.flatMap(row=>{
+      const {customer,workspace,publication,trip}=row;
+      const tripDays=dashboardDateOffset(trip.start);
+      const entries=[];
+      if(workspace.documents.critical)entries.push({rank:1,tone:"critical",reason:`${workspace.documents.critical} kritische Dokumente`,urgency:"Kritisch",tab:"dokumente",row});
+      if(workspace.missingRequired.length)entries.push({rank:2,tone:"critical",reason:`${workspace.missingRequired.length} Pflichtangaben fehlen`,urgency:"Kritisch",tab:"kunde",row});
+      if(workspace.openBookings)entries.push({rank:3,tone:"warning",reason:`${workspace.openBookings} offene ${workspace.openBookings===1?"Buchung":"Buchungen"}`,urgency:tripDays!==null&&tripDays<=7?"Hoch":"Prüfen",tab:"buchungen",row});
+      if(publication.key==="pending")entries.push({rank:4,tone:"warning",reason:`${publication.changeCount||1} unveröffentlichte ${publication.changeCount===1?"Änderung":"Änderungen"}`,urgency:tripDays!==null&&tripDays<=7?"Hoch":"Prüfen",tab:"veroeffentlichung",row});
+      if(!workspace.lastCommunication&&(isActiveTrip(customer)||(tripDays!==null&&tripDays>=0&&tripDays<=7)))entries.push({rank:5,tone:"info",reason:"Letzte Kommunikation nicht dokumentiert",urgency:"Prüfen",tab:"kommunikation",row});
+      if(tripDays!==null&&tripDays>=0&&tripDays<=7&&workspace.warnings.length)entries.push({rank:6,tone:"warning",reason:`Reise beginnt ${tripDays===0?"heute":tripDays===1?"morgen":`in ${tripDays} Tagen`} – Vorbereitung offen`,urgency:tripDays<=1?"Heute":"Hoch",tab:"reise",row});
+      return entries;
+    }).sort((a,b)=>a.rank-b.rank||(dashboardDateOffset(a.row.trip.start)??99)-(dashboardDateOffset(b.row.trip.start)??99)||timestampValue(b.row.customer)-timestampValue(a.row.customer));
+  }
+
+  function dashboardTodayEntries(rows,priorities){
+    const entries=[];
+    rows.forEach(row=>{
+      const {customer,publication}=row;
+      if(isArrivalToday(customer))entries.push({type:"Anreise",title:"Anreise heute",tab:"reise",row});
+      if(isDepartureToday(customer))entries.push({type:"Abreise",title:"Abreise heute",tab:"reise",row});
+      flattenProgramItems(customer).filter(item=>dashboardDateOffset(dashboardProgramDate(item))===0).forEach(item=>entries.push({type:item.startTime||item.time||"Programm",title:item.title||"Programmpunkt",tab:"programm",row}));
+      if(publication.key==="pending")entries.push({type:"Veröffentlichung",title:"Änderungen warten auf Veröffentlichung",tab:"veroeffentlichung",row});
+    });
+    priorities.filter(item=>item.rank<=2&&(isArrivalToday(item.row.customer)||isDepartureToday(item.row.customer)||isActiveTrip(item.row.customer))).forEach(item=>entries.push({type:"Hinweis",title:item.reason,tab:item.tab,row:item.row,tone:item.tone}));
+    return entries;
+  }
+
+  function dashboardNextSevenEntries(rows){
+    const entries=[];
+    const add=(date,type,title,tab,row)=>{
+      const offset=dashboardDateOffset(date);
+      if(offset!==null&&offset>=1&&offset<=7)entries.push({date,dateValue:dateValue(date)?.getTime()||0,type,title,tab,row});
+    };
+    rows.forEach(row=>{
+      const {customer,workspace,trip}=row;
+      add(trip.start,"Anreise","Anreise","reise",row);
+      add(trip.end,"Abreise","Abreise","reise",row);
+      flattenProgramItems(customer).forEach(item=>add(dashboardProgramDate(item),"Programm",item.title||"Programmpunkt","programm",row));
+      const bookingLibrary=window.ACTBookingLibrary;
+      arrayValue(customer.bookings)
+        .filter(booking=>bookingLibrary?.isBookingOpen?bookingLibrary.isBookingOpen(booking):!workspaceBookingComplete(booking))
+        .forEach(booking=>add(dashboardBookingDueDate(booking),"Buchungsfrist",booking.title||booking.service||booking.provider||"Buchung prüfen","buchungen",row));
+      if(workspace.documents.missing)add(trip.start,"Dokumente",`${workspace.documents.missing} erwartete Dokumente fehlen`,"dokumente",row);
+      add(customer.scheduledPublishAt||customer.publicationDate||customer.publishAt,"Veröffentlichung","Geplante Veröffentlichung","veroeffentlichung",row);
+    });
+    return entries.sort((a,b)=>a.dateValue-b.dateValue||String(a.type).localeCompare(String(b.type),"de"));
+  }
+
+  function dashboardActivityEntries(rows){
+    const entries=[];
+    const add=(value,label,row,tab="kunde")=>{
+      const date=dateValue(value);
+      if(date)entries.push({date:date.getTime(),label,value:formatDate(date),row,tab});
+    };
+    rows.forEach(row=>{
+      const {customer}=row;
+      add(customer._lastSavedAt||customer.updatedAtIso||customer.updatedAt,"Kunde zuletzt aktualisiert",row);
+      add(customer.publishMeta?.lastPublishedAt,"Reise veröffentlicht",row,"veroeffentlichung");
+      normalizedDocuments(customer).forEach(doc=>add(doc.uploadedAt||doc.uploadDate,"Dokument hochgeladen",row,"dokumente"));
+      arrayValue(customer.bookings).forEach(booking=>add(booking.updatedAt||booking.modifiedAt,"Buchung geändert",row,"buchungen"));
+      [...arrayValue(customer.communications),...arrayValue(customer.communicationHistory),...arrayValue(customer.crm?.communications)].forEach(item=>add(item.createdAt||item.date||item.timestamp,"Kommunikation vorbereitet",row,"kommunikation"));
+    });
+    return entries.sort((a,b)=>b.date-a.date).slice(0,6);
+  }
+
+  function dashboardLink(row,tab,label,className="v2-dashboard-link"){
+    const customer=row.customer;
+    return `<a class="${className}" href="${escapeHtml(detailHash(customer.customerId,tab))}" aria-label="${escapeHtml(`${label}: ${customer.customerName||"Kunde"}`)}">`;
+  }
+
+  function renderDashboardHeader(rows,priorities){
+    const hour=new Date().getHours();
+    byId("dashboardGreeting").textContent=hour<11?"Guten Morgen":hour<18?"Guten Tag":"Guten Abend";
+    byId("dashboardDate").textContent=new Intl.DateTimeFormat("de-DE",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date());
+    const arrivals=rows.filter(row=>isArrivalToday(row.customer)).length;
+    const departures=rows.filter(row=>isDepartureToday(row.customer)).length;
+    const travelText=[arrivals?`${arrivals} ${arrivals===1?"Anreise":"Anreisen"}`:"",departures?`${departures} ${departures===1?"Abreise":"Abreisen"}`:""].filter(Boolean).join(" und ");
+    byId("dashboardSummary").textContent=`${travelText?`Heute stehen ${travelText} an.`:"Heute sind keine An- oder Abreisen geplant."} ${priorities.length?`${priorities.length} ${priorities.length===1?"Aufgabe benötigt":"Aufgaben benötigen"} Ihre Aufmerksamkeit.`:"Keine dringenden Aufgaben sind offen."}`;
+  }
+
+  function renderOperationsMetrics(rows,priorities){
     const metrics=[
-      {label:"Kunden gesamt",value:data.total,preset:"all"},
-      {label:"Aktive Reisen",value:data.active,preset:"active"},
-      {label:"Veröffentlicht",value:data.published,preset:"published"},
-      {label:"Entwürfe",value:data.drafts,preset:"draft"}
+      {label:"Aktive Reisen",value:rows.filter(row=>isActiveTrip(row.customer)).length,preset:"active",tone:"green",icon:"map"},
+      {label:"In Vorbereitung",value:rows.filter(row=>isUpcomingTrip(row.customer)&&!isActiveTrip(row.customer)).length,preset:"upcoming",tone:"blue",icon:"edit"},
+      {label:"Anreisen heute",value:rows.filter(row=>isArrivalToday(row.customer)).length,preset:"arrivals",tone:"rose",icon:"arrival"},
+      {label:"Abreisen heute",value:rows.filter(row=>isDepartureToday(row.customer)).length,preset:"departures",tone:"blue",icon:"departure"},
+      {label:"Offene Aufgaben",value:priorities.length,preset:"tasks",tone:"amber",icon:"check"},
+      {label:"Kritische Dokumente",value:rows.reduce((sum,row)=>sum+row.workspace.documents.critical,0),preset:"critical-documents",tone:"rose",icon:"documents"},
+      {label:"Offene Buchungen",value:rows.reduce((sum,row)=>sum+row.workspace.openBookings,0),preset:"open-bookings",tone:"amber",icon:"edit"},
+      {label:"Unveröffentlichte Änderungen",value:rows.filter(row=>row.publication.key==="pending").length,preset:"pending-publication",tone:"amber",icon:"edit"}
     ];
-    byId("metricGrid").innerHTML=metrics.map(item=>`
-      <button class="v2-card v2-metric" type="button" data-filter-preset="${item.preset}">
-        <span>${escapeHtml(item.label)}</span>
-        <strong>${item.value}</strong>
-      </button>
-    `).join("");
+    byId("metricGrid").innerHTML=metrics.map(item=>`<button class="v2-card v2-metric ${item.tone}" type="button" data-filter-preset="${item.preset}" aria-label="${escapeHtml(`${item.label}: ${item.value}`)}"><span class="v2-card-icon ${escapeHtml(item.icon)}" aria-hidden="true"></span><span class="v2-metric-copy"><strong>${item.value}</strong><span>${escapeHtml(item.label)}</span></span></button>`).join("");
   }
 
-  function renderDashboardLists(){
-    const activeCustomers=state.customers.filter(customer=>!isArchivedCustomer(customer));
-    const upcoming=activeCustomers.filter(isUpcomingTrip).sort((a,b)=>(dateValue(a.startDatePlain)?.getTime()||0)-(dateValue(b.startDatePlain)?.getTime()||0)).slice(0,5);
-    const recent=[...activeCustomers].sort((a,b)=>timestampValue(b)-timestampValue(a)).slice(0,5);
-    byId("upcomingList").innerHTML=upcoming.length?upcoming.map(listItem).join(""):`<p class="v2-muted">Keine anstehenden Reisen mit vorhandenem Anreisedatum.</p>`;
-    byId("recentList").innerHTML=recent.length?recent.map(listItem).join(""):`<p class="v2-muted">Keine zuletzt bearbeiteten Kunden verfügbar.</p>`;
+  function renderOperationsLists(rows,priorities){
+    const today=dashboardTodayEntries(rows,priorities);
+    byId("todayList").innerHTML=today.length?today.map(item=>`${dashboardLink(item.row,item.tab,item.title,"v2-dashboard-today-card")}<span>${escapeHtml(item.type)}</span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.row.customer.customerName||"Unbenannter Kunde")}</small></a>`).join(""):`<div class="v2-dashboard-empty"><strong>Heute ist alles ruhig.</strong><span>Keine Anreisen, Abreisen oder dringenden Hinweise vorhanden.</span></div>`;
+    byId("priorityList").innerHTML=priorities.length?priorities.slice(0,5).map(item=>`${dashboardLink(item.row,item.tab,item.reason,`v2-priority-item ${item.tone}`)}<span class="v2-priority-urgency">${escapeHtml(item.urgency)}</span><span><strong>${escapeHtml(item.row.customer.customerName||"Unbenannter Kunde")}</strong><small>${escapeHtml(item.reason)}</small></span><span class="v2-priority-action">Öffnen</span></a>`).join(""):`<div class="v2-dashboard-empty"><strong>Keine dringenden Prioritäten.</strong><span>Aktuell ist kein unmittelbarer Handlungsbedarf erkennbar.</span></div>`;
+    const next=dashboardNextSevenEntries(rows);
+    byId("nextSevenDaysList").innerHTML=next.length?next.map(item=>`${dashboardLink(item.row,item.tab,item.title,"v2-dashboard-timeline-item")}<time datetime="${escapeHtml(dateInputValue(item.date)||"")}">${escapeHtml(formatDate(item.date))}</time><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(`${item.type} · ${item.row.customer.customerName||"Unbenannter Kunde"}`)}</small></span></a>`).join(""):`<div class="v2-dashboard-empty"><strong>Keine Termine in den nächsten 7 Tagen.</strong><span>Der Zeitraum ist aktuell frei.</span></div>`;
+    const attention=rows.filter(row=>row.workspace.warnings.length||row.publication.key==="pending"||!row.workspace.lastCommunication).sort((a,b)=>(b.workspace.warnings.length+(b.publication.key==="pending"?1:0))-(a.workspace.warnings.length+(a.publication.key==="pending"?1:0))).slice(0,6);
+    byId("attentionCustomerList").innerHTML=attention.length?attention.map(row=>`${dashboardLink(row,"kunde",row.customer.customerName||"Kunde","v2-dashboard-customer")}<span><strong>${escapeHtml(row.customer.customerName||"Unbenannter Kunde")}</strong><small>${escapeHtml(row.customer.tripName||row.customer.tripTitle||"Reise nicht benannt")} · ${escapeHtml(formatPeriod(row.customer)||"Zeitraum offen")}</small></span><span class="v2-dashboard-customer-meta">${badge(row.customer.status||"Status offen")}${badge(publicationState(row.customer))}<small>${row.workspace.warnings.length} offene Punkte · Letzter Kontakt: ${escapeHtml(row.workspace.lastCommunication||"nicht dokumentiert")}</small></span></a>`).join(""):`<div class="v2-dashboard-empty"><strong>Alle Kunden sind vorbereitet.</strong><span>Aktuell besteht kein erkannter Handlungsbedarf.</span></div>`;
+    const activity=dashboardActivityEntries(rows);
+    byId("activityList").innerHTML=activity.length?activity.map(item=>`${dashboardLink(item.row,item.tab,item.label,"v2-dashboard-activity-item")}<span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.row.customer.customerName||"Unbenannter Kunde")}</small></span><time>${escapeHtml(item.value)}</time></a>`).join(""):`<div class="v2-dashboard-empty"><strong>Noch keine Aktivität.</strong><span>Aktualisierungen erscheinen hier, sobald Zeitstempel vorhanden sind.</span></div>`;
   }
 
-  function listItem(customer){
-    return `<button class="v2-list-item" type="button" data-open-editor="${escapeHtml(customer.customerId)}">
-      <span><strong>${escapeHtml(customer.customerName||"Unbenannter Kunde")}</strong><br><span class="v2-muted">${escapeHtml(customer.tripName||customer.tripTitle||"")} · ${escapeHtml(formatPeriod(customer)||"Zeitraum nicht verfügbar")}</span></span>
-      ${badge(publicationState(customer))}
-    </button>`;
-  }
-
-  function renderMetrics(){
-    const data=stats();
-    const docStats=allDocumentQualitySummary();
-    const metrics=[
-      {label:"Kunden gesamt",value:data.total,preset:"all",tone:"blue",icon:"users"},
-      {label:"Aktive Reisen",value:data.active,preset:"active",tone:"green",icon:"map"},
-      {label:"Entwuerfe",value:data.drafts,preset:"draft",tone:"amber",icon:"edit"},
-      {label:"Veroeffentlicht",value:data.published,preset:"published",tone:"green",icon:"check"},
-      {label:"Heute Anreisen",value:data.arrivals,preset:"arrivals",tone:"rose",icon:"arrival"},
-      {label:"Heute Abreisen",value:data.departures,preset:"departures",tone:"blue",icon:"departure"},
-      {label:`Dokumente · ${docStats.complete} vollstaendig · ${docStats.issues} Hinweise · ${docStats.critical} kritisch`,value:docStats.total,preset:"documents",tone:"amber",icon:"documents"}
-    ];
-    byId("metricGrid").innerHTML=metrics.map(item=>`
-      <button class="v2-card v2-metric ${item.tone}" type="button" data-filter-preset="${item.preset}">
-        <span class="v2-card-icon ${escapeHtml(item.icon)}" aria-hidden="true"></span>
-        <span class="v2-metric-copy">
-          <strong>${item.value}</strong>
-          <span>${escapeHtml(item.label)}</span>
-        </span>
-      </button>
-    `).join("");
-  }
-
-  function renderDashboardLists(){
-    const today=state.customers.filter(customer=>isArrivalToday(customer)||isDepartureToday(customer)||isActiveTrip(customer)).sort(compareCustomers).slice(0,6);
-    const recent=[...state.customers].sort((a,b)=>timestampValue(b)-timestampValue(a)).slice(0,6);
-    byId("todayList").innerHTML=today.length?today.map(todayItem).join(""):`<p class="v2-muted">Heute sind keine Reisen mit passendem Datum hinterlegt.</p>`;
-    byId("activityList").innerHTML=recent.length?recent.map(activityItem).join(""):`<p class="v2-muted">Noch keine Aktivitaeten verfuegbar.</p>`;
-  }
-
-  function todayItem(customer){
-    const label=isArrivalToday(customer)?"Anreise":isDepartureToday(customer)?"Abreise":"Reise aktiv";
-    return `<button class="v2-list-item" type="button" data-open-editor="${escapeHtml(customer.customerId)}">
-      <span><strong>${escapeHtml(customer.customerName||"Unbenannter Kunde")}</strong><br><span class="v2-muted">${escapeHtml(label)} - ${escapeHtml(formatPeriod(customer)||"Zeitraum nicht verfuegbar")}</span></span>
-      ${badge(customer.region||publicationState(customer))}
-    </button>`;
-  }
-
-  function activityItem(customer){
-    const updated=timestampValue(customer)?formatDate(new Date(timestampValue(customer)).toISOString()):"kein Datum";
-    return `<button class="v2-list-item" type="button" data-open-editor="${escapeHtml(customer.customerId)}">
-      <span><strong>${escapeHtml(customer.customerName||"Unbenannter Kunde")}</strong><br><span class="v2-muted">Letzte Aenderung - ${escapeHtml(updated)}</span></span>
-      ${badge(publicationState(customer))}
-    </button>`;
+  function renderOperationsDashboard(){
+    const rows=dashboardCustomerRows();
+    const priorities=dashboardPriorityEntries(rows);
+    renderDashboardHeader(rows,priorities);
+    renderOperationsMetrics(rows,priorities);
+    renderOperationsLists(rows,priorities);
   }
 
   function renderFilterOptions(){
@@ -5878,8 +5951,7 @@
 
   function render(){
     if(state.loading)return renderSkeletons();
-    renderMetrics();
-    renderDashboardLists();
+    if(state.route==="dashboard")renderOperationsDashboard();
     renderCustomers();
     renderDocuments();
     if(window.ACTAdminV2Bookings?.renderBookings)window.ACTAdminV2Bookings.renderBookings();
@@ -5945,8 +6017,13 @@
   }
 
   function applyPreset(preset){
-    if(preset==="documents"){
+    if(preset==="documents"||preset==="critical-documents"){
+      if(preset==="critical-documents")state.documentQuality="Kritisch";
       routeTo("documents");
+      return;
+    }
+    if(preset==="tasks"){
+      routeTo("tasks");
       return;
     }
     state.status=preset==="all"?"":preset;
@@ -7507,7 +7584,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,workspacePanelStartVisible,customerWorkspaceStartVisible,scrollToCustomerWorkspaceStart,scheduleCustomerWorkspaceStartScroll,openCustomerDetail,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,dashboardDateOffset,dashboardProgramDate,dashboardBookingDueDate,dashboardPriorityEntries,dashboardTodayEntries,dashboardNextSevenEntries,dashboardActivityEntries,renderOperationsDashboard,workspacePanelStartVisible,customerWorkspaceStartVisible,scrollToCustomerWorkspaceStart,scheduleCustomerWorkspaceStartScroll,openCustomerDetail,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

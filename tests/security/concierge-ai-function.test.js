@@ -10,16 +10,19 @@ const ai=require(join(root,"functions/lib/conciergeAi.js"));
 const impl=require(join(root,"functions/impl.js"));
 const store=require(join(root,"functions/lib/aiAnalysisStore.js"));
 
-function taskContextDb(items,{error}={}){
-  const query={
-    where:()=>query,
-    limit:()=>query,
+function taskContextDb(analyses,{error}={}){
+  const itemSnapshot=items=>({docs:items.map(item=>({data:()=>item}))});
+  const analysisQuery={
+    orderBy:()=>analysisQuery,
+    limit:()=>analysisQuery,
     get:async()=>{
       if(error)throw error;
-      return {docs:items.map(item=>({data:()=>item}))};
+      return {docs:analyses.map(items=>({
+        ref:{collection:()=>({limit:()=>({get:async()=>itemSnapshot(items)})})}
+      }))};
     }
   };
-  return {collectionGroup:()=>query};
+  return {collection:()=>({doc:()=>({collection:()=>analysisQuery})})};
 }
 
 describe("concierge AI function helpers",()=>{
@@ -101,13 +104,28 @@ describe("concierge AI function helpers",()=>{
 
   it("returns only valid prior tasks for customers with none, open tasks, or completed tasks",async()=>{
     assert.deepEqual(await impl.loadAiTaskContext(taskContextDb([]),"synthetic-customer"),[]);
-    assert.deepEqual(await impl.loadAiTaskContext(taskContextDb([
+    assert.deepEqual(await impl.loadAiTaskContext(taskContextDb([[
       {stableKey:"task:one",title:"Open task",status:"open"},
       {stableKey:"task:two",title:"Completed task",status:"completed"},
       {stableKey:"task:invalid",title:"Ignored",status:"invalid"}
-    ]),"synthetic-customer"),[
+    ]]),"synthetic-customer"),[
       {stableKey:"task:one",title:"Open task",status:"open"},
       {stableKey:"task:two",title:"Completed task",status:"completed"}
+    ]);
+  });
+
+  it("uses the newest customer analysis state and does not query global item collections",async()=>{
+    const db=taskContextDb([
+      [{stableKey:"task:one",title:"Current task",status:"completed"}],
+      [
+        {stableKey:"task:one",title:"Old task",status:"open"},
+        {stableKey:"task:two",title:"Dismissed task",status:"dismissed"}
+      ]
+    ]);
+    db.collectionGroup=()=>{throw new Error("global collectionGroup must not be used");};
+    assert.deepEqual(await impl.loadAiTaskContext(db,"synthetic-customer"),[
+      {stableKey:"task:one",title:"Current task",status:"completed"},
+      {stableKey:"task:two",title:"Dismissed task",status:"dismissed"}
     ]);
   });
 

@@ -92,6 +92,7 @@ const {
 const SIGNED_URL_TTL_MS=5*60*1000;
 const AI_ANALYSIS_HISTORY_PAGE_SIZE=5;
 const AI_TASK_LIST_LIMIT=200;
+const AI_TASK_CONTEXT_LIMIT=20;
 
 async function resolveStorageSignedUrl(storagePath){
   const path=stringValue(storagePath).replace(/^\/+/,"");
@@ -620,14 +621,24 @@ function requireAdminCallable(request){
 }
 
 async function loadAiTaskContext(db,customerId){
-  const snapshot=await db.collectionGroup("items")
-    .where("customerId","==",customerId)
-    .limit(20)
+  const customerRef=db.collection("customers").doc(customerId);
+  const analyses=await customerRef.collection("aiAnalyses")
+    .orderBy("createdAt","desc")
+    .limit(AI_ANALYSIS_HISTORY_PAGE_SIZE)
     .get();
-  return snapshot.docs.map(docSnap=>{
-    const item=docSnap.data()||{};
-    return {stableKey:item.stableKey,title:item.title,status:item.status};
-  }).filter(item=>item.stableKey&&item.title&&["open","completed","dismissed"].includes(item.status));
+  const byStableKey=new Map();
+  for(const analysis of analyses.docs){
+    const remaining=AI_TASK_CONTEXT_LIMIT-byStableKey.size;
+    if(remaining<=0)break;
+    const items=await analysis.ref.collection("items").limit(remaining).get();
+    items.docs.forEach(docSnap=>{
+      const item=docSnap.data()||{};
+      if(!byStableKey.has(item.stableKey)&&item.stableKey&&item.title&&["open","completed","dismissed"].includes(item.status)){
+        byStableKey.set(item.stableKey,{stableKey:item.stableKey,title:item.title,status:item.status});
+      }
+    });
+  }
+  return [...byStableKey.values()];
 }
 
 async function analyzeConciergeTrip(request){

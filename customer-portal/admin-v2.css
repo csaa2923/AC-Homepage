@@ -273,6 +273,12 @@ p{color:var(--muted);line-height:1.55}
 .v2-concierge-intelligence{display:grid;gap:10px;padding-top:2px}
 .v2-ai-analysis{display:grid;gap:9px;padding:14px;border:1px solid #c8d9ed;border-radius:14px;background:#f3f8ff}
 .v2-ai-analysis h4,.v2-ai-analysis p{margin:0}
+.v2-ai-analysis-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.v2-ai-history{display:grid;gap:9px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.v2-ai-history ol{display:grid;gap:7px;margin:0;padding:0;list-style:none}
+.v2-ai-history li{display:grid;gap:2px;padding:9px 0;border-bottom:1px solid rgba(16,40,32,.08)}
+.v2-ai-history li:last-child{border-bottom:0}
+.v2-ai-history li span{color:var(--muted);font-size:13px;font-weight:700}
 .v2-workspace-alert.recommendation{background:#f3f8ff;border-color:#c8d9ed}
 .v2-workspace-alert.recommendation>span:first-child{background:var(--blue);color:#315f96}
 .v2-workspace-clear{display:flex;gap:8px;align-items:center;padding:11px 12px;border-radius:14px;background:var(--mint);color:#1f6b3f}
@@ -293,6 +299,20 @@ p{color:var(--muted);line-height:1.55}
 .workspace-task-page-list>button{width:100%;display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:12px;align-items:center;padding:15px;border:1px solid var(--line);border-radius:17px;background:#fff;color:var(--ink);text-align:left}
 .workspace-task-page-list>button>span:nth-child(2){display:grid;gap:3px}
 .workspace-task-page-list small,.workspace-task-page-list>button>span:nth-child(2)>span{color:var(--muted);font-weight:700}
+.workspace-ai-task-controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:16px;background:#f8faf7}
+.workspace-ai-task-controls label{display:grid;gap:6px;min-width:170px;color:var(--muted);font-size:13px;font-weight:850}
+.workspace-ai-task-controls select{min-height:42px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:#fff;color:var(--ink);font:inherit}
+.workspace-ai-task-list{display:grid;gap:10px}
+.workspace-ai-task{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:12px;align-items:start;padding:15px;border:1px solid var(--line);border-radius:17px;background:#fff}
+.workspace-ai-task>div:nth-child(2){display:grid;gap:4px}
+.workspace-ai-task h3,.workspace-ai-task p{margin:0}
+.workspace-ai-task h3{font-size:17px}
+.workspace-ai-task p,.workspace-ai-task small,.workspace-ai-task>div:nth-child(2)>span{color:var(--muted);font-weight:700}
+.workspace-ai-task small{font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+.workspace-ai-task.completed .v2-workspace-task-state{background:#4f9773}
+.workspace-ai-task.dismissed .v2-workspace-task-state{background:#99a8a0}
+.workspace-ai-task-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}
+.workspace-ai-task-actions .v2-button{min-height:40px}
 .admin-mobile-action-sheet{display:none}
 .v2-read-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .v2-read-card{padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow)}

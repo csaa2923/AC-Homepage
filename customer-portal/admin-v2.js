@@ -16,6 +16,19 @@
     aiAnalysisCustomerId:"",
     aiAnalysisBusy:false,
     aiAnalysisError:"",
+    aiAnalysisSaving:false,
+    aiAnalysisSaveMessage:"",
+    aiAnalysisSaveMessageKind:"",
+    aiHistory:[],
+    aiHistoryCustomerId:"",
+    aiHistoryCursor:null,
+    aiHistoryBusy:false,
+    aiHistoryError:"",
+    aiTasks:[],
+    aiTasksBusy:false,
+    aiTasksError:"",
+    aiTaskStatusFilter:"open",
+    aiTaskSort:"priority",
     communicationMessage:"",
     communicationMessageKind:"",
     communicationEmailTemplate:"general",
@@ -4524,6 +4537,25 @@
     return `<span class="v2-workspace-status ${escapeHtml(item.tone||"muted")}"><i aria-hidden="true"></i>${escapeHtml(item.label)}</span>`;
   }
 
+  function aiHistoryMarkup(customerId){
+    if(state.aiHistoryCustomerId!==customerId)return "";
+    const history=arrayValue(state.aiHistory);
+    const entries=history.length?history.map(entry=>`
+      <li>
+        <strong>${escapeHtml(entry.summary||"Gespeicherte Analyse")}</strong>
+        <span>${escapeHtml(entry.createdAt?formatDate(entry.createdAt):"Zeitpunkt nicht verfügbar")} · ${escapeHtml(`${Number(entry.openItemCount)||0} offen`)}</span>
+      </li>
+    `).join(""):`<li><span>Noch keine Analyse gespeichert.</span></li>`;
+    return `
+      <section class="v2-ai-history" aria-labelledby="aiHistoryTitle">
+        <div class="v2-workspace-section-head compact"><h5 id="aiHistoryTitle">Gespeicherte Analysen</h5><span>${history.length}</span></div>
+        ${state.aiHistoryError?`<p class="v2-edit-status error">${escapeHtml(state.aiHistoryError)}</p>`:""}
+        <ol>${entries}</ol>
+        ${state.aiHistoryCursor?`<button class="v2-button soft" type="button" data-ai-history-more ${state.aiHistoryBusy?"disabled":""}>${state.aiHistoryBusy?"Lädt …":"Weitere Analysen laden"}</button>`:""}
+      </section>
+    `;
+  }
+
   function customerWorkspaceOverviewMarkup(customer,workspace){
     const intelligence=customerConciergeReadiness(customer,workspace);
     const warningMarkup=workspace.warnings.length
@@ -4564,7 +4596,11 @@
         ${arrayValue(aiAnalysis.strengths).length?`<h5>Stärken</h5><ul>${arrayValue(aiAnalysis.strengths).map(item=>`<li><strong>${escapeHtml(item.title)}</strong> ${escapeHtml(item.description)}</li>`).join("")}</ul>`:""}
         ${arrayValue(aiAnalysis.concerns).length?`<h5>Hinweise</h5><ul>${arrayValue(aiAnalysis.concerns).map(item=>`<li><strong>${escapeHtml(item.title)}</strong> ${escapeHtml(item.description)}</li>`).join("")}</ul>`:""}
         ${arrayValue(aiAnalysis.nextActions).map(item=>`<button class="v2-workspace-task" type="button" data-ai-target-tab="${escapeHtml(item.targetTab)}"><span class="v2-workspace-task-state"></span><span><small>${escapeHtml(`${urgencyLabels[item.urgency]||"Optional"} · ${impactLabels[item.impact]||"Geringe Wirkung"}`)}</small><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></span><span aria-hidden="true">→</span></button>`).join("")}
-        <button class="v2-button soft" type="button" data-ai-copy="${escapeHtml(aiAnalysis.conciergeNoteDraft||aiAnalysis.summary)}">Concierge-Entwurf kopieren</button>
+        <div class="v2-ai-analysis-actions">
+          <button class="v2-button primary" type="button" data-ai-save ${state.aiAnalysisSaving?"disabled":""}>${state.aiAnalysisSaving?"Speichert …":"Analyse speichern"}</button>
+          <button class="v2-button soft" type="button" data-ai-copy="${escapeHtml(aiAnalysis.conciergeNoteDraft||aiAnalysis.summary)}">Concierge-Entwurf kopieren</button>
+        </div>
+        ${state.aiAnalysisSaveMessage?`<p class="v2-edit-status ${escapeHtml(state.aiAnalysisSaveMessageKind)}">${escapeHtml(state.aiAnalysisSaveMessage)}</p>`:""}
       </section>`:"";
     return `
       <section class="v2-concierge-overview-card" aria-labelledby="conciergeOverviewTitle">
@@ -4594,6 +4630,7 @@
             ${state.aiAnalysisError?`<p class="v2-edit-status error">${escapeHtml(state.aiAnalysisError)}</p>`:""}
             <div class="v2-workspace-alerts" aria-label="Concierge Hinweise">${insightMarkup}</div>
             ${aiMarkup}
+            ${aiHistoryMarkup(customer.customerId)}
           </section>
         `:""}
         <div class="v2-workspace-lower">
@@ -4631,12 +4668,135 @@
       if(!result?.analysis)throw new Error("AI Concierge ist vorübergehend nicht verfügbar.");
       state.aiAnalysis=result.analysis;
       state.aiAnalysisCustomerId=customer.customerId;
+      state.aiAnalysisSaveMessage="";
+      state.aiAnalysisSaveMessageKind="";
+      state.aiAnalysis.analysisId=result.analysisId||"";
     }catch(error){
       state.aiAnalysisError=error?.message==="AI Concierge ist noch nicht konfiguriert."
         ?"AI Concierge ist noch nicht konfiguriert."
         :"AI Concierge ist vorübergehend nicht verfügbar.";
     }finally{
       state.aiAnalysisBusy=false;
+      render();
+    }
+  }
+
+  async function saveSelectedAiAnalysis(){
+    const customer=customerById(state.selectedCustomerId);
+    const analysis=state.aiAnalysisCustomerId===customer?.customerId?state.aiAnalysis:null;
+    if(!customer||!analysis||state.aiAnalysisSaving)return;
+    state.aiAnalysisSaving=true;
+    state.aiAnalysisSaveMessage="";
+    state.aiAnalysisSaveMessageKind="";
+    render();
+    try{
+      const language=["de","en","it","fr"].includes(customer.portalLanguage)?customer.portalLanguage:"de";
+      const result=await window.ACTFirebaseService?.saveConciergeAnalysis?.(
+        customer.customerId,
+        analysis.analysisId,
+        {
+          summary:analysis.summary,
+          strengths:arrayValue(analysis.strengths),
+          concerns:arrayValue(analysis.concerns),
+          nextActions:arrayValue(analysis.nextActions),
+          conciergeNoteDraft:analysis.conciergeNoteDraft,
+          disclaimer:analysis.disclaimer
+        },
+        language
+      );
+      if(!result?.analysisId)throw new Error("save failed");
+      state.aiAnalysisSaveMessage="Analyse gespeichert.";
+      state.aiAnalysisSaveMessageKind="success";
+      await Promise.all([loadAiAnalysisHistory(customer.customerId),loadAiTasks()]);
+    }catch(_){
+      state.aiAnalysisSaveMessage="Analyse konnte nicht gespeichert werden. Bitte erneut versuchen.";
+      state.aiAnalysisSaveMessageKind="error";
+    }finally{
+      state.aiAnalysisSaving=false;
+      render();
+    }
+  }
+
+  async function loadAiAnalysisHistory(customerId,{more=false}={}){
+    const id=cleanValue(customerId);
+    if(!id||state.aiHistoryBusy)return;
+    if(!more||state.aiHistoryCustomerId!==id){
+      state.aiHistoryCustomerId=id;
+      state.aiHistory=[];
+      state.aiHistoryCursor=null;
+      state.aiHistoryError="";
+    }
+    state.aiHistoryBusy=true;
+    render();
+    try{
+      const result=await window.ACTFirebaseService?.listConciergeAnalyses?.(id,more?state.aiHistoryCursor:null);
+      if(state.aiHistoryCustomerId!==id)return;
+      const entries=arrayValue(result?.analyses);
+      state.aiHistory=more?[...state.aiHistory,...entries]:entries;
+      state.aiHistoryCursor=result?.nextCursor||null;
+    }catch(_){
+      if(state.aiHistoryCustomerId===id)state.aiHistoryError="Gespeicherte Analysen konnten nicht geladen werden.";
+    }finally{
+      if(state.aiHistoryCustomerId===id)state.aiHistoryBusy=false;
+      render();
+    }
+  }
+
+  async function loadAiTasks(){
+    if(state.aiTasksBusy)return;
+    state.aiTasksBusy=true;
+    state.aiTasksError="";
+    render();
+    try{
+      const result=await window.ACTFirebaseService?.listConciergeAnalysisTasks?.();
+      state.aiTasks=arrayValue(result?.tasks);
+    }catch(_){
+      state.aiTasksError="Gespeicherte AI-Aufgaben konnten nicht geladen werden.";
+    }finally{
+      state.aiTasksBusy=false;
+      render();
+    }
+  }
+
+  function filteredAiTasks(){
+    const status=state.aiTaskStatusFilter;
+    const tasks=arrayValue(state.aiTasks).filter(task=>status==="all"||task.status===status);
+    return tasks.sort((left,right)=>{
+      if(state.aiTaskSort==="lastSeen"){
+        return String(right.lastSeenAt||"").localeCompare(String(left.lastSeenAt||""));
+      }
+      if(state.aiTaskSort==="customer"){
+        return String(left.customerName||customerById(left.customerId)?.customerName||"").localeCompare(String(right.customerName||customerById(right.customerId)?.customerName||""),"de")
+          ||Number(left.priority||99)-Number(right.priority||99);
+      }
+      const urgencyOrder={immediate:0,this_week:1,before_trip:2,optional:3};
+      const impactOrder={high:0,medium:1,low:2};
+      return (urgencyOrder[left.urgency]??9)-(urgencyOrder[right.urgency]??9)
+        ||Number(left.priority||99)-Number(right.priority||99)
+        ||(impactOrder[left.impact]??9)-(impactOrder[right.impact]??9)
+        ||String(right.lastSeenAt||"").localeCompare(String(left.lastSeenAt||""));
+    });
+  }
+
+  async function updateAiTaskStatus(task,status){
+    if(!task||state.aiTasksBusy)return;
+    state.aiTasksBusy=true;
+    state.aiTasksError="";
+    render();
+    try{
+      const result=await window.ACTFirebaseService?.updateConciergeAnalysisItemStatus?.(
+        task.customerId,task.analysisId,task.itemId,status
+      );
+      if(!result?.itemId)throw new Error("status update failed");
+      state.aiTasksBusy=false;
+      await Promise.all([
+        loadAiTasks(),
+        state.selectedCustomerId===task.customerId?loadAiAnalysisHistory(task.customerId):Promise.resolve()
+      ]);
+    }catch(_){
+      state.aiTasksError="Aufgabenstatus konnte nicht aktualisiert werden. Bitte erneut versuchen.";
+    }finally{
+      state.aiTasksBusy=false;
       render();
     }
   }
@@ -4739,16 +4899,32 @@
   function renderTasks(){
     const root=byId("tasksRoot");
     if(!root)return;
-    const tasks=allWorkspaceTasks();
+    const tasks=filteredAiTasks();
+    const taskMarkup=tasks.length?tasks.map(task=>{
+      const customer=customerById(task.customerId);
+      const customerName=customer?.customerName||"Unbenannter Kunde";
+      const statusLabel=task.status==="completed"?"Erledigt":task.status==="dismissed"?"Verworfen":"Offen";
+      const taskData=`data-ai-task-customer="${escapeHtml(task.customerId)}" data-ai-task-analysis="${escapeHtml(task.analysisId)}" data-ai-task-item="${escapeHtml(task.itemId)}"`;
+      const actionMarkup=task.status==="open"
+        ?`<div class="workspace-ai-task-actions"><label class="workspace-ai-task-check"><input type="checkbox" data-ai-task-status="completed" ${taskData}><span>Erledigt</span></label><button class="v2-button small soft" type="button" data-ai-task-status="dismissed" ${taskData}>Verwerfen</button></div>`
+        :`<div class="workspace-ai-task-actions"><label class="workspace-ai-task-check"><input type="checkbox" checked data-ai-task-status="open" ${taskData}><span>Erledigt</span></label><button class="v2-button small soft" type="button" data-ai-task-status="open" ${taskData}>Wieder öffnen</button></div>`;
+      return `<article class="workspace-ai-task ${escapeHtml(task.status||"open")}"><span class="v2-workspace-task-state" aria-hidden="true"></span><div><small>${escapeHtml(customerName)} · ${escapeHtml(statusLabel)} · ${escapeHtml(`${task.urgency||"optional"} · ${task.impact||"low"}`)}</small><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.description)}</p><span>${escapeHtml(task.lastSeenAt?`Zuletzt erkannt: ${formatDate(task.lastSeenAt)}`:"Zeitpunkt nicht verfügbar")}</span></div><button class="v2-button small soft" type="button" data-ai-target-tab="${escapeHtml(task.targetTab)}">Öffnen</button>${actionMarkup}</article>`;
+    }).join(""):`<article class="v2-empty"><h3>Keine passenden AI-Aufgaben</h3><p>Ändern Sie den Statusfilter oder speichern Sie eine neue Analyse.</p></article>`;
     root.innerHTML=`<section class="v2-document-page workspace-tasks-page">
-      <div class="v2-section-toolbar"><div><p class="v2-eyebrow">Arbeitsvorrat</p><h2>Offene Aufgaben</h2><p class="v2-muted">Aus bereits geladenen Kunden-, Buchungs- und Dokumentdaten abgeleitet.</p></div>${badge(`${tasks.length} offen`)}</div>
-      <div class="workspace-task-page-list">${tasks.length?tasks.map(task=>`<button type="button" data-mobile-customer-task="${escapeHtml(task.customerId)}" data-task-tab="${escapeHtml(task.tab)}"><span class="v2-workspace-task-state"></span><span><small>${escapeHtml(task.customerName)}</small><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(task.detail)}</span></span><span aria-hidden="true">→</span></button>`).join(""):`<article class="v2-empty"><h3>Keine offenen Aufgaben</h3><p>Alle aus den vorhandenen Daten ableitbaren Punkte sind erledigt.</p></article>`}</div>
+      <div class="v2-section-toolbar"><div><h2>Gespeicherte AI-Aufgaben</h2><p class="v2-muted">Status und Auftreten werden serverseitig nachvollziehbar geführt.</p></div>${badge(`${tasks.length} ${state.aiTaskStatusFilter==="open"?"offen":"Einträge"}`)}</div>
+      <div class="workspace-ai-task-controls">
+        <label>Status<select id="aiTaskStatusFilter"><option value="open" ${state.aiTaskStatusFilter==="open"?"selected":""}>Offen</option><option value="completed" ${state.aiTaskStatusFilter==="completed"?"selected":""}>Erledigt</option><option value="dismissed" ${state.aiTaskStatusFilter==="dismissed"?"selected":""}>Verworfen</option><option value="all" ${state.aiTaskStatusFilter==="all"?"selected":""}>Alle</option></select></label>
+        <label>Sortieren<select id="aiTaskSortSelect"><option value="priority" ${state.aiTaskSort==="priority"?"selected":""}>Priorität</option><option value="lastSeen" ${state.aiTaskSort==="lastSeen"?"selected":""}>Zuletzt erkannt</option><option value="customer" ${state.aiTaskSort==="customer"?"selected":""}>Kunde</option></select></label>
+        <button class="v2-button soft" type="button" data-ai-tasks-refresh ${state.aiTasksBusy?"disabled":""}>${state.aiTasksBusy?"Aktualisiert …":"Aktualisieren"}</button>
+      </div>
+      ${state.aiTasksError?`<p class="v2-edit-status error">${escapeHtml(state.aiTasksError)}</p>`:""}
+      <div class="workspace-ai-task-list">${taskMarkup}</div>
     </section>`;
   }
 
   function renderMobileNavigation(){
     const isMobile=typeof window.matchMedia!=="function"||window.matchMedia("(max-width:820px), (max-width:920px) and (max-height:520px)").matches;
-    const taskCount=isMobile?allWorkspaceTasks().length:0;
+    const taskCount=isMobile?arrayValue(state.aiTasks).filter(task=>task.status==="open").length:0;
     const badgeEl=byId("mobileTaskBadge");
     if(badgeEl){badgeEl.textContent=String(taskCount);badgeEl.hidden=taskCount===0;}
     const active=state.route==="customerDetail"?"customers":state.route;
@@ -6098,6 +6274,12 @@
     if(replace)history.replaceState({route:parsed.route},"",nextHash);
     else if(location.hash!==nextHash)history.pushState({route:parsed.route},"",nextHash);
     render();
+    if(parsed.route==="customerDetail"&&parsed.customerId&&state.aiHistoryCustomerId!==parsed.customerId){
+      loadAiAnalysisHistory(parsed.customerId);
+    }
+    if(parsed.route==="tasks"&&!state.aiTasks.length&&!state.aiTasksBusy){
+      loadAiTasks();
+    }
     resetHorizontalScroll();
     return true;
   }
@@ -7544,6 +7726,22 @@
       const open=event.target.closest("[data-open-editor]");
       if(open){openCustomerDetail(open.dataset.openEditor);return;}
       if(event.target.closest("[data-ai-analyze]")){analyzeSelectedCustomerWithAi();return;}
+      if(event.target.closest("[data-ai-save]")){saveSelectedAiAnalysis();return;}
+      if(event.target.closest("[data-ai-history-more]")){
+        if(state.aiHistoryCustomerId)loadAiAnalysisHistory(state.aiHistoryCustomerId,{more:true});
+        return;
+      }
+      if(event.target.closest("[data-ai-tasks-refresh]")){loadAiTasks();return;}
+      const aiTaskStatus=event.target.closest("[data-ai-task-status]");
+      if(aiTaskStatus){
+        const task=arrayValue(state.aiTasks).find(item=>
+          item.customerId===aiTaskStatus.dataset.aiTaskCustomer
+          &&item.analysisId===aiTaskStatus.dataset.aiTaskAnalysis
+          &&item.itemId===aiTaskStatus.dataset.aiTaskItem
+        );
+        if(task)updateAiTaskStatus(task,aiTaskStatus.dataset.aiTaskStatus);
+        return;
+      }
       const aiTarget=event.target.closest("[data-ai-target-tab]");
       if(aiTarget&&state.selectedCustomerId){openWorkspaceTab(AI_TARGET_TABS[aiTarget.dataset.aiTargetTab]||"kunde");return;}
       const aiCopy=event.target.closest("[data-ai-copy]");
@@ -7583,6 +7781,8 @@
       if(event.target.id==="documentQualityFilter"){state.documentQuality=event.target.value;renderDocuments();}
       if(event.target.id==="documentSortSelect"){state.documentSort=event.target.value;renderDocuments();}
       if(event.target.id==="documentUploadCustomerSelect"){state.documentUploadCustomerId=event.target.value;renderDocuments();}
+      if(event.target.id==="aiTaskStatusFilter"){state.aiTaskStatusFilter=event.target.value;renderTasks();}
+      if(event.target.id==="aiTaskSortSelect"){state.aiTaskSort=event.target.value;renderTasks();}
       if(event.target.matches("[data-customer-image-upload]")){
         const file=event.target.files&&event.target.files[0];
         event.target.value="";

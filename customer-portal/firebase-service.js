@@ -1236,6 +1236,47 @@
     return result.data||{};
   }
 
+  async function saveConciergeAnalysis(customerId,analysisId,analysis,language="de"){
+    const id=String(customerId||"").trim();
+    const savedAnalysisId=String(analysisId||"").trim();
+    if(!id||!savedAnalysisId||!analysis)throw new Error("Analyse kann nicht gespeichert werden.");
+    const {functions,functionsModule,auth,authModule}=await callableFunctionsContext();
+    await callableUserContext(auth,authModule);
+    const callable=functionsModule.httpsCallable(functions,"saveConciergeAnalysis",{timeout:20000});
+    const result=await callable({customerId:id,analysisId:savedAnalysisId,analysis,language});
+    return result.data||{};
+  }
+
+  async function listConciergeAnalyses(customerId,cursor=null){
+    const id=String(customerId||"").trim();
+    if(!id)throw new Error("Kunden-ID fehlt.");
+    const {functions,functionsModule,auth,authModule}=await callableFunctionsContext();
+    await callableUserContext(auth,authModule);
+    const callable=functionsModule.httpsCallable(functions,"listConciergeAnalyses",{timeout:20000});
+    const result=await callable({customerId:id,cursor:cursor||null});
+    return result.data||{};
+  }
+
+  async function updateConciergeAnalysisItemStatus(customerId,analysisId,itemId,status){
+    const id=String(customerId||"").trim();
+    const savedAnalysisId=String(analysisId||"").trim();
+    const savedItemId=String(itemId||"").trim();
+    if(!id||!savedAnalysisId||!savedItemId)throw new Error("Aufgabe kann nicht aktualisiert werden.");
+    const {functions,functionsModule,auth,authModule}=await callableFunctionsContext();
+    await callableUserContext(auth,authModule);
+    const callable=functionsModule.httpsCallable(functions,"updateConciergeAnalysisItemStatus",{timeout:20000});
+    const result=await callable({customerId:id,analysisId:savedAnalysisId,itemId:savedItemId,status});
+    return result.data||{};
+  }
+
+  async function listConciergeAnalysisTasks(){
+    const {functions,functionsModule,auth,authModule}=await callableFunctionsContext();
+    await callableUserContext(auth,authModule);
+    const callable=functionsModule.httpsCallable(functions,"listConciergeAnalysisTasks",{timeout:20000});
+    const result=await callable({});
+    return result.data||{};
+  }
+
   async function refreshPortalShares(customerId){
     const id=String(customerId||"").trim();
     if(!id)throw new Error("Kunden-ID fehlt.");
@@ -1361,6 +1402,10 @@
     revokePortalShare,
     fetchPortalShareData,
     fetchPortalDocumentUrl,
+    saveConciergeAnalysis,
+    listConciergeAnalyses,
+    updateConciergeAnalysisItemStatus,
+    listConciergeAnalysisTasks,
     denormalizeFromFirestore,
     normalizeForFirestore,
     resolvedContentType,

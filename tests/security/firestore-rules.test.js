@@ -87,4 +87,22 @@ describe("firestore rules — share layer",()=>{
     const admin=testEnv.authenticatedContext("admin-user",{role:"admin"});
     await assertSucceeds(admin.firestore().doc("portalShares/ps_admin").get());
   });
+
+  it("denies direct customer, share and admin access to persisted AI analyses",async()=>{
+    const analysisPath="customers/kunde-test/aiAnalyses/analysis-test";
+    const itemPath=`${analysisPath}/items/task-semantic-trip-check`;
+    const customer=testEnv.authenticatedContext("customer-user",{role:"customer"});
+    const share=testEnv.authenticatedContext("share-user",{});
+    const admin=testEnv.authenticatedContext("admin-user",{role:"admin"});
+    await assertFails(customer.firestore().doc(analysisPath).get());
+    await assertFails(share.firestore().doc(itemPath).get());
+    await assertFails(admin.firestore().doc(analysisPath).set({
+      createdBy:"forged-user",
+      summary:"forged"
+    }));
+    await assertFails(admin.firestore().doc(itemPath).set({
+      completedBy:"forged-user",
+      status:"completed"
+    }));
+  });
 });

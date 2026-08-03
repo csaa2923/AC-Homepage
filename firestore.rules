@@ -78,6 +78,21 @@ service cloud.firestore {
         allow create, update: if adminWrite();
         allow delete: if isAdmin() && sameOrgOnExisting();
       }
+
+      /*
+       * AI analyses are internal operational records. They are accessed only
+       * through authenticated Admin/Owner Callable functions so audit fields
+       * (createdBy, completedBy and dismissedBy) always come from the server.
+       * In particular, customer accounts and share-token clients never receive
+       * direct access to either the analysis document or its task items.
+       */
+      match /aiAnalyses/{analysisId} {
+        allow read, write: if false;
+
+        match /items/{itemId} {
+          allow read, write: if false;
+        }
+      }
     }
 
     match /templates/library/{type}/{templateId} {

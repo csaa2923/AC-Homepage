@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {createRequire} from "node:module";
 import {fileURLToPath} from "node:url";
 import {dirname,join} from "node:path";
@@ -9,6 +10,7 @@ import http from "node:http";
 const require=createRequire(import.meta.url);
 const root=join(dirname(fileURLToPath(import.meta.url)),"../..");
 const callable=require(join(root,"functions/index.js")).analyzeConciergeTrip;
+const functions=require(join(root,"functions/index.js"));
 const impl=require(join(root,"functions/impl.js"));
 
 function invokeLocalCallable(){
@@ -28,6 +30,20 @@ describe("AI concierge callable protocol",()=>{
     assert.equal(callable.__endpoint.platform,"gcfv2");
     assert.deepEqual(callable.__endpoint.region,["europe-west1"]);
     assert.equal(typeof impl.analyzeConciergeTrip,"function");
+  });
+
+  it("keeps analysis persistence behind authenticated callable functions",()=>{
+    for(const name of ["saveConciergeAnalysis","listConciergeAnalyses","updateConciergeAnalysisItemStatus","listConciergeAnalysisTasks"]){
+      assert.deepEqual(functions[name].__endpoint.callableTrigger,{});
+      assert.equal(functions[name].__endpoint.platform,"gcfv2");
+      assert.equal(typeof impl[name],"function");
+    }
+    const source=fs.readFileSync(join(root,"functions/impl.js"),"utf8");
+    assert.match(source,/function requireAdminCallable\(request\)/);
+    assert.match(source,/transaction\.create\(analysisRef,/);
+    assert.match(source,/createdBy:actorUid/);
+    assert.match(source,/completedBy=actorUid/);
+    assert.match(source,/AI_ANALYSIS_HISTORY_PAGE_SIZE=5/);
   });
 
   it("answers OPTIONS with callable CORS and rejects an unauthenticated POST as callable auth error",async()=>{

@@ -41,3 +41,27 @@ exports.analyzeConciergeTrip=onCall({
   timeoutSeconds:30,
   memory:"512MiB"
 },(request)=>loadImpl().analyzeConciergeTrip(request));
+
+exports.saveConciergeAnalysis=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().saveConciergeAnalysis(request));
+
+exports.listConciergeAnalyses=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().listConciergeAnalyses(request));
+
+exports.updateConciergeAnalysisItemStatus=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().updateConciergeAnalysisItemStatus(request));
+
+exports.listConciergeAnalysisTasks=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().listConciergeAnalysisTasks(request));

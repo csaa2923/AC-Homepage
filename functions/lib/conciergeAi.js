@@ -19,8 +19,8 @@ const RESPONSE_SCHEMA={
   properties:{
     summary:{type:"string",maxLength:900},
     strengths:{type:"array",maxItems:3,items:{type:"object",additionalProperties:false,required:["title","description"],properties:{title:{type:"string",maxLength:120},description:{type:"string",maxLength:360}}}},
-    concerns:{type:"array",maxItems:5,items:{type:"object",additionalProperties:false,required:["severity","title","description","targetTab"],properties:{severity:{type:"string",enum:["critical","important","recommendation"]},title:{type:"string",maxLength:120},description:{type:"string",maxLength:360},targetTab:{type:"string",enum:[...ALLOWED_TABS]}}}},
-    nextActions:{type:"array",maxItems:5,items:{type:"object",additionalProperties:false,required:["priority","urgency","impact","title","description","targetTab"],properties:{priority:{type:"integer",minimum:1,maximum:5},urgency:{type:"string",enum:[...URGENCIES]},impact:{type:"string",enum:[...IMPACTS]},title:{type:"string",maxLength:120},description:{type:"string",maxLength:360},targetTab:{type:"string",enum:[...ALLOWED_TABS]}}}},
+    concerns:{type:"array",maxItems:5,items:{type:"object",additionalProperties:false,required:["severity","title","description","targetTab","sourceInsightId"],properties:{severity:{type:"string",enum:["critical","important","recommendation"]},title:{type:"string",maxLength:120},description:{type:"string",maxLength:360},targetTab:{type:"string",enum:[...ALLOWED_TABS]},sourceInsightId:{type:"string",maxLength:120}}}},
+    nextActions:{type:"array",maxItems:5,items:{type:"object",additionalProperties:false,required:["priority","urgency","impact","title","description","targetTab","sourceInsightId"],properties:{priority:{type:"integer",minimum:1,maximum:5},urgency:{type:"string",enum:[...URGENCIES]},impact:{type:"string",enum:[...IMPACTS]},title:{type:"string",maxLength:120},description:{type:"string",maxLength:360},targetTab:{type:"string",enum:[...ALLOWED_TABS]},sourceInsightId:{type:"string",maxLength:120}}}},
     conciergeNoteDraft:{type:"string",maxLength:900},
     disclaimer:{type:"string",maxLength:240}
   }
@@ -120,7 +120,7 @@ function buildIntelligence(customer){
   });
 }
 
-function buildAiConciergeContext(customer,analysis){
+function buildAiConciergeContext(customer,analysis,previousAiTasks=[]){
   const travel=customer.travel&&typeof customer.travel==="object"?customer.travel:{};
   const startDate=dateText(customer.startDatePlain||customer.startDate||customer.dateFrom||travel.startDate||travel.arrival);
   const endDate=dateText(customer.endDatePlain||customer.endDate||customer.dateTo||travel.endDate||travel.departure);
@@ -156,7 +156,12 @@ function buildAiConciergeContext(customer,analysis){
     intelligence:{
       quality:analysis?.quality||{score:0,counts:{critical:0,important:0,recommendation:0}},
       insights:list(analysis?.insights,10).map(item=>({id:text(item.id,80),severity:text(item.severity,30),title:text(item.title,120),description:text(item.description,360),targetTab:text(item.targetTab,40)}))
-    }
+    },
+    previousAiTasks:list(previousAiTasks,20).map(item=>({
+      stableKey:text(item.stableKey,160),
+      title:text(item.title,120),
+      status:text(item.status,20)
+    }))
   };
   const encoded=JSON.stringify(context);
   if(Buffer.byteLength(encoded,"utf8")>MAX_CONTEXT_BYTES)throw new HttpsError("invalid-argument","Die Reisedaten sind für die Analyse zu umfangreich.");
@@ -170,8 +175,8 @@ function validateAnalysis(value){
   if(value.summary.split(/[.!?](?:\s|$)/).filter(Boolean).length>3||value.conciergeNoteDraft.trim().split(/\s+/).filter(Boolean).length>120)throw new Error("invalid response");
   if(!Array.isArray(value.strengths)||value.strengths.length>3||!Array.isArray(value.concerns)||value.concerns.length>5||!Array.isArray(value.nextActions)||value.nextActions.length>5)throw new Error("invalid response");
   if(!value.strengths.every(item=>item&&Object.keys(item).length===2&&validText(item.title)&&validText(item.description)))throw new Error("invalid response");
-  if(!value.concerns.every(item=>item&&Object.keys(item).length===4&&SEVERITIES.has(item.severity)&&validText(item.title)&&validText(item.description)&&ALLOWED_TABS.has(item.targetTab)))throw new Error("invalid response");
-  if(!value.nextActions.every(item=>item&&Object.keys(item).length===6&&Number.isInteger(item.priority)&&item.priority>=1&&item.priority<=5&&URGENCIES.has(item.urgency)&&IMPACTS.has(item.impact)&&validText(item.title)&&validText(item.description)&&ALLOWED_TABS.has(item.targetTab)))throw new Error("invalid response");
+  if(!value.concerns.every(item=>item&&Object.keys(item).length===5&&SEVERITIES.has(item.severity)&&validText(item.title)&&validText(item.description)&&ALLOWED_TABS.has(item.targetTab)&&typeof item.sourceInsightId==="string"&&item.sourceInsightId.length<=120))throw new Error("invalid response");
+  if(!value.nextActions.every(item=>item&&Object.keys(item).length===7&&Number.isInteger(item.priority)&&item.priority>=1&&item.priority<=5&&URGENCIES.has(item.urgency)&&IMPACTS.has(item.impact)&&validText(item.title)&&validText(item.description)&&ALLOWED_TABS.has(item.targetTab)&&typeof item.sourceInsightId==="string"&&item.sourceInsightId.length<=120))throw new Error("invalid response");
   if(new Set(value.nextActions.map(item=>item.priority)).size!==value.nextActions.length||new Set(value.nextActions.map(item=>`${item.title}|${item.targetTab}`.toLocaleLowerCase())).size!==value.nextActions.length)throw new Error("invalid response");
   return value;
 }
@@ -185,7 +190,7 @@ function checkRateLimit(uid,now=Date.now()){
 }
 
 function systemPrompt(language){
-  return `You are a professional Tirol travel and lifestyle concierge. Return only the requested JSON in ${language}. Use only supplied facts: never invent places, providers, bookings, availability, prices or opening hours. Be calm, discreet, personal and action-oriented. Respect trip.phase: before_trip over 30 days is planning; 7-30 days prioritizes reservations and decisions; under 7 days only actionable urgent steps; during_trip focuses today's or next gaps; completed trips only allow documentation, feedback or follow-up. Do not repeat facts as missing. Keep critical rule-based concerns intact. Summary has at most three sentences. Strengths require evidence. Concierge note is a customer-facing draft, at most 120 words, with no internal terms such as quality score, insight or status model. Order next actions by urgency then impact, use unique priorities, and do not make changes.`;
+  return `You are a professional Tirol travel and lifestyle concierge. Return only the requested JSON in ${language}. Use only supplied facts: never invent places, providers, bookings, availability, prices or opening hours. Be calm, discreet, personal and action-oriented. Respect trip.phase: before_trip over 30 days is planning; 7-30 days prioritizes reservations and decisions; under 7 days only actionable urgent steps; during_trip focuses today's or next gaps; completed trips only allow documentation, feedback or follow-up. Do not repeat facts as missing. Keep critical rule-based concerns intact. For each concern and next action, set sourceInsightId to the matching intelligence.insights id when one supports it; otherwise return an empty string. previousAiTasks are existing internal tasks: do not repeat completed tasks as open, do not restate dismissed tasks without new factual grounds, and only refine unresolved open tasks. Summary has at most three sentences. Strengths require evidence. Concierge note is a customer-facing draft, at most 120 words, with no internal terms such as quality score, insight or status model. Order next actions by urgency then impact, use unique priorities, and do not make changes.`;
 }
 
 async function withTimeout(promise,timeoutMs){

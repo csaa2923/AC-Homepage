@@ -21,15 +21,16 @@ describe("concierge AI function helpers",()=>{
       documents:[{title:"Passport",url:"https://private.example/token",content:"private document text",type:"ID"}],
       bookings:[{title:"Hotel",amount:9999,paymentDetails:"private",status:"Requested"}],
       program:[{title:"Walk",description:"A short hike"}]
-    },{quality:{score:90,counts:{critical:0,important:0,recommendation:1}},insights:[]});
+    },{quality:{score:90,counts:{critical:0,important:0,recommendation:1}},insights:[]},[{stableKey:"task:semantic:trip:check",title:"Existing task",status:"completed"}]);
     const serialized=JSON.stringify(context);
     assert.match(serialized,/Synthetic trip/);
     assert.doesNotMatch(serialized,/synthetic@example|431234|secret|private\.example|private document text|9999|paymentDetails/);
     assert.equal(context.documents.total,1);
+    assert.deepEqual(context.previousAiTasks,[{stableKey:"task:semantic:trip:check",title:"Existing task",status:"completed"}]);
   });
 
   it("rejects malformed AI output and unknown target tabs",()=>{
-    const valid={summary:"Summary.",strengths:[],concerns:[],nextActions:[{priority:1,urgency:"immediate",impact:"high",title:"Check",description:"Check the supplied facts.",targetTab:"trip"}],conciergeNoteDraft:"Note",disclaimer:"Review"};
+    const valid={summary:"Summary.",strengths:[],concerns:[],nextActions:[{priority:1,urgency:"immediate",impact:"high",title:"Check",description:"Check the supplied facts.",targetTab:"trip",sourceInsightId:""}],conciergeNoteDraft:"Note",disclaimer:"Review"};
     assert.deepEqual(ai.validateAnalysis(valid),valid);
     assert.throws(()=>ai.validateAnalysis({...valid,unexpected:true}));
     assert.throws(()=>ai.validateAnalysis({...valid,concerns:[{severity:"critical",title:"x",description:"x",targetTab:"unknown"}]}));

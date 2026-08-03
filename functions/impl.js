@@ -3,6 +3,13 @@ const path=require("path");
 const {HttpsError}=require("firebase-functions/v2/https");
 const {isEmulator,portalShareSecret,openAiApiKey}=require("./secrets");
 const {buildAiConciergeContext,buildIntelligence,checkRateLimit:checkAiRateLimit,requestAnalysis}=require("./lib/conciergeAi");
+const {
+  ITEM_STATUSES,
+  canTransitionStatus,
+  canonicalAnalysisHash,
+  mergeItemState,
+  normalizeAnalysisItems
+}=require("./lib/aiAnalysisStore");
 
 function loadLocalEmulatorSecret(){
   const file=path.join(__dirname,".secret.local");
@@ -83,6 +90,8 @@ const {
 }=require("./lib/httpPolicy");
 
 const SIGNED_URL_TTL_MS=5*60*1000;
+const AI_ANALYSIS_HISTORY_PAGE_SIZE=5;
+const AI_TASK_LIST_LIMIT=200;
 
 async function resolveStorageSignedUrl(storagePath){
   const path=stringValue(storagePath).replace(/^\/+/,"");
@@ -502,24 +511,103 @@ function aiKey(){
   try{return String(openAiApiKey?.value()||"").trim();}catch(_){return "";}
 }
 
+function validCustomerId(value){
+  const customerId=String(value||"").trim();
+  return /^[a-zA-Z0-9_-]+$/.test(customerId)?customerId:"";
+}
+
+function validAnalysisId(value){
+  const analysisId=String(value||"").trim();
+  return /^[a-zA-Z0-9_-]{6,128}$/.test(analysisId)?analysisId:"";
+}
+
+function analysisLanguage(value){
+  const language=String(value||"").toLowerCase();
+  return ["de","en","it","fr"].includes(language)?language:"de";
+}
+
+function analysisCustomerData(customer){
+  return customer?.draftData||customer?.publishedData||customer||{};
+}
+
+function analysisSummary(docSnap,items){
+  const data=docSnap.data()||{};
+  return {
+    analysisId:docSnap.id,
+    customerId:data.customerId||"",
+    language:data.language||"de",
+    summary:data.summary||"",
+    disclaimer:data.disclaimer||"",
+    conciergeNoteDraft:data.conciergeNoteDraft||"",
+    strengths:Array.isArray(data.strengths)?data.strengths:[],
+    createdAt:data.createdAt||"",
+    createdBy:data.createdBy||"",
+    itemCount:Number(data.itemCount)||0,
+    openItemCount:Number(data.openItemCount)||0,
+    items:items.map(item=>({
+      itemId:item.id,
+      ...item.data()
+    }))
+  };
+}
+
+function historyCursor(value){
+  if(!value||typeof value!=="string"||value.length>512)return null;
+  try{
+    const parsed=JSON.parse(Buffer.from(value,"base64url").toString("utf8"));
+    const analysisId=validAnalysisId(parsed?.analysisId);
+    const createdAt=String(parsed?.createdAt||"");
+    return analysisId&&/^\d{4}-\d{2}-\d{2}T/.test(createdAt)?{analysisId,createdAt}:null;
+  }catch(_){
+    return null;
+  }
+}
+
+function nextHistoryCursor(docSnap){
+  const data=docSnap.data()||{};
+  return Buffer.from(JSON.stringify({
+    analysisId:docSnap.id,
+    createdAt:data.createdAt||""
+  })).toString("base64url");
+}
+
+function requireAdminCallable(request){
+  if(!isAdminAuth(request?.auth))throw new HttpsError("permission-denied","Keine Admin-Berechtigung.");
+  return request.auth.uid;
+}
+
+async function loadAiTaskContext(db,customerId){
+  const snapshot=await db.collectionGroup("items")
+    .where("customerId","==",customerId)
+    .limit(20)
+    .get();
+  return snapshot.docs.map(docSnap=>{
+    const item=docSnap.data()||{};
+    return {stableKey:item.stableKey,title:item.title,status:item.status};
+  }).filter(item=>item.stableKey&&item.title&&["open","completed","dismissed"].includes(item.status));
+}
+
 async function analyzeConciergeTrip(request){
-  if(!isAdminAuth(request.auth))throw new HttpsError("permission-denied","Keine Admin-Berechtigung.");
-  const customerId=String(request.data?.customerId||"").trim();
-  if(!customerId||!/^[a-zA-Z0-9_-]+$/.test(customerId))throw new HttpsError("invalid-argument","customerId fehlt oder ist ungültig.");
+  const actorUid=requireAdminCallable(request);
+  const customerId=validCustomerId(request.data?.customerId);
+  if(!customerId)throw new HttpsError("invalid-argument","customerId fehlt oder ist ungültig.");
   if(request.data?.mode!=="trip_review")throw new HttpsError("invalid-argument","Analysemodus ist ungültig.");
-  if(!checkAiRateLimit(request.auth.uid))throw new HttpsError("resource-exhausted","Zu viele AI-Analysen. Bitte kurz warten.");
+  if(!checkAiRateLimit(actorUid))throw new HttpsError("resource-exhausted","Zu viele AI-Analysen. Bitte kurz warten.");
   const key=aiKey();
   if(!key)throw new HttpsError("failed-precondition","AI Concierge ist noch nicht konfiguriert.");
-  const customerSnap=await getDb().collection("customers").doc(customerId).get();
+  const db=getDb();
+  const customerSnap=await db.collection("customers").doc(customerId).get();
   if(!customerSnap.exists)throw new HttpsError("not-found","Kunde nicht gefunden.");
-  const customer=customerSnap.data().draftData||customerSnap.data().publishedData||customerSnap.data();
-  const language=["de","en","it","fr"].includes(String(request.data?.language||"").toLowerCase())?String(request.data.language).toLowerCase():"de";
+  const customer=analysisCustomerData(customerSnap.data());
+  const language=analysisLanguage(request.data?.language);
   try{
     const intelligenceResult=buildIntelligence(customer);
-    const context=buildAiConciergeContext(customer,intelligenceResult);
+    const previousAiTasks=await loadAiTaskContext(db,customerId);
+    const context=buildAiConciergeContext(customer,intelligenceResult,previousAiTasks);
     const analysis=await requestAnalysis({apiKey:key,model:process.env.OPENAI_MODEL||"gpt-4o-mini",context,language});
-    console.info("[analyzeConciergeTrip] completed",request.auth.uid,customerId);
-    return {analysis};
+    const analysisId=db.collection("customers").doc(customerId).collection("aiAnalyses").doc().id;
+    console.info("[analyzeConciergeTrip] completed",actorUid,customerId);
+    return {analysis,analysisId};
   }catch(error){
     if(error instanceof HttpsError)throw error;
     if(error?.message==="timeout")throw new HttpsError("deadline-exceeded","AI Concierge ist vorübergehend nicht erreichbar.");
@@ -527,6 +615,201 @@ async function analyzeConciergeTrip(request){
     console.error("[analyzeConciergeTrip] failed",error?.code||"unknown");
     throw new HttpsError("unavailable","AI Concierge ist vorübergehend nicht erreichbar.");
   }
+}
+
+async function saveConciergeAnalysis(request){
+  const actorUid=requireAdminCallable(request);
+  const customerId=validCustomerId(request.data?.customerId);
+  const analysisId=validAnalysisId(request.data?.analysisId);
+  if(!customerId||!analysisId)throw new HttpsError("invalid-argument","Kunden- oder Analyse-ID ist ungültig.");
+  const analysis=request.data?.analysis;
+  let validated;
+  try{
+    const {validateAnalysis}=require("./lib/conciergeAi");
+    validated=validateAnalysis(analysis);
+  }catch(_){
+    throw new HttpsError("invalid-argument","Die Analyse ist ungültig.");
+  }
+  const db=getDb();
+  const customerRef=db.collection("customers").doc(customerId);
+  const customerSnap=await customerRef.get();
+  if(!customerSnap.exists)throw new HttpsError("not-found","Kunde nicht gefunden.");
+  const customer=analysisCustomerData(customerSnap.data());
+  const intelligence=buildIntelligence(customer);
+  const knownInsightIds=new Set((intelligence.insights||[]).map(item=>String(item.id||"")));
+  const normalizedItems=normalizeAnalysisItems(validated,knownInsightIds);
+  const contentHash=canonicalAnalysisHash(validated);
+  const language=analysisLanguage(request.data?.language);
+  const now=new Date().toISOString();
+  const analysisRef=customerRef.collection("aiAnalyses").doc(analysisId);
+  const result=await db.runTransaction(async transaction=>{
+    const existing=await transaction.get(analysisRef);
+    if(existing.exists){
+      const existingData=existing.data()||{};
+      if(existingData.createdBy!==actorUid)throw new HttpsError("permission-denied","Diese Analyse wurde von einem anderen Konto gespeichert.");
+      if(existingData.contentHash!==contentHash)throw new HttpsError("failed-precondition","Die Analyse-ID wurde bereits mit anderem Inhalt verwendet.");
+      return {
+        analysisId,
+        createdAt:existingData.createdAt||"",
+        itemCount:Number(existingData.itemCount)||0,
+        openItemCount:Number(existingData.openItemCount)||0,
+        idempotent:true
+      };
+    }
+    const priorSnapshots=await Promise.all(normalizedItems.map(item=>transaction.get(
+      db.collectionGroup("items")
+        .where("customerId","==",customerId)
+        .where("stableKey","==",item.stableKey)
+        .orderBy("lastSeenAt","desc")
+        .limit(1)
+    )));
+    const itemRecords=normalizedItems.map((item,index)=>{
+      const previous=priorSnapshots[index].docs[0]?.data()||null;
+      const merged=mergeItemState(item,previous,now);
+      return {
+        ...merged,
+        customerId,
+        analysisId,
+        createdAt:now,
+        createdBy:actorUid,
+        updatedAt:now,
+        updatedBy:actorUid
+      };
+    });
+    const openItemCount=itemRecords.filter(item=>item.itemType==="task"&&item.status==="open").length;
+    transaction.create(analysisRef,{
+      analysisId,
+      customerId,
+      type:"trip_review",
+      schemaVersion:1,
+      language,
+      summary:validated.summary,
+      strengths:validated.strengths,
+      disclaimer:validated.disclaimer,
+      conciergeNoteDraft:validated.conciergeNoteDraft,
+      contentHash,
+      itemCount:itemRecords.length,
+      openItemCount,
+      createdAt:now,
+      createdBy:actorUid,
+      updatedAt:now,
+      updatedBy:actorUid
+    });
+    itemRecords.forEach(item=>{
+      transaction.create(analysisRef.collection("items").doc(item.stableKey),item);
+    });
+    return {analysisId,createdAt:now,itemCount:itemRecords.length,openItemCount,idempotent:false};
+  });
+  return result;
+}
+
+async function listConciergeAnalyses(request){
+  requireAdminCallable(request);
+  const customerId=validCustomerId(request.data?.customerId);
+  if(!customerId)throw new HttpsError("invalid-argument","customerId fehlt oder ist ungültig.");
+  const db=getDb();
+  const customerRef=db.collection("customers").doc(customerId);
+  const customerSnap=await customerRef.get();
+  if(!customerSnap.exists)throw new HttpsError("not-found","Kunde nicht gefunden.");
+  const cursor=historyCursor(request.data?.cursor);
+  const FieldPath=getAdmin().firestore.FieldPath;
+  let query=customerRef.collection("aiAnalyses")
+    .orderBy("createdAt","desc")
+    .orderBy(FieldPath.documentId(),"desc")
+    .limit(AI_ANALYSIS_HISTORY_PAGE_SIZE+1);
+  if(cursor)query=query.startAfter(cursor.createdAt,cursor.analysisId);
+  const page=await query.get();
+  const documents=page.docs.slice(0,AI_ANALYSIS_HISTORY_PAGE_SIZE);
+  const entries=await Promise.all(documents.map(async docSnap=>{
+    const items=await docSnap.ref.collection("items").get();
+    const sortedItems=[...items.docs].sort((a,b)=>{
+      const left=a.data()||{},right=b.data()||{};
+      return String(left.itemType||"").localeCompare(String(right.itemType||""))
+        ||Number(left.priority||99)-Number(right.priority||99)
+        ||String(left.title||"").localeCompare(String(right.title||""));
+    });
+    return analysisSummary(docSnap,sortedItems);
+  }));
+  return {
+    analyses:entries,
+    nextCursor:page.docs.length>AI_ANALYSIS_HISTORY_PAGE_SIZE?nextHistoryCursor(documents[documents.length-1]):null,
+    pageSize:AI_ANALYSIS_HISTORY_PAGE_SIZE
+  };
+}
+
+async function updateConciergeAnalysisItemStatus(request){
+  const actorUid=requireAdminCallable(request);
+  const customerId=validCustomerId(request.data?.customerId);
+  const analysisId=validAnalysisId(request.data?.analysisId);
+  const itemId=String(request.data?.itemId||"").trim();
+  const status=String(request.data?.status||"").trim();
+  if(!customerId||!analysisId||!itemId||itemId.length>240||!ITEM_STATUSES.has(status)){
+    throw new HttpsError("invalid-argument","Status-Aktualisierung ist ungültig.");
+  }
+  const db=getDb();
+  const analysisRef=db.collection("customers").doc(customerId).collection("aiAnalyses").doc(analysisId);
+  const itemRef=analysisRef.collection("items").doc(itemId);
+  const now=new Date().toISOString();
+  return db.runTransaction(async transaction=>{
+    const [analysisSnap,itemSnap,taskDocs]=await Promise.all([
+      transaction.get(analysisRef),
+      transaction.get(itemRef),
+      transaction.get(analysisRef.collection("items").where("itemType","==","task"))
+    ]);
+    if(!analysisSnap.exists||!itemSnap.exists)throw new HttpsError("not-found","Analyseaufgabe nicht gefunden.");
+    const item=itemSnap.data()||{};
+    if(item.customerId!==customerId||item.analysisId!==analysisId)throw new HttpsError("permission-denied","Analyseaufgabe ist ungültig.");
+    if(!canTransitionStatus(item.status,status))throw new HttpsError("failed-precondition","Dieser Statuswechsel ist nicht erlaubt.");
+    const update={status,updatedAt:now,updatedBy:actorUid};
+    if(status==="completed"){
+      update.completedAt=now;
+      update.completedBy=actorUid;
+      update.dismissedAt=null;
+      update.dismissedBy=null;
+    }else if(status==="dismissed"){
+      update.dismissedAt=now;
+      update.dismissedBy=actorUid;
+      update.completedAt=null;
+      update.completedBy=null;
+    }else{
+      update.reopenedAt=now;
+      update.reopenedBy=actorUid;
+      update.completedAt=null;
+      update.completedBy=null;
+      update.dismissedAt=null;
+      update.dismissedBy=null;
+    }
+    transaction.update(itemRef,update);
+    if(item.itemType==="task"){
+      const openItemCount=taskDocs.docs.reduce((count,docSnap)=>{
+        if(docSnap.id===itemId)return count+(status==="open"?1:0);
+        return count+(docSnap.data().status==="open"?1:0);
+      },0);
+      transaction.update(analysisRef,{openItemCount,updatedAt:now,updatedBy:actorUid});
+    }
+    return {analysisId,itemId,status,updatedAt:now};
+  });
+}
+
+async function listConciergeAnalysisTasks(request){
+  requireAdminCallable(request);
+  const db=getDb();
+  const snapshot=await db.collectionGroup("items")
+    .where("itemType","==","task")
+    .orderBy("lastSeenAt","desc")
+    .limit(AI_TASK_LIST_LIMIT)
+    .get();
+  const byStableKey=new Map();
+  snapshot.docs.forEach(docSnap=>{
+    const item=docSnap.data()||{};
+    if(!validCustomerId(item.customerId)||!item.stableKey||byStableKey.has(`${item.customerId}:${item.stableKey}`))return;
+    byStableKey.set(`${item.customerId}:${item.stableKey}`,{
+      itemId:docSnap.id,
+      analysisId:item.analysisId,
+      ...item
+    });
+  });
+  return {tasks:[...byStableKey.values()].slice(0,100)};
 }
 
 async function revokePortalShare(request){
@@ -554,5 +837,9 @@ module.exports={
   createPortalShare,
   refreshPortalShares,
   revokePortalShare,
-  analyzeConciergeTrip
+  analyzeConciergeTrip,
+  saveConciergeAnalysis,
+  listConciergeAnalyses,
+  updateConciergeAnalysisItemStatus,
+  listConciergeAnalysisTasks
 };

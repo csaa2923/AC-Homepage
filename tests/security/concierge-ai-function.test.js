@@ -85,7 +85,7 @@ describe("concierge AI function helpers",()=>{
         language:"de",
         clientFactory:()=>({responses:{create:async()=>{throw new Error("provider unavailable");}}})
       }),
-      error=>error.conciergePhase==="ai_call"
+      error=>error.conciergePhase==="openaiCall"
     );
     await assert.rejects(
       ai.requestAnalysis({
@@ -95,7 +95,7 @@ describe("concierge AI function helpers",()=>{
         language:"de",
         clientFactory:()=>({responses:{create:async()=>({output_text:"not json"})}})
       }),
-      error=>error.conciergePhase==="schema_validation"
+      error=>error.conciergePhase==="validateSchema"
     );
   });
 
@@ -155,9 +155,25 @@ describe("concierge AI function helpers",()=>{
     assert.equal(entries.length,1);
     assert.match(entries[0][0],/^\[analyzeConciergeTrip\] failed /);
     const details=JSON.parse(entries[0][0].replace(/^\[analyzeConciergeTrip\] failed /,""));
-    assert.equal(details.phase,"ai_call");
+    assert.equal(details.phase,"validateRequest");
     assert.equal(details.errorName,"Error");
     assert.doesNotMatch(details.errorMessage,/sk-secret-token|token-value/);
     assert.doesNotMatch(details.stack,/sk-secret-token|token-value/);
+  });
+
+  it("logs the existing-analysis query with a named phase",()=>{
+    const originalError=console.error;
+    const entries=[];
+    console.error=(...args)=>entries.push(args);
+    try{
+      impl.logAiConciergeError("loadExistingAnalyses",Object.assign(new Error("index required"),{code:9}));
+    }finally{
+      console.error=originalError;
+    }
+    const details=JSON.parse(entries[0][0].replace(/^\[analyzeConciergeTrip\] failed /,""));
+    assert.equal(details.phase,"loadExistingAnalyses");
+    assert.equal(details.errorCode,"9");
+    assert.equal(details.errorName,"Error");
+    assert.match(details.stack,/index required/);
   });
 });

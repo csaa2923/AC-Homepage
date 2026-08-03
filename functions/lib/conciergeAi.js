@@ -214,13 +214,13 @@ async function requestAnalysis({apiKey,model,context,language,clientFactory}){
       max_output_tokens:1400
     }),20000);
   }catch(error){
-    error.conciergePhase="ai_call";
+      error.conciergePhase="openaiCall";
     throw error;
   }
   try{
     return validateAnalysis(JSON.parse(response.output_text||""));
   }catch(error){
-    error.conciergePhase="schema_validation";
+    error.conciergePhase="validateSchema";
     throw error;
   }
 }

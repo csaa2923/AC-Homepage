@@ -526,7 +526,16 @@ function analysisLanguage(value){
   return ["de","en","it","fr"].includes(language)?language:"de";
 }
 
-const AI_ERROR_PHASES=new Set(["context_preparation","ai_call","schema_validation","firestore","merge"]);
+const AI_ERROR_PHASES=new Set([
+  "validateRequest",
+  "loadCustomer",
+  "buildContext",
+  "loadExistingAnalyses",
+  "openaiCall",
+  "validateSchema",
+  "createAnalysisId",
+  "mergeAnalysis"
+]);
 
 function redactAiErrorText(value,maxLength){
   const configuredKey=String(process.env.OPENAI_API_KEY||"").trim();
@@ -546,7 +555,7 @@ function redactAiErrorText(value,maxLength){
 
 function logAiConciergeError(phase,error){
   const details={
-    phase:AI_ERROR_PHASES.has(phase)?phase:"context_preparation",
+    phase:AI_ERROR_PHASES.has(phase)?phase:"validateRequest",
     errorName:redactAiErrorText(error?.name||error?.constructor?.name||"Error",120),
     errorMessage:redactAiErrorText(error?.message,500),
     stack: redactAiErrorText(error?.stack,5000)
@@ -623,7 +632,7 @@ async function loadAiTaskContext(db,customerId){
 
 async function analyzeConciergeTrip(request){
   const actorUid=requireAdminCallable(request);
-  let phase="context_preparation";
+  let phase="validateRequest";
   try{
     const customerId=validCustomerId(request.data?.customerId);
     if(!customerId)throw new HttpsError("invalid-argument","customerId fehlt oder ist ungültig.");
@@ -631,21 +640,21 @@ async function analyzeConciergeTrip(request){
     if(!checkAiRateLimit(actorUid))throw new HttpsError("resource-exhausted","Zu viele AI-Analysen. Bitte kurz warten.");
     const key=aiKey();
     if(!key)throw new HttpsError("failed-precondition","AI Concierge ist noch nicht konfiguriert.");
-    phase="firestore";
+    phase="loadCustomer";
     const db=getDb();
     const customerSnap=await db.collection("customers").doc(customerId).get();
     if(!customerSnap.exists)throw new HttpsError("not-found","Kunde nicht gefunden.");
     const customer=analysisCustomerData(customerSnap.data());
     const language=analysisLanguage(request.data?.language);
-    phase="context_preparation";
+    phase="buildContext";
     const intelligenceResult=buildIntelligence(customer);
-    phase="firestore";
+    phase="loadExistingAnalyses";
     const previousAiTasks=await loadAiTaskContext(db,customerId);
-    phase="context_preparation";
+    phase="buildContext";
     const context=buildAiConciergeContext(customer,intelligenceResult,previousAiTasks);
-    phase="ai_call";
+    phase="openaiCall";
     const analysis=await requestAnalysis({apiKey:key,model:process.env.OPENAI_MODEL||"gpt-4o-mini",context,language});
-    phase="firestore";
+    phase="createAnalysisId";
     const analysisId=db.collection("customers").doc(customerId).collection("aiAnalyses").doc().id;
     console.info("[analyzeConciergeTrip] completed");
     return {analysis,analysisId};

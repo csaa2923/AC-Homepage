@@ -526,6 +526,29 @@ function analysisLanguage(value){
   return ["de","en","it","fr"].includes(language)?language:"de";
 }
 
+const AI_ERROR_PHASES=new Set(["context_preparation","ai_call","schema_validation","firestore","merge"]);
+
+function redactAiErrorText(value,maxLength){
+  const configuredKey=String(process.env.OPENAI_API_KEY||"").trim();
+  let text=String(value||"");
+  if(configuredKey)text=text.split(configuredKey).join("[REDACTED_OPENAI_API_KEY]");
+  return text
+    .replace(/sk-[A-Za-z0-9_-]{8,}/g,"[REDACTED_OPENAI_API_KEY]")
+    .replace(/(bearer\s+)[^\s"'`]+/gi,"$1[REDACTED]")
+    .replace(/(openai_api_key\s*[=:]\s*)[^\s"'`]+/gi,"$1[REDACTED]")
+    .slice(0,maxLength);
+}
+
+function logAiConciergeError(phase,error){
+  const errorClass=String(error?.name||error?.constructor?.name||"Error").slice(0,120);
+  console.error("[analyzeConciergeTrip] failed",{
+    phase:AI_ERROR_PHASES.has(phase)?phase:"context_preparation",
+    errorClass,
+    errorMessage:redactAiErrorText(error?.message,500),
+    stack: redactAiErrorText(error?.stack,5000)
+  });
+}
+
 function analysisCustomerData(customer){
   return customer?.draftData||customer?.publishedData||customer||{};
 }
@@ -595,24 +618,27 @@ async function analyzeConciergeTrip(request){
   if(!checkAiRateLimit(actorUid))throw new HttpsError("resource-exhausted","Zu viele AI-Analysen. Bitte kurz warten.");
   const key=aiKey();
   if(!key)throw new HttpsError("failed-precondition","AI Concierge ist noch nicht konfiguriert.");
-  const db=getDb();
-  const customerSnap=await db.collection("customers").doc(customerId).get();
-  if(!customerSnap.exists)throw new HttpsError("not-found","Kunde nicht gefunden.");
-  const customer=analysisCustomerData(customerSnap.data());
-  const language=analysisLanguage(request.data?.language);
+  let phase="firestore";
   try{
+    const db=getDb();
+    const customerSnap=await db.collection("customers").doc(customerId).get();
+    if(!customerSnap.exists)throw new HttpsError("not-found","Kunde nicht gefunden.");
+    const customer=analysisCustomerData(customerSnap.data());
+    const language=analysisLanguage(request.data?.language);
+    phase="context_preparation";
     const intelligenceResult=buildIntelligence(customer);
+    phase="firestore";
     const previousAiTasks=await loadAiTaskContext(db,customerId);
+    phase="context_preparation";
     const context=buildAiConciergeContext(customer,intelligenceResult,previousAiTasks);
+    phase="ai_call";
     const analysis=await requestAnalysis({apiKey:key,model:process.env.OPENAI_MODEL||"gpt-4o-mini",context,language});
+    phase="firestore";
     const analysisId=db.collection("customers").doc(customerId).collection("aiAnalyses").doc().id;
-    console.info("[analyzeConciergeTrip] completed",actorUid,customerId);
+    console.info("[analyzeConciergeTrip] completed");
     return {analysis,analysisId};
   }catch(error){
-    if(error instanceof HttpsError)throw error;
-    if(error?.message==="timeout")throw new HttpsError("deadline-exceeded","AI Concierge ist vorübergehend nicht erreichbar.");
-    if(error instanceof SyntaxError||error?.message==="invalid response")throw new HttpsError("internal","Die AI-Antwort konnte nicht geprüft werden.");
-    console.error("[analyzeConciergeTrip] failed",error?.code||"unknown");
+    logAiConciergeError(error?.conciergePhase||phase,error);
     throw new HttpsError("unavailable","AI Concierge ist vorübergehend nicht erreichbar.");
   }
 }
@@ -643,6 +669,7 @@ async function saveConciergeAnalysis(request){
   const now=new Date().toISOString();
   const analysisRef=customerRef.collection("aiAnalyses").doc(analysisId);
   const result=await db.runTransaction(async transaction=>{
+    try{
     const existing=await transaction.get(analysisRef);
     if(existing.exists){
       const existingData=existing.data()||{};
@@ -699,6 +726,10 @@ async function saveConciergeAnalysis(request){
       transaction.create(analysisRef.collection("items").doc(item.stableKey),item);
     });
     return {analysisId,createdAt:now,itemCount:itemRecords.length,openItemCount,idempotent:false};
+    }catch(error){
+      logAiConciergeError("merge",error);
+      throw error;
+    }
   });
   return result;
 }
@@ -838,6 +869,7 @@ module.exports={
   refreshPortalShares,
   revokePortalShare,
   analyzeConciergeTrip,
+  logAiConciergeError,
   saveConciergeAnalysis,
   listConciergeAnalyses,
   updateConciergeAnalysisItemStatus,

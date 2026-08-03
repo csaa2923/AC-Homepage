@@ -203,15 +203,26 @@ async function withTimeout(promise,timeoutMs){
 }
 
 async function requestAnalysis({apiKey,model,context,language,clientFactory}){
-  const OpenAI=clientFactory?null:require("openai");
-  const client=clientFactory?clientFactory(apiKey):new OpenAI({apiKey});
-  const response=await withTimeout(client.responses.create({
-    model,
-    input:[{role:"system",content:systemPrompt(language)},{role:"user",content:JSON.stringify(context)}],
-    text:{format:{type:"json_schema",name:"concierge_trip_review",strict:true,schema:RESPONSE_SCHEMA}},
-    max_output_tokens:1400
-  }),20000);
-  return validateAnalysis(JSON.parse(response.output_text||""));
+  let response;
+  try{
+    const OpenAI=clientFactory?null:require("openai");
+    const client=clientFactory?clientFactory(apiKey):new OpenAI({apiKey});
+    response=await withTimeout(client.responses.create({
+      model,
+      input:[{role:"system",content:systemPrompt(language)},{role:"user",content:JSON.stringify(context)}],
+      text:{format:{type:"json_schema",name:"concierge_trip_review",strict:true,schema:RESPONSE_SCHEMA}},
+      max_output_tokens:1400
+    }),20000);
+  }catch(error){
+    error.conciergePhase="ai_call";
+    throw error;
+  }
+  try{
+    return validateAnalysis(JSON.parse(response.output_text||""));
+  }catch(error){
+    error.conciergePhase="schema_validation";
+    throw error;
+  }
 }
 
 module.exports={ALLOWED_TABS,TAB_MAP,RESPONSE_SCHEMA,buildAiConciergeContext,buildIntelligence,checkRateLimit,requestAnalysis,tripPhase,validateAnalysis};

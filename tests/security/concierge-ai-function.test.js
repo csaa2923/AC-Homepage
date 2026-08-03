@@ -7,6 +7,7 @@ import {dirname,join} from "node:path";
 const require=createRequire(import.meta.url);
 const root=join(dirname(fileURLToPath(import.meta.url)),"../..");
 const ai=require(join(root,"functions/lib/conciergeAi.js"));
+const impl=require(join(root,"functions/impl.js"));
 
 describe("concierge AI function helpers",()=>{
   it("minimizes customer data and excludes tokens, urls, contacts and document contents",()=>{
@@ -60,5 +61,45 @@ describe("concierge AI function helpers",()=>{
     assert.equal(ai.checkRateLimit(uid),true);
     assert.equal(ai.checkRateLimit(uid),true);
     assert.equal(ai.checkRateLimit(uid),false);
+  });
+
+  it("labels AI-call and schema-validation failures without exposing the response",async()=>{
+    await assert.rejects(
+      ai.requestAnalysis({
+        apiKey:"test-key",
+        model:"test",
+        context:{},
+        language:"de",
+        clientFactory:()=>({responses:{create:async()=>{throw new Error("provider unavailable");}}})
+      }),
+      error=>error.conciergePhase==="ai_call"
+    );
+    await assert.rejects(
+      ai.requestAnalysis({
+        apiKey:"test-key",
+        model:"test",
+        context:{},
+        language:"de",
+        clientFactory:()=>({responses:{create:async()=>({output_text:"not json"})}})
+      }),
+      error=>error.conciergePhase==="schema_validation"
+    );
+  });
+
+  it("logs only redacted structured error details",()=>{
+    const originalError=console.error;
+    const entries=[];
+    console.error=(...args)=>entries.push(args);
+    try{
+      impl.logAiConciergeError("ai_call",new Error("OpenAI key sk-secret-token and Bearer token-value"));
+    }finally{
+      console.error=originalError;
+    }
+    assert.equal(entries.length,1);
+    assert.equal(entries[0][0],"[analyzeConciergeTrip] failed");
+    assert.deepEqual(entries[0][1].phase,"ai_call");
+    assert.equal(entries[0][1].errorClass,"Error");
+    assert.doesNotMatch(entries[0][1].errorMessage,/sk-secret-token|token-value/);
+    assert.doesNotMatch(entries[0][1].stack,/sk-secret-token|token-value/);
   });
 });

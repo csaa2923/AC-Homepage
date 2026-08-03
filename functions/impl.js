@@ -530,7 +530,12 @@ const AI_ERROR_PHASES=new Set(["context_preparation","ai_call","schema_validatio
 
 function redactAiErrorText(value,maxLength){
   const configuredKey=String(process.env.OPENAI_API_KEY||"").trim();
-  let text=String(value||"");
+  let text;
+  try{
+    text=String(value||"");
+  }catch(_){
+    text="[unavailable]";
+  }
   if(configuredKey)text=text.split(configuredKey).join("[REDACTED_OPENAI_API_KEY]");
   return text
     .replace(/sk-[A-Za-z0-9_-]{8,}/g,"[REDACTED_OPENAI_API_KEY]")
@@ -540,13 +545,19 @@ function redactAiErrorText(value,maxLength){
 }
 
 function logAiConciergeError(phase,error){
-  const errorClass=String(error?.name||error?.constructor?.name||"Error").slice(0,120);
-  console.error("[analyzeConciergeTrip] failed",{
+  const details={
     phase:AI_ERROR_PHASES.has(phase)?phase:"context_preparation",
-    errorClass,
+    errorName:redactAiErrorText(error?.name||error?.constructor?.name||"Error",120),
     errorMessage:redactAiErrorText(error?.message,500),
     stack: redactAiErrorText(error?.stack,5000)
-  });
+  };
+  const errorCode=redactAiErrorText(error?.code||error?.status||"",120);
+  if(errorCode)details.errorCode=errorCode;
+  try{
+    console.error(`[analyzeConciergeTrip] failed ${JSON.stringify(details)}`);
+  }catch(_){
+    console.error("[analyzeConciergeTrip] failed");
+  }
 }
 
 function analysisCustomerData(customer){
@@ -612,14 +623,15 @@ async function loadAiTaskContext(db,customerId){
 
 async function analyzeConciergeTrip(request){
   const actorUid=requireAdminCallable(request);
-  const customerId=validCustomerId(request.data?.customerId);
-  if(!customerId)throw new HttpsError("invalid-argument","customerId fehlt oder ist ungültig.");
-  if(request.data?.mode!=="trip_review")throw new HttpsError("invalid-argument","Analysemodus ist ungültig.");
-  if(!checkAiRateLimit(actorUid))throw new HttpsError("resource-exhausted","Zu viele AI-Analysen. Bitte kurz warten.");
-  const key=aiKey();
-  if(!key)throw new HttpsError("failed-precondition","AI Concierge ist noch nicht konfiguriert.");
-  let phase="firestore";
+  let phase="context_preparation";
   try{
+    const customerId=validCustomerId(request.data?.customerId);
+    if(!customerId)throw new HttpsError("invalid-argument","customerId fehlt oder ist ungültig.");
+    if(request.data?.mode!=="trip_review")throw new HttpsError("invalid-argument","Analysemodus ist ungültig.");
+    if(!checkAiRateLimit(actorUid))throw new HttpsError("resource-exhausted","Zu viele AI-Analysen. Bitte kurz warten.");
+    const key=aiKey();
+    if(!key)throw new HttpsError("failed-precondition","AI Concierge ist noch nicht konfiguriert.");
+    phase="firestore";
     const db=getDb();
     const customerSnap=await db.collection("customers").doc(customerId).get();
     if(!customerSnap.exists)throw new HttpsError("not-found","Kunde nicht gefunden.");
@@ -639,6 +651,7 @@ async function analyzeConciergeTrip(request){
     return {analysis,analysisId};
   }catch(error){
     logAiConciergeError(error?.conciergePhase||phase,error);
+    if(error instanceof HttpsError)throw error;
     throw new HttpsError("unavailable","AI Concierge ist vorübergehend nicht erreichbar.");
   }
 }
@@ -727,7 +740,6 @@ async function saveConciergeAnalysis(request){
     });
     return {analysisId,createdAt:now,itemCount:itemRecords.length,openItemCount,idempotent:false};
     }catch(error){
-      logAiConciergeError("merge",error);
       throw error;
     }
   });
@@ -869,6 +881,7 @@ module.exports={
   refreshPortalShares,
   revokePortalShare,
   analyzeConciergeTrip,
+  loadAiTaskContext,
   logAiConciergeError,
   saveConciergeAnalysis,
   listConciergeAnalyses,

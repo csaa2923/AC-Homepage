@@ -8,6 +8,19 @@ const require=createRequire(import.meta.url);
 const root=join(dirname(fileURLToPath(import.meta.url)),"../..");
 const ai=require(join(root,"functions/lib/conciergeAi.js"));
 const impl=require(join(root,"functions/impl.js"));
+const store=require(join(root,"functions/lib/aiAnalysisStore.js"));
+
+function taskContextDb(items,{error}={}){
+  const query={
+    where:()=>query,
+    limit:()=>query,
+    get:async()=>{
+      if(error)throw error;
+      return {docs:items.map(item=>({data:()=>item}))};
+    }
+  };
+  return {collectionGroup:()=>query};
+}
 
 describe("concierge AI function helpers",()=>{
   it("minimizes customer data and excludes tokens, urls, contacts and document contents",()=>{
@@ -86,6 +99,50 @@ describe("concierge AI function helpers",()=>{
     );
   });
 
+  it("returns only valid prior tasks for customers with none, open tasks, or completed tasks",async()=>{
+    assert.deepEqual(await impl.loadAiTaskContext(taskContextDb([]),"synthetic-customer"),[]);
+    assert.deepEqual(await impl.loadAiTaskContext(taskContextDb([
+      {stableKey:"task:one",title:"Open task",status:"open"},
+      {stableKey:"task:two",title:"Completed task",status:"completed"},
+      {stableKey:"task:invalid",title:"Ignored",status:"invalid"}
+    ]),"synthetic-customer"),[
+      {stableKey:"task:one",title:"Open task",status:"open"},
+      {stableKey:"task:two",title:"Completed task",status:"completed"}
+    ]);
+  });
+
+  it("surfaces a prior-task Firestore failure to the central handler",async()=>{
+    const failure=Object.assign(new Error("Firestore unavailable"),{code:"unavailable"});
+    await assert.rejects(
+      impl.loadAiTaskContext(taskContextDb([],{error:failure}),"synthetic-customer"),
+      error=>error===failure
+    );
+  });
+
+  it("accepts a valid OpenAI response",async()=>{
+    const output={
+      summary:"Summary.",
+      strengths:[],
+      concerns:[],
+      nextActions:[{priority:1,urgency:"immediate",impact:"high",title:"Check",description:"Check the supplied facts.",targetTab:"trip",sourceInsightId:""}],
+      conciergeNoteDraft:"Note",
+      disclaimer:"Review"
+    };
+    assert.deepEqual(await ai.requestAnalysis({
+      apiKey:"test-key",
+      model:"test",
+      context:{},
+      language:"de",
+      clientFactory:()=>({responses:{create:async()=>({output_text:JSON.stringify(output)})}})
+    }),output);
+  });
+
+  it("keeps merge failures observable to their caller",()=>{
+    const item={stableKey:"task:synthetic",itemType:"task"};
+    const failingPrevious={get occurrenceCount(){throw new Error("merge failure");}};
+    assert.throws(()=>store.mergeItemState(item,failingPrevious,"2026-08-03T00:00:00.000Z"),/merge failure/);
+  });
+
   it("logs only redacted structured error details",()=>{
     const originalError=console.error;
     const entries=[];
@@ -96,10 +153,11 @@ describe("concierge AI function helpers",()=>{
       console.error=originalError;
     }
     assert.equal(entries.length,1);
-    assert.equal(entries[0][0],"[analyzeConciergeTrip] failed");
-    assert.deepEqual(entries[0][1].phase,"ai_call");
-    assert.equal(entries[0][1].errorClass,"Error");
-    assert.doesNotMatch(entries[0][1].errorMessage,/sk-secret-token|token-value/);
-    assert.doesNotMatch(entries[0][1].stack,/sk-secret-token|token-value/);
+    assert.match(entries[0][0],/^\[analyzeConciergeTrip\] failed /);
+    const details=JSON.parse(entries[0][0].replace(/^\[analyzeConciergeTrip\] failed /,""));
+    assert.equal(details.phase,"ai_call");
+    assert.equal(details.errorName,"Error");
+    assert.doesNotMatch(details.errorMessage,/sk-secret-token|token-value/);
+    assert.doesNotMatch(details.stack,/sk-secret-token|token-value/);
   });
 });

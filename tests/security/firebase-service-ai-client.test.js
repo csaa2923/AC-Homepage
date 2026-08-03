@@ -47,6 +47,8 @@ describe("firebase service AI callable client",()=>{
     assert.match(source,/currentUserPresent:Boolean\(user\)/);
     assert.match(source,/uidPresent:Boolean\(user&&user\.uid\)/);
     assert.match(source,/diagnostic\.idTokenAvailable=Boolean\(await user\.getIdToken\(\)\)/);
+    assert.match(source,/user\.getIdTokenResult\(true\)/);
+    assert.match(source,/role!=="admin"&&role!=="owner"/);
     assert.match(source,/await callableUserContext\(auth,authModule\);[\s\S]*httpsCallable\(functions,"analyzeConciergeTrip"/);
   });
 

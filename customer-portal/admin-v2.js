@@ -4707,7 +4707,21 @@
       if(!result?.analysisId)throw new Error("save failed");
       state.aiAnalysisSaveMessage="Analyse gespeichert.";
       state.aiAnalysisSaveMessageKind="success";
-      await Promise.all([loadAiAnalysisHistory(customer.customerId),loadAiTasks()]);
+      if(state.aiHistoryCustomerId!==customer.customerId){
+        state.aiHistoryCustomerId=customer.customerId;
+        state.aiHistory=[];
+        state.aiHistoryCursor=null;
+        state.aiHistoryError="";
+      }
+      const savedEntry={
+        analysisId:result.analysisId,
+        createdAt:result.createdAt||new Date().toISOString(),
+        summary:analysis.summary,
+        itemCount:Number(result.itemCount)||0,
+        openItemCount:Number(result.openItemCount)||0
+      };
+      state.aiHistory=[savedEntry,...state.aiHistory.filter(entry=>entry.analysisId!==result.analysisId)];
+      await loadAiTasks();
     }catch(_){
       state.aiAnalysisSaveMessage="Analyse konnte nicht gespeichert werden. Bitte erneut versuchen.";
       state.aiAnalysisSaveMessageKind="error";

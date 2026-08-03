@@ -1193,8 +1193,20 @@
     }
     try{
       diagnostic.idTokenAvailable=Boolean(await user.getIdToken());
+      if(typeof user.getIdTokenResult==="function"){
+        let tokenResult=await user.getIdTokenResult();
+        let role=String(tokenResult?.claims?.role||"").trim().toLowerCase();
+        if(role!=="admin"&&role!=="owner"){
+          tokenResult=await user.getIdTokenResult(true);
+          role=String(tokenResult?.claims?.role||"").trim().toLowerCase();
+        }
+        if(role!=="admin"&&role!=="owner"){
+          throw new Error("AI Concierge abgebrochen: Admin-Rolle fehlt im Firebase-ID-Token.");
+        }
+      }
     }catch(error){
       console.warn("[ACT Firebase] Callable Auth-Prüfung",diagnostic);
+      if(/Admin-Rolle fehlt/.test(String(error?.message||"")))throw error;
       throw new Error("AI Concierge abgebrochen: Firebase-ID-Token konnte nicht abgerufen werden.");
     }
     console.info("[ACT Firebase] Callable Auth-Prüfung",diagnostic);

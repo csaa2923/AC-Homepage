@@ -33,10 +33,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=10/);
-    assert.match(html,/admin-v2\.css\?v=57/);
+    assert.match(html,/admin-v2\.css\?v=62/);
     assert.match(html,/class="v2-login-logo"[^>]+src="\.\.\/images\/logo\/alpine-concierge-logo-transparent\.png"[^>]+alt="Alpine Concierge Tirol"[^>]+width="1536" height="1024"/);
     assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
-    assert.match(html,/admin-v2\.js\?v=77/);
+    assert.match(html,/admin-v2\.js\?v=82/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(html,/concierge-intelligence-library\.js\?v=1/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
@@ -85,13 +85,127 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/id="aiTaskStatusFilter"/);
     assert.match(js,/id="aiTaskSortSelect"/);
     assert.match(js,/data-ai-task-status="completed"/);
-    assert.match(js,/workspace-ai-task-check/);
+    assert.match(js,/task-card__actions/);
     assert.match(js,/data-ai-task-status="dismissed"/);
     assert.match(js,/data-ai-task-status="open"/);
     assert.match(js,/async function updateAiTaskStatus\(task,status\)/);
     assert.match(css,/\.workspace-ai-task-controls\{/);
-    assert.match(css,/\.workspace-ai-task\.completed \.v2-workspace-task-state/);
+    assert.match(css,/\.workspace-ai-task\.completed \.task-card__status-dot/);
     assert.match(html,/firebase-service\.js\?v=32/);
+  });
+
+  it("surfaces created AI tasks in the customer overview and opens them by task id",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    const html=readProjectFile("customer-portal/admin-v2.html");
+    const createFn=js.match(/async function createSelectedAiTask[\s\S]*?(?=\n  function |\n  async function )/)?.[0]||"";
+    const openFn=js.match(/function openAiTaskById[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const statusFn=js.match(/async function updateAiTaskStatus[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const cardFn=js.match(/function aiTaskListCardMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const actionFn=js.match(/function aiTaskActionBarMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
+    assert.match(js,/AI Concierge Aufgaben/);
+    assert.match(js,/function customerAiTasks\(/);
+    assert.match(js,/function openAiTaskById\(/);
+    assert.match(js,/function upsertAiTaskLocal\(/);
+    assert.match(js,/function renderAiTaskDetail\(/);
+    assert.match(js,/function ensureAiTaskDetailHost\(/);
+    assert.match(js,/data-ai-open-task=/);
+    assert.match(js,/getAttribute\("data-ai-open-task"\)/);
+    assert.match(js,/state\.aiTaskDetailItemId/);
+    assert.match(js,/state\.aiTaskDetailCustomerId/);
+    assert.match(html,/id="aiTaskDetailHost"/);
+    assert.match(openFn,/fehlende Task-ID/);
+    assert.match(openFn,/Aufgabe nicht gefunden/);
+    assert.match(openFn,/state\.aiTaskDetailItemId=resolvedTaskId/);
+    assert.match(openFn,/renderAiTaskDetail\(\)/);
+    assert.match(cardFn,/task-card__header/);
+    assert.match(cardFn,/task-card__title/);
+    assert.match(cardFn,/task-card__description/);
+    assert.match(cardFn,/task-card__meta/);
+    assert.match(cardFn,/task-card__actions/);
+    assert.match(actionFn,/data-ai-open-task="\$\{escapeHtml\(taskId\)\}"/);
+    assert.match(actionFn,/>Erledigt</);
+    assert.match(actionFn,/>Verwerfen</);
+    assert.equal((cardFn.match(/task-card__actions/g)||[]).length,1,"exactly one action bar per card markup");
+    assert.doesNotMatch(cardFn,/workspace-ai-task-toolbar|workspace-ai-task-check|workspace-ai-task-actions/);
+    assert.match(statusFn,/updateConciergeAnalysisItemStatus/);
+    assert.match(statusFn,/upsertAiTaskLocal/);
+    assert.match(statusFn,/loadAiTasks\(\)/);
+    assert.match(createFn,/upsertAiTaskLocal\(/);
+    assert.match(createFn,/await loadAiTasks\(\)/);
+    assert.match(createFn,/openAiTaskById\(customer\.customerId,result\.itemId\)/);
+    assert.match(js,/Escape.*aiTaskDetailItemId|aiTaskDetailItemId.*Escape/);
+    assert.match(css,/\.task-card\.workspace-ai-task\{/);
+    assert.match(css,/flex-direction:column/);
+    assert.match(css,/\.task-card__actions\{/);
+    assert.match(css,/\.ai-task-detail-overlay\{/);
+    assert.match(css,/z-index:220/);
+    assert.match(css,/@media \(max-width:767px\)\{[\s\S]*task-card__actions/);
+    assert.ok(
+      /upsertAiTaskLocal\([\s\S]*?status:result\.status\|\|"open"/.test(createFn),
+      "created confirm tasks must be upserted locally with open status"
+    );
+  });
+
+  it("filters AI tasks by customer with URL/session persistence and deep links",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    const parseFn=js.match(/function parseRoute[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const filterFn=js.match(/function filteredAiTasks[\s\S]*?(?=\n  async function |\n  function )/)?.[0]||"";
+    const renderFn=js.match(/function renderTasks[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const optionsFn=js.match(/function aiTaskCustomerFilterOptions[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const normalizeFn=js.match(/function normalizeAiTaskCustomerFilter[\s\S]*?(?=\n  function )/)?.[0]||"";
+    assert.match(js,/aiTaskCustomerFilter:""/);
+    assert.match(js,/id="aiTaskCustomerFilter"/);
+    assert.match(js,/Alle Kunden/);
+    assert.match(js,/function tasksRouteHash\(/);
+    assert.match(js,/#tasks\?customer=/);
+    assert.match(js,/act_admin_v2_ai_task_customer_filter/);
+    assert.match(js,/sessionStorage\.getItem\(AI_TASK_CUSTOMER_FILTER_KEY\)/);
+    assert.match(js,/function openAiTasksForCustomer\(/);
+    assert.match(js,/data-ai-tasks-for-customer=/);
+    assert.match(parseFn,/taskCustomerFromQuery/);
+    assert.match(parseFn,/main==="tasks"/);
+    assert.match(optionsFn,/localeCompare\(right\.label,"de"\)/);
+    assert.match(optionsFn,/aiTaskCustomerIdsWithTasks/);
+    assert.match(normalizeFn,/allowPending/);
+    assert.match(filterFn,/state\.aiTaskCustomerFilter/);
+    assert.match(filterFn,/cleanValue\(task\.customerId\)!==customerId/);
+    assert.match(filterFn,/status!=="all"/);
+    assert.match(renderFn,/Für diesen Kunden gibt es keine Aufgaben/);
+    assert.match(renderFn,/tasks\.length.*offen|badge\(`\$\{tasks\.length\}/);
+    assert.match(js,/event\.target\.id==="aiTaskCustomerFilter"/);
+    assert.match(js,/setAiTaskCustomerFilter\(event\.target\.value/);
+    assert.match(css,/ai-task-customer-filter/);
+    assert.match(css,/min-height:44px/);
+    assert.match(css,/text-overflow:ellipsis/);
+    assert.match(css,/@media \(max-width:767px\)\{[\s\S]*workspace-ai-task-controls\{display:grid/);
+    // Layout regression guard: task cards stay flex column with one action bar.
+    assert.match(css,/\.task-card\.workspace-ai-task\{/);
+    assert.match(css,/flex-direction:column/);
+    assert.doesNotMatch(css,/\.workspace-ai-task\{[^}]*grid-template-columns:10px minmax\(0,1fr\) auto/);
+  });
+
+  it("clears history load errors after a successful retry and never renders blank action buttons",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    const loadFn=js.match(/async function loadAiAnalysisHistory[\s\S]*?(?=\n  async function |\n  function )/)?.[0]||"";
+    assert.match(loadFn,/state\.aiHistoryError=""/);
+    assert.match(loadFn,/Historie teilweise geladen/);
+    assert.match(js,/function aiActionButton\(/);
+    assert.match(js,/if\(!text\)return ""/);
+    assert.match(js,/label:createLabel/);
+    assert.match(js,/createMode!=="auto"\?"Aufgabe erstellen":""/);
+    assert.match(js,/Hard failure banners must not stay visible once valid history rows exist/);
+    assert.match(js,/historyError!=="Historie teilweise geladen\."\)return ""/);
+    assert.match(css,/\.v2-button\.small\.primary,\.v2-ai-finding-actions \.v2-button\.primary\{/);
+    assert.match(css,/background:var\(--green\)/);
+    assert.match(css,/\.v2-edit-status\.warning\{/);
+    // Regression: failed first load leaves error; success path must clear it before render.
+    assert.ok(
+      /state\.aiHistory=more\?\[\.\.\.state\.aiHistory,\.\.\.entries\]:entries;[\s\S]{0,160}state\.aiHistoryError=""/.test(loadFn),
+      "successful listConciergeAnalyses must clear aiHistoryError"
+    );
   });
 
   it("keeps dashboard as cockpit and customer cards in the customer view only",()=>{
@@ -637,12 +751,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=57/);
+    assert.match(html,/admin-v2\.css\?v=62/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
     assert.match(html,/firebase-service\.js\?v=32/);
-    assert.match(html,/admin-v2\.js\?v=77/);
+    assert.match(html,/admin-v2\.js\?v=82/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -764,7 +878,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-service\.js\?v=32/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=77/);
+    assert.match(html,/admin-v2\.js\?v=82/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -876,8 +990,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=57/);
-    assert.match(html,/admin-v2\.js\?v=77/);
+    assert.match(html,/admin-v2\.css\?v=62/);
+    assert.match(html,/admin-v2\.js\?v=82/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -1093,8 +1207,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=77/);
-    assert.match(html,/admin-v2\.css\?v=57/);
+    assert.match(html,/admin-v2\.js\?v=82/);
+    assert.match(html,/admin-v2\.css\?v=62/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);
     assert.match(js,/ACTAdminV2Communication\?\.bind/);

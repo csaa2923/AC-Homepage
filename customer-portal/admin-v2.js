@@ -31,6 +31,11 @@
     aiTasksError:"",
     aiTaskStatusFilter:"open",
     aiTaskSort:"priority",
+    aiTaskCustomerFilter:"",
+    aiFocusTaskId:"",
+    aiTaskDetailCustomerId:"",
+    aiTaskDetailItemId:"",
+    aiTaskDetailError:"",
     communicationMessage:"",
     communicationMessageKind:"",
     communicationEmailTemplate:"general",
@@ -596,24 +601,43 @@
 
   function parseRoute(hashValue){
     const raw=String(hashValue||"").replace(/^#/,"").replace(/^\/+/,"")||"dashboard";
-    const parts=raw.split("/").filter(Boolean);
+    const [pathPart,queryPart=""]=raw.split("?");
+    const parts=String(pathPart||"").split("/").filter(Boolean);
     const main=parts[0]||"dashboard";
-    if(["dashboard","customers","bookings","calendar","documents","settings","communication","tasks"].includes(main)&&parts.length===1){
-      return {route:main==="calendar"?"bookings":main,customerId:"",tab:""};
+    const query=new URLSearchParams(queryPart||"");
+    const taskCustomerFromQuery=query.has("customer");
+    let taskCustomerId="";
+    if(taskCustomerFromQuery){
+      try{taskCustomerId=decodeURIComponent(String(query.get("customer")||"")).trim();}
+      catch(_){taskCustomerId=String(query.get("customer")||"").trim();}
+    }
+    if(main==="tasks"){
+      return {route:"tasks",customerId:"",tab:"",taskCustomerId,taskCustomerFromQuery};
+    }
+    if(["dashboard","customers","bookings","calendar","documents","settings","communication"].includes(main)&&parts.length===1){
+      return {route:main==="calendar"?"bookings":main,customerId:"",tab:"",taskCustomerId:"",taskCustomerFromQuery:false};
     }
     if(main==="customers"&&parts[1]){
       const tab=parts[2]||"kunde";
       return {
         route:"customerDetail",
         customerId:decodeURIComponent(parts[1]),
-        tab:detailTabs.some(([key])=>key===tab)?tab:"kunde"
+        tab:detailTabs.some(([key])=>key===tab)?tab:"kunde",
+        taskCustomerId:"",
+        taskCustomerFromQuery:false
       };
     }
-    return {route:"dashboard",customerId:"",tab:""};
+    return {route:"dashboard",customerId:"",tab:"",taskCustomerId:"",taskCustomerFromQuery:false};
+  }
+
+  function tasksRouteHash(customerId=""){
+    const id=cleanValue(customerId);
+    return id?`#tasks?customer=${encodeURIComponent(id)}`:"#tasks";
   }
 
   function currentRouteHash(){
     if(state.route==="customerDetail"&&state.selectedCustomerId)return detailHash(state.selectedCustomerId,state.selectedTab);
+    if(state.route==="tasks")return tasksRouteHash(state.aiTaskCustomerFilter);
     return `#${state.route||"dashboard"}`;
   }
 
@@ -4635,18 +4659,280 @@
     `;
   }
 
+  function aiActionButton({label,className,attrs="",disabled=false}){
+    const text=cleanValue(label);
+    if(!text)return "";
+    return `<button class="${escapeHtml(className)}" type="button" ${attrs} ${disabled?"disabled":""}>${escapeHtml(text)}</button>`;
+  }
+
+  function aiTaskMatchKey(task){
+    const taskType=cleanValue(task?.taskType)||"other";
+    const title=cleanValue(task?.title).toLocaleLowerCase("de-DE");
+    const target=cleanValue(task?.targetTab)||"general";
+    const ref=arrayValue(task?.refs).find(item=>item?.entityType&&item.entityType!=="none"&&item.entityId);
+    const entityType=cleanValue(ref?.entityType||task?.entityType);
+    const entityId=cleanValue(ref?.entityId||task?.entityId);
+    if(entityType&&entityId&&entityType!=="none")return `ref:${taskType}:${entityType}:${entityId}`;
+    return `sem:${taskType}:${target}:${title}`;
+  }
+
+  function customerAiTasks(customerId,{status="open"}={}){
+    const id=cleanValue(customerId);
+    if(!id)return [];
+    return arrayValue(state.aiTasks).filter(task=>{
+      if(cleanValue(task.customerId)!==id)return false;
+      if(status==="all")return true;
+      return (task.status||"open")===status;
+    });
+  }
+
+  function findAiTaskForSuggestion(customerId,task){
+    const id=cleanValue(customerId);
+    if(!id||!task)return null;
+    const key=aiTaskMatchKey(task);
+    return arrayValue(state.aiTasks).find(item=>{
+      if(cleanValue(item.customerId)!==id)return false;
+      if(cleanValue(item.itemId)&&cleanValue(task.itemId)&&cleanValue(item.itemId)===cleanValue(task.itemId))return true;
+      if(cleanValue(item.stableKey)&&cleanValue(task.stableKey)&&cleanValue(item.stableKey)===cleanValue(task.stableKey))return true;
+      return aiTaskMatchKey(item)===key;
+    })||null;
+  }
+
+  function upsertAiTaskLocal(task){
+    const itemId=cleanValue(task?.itemId||task?.stableKey);
+    const customerId=cleanValue(task?.customerId);
+    if(!itemId||!customerId)return;
+    const next={
+      ...task,
+      itemId,
+      stableKey:cleanValue(task.stableKey)||itemId,
+      customerId,
+      status:cleanValue(task.status)||"open",
+      source:cleanValue(task.source)||"ai_concierge"
+    };
+    const others=arrayValue(state.aiTasks).filter(item=>!(cleanValue(item.customerId)===customerId&&cleanValue(item.itemId)===itemId));
+    state.aiTasks=[next,...others];
+  }
+
+  function aiTaskFocusKey(customerId,itemId){
+    return `${cleanValue(customerId)}::${cleanValue(itemId)}`;
+  }
+
+  function findAiTaskByIds(customerId,itemId){
+    const taskId=cleanValue(itemId);
+    if(!taskId)return null;
+    const id=cleanValue(customerId);
+    return arrayValue(state.aiTasks).find(item=>{
+      const matchId=cleanValue(item.itemId||item.stableKey)===taskId;
+      if(!matchId)return false;
+      if(!id)return true;
+      return cleanValue(item.customerId)===id;
+    })||null;
+  }
+
+  function ensureAiTaskDetailHost(){
+    let host=byId("aiTaskDetailHost");
+    if(host)return host;
+    host=document.createElement("div");
+    host.id="aiTaskDetailHost";
+    document.body.appendChild(host);
+    return host;
+  }
+
+  function closeAiTaskDetail(){
+    state.aiTaskDetailCustomerId="";
+    state.aiTaskDetailItemId="";
+    state.aiTaskDetailError="";
+    renderAiTaskDetail();
+  }
+
+  function focusAiTaskDetailPanel(){
+    window.requestAnimationFrame(()=>{
+      const panel=byId("aiTaskDetailPanel");
+      const closeBtn=panel?.querySelector("[data-ai-task-detail-close]");
+      (closeBtn||panel)?.focus?.();
+    });
+  }
+
+  function openAiTaskById(customerId,itemId){
+    const taskId=cleanValue(itemId);
+    const id=cleanValue(customerId);
+    if(!taskId){
+      state.aiTaskDetailCustomerId="";
+      state.aiTaskDetailItemId="";
+      state.aiTaskDetailError="Aufgabe konnte nicht geöffnet werden: fehlende Task-ID.";
+      renderAiTaskDetail();
+      focusAiTaskDetailPanel();
+      return false;
+    }
+    const task=findAiTaskByIds(id,taskId);
+    if(!task){
+      state.aiTaskDetailCustomerId="";
+      state.aiTaskDetailItemId="";
+      state.aiTaskDetailError="Aufgabe nicht gefunden. Bitte die Liste aktualisieren und erneut öffnen.";
+      renderAiTaskDetail();
+      focusAiTaskDetailPanel();
+      return false;
+    }
+    const resolvedId=cleanValue(task.customerId)||id;
+    const resolvedTaskId=cleanValue(task.itemId||task.stableKey)||taskId;
+    state.aiTaskDetailError="";
+    state.aiFocusTaskId=aiTaskFocusKey(resolvedId,resolvedTaskId);
+    state.aiTaskDetailCustomerId=resolvedId;
+    state.aiTaskDetailItemId=resolvedTaskId;
+    renderAiTaskDetail();
+    focusAiTaskDetailPanel();
+    return true;
+  }
+
+  function aiTaskStatusLabel(status){
+    if(status==="completed")return "Erledigt";
+    if(status==="dismissed")return "Verworfen";
+    return "Offen";
+  }
+
+  function aiTaskPhaseLabel(task){
+    const urgencyLabels={immediate:"Sofort",this_week:"Diese Woche",before_trip:"Vor Reise",optional:"Optional"};
+    return urgencyLabels[task?.urgency]||cleanValue(task?.duePhase)||cleanValue(task?.urgency)||"Optional";
+  }
+
+  function aiTaskActionBarMarkup(task){
+    const taskId=cleanValue(task.itemId||task.stableKey);
+    const customerId=cleanValue(task.customerId);
+    const analysisId=cleanValue(task.analysisId);
+    const status=cleanValue(task.status)||"open";
+    const statusAttrs=`data-ai-task-customer="${escapeHtml(customerId)}" data-ai-task-analysis="${escapeHtml(analysisId)}" data-ai-task-item="${escapeHtml(taskId)}"`;
+    const openBtn=`<button class="v2-button small soft task-card__action" type="button" data-ai-open-task="${escapeHtml(taskId)}" data-ai-task-customer="${escapeHtml(customerId)}">Öffnen</button>`;
+    if(status==="open"){
+      return `${openBtn}<button class="v2-button small soft task-card__action" type="button" data-ai-task-status="completed" ${statusAttrs}>Erledigt</button><button class="v2-button small soft task-card__action" type="button" data-ai-task-status="dismissed" ${statusAttrs}>Verwerfen</button>`;
+    }
+    return `${openBtn}<button class="v2-button small soft task-card__action" type="button" data-ai-task-status="open" ${statusAttrs}>Wieder öffnen</button>`;
+  }
+
+  function aiTaskListCardMarkup(task){
+    const customerName=aiTaskCustomerDisplayName(task.customerId,task);
+    const taskId=cleanValue(task.itemId||task.stableKey);
+    const focused=cleanValue(state.aiFocusTaskId)===aiTaskFocusKey(task.customerId,taskId);
+    const status=cleanValue(task.status)||"open";
+    return `
+      <article class="task-card workspace-ai-task ${escapeHtml(status)} ${focused?"is-focused":""}" data-ai-task-id="${escapeHtml(taskId)}" data-ai-task-customer="${escapeHtml(task.customerId||"")}">
+        <header class="task-card__header">
+          <span class="task-card__status-dot v2-workspace-task-state" aria-hidden="true"></span>
+          <span class="task-card__status">${escapeHtml(`${aiTaskStatusLabel(status)} · ${aiTaskPhaseLabel(task)} · ${task.impact||"low"}`)}</span>
+        </header>
+        <h3 class="task-card__title">${escapeHtml(task.title||"")}</h3>
+        <p class="task-card__description">${escapeHtml(task.description||"")}</p>
+        <p class="task-card__meta">${escapeHtml(`${customerName} · ${task.lastSeenAt?`Zuletzt erkannt: ${formatDate(task.lastSeenAt)}`:"Zeitpunkt nicht verfügbar"}`)}</p>
+        <div class="task-card__actions">
+          ${aiTaskActionBarMarkup(task)}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderAiTaskDetail(){
+    const host=ensureAiTaskDetailHost();
+    if(cleanValue(state.aiTaskDetailError)){
+      host.innerHTML=`
+        <div class="ai-task-detail-overlay" id="aiTaskDetailOverlay">
+          <div class="ai-task-detail-panel" id="aiTaskDetailPanel" role="alertdialog" aria-modal="true" aria-labelledby="aiTaskDetailTitle" tabindex="-1">
+            <header class="ai-task-detail-header">
+              <div><p class="v2-eyebrow">AI Concierge Aufgabe</p><h2 id="aiTaskDetailTitle">Aufgabe nicht verfügbar</h2></div>
+              <button class="v2-button soft" type="button" data-ai-task-detail-close>Schließen</button>
+            </header>
+            <p class="v2-edit-status error">${escapeHtml(state.aiTaskDetailError)}</p>
+            <footer class="ai-task-detail-footer task-card__actions">
+              <button class="v2-button primary task-card__action" type="button" data-ai-task-detail-close>Verstanden</button>
+            </footer>
+          </div>
+        </div>`;
+      return;
+    }
+    const customerId=cleanValue(state.aiTaskDetailCustomerId);
+    const itemId=cleanValue(state.aiTaskDetailItemId);
+    if(!itemId){
+      host.innerHTML="";
+      return;
+    }
+    const task=findAiTaskByIds(customerId,itemId);
+    if(!task){
+      host.innerHTML=`
+        <div class="ai-task-detail-overlay" id="aiTaskDetailOverlay">
+          <div class="ai-task-detail-panel" id="aiTaskDetailPanel" role="alertdialog" aria-modal="true" aria-labelledby="aiTaskDetailTitle" tabindex="-1">
+            <header class="ai-task-detail-header">
+              <div><p class="v2-eyebrow">AI Concierge Aufgabe</p><h2 id="aiTaskDetailTitle">Aufgabe nicht gefunden</h2></div>
+              <button class="v2-button soft" type="button" data-ai-task-detail-close>Schließen</button>
+            </header>
+            <p class="v2-edit-status error">Die referenzierte Aufgabe ist nicht mehr geladen.</p>
+            <footer class="ai-task-detail-footer task-card__actions">
+              <button class="v2-button primary task-card__action" type="button" data-ai-task-detail-close>Schließen</button>
+            </footer>
+          </div>
+        </div>`;
+      return;
+    }
+    const customerName=aiTaskCustomerDisplayName(task.customerId,task);
+    const status=cleanValue(task.status)||"open";
+    const targetTabs={customer:"kunde",trip:"reise",program:"programm",concierge:"concierge",bookings:"buchungen",documents:"dokumente",communication:"kommunikation",publishing:"veroeffentlichung"};
+    const targetTab=targetTabs[task.targetTab]||"";
+    host.innerHTML=`
+      <div class="ai-task-detail-overlay" id="aiTaskDetailOverlay">
+        <div class="ai-task-detail-panel" id="aiTaskDetailPanel" role="dialog" aria-modal="true" aria-labelledby="aiTaskDetailTitle" tabindex="-1">
+          <header class="ai-task-detail-header">
+            <div>
+              <p class="v2-eyebrow">AI Concierge Aufgabe</p>
+              <h2 id="aiTaskDetailTitle">${escapeHtml(task.title||"Aufgabe")}</h2>
+            </div>
+            <button class="v2-button soft" type="button" data-ai-task-detail-close>Schließen</button>
+          </header>
+          <div class="ai-task-detail-body">
+            <p>${escapeHtml(task.description||"Keine Beschreibung vorhanden.")}</p>
+            <dl class="ai-task-detail-meta">
+              <div><dt>Kunde</dt><dd>${escapeHtml(customerName)}</dd></div>
+              <div><dt>Priorität</dt><dd>${escapeHtml(String(task.priority??"—"))}</dd></div>
+              <div><dt>Phase</dt><dd>${escapeHtml(aiTaskPhaseLabel(task))}</dd></div>
+              <div><dt>Status</dt><dd>${escapeHtml(aiTaskStatusLabel(status))}</dd></div>
+              <div><dt>Quelle</dt><dd>${escapeHtml(`AI Concierge${task.analysisId?` · ${task.analysisId}`:""}`)}</dd></div>
+              <div><dt>Task-ID</dt><dd><code data-ai-task-detail-id>${escapeHtml(task.itemId||task.stableKey||"")}</code></dd></div>
+            </dl>
+          </div>
+          <footer class="ai-task-detail-footer">
+            <div class="task-card__actions">
+              ${targetTab?`<button class="v2-button soft task-card__action" type="button" data-ai-task-detail-goto="${escapeHtml(task.customerId)}" data-detail-tab="${escapeHtml(targetTab)}">Zum Kundenbereich</button>`:""}
+              ${aiTaskActionBarMarkup(task)}
+            </div>
+          </footer>
+        </div>
+      </div>`;
+  }
+
   function aiSuggestedTaskCard(task,index){
     const urgencyLabels={immediate:"Sofort",this_week:"Diese Woche",before_trip:"Vor Reise",optional:"Optional"};
     const impactLabels={high:"Hohe Wirkung",medium:"Mittlere Wirkung",low:"Geringe Wirkung"};
-    const needsConfirm=task.createMode!=="auto";
+    const existing=findAiTaskForSuggestion(state.selectedCustomerId,task);
+    const openLabel="Öffnen";
+    const createLabel=!existing&&task.createMode!=="auto"?"Aufgabe erstellen":"";
+    const openButton=aiActionButton({
+      label:openLabel,
+      className:"v2-button small soft",
+      attrs:existing
+        ?`data-ai-open-task="${escapeHtml(existing.itemId)}" data-ai-task-customer="${escapeHtml(existing.customerId)}"`
+        :`data-ai-target-tab="${escapeHtml(task.targetTab||"trip")}"`
+    });
+    const createButton=aiActionButton({
+      label:createLabel,
+      className:"v2-button small primary",
+      attrs:`data-ai-create-task="${escapeHtml(String(index))}"`,
+      disabled:state.aiTaskCreateBusy
+    });
     return `
-      <article class="v2-ai-task-card">
-        <small>${escapeHtml(`${urgencyLabels[task.urgency]||"Optional"} · ${impactLabels[task.impact]||"Geringe Wirkung"} · ${task.createMode==="auto"?"Auto":"Bestätigung"}`)}</small>
+      <article class="v2-ai-task-card ${existing?"is-created":""}">
+        <small>${escapeHtml(`${urgencyLabels[task.urgency]||"Optional"} · ${impactLabels[task.impact]||"Geringe Wirkung"} · ${task.createMode==="auto"?"Auto":"Bestätigung"}`)}${existing?" · Erstellt":""}</small>
         <strong>${escapeHtml(task.title||"")}</strong>
         <p>${escapeHtml(task.description||"")}</p>
         <div class="v2-ai-finding-actions">
-          <button class="v2-button small soft" type="button" data-ai-target-tab="${escapeHtml(task.targetTab||"trip")}">Öffnen</button>
-          ${needsConfirm?`<button class="v2-button small primary" type="button" data-ai-create-task="${escapeHtml(String(index))}" ${state.aiTaskCreateBusy?"disabled":""}>Aufgabe erstellen</button>`:""}
+          ${openButton}
+          ${createButton}
         </div>
       </article>
     `;
@@ -4697,7 +4983,17 @@
       <section class="v2-ai-history" aria-labelledby="aiHistoryTitle">
         <div class="v2-workspace-section-head compact"><h5 id="aiHistoryTitle">Gespeicherte Analysen</h5><span>${history.length}</span></div>
         <p class="v2-ai-history-hint">Zwei Analysen markieren zum Vergleich.</p>
-        ${state.aiHistoryError?`<p class="v2-edit-status error">${escapeHtml(state.aiHistoryError)}</p>`:""}
+        ${(()=>{
+          const historyError=cleanValue(state.aiHistoryError);
+          if(!historyError)return "";
+          const hasHistory=arrayValue(state.aiHistory).length>0;
+          // Hard failure banners must not stay visible once valid history rows exist.
+          if(hasHistory){
+            if(historyError!=="Historie teilweise geladen.")return "";
+            return `<p class="v2-edit-status warning">${escapeHtml(historyError)}</p>`;
+          }
+          return `<p class="v2-edit-status error">${escapeHtml(historyError)}</p>`;
+        })()}
         <ol>${entries}</ol>
         ${aiCompareMarkup(history)}
         ${state.aiHistoryCursor?`<button class="v2-button soft" type="button" data-ai-history-more ${state.aiHistoryBusy?"disabled":""}>${state.aiHistoryBusy?"Lädt …":"Weitere Analysen laden"}</button>`:""}
@@ -4778,7 +5074,11 @@
           <span aria-hidden="true">→</span>
         </button>
       `).join("")
-      :`<p class="v2-muted">Aktuell keine offenen Aufgaben.</p>`;
+      :`<p class="v2-muted">Keine operativen Hinweise offen.</p>`;
+    const openAiTasks=customerAiTasks(customer.customerId,{status:"open"});
+    const aiTaskList=openAiTasks.length
+      ?openAiTasks.slice(0,5).map(task=>aiTaskListCardMarkup(task)).join("")
+      :`<p class="v2-muted">Noch keine AI-Concierge-Aufgaben für diesen Kunden.</p>`;
     const activities=workspace.activities.length
       ?workspace.activities.map(item=>`<li><span></span><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.value)}</small></div></li>`).join("")
       :`<li><span></span><div><strong>Noch keine Aktivität</strong><small>Änderungen werden hier zusammengefasst.</small></div></li>`;
@@ -4823,11 +5123,15 @@
             ${aiHistoryMarkup(customer.customerId)}
           </section>
         `:""}
+        <section class="v2-workspace-panel workspace-ai-overview-panel" id="workspaceAiTasksPanel">
+          <div class="v2-workspace-section-head compact"><h4>AI Concierge Aufgaben</h4><span>${openAiTasks.length}</span></div>
+          <div class="workspace-ai-task-list">${aiTaskList}</div>
+          <button class="v2-link-button v2-workspace-all-tasks" type="button" data-ai-tasks-for-customer="${escapeHtml(customer.customerId)}">AI-Aufgaben dieses Kunden</button>
+        </section>
         <div class="v2-workspace-lower">
           <section class="v2-workspace-panel">
-            <div class="v2-workspace-section-head compact"><h4>Aufgaben</h4><span>${workspace.tasks.length}</span></div>
+            <div class="v2-workspace-section-head compact"><h4>Operative Hinweise</h4><span>${workspace.tasks.length}</span></div>
             <div class="v2-workspace-task-list">${tasks}</div>
-            <button class="v2-link-button v2-workspace-all-tasks" type="button" data-mobile-route="tasks">Alle Aufgaben anzeigen</button>
           </section>
           <section class="v2-workspace-panel">
             <div class="v2-workspace-section-head compact"><h4>Aktivität</h4></div>
@@ -4951,8 +5255,14 @@
       const entries=arrayValue(result?.analyses);
       state.aiHistory=more?[...state.aiHistory,...entries]:entries;
       state.aiHistoryCursor=result?.nextCursor||null;
+      // Always clear sticky errors after a successful response (incl. retry after failure).
+      state.aiHistoryError="";
     }catch(_){
-      if(state.aiHistoryCustomerId===id)state.aiHistoryError="Gespeicherte Analysen konnten nicht geladen werden.";
+      if(state.aiHistoryCustomerId===id){
+        state.aiHistoryError=arrayValue(state.aiHistory).length
+          ?"Historie teilweise geladen."
+          :"Gespeicherte Analysen konnten nicht geladen werden.";
+      }
     }finally{
       if(state.aiHistoryCustomerId===id)state.aiHistoryBusy=false;
       render();
@@ -4966,7 +5276,19 @@
     render();
     try{
       const result=await window.ACTFirebaseService?.listConciergeAnalysisTasks?.();
-      state.aiTasks=arrayValue(result?.tasks);
+      state.aiTasks=arrayValue(result?.tasks).map(task=>({
+        ...task,
+        itemId:cleanValue(task.itemId||task.stableKey),
+        status:cleanValue(task.status)||"open",
+        source:cleanValue(task.source)||"ai_concierge"
+      }));
+      // Drop stale customer filters that no longer exist in the loaded task set.
+      setAiTaskCustomerFilter(state.aiTaskCustomerFilter,{
+        syncRoute:state.route==="tasks",
+        replace:true,
+        persist:true,
+        allowPending:false
+      });
     }catch(_){
       state.aiTasksError="Gespeicherte AI-Aufgaben konnten nicht geladen werden.";
     }finally{
@@ -4981,6 +5303,13 @@
     const view=toAdvisorView(analysis);
     const task=arrayValue(view?.suggestedTasks)[index];
     if(!customer||!analysis?.analysisId||!task||state.aiTaskCreateBusy)return;
+    const already=findAiTaskForSuggestion(customer.customerId,task);
+    if(already?.itemId){
+      state.aiAnalysisSaveMessage="Aufgabe bereits vorhanden.";
+      state.aiAnalysisSaveMessageKind="success";
+      openAiTaskById(customer.customerId,already.itemId);
+      return;
+    }
     state.aiTaskCreateBusy=true;
     state.aiAnalysisSaveMessage="";
     state.aiAnalysisSaveMessageKind="";
@@ -4988,8 +5317,30 @@
     try{
       const result=await window.ACTFirebaseService?.createConciergeAnalysisTask?.(customer.customerId,analysis.analysisId,task);
       if(!result?.itemId)throw new Error("create failed");
-      state.aiAnalysisSaveMessage="Aufgabe erstellt.";
+      const now=result.updatedAt||new Date().toISOString();
+      upsertAiTaskLocal({
+        itemId:result.itemId,
+        stableKey:result.itemId,
+        analysisId:analysis.analysisId,
+        customerId:customer.customerId,
+        status:result.status||"open",
+        title:task.title,
+        description:task.description,
+        priority:task.priority,
+        urgency:task.urgency,
+        impact:task.impact,
+        targetTab:task.targetTab,
+        taskType:task.taskType,
+        createMode:task.createMode||"confirm",
+        source:"ai_concierge",
+        createdAt:now,
+        lastSeenAt:now,
+        duePhase:task.urgency||""
+      });
+      state.aiAnalysisSaveMessage=result.created===false?"Aufgabe bereits vorhanden.":"Aufgabe erstellt.";
       state.aiAnalysisSaveMessageKind="success";
+      state.aiTaskCreateBusy=false;
+      openAiTaskById(customer.customerId,result.itemId);
       await loadAiTasks();
     }catch(_){
       state.aiAnalysisSaveMessage="Aufgabe konnte nicht erstellt werden.";
@@ -5000,15 +5351,108 @@
     }
   }
 
+  const AI_TASK_CUSTOMER_FILTER_KEY="act_admin_v2_ai_task_customer_filter";
+
+  function readStoredAiTaskCustomerFilter(){
+    try{return cleanValue(sessionStorage.getItem(AI_TASK_CUSTOMER_FILTER_KEY));}
+    catch(_){return "";}
+  }
+
+  function writeStoredAiTaskCustomerFilter(customerId){
+    try{
+      const id=cleanValue(customerId);
+      if(id)sessionStorage.setItem(AI_TASK_CUSTOMER_FILTER_KEY,id);
+      else sessionStorage.removeItem(AI_TASK_CUSTOMER_FILTER_KEY);
+    }catch(_){}
+  }
+
+  function aiTaskCustomerDisplayName(customerId,fallbackTask=null){
+    const id=cleanValue(customerId);
+    const customer=customerById(id);
+    const first=cleanValue(customer?.firstName);
+    const last=cleanValue(customer?.lastName);
+    if(last&&first)return `${last}, ${first}`;
+    if(last||first)return last||first;
+    return cleanValue(customer?.customerName)
+      ||cleanValue(fallbackTask?.customerName)
+      ||id
+      ||"Unbenannter Kunde";
+  }
+
+  function aiTaskCustomerIdsWithTasks(){
+    const ids=new Set();
+    arrayValue(state.aiTasks).forEach(task=>{
+      const id=cleanValue(task.customerId);
+      if(id)ids.add(id);
+    });
+    return [...ids];
+  }
+
+  function aiTaskCustomerFilterOptions(){
+    return aiTaskCustomerIdsWithTasks()
+      .map(id=>({customerId:id,label:aiTaskCustomerDisplayName(id)}))
+      .sort((left,right)=>left.label.localeCompare(right.label,"de")||left.customerId.localeCompare(right.customerId,"de"));
+  }
+
+  function normalizeAiTaskCustomerFilter(preferred="",{allowPending=false}={}){
+    const requested=cleanValue(preferred);
+    if(!requested)return "";
+    const known=aiTaskCustomerIdsWithTasks();
+    if(known.includes(requested))return requested;
+    // Keep deep-link/session value until tasks are loaded; validate afterwards.
+    if(allowPending&&!arrayValue(state.aiTasks).length)return requested;
+    return "";
+  }
+
+  function syncAiTaskCustomerFilterRoute({replace=true}={}){
+    if(state.route!=="tasks")return;
+    const hash=tasksRouteHash(state.aiTaskCustomerFilter);
+    if(replace||location.hash===hash)history.replaceState({route:"tasks"},"",hash);
+    else history.pushState({route:"tasks"},"",hash);
+  }
+
+  function setAiTaskCustomerFilter(customerId,{syncRoute=true,replace=true,persist=true,allowPending=false}={}){
+    const next=normalizeAiTaskCustomerFilter(customerId,{allowPending});
+    state.aiTaskCustomerFilter=next;
+    if(persist)writeStoredAiTaskCustomerFilter(next);
+    if(syncRoute&&state.route==="tasks")syncAiTaskCustomerFilterRoute({replace});
+    return next;
+  }
+
+  function resolveAiTaskCustomerFilterFromRoute(parsed){
+    if(!parsed||parsed.route!=="tasks")return state.aiTaskCustomerFilter;
+    const preferred=parsed.taskCustomerFromQuery
+      ?cleanValue(parsed.taskCustomerId)
+      :cleanValue(parsed.taskCustomerId)||readStoredAiTaskCustomerFilter();
+    return setAiTaskCustomerFilter(preferred,{syncRoute:false,replace:true,persist:true,allowPending:true});
+  }
+
+  function openAiTasksForCustomer(customerId=""){
+    const id=cleanValue(customerId);
+    if(id){
+      writeStoredAiTaskCustomerFilter(id);
+      state.aiTaskCustomerFilter=id;
+    }else{
+      writeStoredAiTaskCustomerFilter("");
+      state.aiTaskCustomerFilter="";
+    }
+    return routeTo(tasksRouteHash(id).replace(/^#/,""));
+  }
+
   function filteredAiTasks(){
     const status=state.aiTaskStatusFilter;
-    const tasks=arrayValue(state.aiTasks).filter(task=>status==="all"||task.status===status);
+    const customerId=cleanValue(state.aiTaskCustomerFilter);
+    const tasks=arrayValue(state.aiTasks).filter(task=>{
+      if(status!=="all"&&(task.status||"open")!==status)return false;
+      if(customerId&&cleanValue(task.customerId)!==customerId)return false;
+      return true;
+    });
     return tasks.sort((left,right)=>{
       if(state.aiTaskSort==="lastSeen"){
         return String(right.lastSeenAt||"").localeCompare(String(left.lastSeenAt||""));
       }
       if(state.aiTaskSort==="customer"){
-        return String(left.customerName||customerById(left.customerId)?.customerName||"").localeCompare(String(right.customerName||customerById(right.customerId)?.customerName||""),"de")
+        return aiTaskCustomerDisplayName(left.customerId,left).localeCompare(aiTaskCustomerDisplayName(right.customerId,right),"de")
           ||Number(left.priority||99)-Number(right.priority||99);
       }
       const urgencyOrder={immediate:0,this_week:1,before_trip:2,optional:3};
@@ -5022,14 +5466,22 @@
 
   async function updateAiTaskStatus(task,status){
     if(!task||state.aiTasksBusy)return;
+    const nextStatus=cleanValue(status)||"open";
     state.aiTasksBusy=true;
     state.aiTasksError="";
     render();
     try{
       const result=await window.ACTFirebaseService?.updateConciergeAnalysisItemStatus?.(
-        task.customerId,task.analysisId,task.itemId,status
+        task.customerId,task.analysisId,task.itemId,nextStatus
       );
       if(!result?.itemId)throw new Error("status update failed");
+      upsertAiTaskLocal({...task,status:result.status||nextStatus,itemId:result.itemId,updatedAt:result.updatedAt});
+      if(nextStatus!=="open"
+        &&cleanValue(state.aiTaskDetailCustomerId)===cleanValue(task.customerId)
+        &&cleanValue(state.aiTaskDetailItemId)===cleanValue(task.itemId)){
+        state.aiTaskDetailCustomerId="";
+        state.aiTaskDetailItemId="";
+      }
       state.aiTasksBusy=false;
       await Promise.all([
         loadAiTasks(),
@@ -5141,20 +5593,31 @@
   function renderTasks(){
     const root=byId("tasksRoot");
     if(!root)return;
+    const customerOptions=aiTaskCustomerFilterOptions();
+    const activeCustomerFilter=normalizeAiTaskCustomerFilter(state.aiTaskCustomerFilter,{
+      allowPending:!arrayValue(state.aiTasks).length
+    });
+    if(activeCustomerFilter!==state.aiTaskCustomerFilter){
+      setAiTaskCustomerFilter(activeCustomerFilter,{
+        syncRoute:true,
+        replace:true,
+        persist:true,
+        allowPending:!arrayValue(state.aiTasks).length
+      });
+    }
     const tasks=filteredAiTasks();
-    const taskMarkup=tasks.length?tasks.map(task=>{
-      const customer=customerById(task.customerId);
-      const customerName=customer?.customerName||"Unbenannter Kunde";
-      const statusLabel=task.status==="completed"?"Erledigt":task.status==="dismissed"?"Verworfen":"Offen";
-      const taskData=`data-ai-task-customer="${escapeHtml(task.customerId)}" data-ai-task-analysis="${escapeHtml(task.analysisId)}" data-ai-task-item="${escapeHtml(task.itemId)}"`;
-      const actionMarkup=task.status==="open"
-        ?`<div class="workspace-ai-task-actions"><label class="workspace-ai-task-check"><input type="checkbox" data-ai-task-status="completed" ${taskData}><span>Erledigt</span></label><button class="v2-button small soft" type="button" data-ai-task-status="dismissed" ${taskData}>Verwerfen</button></div>`
-        :`<div class="workspace-ai-task-actions"><label class="workspace-ai-task-check"><input type="checkbox" checked data-ai-task-status="open" ${taskData}><span>Erledigt</span></label><button class="v2-button small soft" type="button" data-ai-task-status="open" ${taskData}>Wieder öffnen</button></div>`;
-      return `<article class="workspace-ai-task ${escapeHtml(task.status||"open")}"><span class="v2-workspace-task-state" aria-hidden="true"></span><div><small>${escapeHtml(customerName)} · ${escapeHtml(statusLabel)} · ${escapeHtml(`${task.urgency||"optional"} · ${task.impact||"low"}`)}</small><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.description)}</p><span>${escapeHtml(task.lastSeenAt?`Zuletzt erkannt: ${formatDate(task.lastSeenAt)}`:"Zeitpunkt nicht verfügbar")}</span></div><button class="v2-button small soft" type="button" data-ai-target-tab="${escapeHtml(task.targetTab)}">Öffnen</button>${actionMarkup}</article>`;
-    }).join(""):`<article class="v2-empty"><h3>Keine passenden AI-Aufgaben</h3><p>Ändern Sie den Statusfilter oder speichern Sie eine neue Analyse.</p></article>`;
+    const customerFilterActive=Boolean(cleanValue(state.aiTaskCustomerFilter));
+    const emptyMarkup=customerFilterActive
+      ?`<article class="v2-empty"><h3>Für diesen Kunden gibt es keine Aufgaben.</h3><p>Statusfilter prüfen oder einen anderen Kunden wählen.</p></article>`
+      :`<article class="v2-empty"><h3>Keine passenden AI-Aufgaben</h3><p>Ändern Sie den Statusfilter oder speichern Sie eine neue Analyse.</p></article>`;
+    const taskMarkup=tasks.length?tasks.map(task=>aiTaskListCardMarkup(task)).join(""):emptyMarkup;
+    const customerOptionsMarkup=customerOptions.map(option=>
+      `<option value="${escapeHtml(option.customerId)}" ${option.customerId===state.aiTaskCustomerFilter?"selected":""}>${escapeHtml(option.label)}</option>`
+    ).join("");
     root.innerHTML=`<section class="v2-document-page workspace-tasks-page">
       <div class="v2-section-toolbar"><div><h2>Gespeicherte AI-Aufgaben</h2><p class="v2-muted">Status und Auftreten werden serverseitig nachvollziehbar geführt.</p></div>${badge(`${tasks.length} ${state.aiTaskStatusFilter==="open"?"offen":"Einträge"}`)}</div>
       <div class="workspace-ai-task-controls">
+        <label class="ai-task-customer-filter">Kunde<select id="aiTaskCustomerFilter" aria-label="Kundenfilter"><option value="" ${!state.aiTaskCustomerFilter?"selected":""}>Alle Kunden</option>${customerOptionsMarkup}</select></label>
         <label>Status<select id="aiTaskStatusFilter"><option value="open" ${state.aiTaskStatusFilter==="open"?"selected":""}>Offen</option><option value="completed" ${state.aiTaskStatusFilter==="completed"?"selected":""}>Erledigt</option><option value="dismissed" ${state.aiTaskStatusFilter==="dismissed"?"selected":""}>Verworfen</option><option value="all" ${state.aiTaskStatusFilter==="all"?"selected":""}>Alle</option></select></label>
         <label>Sortieren<select id="aiTaskSortSelect"><option value="priority" ${state.aiTaskSort==="priority"?"selected":""}>Priorität</option><option value="lastSeen" ${state.aiTaskSort==="lastSeen"?"selected":""}>Zuletzt erkannt</option><option value="customer" ${state.aiTaskSort==="customer"?"selected":""}>Kunde</option></select></label>
         <button class="v2-button soft" type="button" data-ai-tasks-refresh ${state.aiTasksBusy?"disabled":""}>${state.aiTasksBusy?"Aktualisiert …":"Aktualisieren"}</button>
@@ -6478,13 +6941,22 @@
     window.ACTAdminV2Bookings?.renderBookingEditor?.();
     renderNewCustomerWizard();
     if(state.route==="tasks")renderTasks();
+    renderAiTaskDetail();
     renderMobileNavigation();
   }
 
   function routeTo(route,{replace=false}={}){
     const parsed=parseRoute(route.startsWith("#")?route:`#${route}`);
-    const nextHash=parsed.route==="customerDetail"?detailHash(parsed.customerId,parsed.tab):`#${parsed.route}`;
-    const isSameRoute=nextHash===currentRouteHash();
+    if(parsed.route==="tasks"){
+      // Resolve before hash comparison so deep-links and session restore share one path.
+      resolveAiTaskCustomerFilterFromRoute(parsed);
+    }
+    const nextHash=parsed.route==="customerDetail"
+      ?detailHash(parsed.customerId,parsed.tab)
+      :parsed.route==="tasks"
+        ?tasksRouteHash(state.aiTaskCustomerFilter)
+        :`#${parsed.route}`;
+    const isSameRoute=nextHash===currentRouteHash()&&state.route===parsed.route;
     if(!isSameRoute&&hasDirtyEdits()){
       if(!confirmDiscardCustomerEdit())return false;
       resetCustomerEditState();
@@ -6499,6 +6971,9 @@
     // Kommunikationszentrale behält den zuletzt geoeffneten Kunden.
     if(parsed.route==="communication"){
       state.selectedCustomerId=previousCustomerId||"";
+      state.selectedTab="";
+    }else if(parsed.route==="tasks"){
+      state.selectedCustomerId="";
       state.selectedTab="";
     }else{
       state.selectedCustomerId=parsed.customerId||"";
@@ -6519,7 +6994,7 @@
     if(parsed.route==="customerDetail"&&parsed.customerId&&state.aiHistoryCustomerId!==parsed.customerId){
       loadAiAnalysisHistory(parsed.customerId);
     }
-    if(parsed.route==="tasks"&&!state.aiTasks.length&&!state.aiTasksBusy){
+    if((parsed.route==="tasks"||parsed.route==="customerDetail")&&!state.aiTasks.length&&!state.aiTasksBusy){
       loadAiTasks();
     }
     resetHorizontalScroll();
@@ -7974,19 +8449,52 @@
         return;
       }
       if(event.target.closest("[data-ai-tasks-refresh]")){loadAiTasks();return;}
+      const aiTasksForCustomer=event.target.closest("[data-ai-tasks-for-customer]");
+      if(aiTasksForCustomer){
+        openAiTasksForCustomer(aiTasksForCustomer.getAttribute("data-ai-tasks-for-customer")||"");
+        return;
+      }
       const aiCreateTask=event.target.closest("[data-ai-create-task]");
       if(aiCreateTask){
         createSelectedAiTask(Number(aiCreateTask.dataset.aiCreateTask));
         return;
       }
+      if(event.target.id==="aiTaskDetailOverlay"){
+        closeAiTaskDetail();
+        return;
+      }
+      if(event.target.closest("[data-ai-task-detail-close]")){
+        event.preventDefault();
+        closeAiTaskDetail();
+        return;
+      }
+      const aiTaskDetailGoto=event.target.closest("[data-ai-task-detail-goto]");
+      if(aiTaskDetailGoto){
+        event.preventDefault();
+        const customerId=aiTaskDetailGoto.getAttribute("data-ai-task-detail-goto")||"";
+        const tab=aiTaskDetailGoto.getAttribute("data-detail-tab")||"kunde";
+        closeAiTaskDetail();
+        if(customerId)routeTo(`customers/${encodeURIComponent(customerId)}/${tab}`);
+        return;
+      }
+      const aiOpenTask=event.target.closest("[data-ai-open-task]");
+      if(aiOpenTask){
+        event.preventDefault();
+        event.stopPropagation();
+        const taskId=aiOpenTask.getAttribute("data-ai-open-task")||"";
+        const customerId=aiOpenTask.getAttribute("data-ai-task-customer")||state.selectedCustomerId||"";
+        openAiTaskById(customerId,taskId);
+        return;
+      }
       const aiTaskStatus=event.target.closest("[data-ai-task-status]");
       if(aiTaskStatus){
-        const task=arrayValue(state.aiTasks).find(item=>
-          item.customerId===aiTaskStatus.dataset.aiTaskCustomer
-          &&item.analysisId===aiTaskStatus.dataset.aiTaskAnalysis
-          &&item.itemId===aiTaskStatus.dataset.aiTaskItem
+        event.preventDefault();
+        event.stopPropagation();
+        const task=findAiTaskByIds(
+          aiTaskStatus.getAttribute("data-ai-task-customer")||"",
+          aiTaskStatus.getAttribute("data-ai-task-item")||""
         );
-        if(task)updateAiTaskStatus(task,aiTaskStatus.dataset.aiTaskStatus);
+        if(task)updateAiTaskStatus(task,aiTaskStatus.getAttribute("data-ai-task-status")||"open");
         return;
       }
       const aiJump=event.target.closest("[data-ai-jump-entity]");
@@ -8034,6 +8542,10 @@
       if(event.target.id==="documentQualityFilter"){state.documentQuality=event.target.value;renderDocuments();}
       if(event.target.id==="documentSortSelect"){state.documentSort=event.target.value;renderDocuments();}
       if(event.target.id==="documentUploadCustomerSelect"){state.documentUploadCustomerId=event.target.value;renderDocuments();}
+      if(event.target.id==="aiTaskCustomerFilter"){
+        setAiTaskCustomerFilter(event.target.value,{syncRoute:true,replace:true,persist:true,allowPending:false});
+        renderTasks();
+      }
       if(event.target.id==="aiTaskStatusFilter"){state.aiTaskStatusFilter=event.target.value;renderTasks();}
       if(event.target.id==="aiTaskSortSelect"){state.aiTaskSort=event.target.value;renderTasks();}
       if(event.target.matches("[data-ai-compare-id]")){
@@ -8106,6 +8618,11 @@
       }
     });
     document.addEventListener("keydown",event=>{
+      if(event.key==="Escape"&&(state.aiTaskDetailItemId||state.aiTaskDetailError)){
+        event.preventDefault();
+        closeAiTaskDetail();
+        return;
+      }
       const openSheet=document.querySelector(".admin-mobile-action-sheet:not([hidden])");
       if(event.key==="Escape"&&openSheet){event.preventDefault();closeMobileSheet();return;}
       if(event.key==="Tab"&&openSheet){
@@ -8156,7 +8673,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,dashboardDateOffset,dashboardProgramDate,dashboardBookingDueDate,dashboardPriorityEntries,dashboardTodayEntries,dashboardNextSevenEntries,dashboardActivityEntries,renderOperationsDashboard,workspacePanelStartVisible,customerWorkspaceStartVisible,scrollToCustomerWorkspaceStart,scheduleCustomerWorkspaceStartScroll,openCustomerDetail,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,tasksRouteHash,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,dashboardDateOffset,dashboardProgramDate,dashboardBookingDueDate,dashboardPriorityEntries,dashboardTodayEntries,dashboardNextSevenEntries,dashboardActivityEntries,renderOperationsDashboard,workspacePanelStartVisible,customerWorkspaceStartVisible,scrollToCustomerWorkspaceStart,scheduleCustomerWorkspaceStartScroll,openCustomerDetail,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail,filteredAiTasks,aiTaskCustomerFilterOptions,aiTaskCustomerDisplayName,normalizeAiTaskCustomerFilter,setAiTaskCustomerFilter,openAiTasksForCustomer};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

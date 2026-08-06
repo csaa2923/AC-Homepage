@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Task Card Harness</title>
+  <link rel="stylesheet" href="../../../customer-portal/admin-v2.css?v=62">
+  <style>
+    body{margin:0;padding:24px;font-family:Georgia,serif;background:#f0f4ef;color:#14261f}
+    #fixture{max-width:720px;margin:0 auto;display:grid;gap:16px}
+    #results{padding:12px 14px;border-radius:12px;background:#fff;border:1px solid rgba(16,40,32,.12);font:14px/1.4 ui-monospace,Consolas,monospace;white-space:pre-wrap}
+    #results.pass{border-color:#4f9773;background:#eef8f1}
+    #results.fail{border-color:#8b3d31;background:#fff5f2}
+    .harness-badge{display:inline-flex;min-height:32px;align-items:center;padding:0 12px;border-radius:999px;background:#e7f0ea;font-weight:850}
+  </style>
+</head>
+<body>
+  <div id="fixture">
+    <h1>AI Task Card Harness</h1>
+    <div class="workspace-ai-task-controls" id="filterBar">
+      <label class="ai-task-customer-filter">Kunde
+        <select id="aiTaskCustomerFilter" aria-label="Kundenfilter">
+          <option value="">Alle Kunden</option>
+          <option value="kunde-demo-1">Muster, Anna</option>
+          <option value="kunde-demo-2">Schmidt, Ben</option>
+        </select>
+      </label>
+      <label>Status
+        <select id="aiTaskStatusFilter">
+          <option value="open" selected>Offen</option>
+          <option value="all">Alle</option>
+        </select>
+      </label>
+      <label>Sortieren
+        <select id="aiTaskSortSelect">
+          <option value="priority" selected>Priorität</option>
+          <option value="customer">Kunde</option>
+        </select>
+      </label>
+      <button class="v2-button soft" type="button">Aktualisieren</button>
+      <span class="harness-badge" id="countBadge">2 offen</span>
+    </div>
+    <div class="workspace-ai-task-list" id="taskList"></div>
+    <div id="aiTaskDetailHost"></div>
+    <div id="results">Running…</div>
+  </div>
+  <script>
+    const tasks=[
+      {
+        itemId:"task:semantic:trip:transfer-abstimmen",
+        customerId:"kunde-demo-1",
+        customerLabel:"Muster, Anna",
+        title:"Transferzeiten abstimmen",
+        description:"Ankunft und Abholung prüfen, damit keine Lücke entsteht.",
+        status:"open",
+        priority:2
+      },
+      {
+        itemId:"task:semantic:documents:pass-check",
+        customerId:"kunde-demo-2",
+        customerLabel:"Schmidt, Ben",
+        title:"Reisepass prüfen",
+        description:"Gültigkeit und Scan im Dokumentenbereich kontrollieren.",
+        status:"open",
+        priority:1
+      }
+    ];
+    let customerFilter="";
+    let statusFilter="open";
+
+    function escapeHtml(value){
+      return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
+    }
+
+    function filtered(){
+      return tasks.filter(task=>{
+        if(statusFilter!=="all"&&task.status!==statusFilter)return false;
+        if(customerFilter&&task.customerId!==customerFilter)return false;
+        return true;
+      });
+    }
+
+    function cardMarkup(item){
+      return `
+        <article class="task-card workspace-ai-task open" data-ai-task-id="${escapeHtml(item.itemId)}" data-ai-task-customer="${escapeHtml(item.customerId)}">
+          <header class="task-card__header">
+            <span class="task-card__status-dot v2-workspace-task-state" aria-hidden="true"></span>
+            <span class="task-card__status">Offen · Priorität ${escapeHtml(String(item.priority))}</span>
+          </header>
+          <h3 class="task-card__title">${escapeHtml(item.title)}</h3>
+          <p class="task-card__description">${escapeHtml(item.description)}</p>
+          <p class="task-card__meta">${escapeHtml(item.customerLabel)}</p>
+          <div class="task-card__actions">
+            <button class="v2-button small soft task-card__action" type="button" data-ai-open-task="${escapeHtml(item.itemId)}" data-ai-task-customer="${escapeHtml(item.customerId)}">Öffnen</button>
+            <button class="v2-button small soft task-card__action" type="button" data-ai-task-status="completed" data-ai-task-item="${escapeHtml(item.itemId)}">Erledigt</button>
+            <button class="v2-button small soft task-card__action" type="button" data-ai-task-status="dismissed" data-ai-task-item="${escapeHtml(item.itemId)}">Verwerfen</button>
+          </div>
+        </article>`;
+    }
+
+    function renderList(){
+      const list=filtered();
+      document.getElementById("countBadge").textContent=`${list.length} offen`;
+      document.getElementById("taskList").innerHTML=list.length
+        ?list.map(cardMarkup).join("")
+        :`<article class="v2-empty"><h3>Für diesen Kunden gibt es keine Aufgaben.</h3></article>`;
+    }
+
+    function openDetail(item){
+      const host=document.getElementById("aiTaskDetailHost");
+      host.innerHTML=`
+        <div class="ai-task-detail-overlay" id="aiTaskDetailOverlay">
+          <div class="ai-task-detail-panel" id="aiTaskDetailPanel" role="dialog" aria-modal="true" aria-labelledby="aiTaskDetailTitle" tabindex="-1">
+            <header class="ai-task-detail-header">
+              <div><p class="v2-eyebrow">AI Concierge Aufgabe</p><h2 id="aiTaskDetailTitle">${escapeHtml(item.title)}</h2></div>
+              <button class="v2-button soft" type="button" data-ai-task-detail-close>Schließen</button>
+            </header>
+            <div class="ai-task-detail-body">
+              <p>${escapeHtml(item.description)}</p>
+              <dl class="ai-task-detail-meta">
+                <div><dt>Task-ID</dt><dd><code data-ai-task-detail-id>${escapeHtml(item.itemId)}</code></dd></div>
+              </dl>
+            </div>
+            <footer class="ai-task-detail-footer">
+              <div class="task-card__actions">
+                <button class="v2-button soft task-card__action" type="button" data-ai-task-detail-close>Schließen</button>
+              </div>
+            </footer>
+          </div>
+        </div>`;
+      document.getElementById("aiTaskDetailPanel")?.focus();
+    }
+
+    function closeDetail(){
+      document.getElementById("aiTaskDetailHost").innerHTML="";
+    }
+
+    renderList();
+
+    document.getElementById("aiTaskCustomerFilter").addEventListener("change",event=>{
+      customerFilter=event.target.value||"";
+      renderList();
+    });
+    document.getElementById("aiTaskStatusFilter").addEventListener("change",event=>{
+      statusFilter=event.target.value||"open";
+      renderList();
+    });
+
+    document.addEventListener("click",event=>{
+      if(event.target.id==="aiTaskDetailOverlay"||event.target.closest("[data-ai-task-detail-close]")){
+        closeDetail();
+        return;
+      }
+      const openBtn=event.target.closest("[data-ai-open-task]");
+      if(openBtn){
+        const taskId=openBtn.getAttribute("data-ai-open-task")||"";
+        const item=tasks.find(task=>task.itemId===taskId);
+        if(item)openDetail(item);
+      }
+    });
+
+    document.addEventListener("keydown",event=>{
+      if(event.key==="Escape")closeDetail();
+    });
+
+    function rectInside(parent,child){
+      const p=parent.getBoundingClientRect();
+      const c=child.getBoundingClientRect();
+      return c.left>=p.left-1&&c.right<=p.right+1&&c.top>=p.top-1&&c.bottom<=p.bottom+1;
+    }
+
+    async function runChecks(){
+      const lines=[];
+      const fail=msg=>{lines.push("FAIL "+msg);};
+      const pass=msg=>{lines.push("PASS "+msg);};
+      const card=document.querySelector(".task-card");
+      const actions=card?.querySelector(".task-card__actions");
+      const actionButtons=[...card?.querySelectorAll(".task-card__actions > .task-card__action")||[]];
+      if(card&&actions&&actionButtons.length===3)pass("exactly one action bar with 3 actions");
+      else fail("action bar structure invalid");
+      if(actions&&actionButtons.every(btn=>rectInside(card,btn)))pass("all actions inside card bounds");
+      else fail("actions overflow card bounds");
+      if(actionButtons.every(btn=>btn.getBoundingClientRect().height>=44))pass("touch targets >= 44px");
+      else fail("touch targets below 44px");
+      const customerSelect=document.getElementById("aiTaskCustomerFilter");
+      const selectHeight=customerSelect.getBoundingClientRect().height;
+      if(selectHeight>=44)pass("customer filter touch target >= 44px");
+      else fail("customer filter too small");
+      if(document.querySelectorAll(".task-card").length===2&&document.getElementById("countBadge").textContent==="2 offen")pass("all customers shows 2 open tasks");
+      else fail("all-customers count incorrect");
+      customerSelect.value="kunde-demo-1";
+      customerSelect.dispatchEvent(new Event("change"));
+      if(document.querySelectorAll(".task-card").length===1
+        &&document.querySelector(".task-card").dataset.aiTaskCustomer==="kunde-demo-1"
+        &&document.getElementById("countBadge").textContent==="1 offen")pass("single customer filter updates list and count");
+      else fail("single customer filter failed");
+      customerSelect.value="kunde-demo-2";
+      customerSelect.dispatchEvent(new Event("change"));
+      document.getElementById("aiTaskStatusFilter").value="all";
+      document.getElementById("aiTaskStatusFilter").dispatchEvent(new Event("change"));
+      if(document.querySelectorAll(".task-card").length===1)pass("customer filter combines with status filter");
+      else fail("status+customer combination failed");
+      customerSelect.value="kunde-missing";
+      // invalid option not in select; simulate empty list via unknown id
+      customerFilter="kunde-missing";
+      renderList();
+      if(document.body.textContent.includes("Für diesen Kunden gibt es keine Aufgaben.")
+        &&document.getElementById("countBadge").textContent==="0 offen")pass("empty state for filtered customer");
+      else fail("empty state missing");
+      customerFilter="";
+      customerSelect.value="";
+      customerSelect.dispatchEvent(new Event("change"));
+      const openBtn=document.querySelector("[data-ai-open-task]");
+      openBtn.click();
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const panel=document.getElementById("aiTaskDetailPanel");
+      const overlay=document.getElementById("aiTaskDetailOverlay");
+      const style=overlay?getComputedStyle(overlay):null;
+      if(panel&&overlay&&style.display!=="none"&&Number(style.zIndex)>=220)pass("detail panel visible in DOM");
+      else fail("detail panel not visibly rendered");
+      panel?.querySelector("[data-ai-task-detail-close]")?.click();
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      if(!document.getElementById("aiTaskDetailPanel"))pass("close removes detail panel");
+      else fail("close did not remove detail panel");
+      // Mobile layout check
+      const previous=document.body.style.width;
+      document.documentElement.style.width="390px";
+      document.body.style.width="390px";
+      window.dispatchEvent(new Event("resize"));
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const bar=document.getElementById("filterBar");
+      const barStyle=getComputedStyle(bar);
+      const overflowX=document.documentElement.scrollWidth>document.documentElement.clientWidth+2;
+      if(barStyle.display==="grid"||bar.getBoundingClientRect().width<=400)pass("mobile filter bar stacks without forcing wide layout");
+      else fail("mobile filter bar layout unexpected");
+      if(!overflowX)pass("no horizontal page overflow on mobile width");
+      else fail("horizontal overflow on mobile width");
+      document.documentElement.style.width=previous;
+      document.body.style.width=previous;
+      const results=document.getElementById("results");
+      const ok=lines.every(line=>line.startsWith("PASS"));
+      results.className=ok?"pass":"fail";
+      results.textContent=lines.join("\n")+"\n\n"+(ok?"BROWSER HARNESS PASS":"BROWSER HARNESS FAIL");
+      document.title=ok?"AI Task Card Harness PASS":"AI Task Card Harness FAIL";
+    }
+
+    runChecks();
+  </script>
+</body>
+</html>

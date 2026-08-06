@@ -29,6 +29,8 @@
     aiTasks:[],
     aiTasksBusy:false,
     aiTasksError:"",
+    aiTasksMessage:"",
+    aiTasksMessageKind:"",
     aiTaskStatusFilter:"open",
     aiTaskSort:"priority",
     aiTaskCustomerFilter:"",
@@ -36,6 +38,7 @@
     aiTaskDetailCustomerId:"",
     aiTaskDetailItemId:"",
     aiTaskDetailError:"",
+    aiEntityFocus:null,
     communicationMessage:"",
     communicationMessageKind:"",
     communicationEmailTemplate:"general",
@@ -3743,7 +3746,7 @@
     const fileName=doc.fileName||"";
     const tripLabel=firstValue(trip.title,trip.destination,trip.period);
     return `
-      <article class="v2-document-card">
+      <article class="v2-document-card" data-document-id="${escapeHtml(cleanValue(doc.documentId||doc.id))}">
         <header class="v2-document-heading">
           ${documentPreview(doc)}
           <div>
@@ -4746,6 +4749,166 @@
     renderAiTaskDetail();
   }
 
+  const AI_TARGET_TABS={customer:"kunde",trip:"reise",program:"programm",concierge:"concierge",bookings:"buchungen",documents:"dokumente",communication:"kommunikation",publishing:"veroeffentlichung"};
+  const AI_ENTITY_TABS={programItem:"programm",booking:"buchungen",document:"dokumente",day:"programm",customer:"kunde",trip:"reise"};
+  const aiOpenTargetLib=window.ACTAiTaskOpenTargetLibrary||null;
+
+  function aiTaskReferenceSnapshot(task){
+    if(aiOpenTargetLib?.referenceSnapshot)return aiOpenTargetLib.referenceSnapshot(task);
+    return {
+      entityType:cleanValue(task?.entityType),
+      entityId:cleanValue(task?.entityId),
+      programItemId:cleanValue(task?.programItemId),
+      bookingId:cleanValue(task?.bookingId),
+      documentId:cleanValue(task?.documentId),
+      dayId:cleanValue(task?.dayId),
+      targetTab:cleanValue(task?.targetTab),
+      customerId:cleanValue(task?.customerId)
+    };
+  }
+
+  function aiTaskRefList(task){
+    const candidates=aiOpenTargetLib?.collectOpenCandidates
+      ?aiOpenTargetLib.collectOpenCandidates(task)
+      :[];
+    return candidates.map(item=>({entityType:item.kind,entityId:item.entityId}));
+  }
+
+  function aiTaskCustomerForOpenTarget(customer){
+    if(!customer)return null;
+    return {
+      ...customer,
+      program:generatedProgramDays(customer).map((day,index)=>({
+        ...day,
+        id:cleanValue(day.id||day.dayId||day.date)||String(index+1),
+        dayId:cleanValue(day.dayId||day.id||day.date)||String(index+1),
+        items:arrayValue(day.items).map((item,itemIndex)=>({
+          ...item,
+          id:cleanValue(item.id||item.programItemId)||`${index+1}-${itemIndex+1}`,
+          programItemId:cleanValue(item.programItemId||item.id)||`${index+1}-${itemIndex+1}`
+        }))
+      })),
+      documents:normalizedDocuments(customer),
+      bookings:arrayValue(customer.bookings)
+    };
+  }
+
+  function resolveAiTaskOpenTarget(task){
+    const customerId=cleanValue(task?.customerId);
+    if(!customerId||!task)return null;
+    const customer=aiTaskCustomerForOpenTarget(customerById(customerId));
+    if(aiOpenTargetLib?.resolveExecutableOpenTarget){
+      return aiOpenTargetLib.resolveExecutableOpenTarget(task,customer);
+    }
+    return null;
+  }
+
+  function canOpenEntityTarget(task){
+    return Boolean(resolveAiTaskOpenTarget(task));
+  }
+
+  function resolveAiTaskCustomerTarget(task){
+    const customerId=cleanValue(task?.customerId);
+    if(!customerId)return null;
+    const openTarget=resolveAiTaskOpenTarget(task);
+    if(openTarget?.tab)return {customerId,tab:openTarget.tab};
+    const fromEntity=AI_ENTITY_TABS[cleanValue(task?.entityType)]||"";
+    const fromSection=AI_TARGET_TABS[cleanValue(task?.travelSection)]||"";
+    const fromTab=AI_TARGET_TABS[cleanValue(task?.targetTab)]||"";
+    return {customerId,tab:fromTab||fromSection||fromEntity||"kunde"};
+  }
+
+  function applyAiEntityFocus(){
+    const focus=state.aiEntityFocus;
+    if(!focus?.entityId)return;
+    const attr=focus.kind==="day"
+      ?"data-program-day-id"
+      :focus.kind==="programItem"
+        ?"data-program-item-id"
+        :focus.kind==="document"
+          ?"data-document-id"
+          :"";
+    if(!attr)return;
+    window.requestAnimationFrame(()=>{
+      const el=Array.from(document.querySelectorAll(`[${attr}]`)).find(node=>node.getAttribute(attr)===focus.entityId);
+      if(!el)return;
+      el.classList.add("is-ai-entity-focus");
+      el.scrollIntoView({behavior:"smooth",block:"center"});
+      window.setTimeout(()=>{
+        el.classList.remove("is-ai-entity-focus");
+        if(state.aiEntityFocus?.entityId===focus.entityId)state.aiEntityFocus=null;
+      },4000);
+    });
+  }
+
+  function openAiTaskEntityTarget(task){
+    const refs=aiTaskReferenceSnapshot(task);
+    console.info("[ACT Admin V2] AI task open refs",refs);
+    const resolved=resolveAiTaskOpenTarget(task);
+    if(!resolved||!canOpenEntityTarget(task)){
+      state.aiTasksMessage="Kein ausführbares Ziel für diese Aufgabe.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const customerId=resolved.customerId;
+    const taskId=cleanValue(task.itemId||task.stableKey);
+    const restoreDetail=()=>{
+      state.aiEntityFocus=null;
+      if(taskId){
+        state.aiTaskDetailCustomerId=customerId;
+        state.aiTaskDetailItemId=taskId;
+      }
+      renderAiTaskDetail();
+    };
+    state.aiEntityFocus={kind:resolved.kind,entityId:resolved.entityId};
+    if(resolved.kind==="booking"){
+      const customer=customerById(customerId);
+      const booking=(customer?.bookings||[]).find(item=>cleanValue(item.bookingId||item.id)===resolved.entityId);
+      if(!booking){
+        state.aiTasksMessage="Die verknüpfte Buchung wurde nicht gefunden.";
+        state.aiTasksMessageKind="error";
+        restoreDetail();
+        return false;
+      }
+      closeAiTaskDetail();
+      if(routeTo(`customers/${encodeURIComponent(customerId)}/buchungen`)===false){
+        state.aiTasksMessage="Ziel konnte nicht geöffnet werden.";
+        state.aiTasksMessageKind="error";
+        restoreDetail();
+        return false;
+      }
+      window.requestAnimationFrame(()=>{
+        window.ACTAdminV2Bookings?.openEditor?.(booking,customerId);
+      });
+      return true;
+    }
+    if(resolved.kind==="document"){
+      const customer=customerById(customerId);
+      const docs=customer?normalizedDocuments(customer):[];
+      const index=docs.findIndex(doc=>cleanValue(doc.documentId||doc.id)===resolved.entityId);
+      if(index<0){
+        state.aiTasksMessage="Das verknüpfte Dokument wurde nicht gefunden.";
+        state.aiTasksMessageKind="error";
+        restoreDetail();
+        return false;
+      }
+      closeAiTaskDetail();
+      openDocumentEditor(customerId,index);
+      applyAiEntityFocus();
+      return true;
+    }
+    closeAiTaskDetail();
+    if(routeTo(`customers/${encodeURIComponent(customerId)}/${resolved.tab}`)===false){
+      state.aiTasksMessage="Ziel konnte nicht geöffnet werden.";
+      state.aiTasksMessageKind="error";
+      restoreDetail();
+      return false;
+    }
+    applyAiEntityFocus();
+    return true;
+  }
+
   function focusAiTaskDetailPanel(){
     window.requestAnimationFrame(()=>{
       const panel=byId("aiTaskDetailPanel");
@@ -4796,17 +4959,44 @@
     return urgencyLabels[task?.urgency]||cleanValue(task?.duePhase)||cleanValue(task?.urgency)||"Optional";
   }
 
-  function aiTaskActionBarMarkup(task){
+  function aiTaskStatusActionAttrs(task){
     const taskId=cleanValue(task.itemId||task.stableKey);
     const customerId=cleanValue(task.customerId);
     const analysisId=cleanValue(task.analysisId);
+    return `data-ai-task-customer="${escapeHtml(customerId)}" data-ai-task-analysis="${escapeHtml(analysisId)}" data-ai-task-item="${escapeHtml(taskId)}"`;
+  }
+
+  function aiTaskStatusButtonsMarkup(task,{busy=false}={}){
     const status=cleanValue(task.status)||"open";
-    const statusAttrs=`data-ai-task-customer="${escapeHtml(customerId)}" data-ai-task-analysis="${escapeHtml(analysisId)}" data-ai-task-item="${escapeHtml(taskId)}"`;
-    const openBtn=`<button class="v2-button small soft task-card__action" type="button" data-ai-open-task="${escapeHtml(taskId)}" data-ai-task-customer="${escapeHtml(customerId)}">Öffnen</button>`;
+    const statusAttrs=aiTaskStatusActionAttrs(task);
+    const disabled=busy?' disabled aria-busy="true"':"";
     if(status==="open"){
-      return `${openBtn}<button class="v2-button small soft task-card__action" type="button" data-ai-task-status="completed" ${statusAttrs}>Erledigt</button><button class="v2-button small soft task-card__action" type="button" data-ai-task-status="dismissed" ${statusAttrs}>Verwerfen</button>`;
+      return `<button class="v2-button small soft task-card__action task-card__action--success" type="button" data-ai-task-status="completed" ${statusAttrs}${disabled}>Erledigt</button><button class="v2-button small soft task-card__action task-card__action--danger" type="button" data-ai-task-status="dismissed" ${statusAttrs}${disabled}>Verwerfen</button>`;
     }
-    return `${openBtn}<button class="v2-button small soft task-card__action" type="button" data-ai-task-status="open" ${statusAttrs}>Wieder öffnen</button>`;
+    return `<button class="v2-button small soft task-card__action" type="button" data-ai-task-status="open" ${statusAttrs}${disabled}>Wieder öffnen</button>`;
+  }
+
+  function aiTaskActionBarMarkup(task){
+    const taskId=cleanValue(task.itemId||task.stableKey);
+    const customerId=cleanValue(task.customerId);
+    const busy=Boolean(state.aiTasksBusy);
+    const disabled=busy?' disabled aria-busy="true"':"";
+    const openBtn=`<button class="v2-button small soft task-card__action" type="button" data-ai-open-task="${escapeHtml(taskId)}" data-ai-task-customer="${escapeHtml(customerId)}"${disabled}>Öffnen</button>`;
+    return `${openBtn}${aiTaskStatusButtonsMarkup(task,{busy})}`;
+  }
+
+  function aiTaskDetailActionBarMarkup(task){
+    const busy=Boolean(state.aiTasksBusy);
+    const disabled=busy?' disabled aria-busy="true"':"";
+    const openTarget=canOpenEntityTarget(task)?resolveAiTaskOpenTarget(task):null;
+    const customerTarget=resolveAiTaskCustomerTarget(task);
+    const openBtn=openTarget
+      ?`<button class="v2-button small primary task-card__action" type="button" data-ai-task-open-entity="${escapeHtml(task.itemId||task.stableKey||"")}" data-ai-task-customer="${escapeHtml(task.customerId||"")}"${disabled}>Öffnen</button>`
+      :"";
+    const gotoBtn=customerTarget
+      ?`<button class="v2-button small soft task-card__action task-card__action--secondary" type="button" data-ai-task-detail-goto="${escapeHtml(customerTarget.customerId)}" data-detail-tab="${escapeHtml(customerTarget.tab)}"${disabled}>Zum Kundenbereich</button>`
+      :"";
+    return `${openBtn}${gotoBtn}${aiTaskStatusButtonsMarkup(task,{busy})}`;
   }
 
   function aiTaskListCardMarkup(task){
@@ -4873,8 +5063,9 @@
     }
     const customerName=aiTaskCustomerDisplayName(task.customerId,task);
     const status=cleanValue(task.status)||"open";
-    const targetTabs={customer:"kunde",trip:"reise",program:"programm",concierge:"concierge",bookings:"buchungen",documents:"dokumente",communication:"kommunikation",publishing:"veroeffentlichung"};
-    const targetTab=targetTabs[task.targetTab]||"";
+    const actionMessage=cleanValue(state.aiTasksMessage);
+    const refs=aiTaskReferenceSnapshot(task);
+    console.info("[ACT Admin V2] AI task detail refs",task.title||"",refs);
     host.innerHTML=`
       <div class="ai-task-detail-overlay" id="aiTaskDetailOverlay">
         <div class="ai-task-detail-panel" id="aiTaskDetailPanel" role="dialog" aria-modal="true" aria-labelledby="aiTaskDetailTitle" tabindex="-1">
@@ -4883,7 +5074,7 @@
               <p class="v2-eyebrow">AI Concierge Aufgabe</p>
               <h2 id="aiTaskDetailTitle">${escapeHtml(task.title||"Aufgabe")}</h2>
             </div>
-            <button class="v2-button soft" type="button" data-ai-task-detail-close>Schließen</button>
+            <button class="v2-button soft" type="button" data-ai-task-detail-close ${state.aiTasksBusy?"disabled":""}>Schließen</button>
           </header>
           <div class="ai-task-detail-body">
             <p>${escapeHtml(task.description||"Keine Beschreibung vorhanden.")}</p>
@@ -4894,12 +5085,23 @@
               <div><dt>Status</dt><dd>${escapeHtml(aiTaskStatusLabel(status))}</dd></div>
               <div><dt>Quelle</dt><dd>${escapeHtml(`AI Concierge${task.analysisId?` · ${task.analysisId}`:""}`)}</dd></div>
               <div><dt>Task-ID</dt><dd><code data-ai-task-detail-id>${escapeHtml(task.itemId||task.stableKey||"")}</code></dd></div>
+              <div data-ai-task-refs><dt>Referenzen</dt><dd><code>${escapeHtml([
+                `entityType=${refs.entityType||"—"}`,
+                `entityId=${refs.entityId||"—"}`,
+                `programItemId=${refs.programItemId||"—"}`,
+                `bookingId=${refs.bookingId||"—"}`,
+                `documentId=${refs.documentId||"—"}`,
+                `dayId=${refs.dayId||"—"}`,
+                `targetTab=${refs.targetTab||"—"}`,
+                `customerId=${refs.customerId||"—"}`
+              ].join(" · "))}</code></dd></div>
             </dl>
+            ${actionMessage?`<p class="v2-edit-status ${escapeHtml(state.aiTasksMessageKind||"success")}" role="status">${escapeHtml(actionMessage)}</p>`:""}
+            ${state.aiTasksError?`<p class="v2-edit-status error" role="alert">${escapeHtml(state.aiTasksError)}</p>`:""}
           </div>
           <footer class="ai-task-detail-footer">
             <div class="task-card__actions">
-              ${targetTab?`<button class="v2-button soft task-card__action" type="button" data-ai-task-detail-goto="${escapeHtml(task.customerId)}" data-detail-tab="${escapeHtml(targetTab)}">Zum Kundenbereich</button>`:""}
-              ${aiTaskActionBarMarkup(task)}
+              ${aiTaskDetailActionBarMarkup(task)}
             </div>
           </footer>
         </div>
@@ -5146,8 +5348,6 @@
     return `<div class="v2-concierge-fact"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
   }
 
-  const AI_TARGET_TABS={customer:"kunde",trip:"reise",program:"programm",concierge:"concierge",bookings:"buchungen",documents:"dokumente",communication:"kommunikation",publishing:"veroeffentlichung"};
-
   async function analyzeSelectedCustomerWithAi(){
     const customer=customerById(state.selectedCustomerId);
     if(!customer||state.aiAnalysisBusy)return;
@@ -5318,6 +5518,7 @@
       const result=await window.ACTFirebaseService?.createConciergeAnalysisTask?.(customer.customerId,analysis.analysisId,task);
       if(!result?.itemId)throw new Error("create failed");
       const now=result.updatedAt||new Date().toISOString();
+      const primaryRef=aiTaskRefList(task)[0]||null;
       upsertAiTaskLocal({
         itemId:result.itemId,
         stableKey:result.itemId,
@@ -5332,6 +5533,9 @@
         targetTab:task.targetTab,
         taskType:task.taskType,
         createMode:task.createMode||"confirm",
+        entityType:primaryRef?.entityType||"",
+        entityId:primaryRef?.entityId||"",
+        refs:arrayValue(task.refs),
         source:"ai_concierge",
         createdAt:now,
         lastSeenAt:now,
@@ -5464,31 +5668,79 @@
     });
   }
 
+  async function refreshAiTasksWhileBusy(){
+    const result=await window.ACTFirebaseService?.listConciergeAnalysisTasks?.();
+    state.aiTasks=arrayValue(result?.tasks).map(task=>({
+      ...task,
+      itemId:cleanValue(task.itemId||task.stableKey),
+      status:cleanValue(task.status)||"open",
+      source:cleanValue(task.source)||"ai_concierge"
+    }));
+    setAiTaskCustomerFilter(state.aiTaskCustomerFilter,{
+      syncRoute:state.route==="tasks",
+      replace:true,
+      persist:true,
+      allowPending:false
+    });
+  }
+
   async function updateAiTaskStatus(task,status){
     if(!task||state.aiTasksBusy)return;
     const nextStatus=cleanValue(status)||"open";
+    if(nextStatus==="dismissed"){
+      const confirmed=window.confirm("Aufgabe verwerfen? Sie verschwindet aus dem offenen Arbeitsvorrat.");
+      if(!confirmed)return;
+    }
     state.aiTasksBusy=true;
     state.aiTasksError="";
+    state.aiTasksMessage=nextStatus==="completed"
+      ?"Aufgabe wird als erledigt markiert …"
+      :nextStatus==="dismissed"
+        ?"Aufgabe wird verworfen …"
+        :"Aufgabe wird wieder geöffnet …";
+    state.aiTasksMessageKind="success";
     render();
     try{
       const result=await window.ACTFirebaseService?.updateConciergeAnalysisItemStatus?.(
         task.customerId,task.analysisId,task.itemId,nextStatus
       );
       if(!result?.itemId)throw new Error("status update failed");
-      upsertAiTaskLocal({...task,status:result.status||nextStatus,itemId:result.itemId,updatedAt:result.updatedAt});
+      const now=result.updatedAt||new Date().toISOString();
+      upsertAiTaskLocal({
+        ...task,
+        status:result.status||nextStatus,
+        itemId:result.itemId,
+        updatedAt:now,
+        completedAt:nextStatus==="completed"?now:null,
+        completedBy:nextStatus==="completed"?"self":null,
+        dismissedAt:nextStatus==="dismissed"?now:null,
+        dismissedBy:nextStatus==="dismissed"?"self":null
+      });
+      try{
+        await refreshAiTasksWhileBusy();
+      }catch(refreshError){
+        console.error("[ACT Admin V2] AI task refresh:",refreshError?.code||refreshError?.name||"unknown");
+      }
+      if(state.selectedCustomerId===task.customerId){
+        try{await loadAiAnalysisHistory(task.customerId);}catch(_){/* ignore history refresh errors */}
+      }
+      state.aiTasksMessage=nextStatus==="completed"
+        ?"Aufgabe als erledigt markiert."
+        :nextStatus==="dismissed"
+          ?"Aufgabe verworfen."
+          :"Aufgabe wieder geöffnet.";
+      state.aiTasksMessageKind="success";
       if(nextStatus!=="open"
         &&cleanValue(state.aiTaskDetailCustomerId)===cleanValue(task.customerId)
-        &&cleanValue(state.aiTaskDetailItemId)===cleanValue(task.itemId)){
+        &&cleanValue(state.aiTaskDetailItemId)===cleanValue(task.itemId||task.stableKey)){
         state.aiTaskDetailCustomerId="";
         state.aiTaskDetailItemId="";
       }
-      state.aiTasksBusy=false;
-      await Promise.all([
-        loadAiTasks(),
-        state.selectedCustomerId===task.customerId?loadAiAnalysisHistory(task.customerId):Promise.resolve()
-      ]);
-    }catch(_){
+    }catch(error){
+      console.error("[ACT Admin V2] AI task status:",error?.code||error?.name||"unknown");
       state.aiTasksError="Aufgabenstatus konnte nicht aktualisiert werden. Bitte erneut versuchen.";
+      state.aiTasksMessage="";
+      state.aiTasksMessageKind="";
     }finally{
       state.aiTasksBusy=false;
       render();
@@ -5622,7 +5874,8 @@
         <label>Sortieren<select id="aiTaskSortSelect"><option value="priority" ${state.aiTaskSort==="priority"?"selected":""}>Priorität</option><option value="lastSeen" ${state.aiTaskSort==="lastSeen"?"selected":""}>Zuletzt erkannt</option><option value="customer" ${state.aiTaskSort==="customer"?"selected":""}>Kunde</option></select></label>
         <button class="v2-button soft" type="button" data-ai-tasks-refresh ${state.aiTasksBusy?"disabled":""}>${state.aiTasksBusy?"Aktualisiert …":"Aktualisieren"}</button>
       </div>
-      ${state.aiTasksError?`<p class="v2-edit-status error">${escapeHtml(state.aiTasksError)}</p>`:""}
+      ${state.aiTasksMessage?`<p class="v2-edit-status ${escapeHtml(state.aiTasksMessageKind||"success")}" role="status">${escapeHtml(state.aiTasksMessage)}</p>`:""}
+      ${state.aiTasksError?`<p class="v2-edit-status error" role="alert">${escapeHtml(state.aiTasksError)}</p>`:""}
       <div class="workspace-ai-task-list">${taskMarkup}</div>
     </section>`;
   }
@@ -6527,15 +6780,17 @@
 
   function programReadDay(day,index,docs=[]){
     const items=sortProgramItems(day.items);
+    const dayId=cleanValue(day.id||day.dayId||day.date)||String(index+1);
+    const dayFocused=state.aiEntityFocus?.kind==="day"&&state.aiEntityFocus?.entityId===dayId;
     return `
-      <article class="v2-program-day">
+      <article class="v2-program-day${dayFocused?" is-ai-entity-focus":""}" data-program-day-index="${index}" data-program-day-id="${escapeHtml(dayId)}">
         <header>
           <p class="v2-eyebrow">Tag ${index+1}</p>
           <h3>${escapeHtml(day.date?`${formatLongDate(day.date)}`:displayValue(day.title,`Tag ${index+1}`))}</h3>
           ${day.title&&!/^Tag \d+$/.test(day.title)?`<p>${escapeHtml(day.title)}</p>`:""}
         </header>
         <div class="v2-program-timeline">
-          ${items.length?items.map(item=>programTimelineItem(item,docs)).join(""):`<p class="v2-muted">Noch keine Programmpunkte hinterlegt.</p>`}
+          ${items.length?items.map((item,itemIndex)=>programTimelineItem(item,docs,{dayIndex:index,itemIndex})).join(""):`<p class="v2-muted">Noch keine Programmpunkte hinterlegt.</p>`}
         </div>
       </article>
     `;
@@ -6610,7 +6865,7 @@
     return true;
   }
 
-  function programTimelineItem(item,docs=[]){
+  function programTimelineItem(item,docs=[],{dayIndex=0,itemIndex=0}={}){
     const time=programTimeLabel(item);
     const location=locationSummary(item)||item.address||"";
     const travelLinks=programTravelLinksMarkup(item);
@@ -6625,8 +6880,10 @@
     const ticketInfo=[item.ticketNumber?`Ticket ${item.ticketNumber}`:"",item.voucherNumber?`Voucher ${item.voucherNumber}`:""].filter(Boolean).join(" · ");
     const attachments=docs.filter(doc=>documentMatchesProgramItem(doc,item));
     const gpxName=cleanValue(item.gpxFile?.fileName||item.gpxFile?.title);
+    const stableId=cleanValue(item.id||item.programItemId||item.stableId)||`${dayIndex+1}-${itemIndex+1}`;
+    const focused=state.aiEntityFocus?.entityId===stableId||state.aiEntityFocus?.entityId===cleanValue(item.id||item.programItemId);
     return `
-      <article class="v2-program-item ${time?"":"no-time"}">
+      <article class="v2-program-item ${time?"":"no-time"}${focused?" is-ai-entity-focus":""}" data-program-item-id="${escapeHtml(stableId)}">
         ${time?`<div class="v2-program-time">${escapeHtml(time)}</div>`:""}
         <div>
           <div class="v2-meta">${badge(item.category||"Sonstiges")}${programPriorityBadge(item.priority)}</div>
@@ -6943,6 +7200,7 @@
     if(state.route==="tasks")renderTasks();
     renderAiTaskDetail();
     renderMobileNavigation();
+    if(state.route==="customerDetail"&&state.aiEntityFocus)applyAiEntityFocus();
   }
 
   function routeTo(route,{replace=false}={}){
@@ -8471,16 +8729,37 @@
       const aiTaskDetailGoto=event.target.closest("[data-ai-task-detail-goto]");
       if(aiTaskDetailGoto){
         event.preventDefault();
+        if(state.aiTasksBusy)return;
         const customerId=aiTaskDetailGoto.getAttribute("data-ai-task-detail-goto")||"";
         const tab=aiTaskDetailGoto.getAttribute("data-detail-tab")||"kunde";
         closeAiTaskDetail();
         if(customerId)routeTo(`customers/${encodeURIComponent(customerId)}/${tab}`);
         return;
       }
+      const aiOpenEntity=event.target.closest("[data-ai-task-open-entity]");
+      if(aiOpenEntity){
+        event.preventDefault();
+        event.stopPropagation();
+        if(state.aiTasksBusy||aiOpenEntity.disabled)return;
+        const task=findAiTaskByIds(
+          aiOpenEntity.getAttribute("data-ai-task-customer")||"",
+          aiOpenEntity.getAttribute("data-ai-task-open-entity")||""
+        );
+        if(!task){
+          state.aiTasksMessage="Aufgabe nicht geladen. Bitte Liste aktualisieren.";
+          state.aiTasksMessageKind="error";
+          renderAiTaskDetail();
+          return;
+        }
+        const opened=openAiTaskEntityTarget(task);
+        if(!opened)render();
+        return;
+      }
       const aiOpenTask=event.target.closest("[data-ai-open-task]");
       if(aiOpenTask){
         event.preventDefault();
         event.stopPropagation();
+        if(state.aiTasksBusy)return;
         const taskId=aiOpenTask.getAttribute("data-ai-open-task")||"";
         const customerId=aiOpenTask.getAttribute("data-ai-task-customer")||state.selectedCustomerId||"";
         openAiTaskById(customerId,taskId);
@@ -8490,6 +8769,7 @@
       if(aiTaskStatus){
         event.preventDefault();
         event.stopPropagation();
+        if(state.aiTasksBusy||aiTaskStatus.disabled)return;
         const task=findAiTaskByIds(
           aiTaskStatus.getAttribute("data-ai-task-customer")||"",
           aiTaskStatus.getAttribute("data-ai-task-item")||""
@@ -8499,7 +8779,18 @@
       }
       const aiJump=event.target.closest("[data-ai-jump-entity]");
       if(aiJump&&state.selectedCustomerId){
-        const tab=AI_TARGET_TABS[aiJump.dataset.aiTargetTab]||"programm";
+        const entityType=cleanValue(aiJump.dataset.aiJumpEntity);
+        const entityId=cleanValue(aiJump.dataset.aiJumpId);
+        const tab=AI_TARGET_TABS[aiJump.dataset.aiTargetTab]||AI_ENTITY_TABS[entityType]||"programm";
+        if(entityType&&entityId&&entityType!=="none"&&entityType!=="customer"&&entityType!=="trip"){
+          openAiTaskEntityTarget({
+            customerId:state.selectedCustomerId,
+            entityType,
+            entityId,
+            targetTab:aiJump.dataset.aiTargetTab||""
+          });
+          return;
+        }
         openWorkspaceTab(tab);
         return;
       }

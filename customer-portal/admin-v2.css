@@ -379,9 +379,32 @@ p{color:var(--muted);line-height:1.55}
   border-top:1px solid rgba(16,40,32,.08);
   min-width:0;
 }
-.task-card__action,.task-card__actions .v2-button{min-height:44px;position:relative;z-index:1}
+.task-card__action,.task-card__actions .v2-button{min-height:44px;min-width:44px;position:relative;z-index:1}
+.task-card__action--secondary{order:2}
+.task-card__action--success{
+  border-color:#9ec9ad;
+  background:#f1faf4;
+  color:#1f6b3f;
+}
+.task-card__action--success:hover{background:#e5f4eb}
+.task-card__action--danger{
+  border-color:#e2b8b0;
+  background:#fff8f6;
+  color:#8b3d31;
+}
+.task-card__action--danger:hover{background:#ffefea}
+.task-card__actions .task-card__action--success{order:3}
+.task-card__actions .task-card__action--danger{order:4}
 .workspace-ai-task.completed .task-card__status-dot{background:#4f9773}
 .workspace-ai-task.dismissed .task-card__status-dot{background:#99a8a0}
+.v2-program-item.is-ai-entity-focus,
+.v2-program-day.is-ai-entity-focus,
+.v2-document-card.is-ai-entity-focus{
+  outline:2px solid #c9a227;
+  outline-offset:3px;
+  box-shadow:0 0 0 4px rgba(201,162,39,.22);
+  border-radius:16px;
+}
 .workspace-ai-task.is-focused,.v2-ai-task-card.is-created{
   border-color:#c9a227;
   box-shadow:0 0 0 2px rgba(201,162,39,.28);

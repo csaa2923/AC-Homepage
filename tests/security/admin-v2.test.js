@@ -33,10 +33,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=10/);
-    assert.match(html,/admin-v2\.css\?v=62/);
+    assert.match(html,/admin-v2\.css\?v=64/);
     assert.match(html,/class="v2-login-logo"[^>]+src="\.\.\/images\/logo\/alpine-concierge-logo-transparent\.png"[^>]+alt="Alpine Concierge Tirol"[^>]+width="1536" height="1024"/);
     assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
-    assert.match(html,/admin-v2\.js\?v=82/);
+    assert.match(html,/admin-v2\.js\?v=84/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(html,/concierge-intelligence-library\.js\?v=1/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
@@ -103,6 +103,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     const statusFn=js.match(/async function updateAiTaskStatus[\s\S]*?(?=\n  function )/)?.[0]||"";
     const cardFn=js.match(/function aiTaskListCardMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
     const actionFn=js.match(/function aiTaskActionBarMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const detailActionFn=js.match(/function aiTaskDetailActionBarMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const openTargetFn=js.match(/function resolveAiTaskOpenTarget[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const openEntityFn=js.match(/function openAiTaskEntityTarget[\s\S]*?(?=\n  function )/)?.[0]||"";
     assert.match(js,/AI Concierge Aufgaben/);
     assert.match(js,/function customerAiTasks\(/);
     assert.match(js,/function openAiTaskById\(/);
@@ -111,6 +114,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function ensureAiTaskDetailHost\(/);
     assert.match(js,/data-ai-open-task=/);
     assert.match(js,/getAttribute\("data-ai-open-task"\)/);
+    assert.match(js,/data-ai-task-open-entity=/);
     assert.match(js,/state\.aiTaskDetailItemId/);
     assert.match(js,/state\.aiTaskDetailCustomerId/);
     assert.match(html,/id="aiTaskDetailHost"/);
@@ -124,27 +128,74 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(cardFn,/task-card__meta/);
     assert.match(cardFn,/task-card__actions/);
     assert.match(actionFn,/data-ai-open-task="\$\{escapeHtml\(taskId\)\}"/);
-    assert.match(actionFn,/>Erledigt</);
-    assert.match(actionFn,/>Verwerfen</);
+    assert.match(actionFn,/aiTaskStatusButtonsMarkup\(task,\{busy\}\)/);
+    assert.match(js,/function aiTaskStatusButtonsMarkup[\s\S]*?>Erledigt</);
+    assert.match(js,/function aiTaskStatusButtonsMarkup[\s\S]*?>Verwerfen</);
+    assert.match(detailActionFn,/resolveAiTaskOpenTarget\(task\)/);
+    assert.match(detailActionFn,/data-ai-task-open-entity=/);
+    assert.match(detailActionFn,/Zum Kundenbereich/);
+    assert.match(detailActionFn,/task-card__action--secondary/);
+    assert.match(detailActionFn,/aiTaskStatusButtonsMarkup\(task,\{busy\}\)/);
+    assert.match(js,/task-card__action--success/);
+    assert.match(js,/task-card__action--danger/);
+    assert.match(openTargetFn,/resolveExecutableOpenTarget/);
+    assert.match(openTargetFn,/return null/);
+    assert.match(js,/OPEN_ENTITY_KINDS|programItem.*booking.*document.*day|collectOpenCandidates/);
+    assert.match(openEntityFn,/aiEntityFocus/);
+    assert.match(openEntityFn,/openEditor/);
+    assert.match(openEntityFn,/openDocumentEditor/);
+    assert.match(openEntityFn,/buchungen/);
+    assert.match(openEntityFn,/Kein ausführbares Ziel/);
     assert.equal((cardFn.match(/task-card__actions/g)||[]).length,1,"exactly one action bar per card markup");
     assert.doesNotMatch(cardFn,/workspace-ai-task-toolbar|workspace-ai-task-check|workspace-ai-task-actions/);
     assert.match(statusFn,/updateConciergeAnalysisItemStatus/);
     assert.match(statusFn,/upsertAiTaskLocal/);
-    assert.match(statusFn,/loadAiTasks\(\)/);
+    assert.match(statusFn,/refreshAiTasksWhileBusy/);
+    assert.match(statusFn,/if\(!task\|\|state\.aiTasksBusy\)return/);
+    assert.match(statusFn,/window\.confirm\("Aufgabe verwerfen\?/);
+    assert.match(statusFn,/Aufgabe als erledigt markiert/);
+    assert.match(statusFn,/Aufgabe verworfen/);
+    assert.match(statusFn,/completedAt/);
+    assert.match(statusFn,/dismissedAt/);
+    assert.match(statusFn,/aiTaskDetailCustomerId=""/);
     assert.match(createFn,/upsertAiTaskLocal\(/);
     assert.match(createFn,/await loadAiTasks\(\)/);
     assert.match(createFn,/openAiTaskById\(customer\.customerId,result\.itemId\)/);
+    assert.match(createFn,/entityType:primaryRef\?\.entityType/);
     assert.match(js,/Escape.*aiTaskDetailItemId|aiTaskDetailItemId.*Escape/);
+    assert.match(js,/data-program-item-id=/);
     assert.match(css,/\.task-card\.workspace-ai-task\{/);
     assert.match(css,/flex-direction:column/);
     assert.match(css,/\.task-card__actions\{/);
+    assert.match(css,/\.task-card__action--success\{/);
+    assert.match(css,/\.task-card__action--danger\{/);
+    assert.match(css,/min-height:44px/);
     assert.match(css,/\.ai-task-detail-overlay\{/);
     assert.match(css,/z-index:220/);
     assert.match(css,/@media \(max-width:767px\)\{[\s\S]*task-card__actions/);
+    assert.match(css,/\.is-ai-entity-focus/);
     assert.ok(
       /upsertAiTaskLocal\([\s\S]*?status:result\.status\|\|"open"/.test(createFn),
       "created confirm tasks must be upserted locally with open status"
     );
+  });
+
+  it("resolves concrete AI task open targets and hides non-concrete detail open actions",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const openTargetFn=js.match(/function resolveAiTaskOpenTarget[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const detailActionFn=js.match(/function aiTaskDetailActionBarMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const detailRenderFn=js.match(/function renderAiTaskDetail[\s\S]*?(?=\n  function aiSuggestedTaskCard|\n  function aiCompareMarkup)/)?.[0]||"";
+    assert.match(js,/function canOpenEntityTarget\(/);
+    assert.match(openTargetFn,/resolveExecutableOpenTarget/);
+    assert.match(openTargetFn,/aiTaskCustomerForOpenTarget/);
+    assert.match(detailActionFn,/canOpenEntityTarget\(task\)\?resolveAiTaskOpenTarget\(task\):null/);
+    assert.match(detailActionFn,/openTarget\s*\?\s*`[\s\S]*data-ai-task-open-entity/);
+    assert.match(detailActionFn,/:\s*""/);
+    assert.match(detailActionFn,/resolveAiTaskCustomerTarget\(task\)/);
+    assert.doesNotMatch(detailActionFn,/data-ai-open-task=/);
+    assert.match(detailRenderFn,/aiTaskDetailActionBarMarkup\(task\)/);
+    assert.doesNotMatch(detailRenderFn,/aiTaskActionBarMarkup\(task\)/);
+    assert.match(detailRenderFn,/data-ai-task-refs/);
   });
 
   it("filters AI tasks by customer with URL/session persistence and deep links",()=>{
@@ -751,12 +802,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=62/);
+    assert.match(html,/admin-v2\.css\?v=64/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
     assert.match(html,/firebase-service\.js\?v=32/);
-    assert.match(html,/admin-v2\.js\?v=82/);
+    assert.match(html,/admin-v2\.js\?v=84/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -878,7 +929,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-service\.js\?v=32/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=82/);
+    assert.match(html,/admin-v2\.js\?v=84/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -990,8 +1041,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=62/);
-    assert.match(html,/admin-v2\.js\?v=82/);
+    assert.match(html,/admin-v2\.css\?v=64/);
+    assert.match(html,/admin-v2\.js\?v=84/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -1207,8 +1258,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=82/);
-    assert.match(html,/admin-v2\.css\?v=62/);
+    assert.match(html,/admin-v2\.js\?v=84/);
+    assert.match(html,/admin-v2\.css\?v=64/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);
     assert.match(js,/ACTAdminV2Communication\?\.bind/);

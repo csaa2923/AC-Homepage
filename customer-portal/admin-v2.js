@@ -24,6 +24,8 @@
     aiHistoryCursor:null,
     aiHistoryBusy:false,
     aiHistoryError:"",
+    aiCompareIds:[],
+    aiTaskCreateBusy:false,
     aiTasks:[],
     aiTasksBusy:false,
     aiTasksError:"",
@@ -4537,21 +4539,223 @@
     return `<span class="v2-workspace-status ${escapeHtml(item.tone||"muted")}"><i aria-hidden="true"></i>${escapeHtml(item.label)}</span>`;
   }
 
+  function toAdvisorView(analysis){
+    if(!analysis||typeof analysis!=="object")return null;
+    if(Number(analysis.schemaVersion)===2||analysis.score||arrayValue(analysis.findings).length||arrayValue(analysis.suggestedTasks).length){
+      return {
+        schemaVersion:Number(analysis.schemaVersion)||2,
+        score:analysis.score||null,
+        summary:analysis.summary||"",
+        strengths:arrayValue(analysis.strengths),
+        findings:arrayValue(analysis.findings),
+        risks:arrayValue(analysis.risks),
+        recommendations:arrayValue(analysis.recommendations),
+        wowMoments:arrayValue(analysis.wowMoments),
+        suggestedTasks:arrayValue(analysis.suggestedTasks),
+        missingData:arrayValue(analysis.missingData),
+        confidence:analysis.confidence||{overall:"medium",notes:""},
+        conciergeNoteDraft:analysis.conciergeNoteDraft||"",
+        disclaimer:analysis.disclaimer||"",
+        legacy:analysis.legacy===true
+      };
+    }
+    return {
+      schemaVersion:1,
+      score:null,
+      summary:analysis.summary||"",
+      strengths:arrayValue(analysis.strengths),
+      findings:arrayValue(analysis.concerns).map((item,index)=>({
+        id:item.sourceInsightId||`legacy-${index}`,
+        area:"other",
+        severity:item.severity||"recommendation",
+        title:item.title||"",
+        rationale:item.description||"",
+        impact:"",
+        recommendedAction:"",
+        targetTab:item.targetTab||"trip",
+        confidence:"medium",
+        refs:[]
+      })),
+      risks:[],
+      recommendations:arrayValue(analysis.nextActions).map(item=>({
+        title:item.title||"",
+        description:item.description||"",
+        priority:item.priority||5,
+        targetTab:item.targetTab||"trip",
+        refs:[]
+      })),
+      wowMoments:[],
+      suggestedTasks:arrayValue(analysis.nextActions).map(item=>({
+        createMode:"confirm",
+        taskType:"other",
+        title:item.title||"",
+        description:item.description||"",
+        priority:item.priority||5,
+        urgency:item.urgency||"optional",
+        impact:item.impact||"low",
+        targetTab:item.targetTab||"trip",
+        refs:[],
+        sourceFindingId:item.sourceInsightId||""
+      })),
+      missingData:[],
+      confidence:{overall:"medium",notes:"Legacy-Analyse"},
+      conciergeNoteDraft:analysis.conciergeNoteDraft||"",
+      disclaimer:analysis.disclaimer||"",
+      legacy:true
+    };
+  }
+
+  function aiScoreChip(label,value){
+    const score=Number.isFinite(Number(value))?Math.round(Number(value)):"—";
+    return `<div class="v2-ai-score-chip"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(score))}</strong></div>`;
+  }
+
+  function aiFindingCard(item,{kind="finding"}={}){
+    const severity=item.severity||"recommendation";
+    const refs=arrayValue(item.refs);
+    const entityRef=refs.find(ref=>ref.entityType&&ref.entityType!=="none"&&ref.entityId);
+    const jumpAttr=entityRef
+      ?`data-ai-jump-entity="${escapeHtml(entityRef.entityType)}" data-ai-jump-id="${escapeHtml(entityRef.entityId)}" data-ai-target-tab="${escapeHtml(item.targetTab||"program")}"`
+      :`data-ai-target-tab="${escapeHtml(item.targetTab||"trip")}"`;
+    return `
+      <article class="v2-ai-finding ${escapeHtml(kind)} severity-${escapeHtml(severity)}">
+        <header>
+          <small>${escapeHtml(severity)} · ${escapeHtml(item.area||kind)}</small>
+          <strong>${escapeHtml(item.title||"")}</strong>
+        </header>
+        <p>${escapeHtml(item.rationale||item.description||"")}</p>
+        ${item.impact?`<p class="v2-ai-finding-meta"><span>Auswirkung</span> ${escapeHtml(item.impact)}</p>`:""}
+        ${item.recommendedAction?`<p class="v2-ai-finding-meta"><span>Maßnahme</span> ${escapeHtml(item.recommendedAction)}</p>`:""}
+        <div class="v2-ai-finding-actions">
+          <button class="v2-button small soft" type="button" ${jumpAttr}>Zur Stelle</button>
+          ${item.targetTab==="documents"?`<button class="v2-button small soft" type="button" data-ai-target-tab="documents">Dokument hochladen</button>`:""}
+          ${item.targetTab==="program"?`<button class="v2-button small soft" type="button" data-ai-target-tab="program">Navigation ergänzen</button>`:""}
+        </div>
+      </article>
+    `;
+  }
+
+  function aiSuggestedTaskCard(task,index){
+    const urgencyLabels={immediate:"Sofort",this_week:"Diese Woche",before_trip:"Vor Reise",optional:"Optional"};
+    const impactLabels={high:"Hohe Wirkung",medium:"Mittlere Wirkung",low:"Geringe Wirkung"};
+    const needsConfirm=task.createMode!=="auto";
+    return `
+      <article class="v2-ai-task-card">
+        <small>${escapeHtml(`${urgencyLabels[task.urgency]||"Optional"} · ${impactLabels[task.impact]||"Geringe Wirkung"} · ${task.createMode==="auto"?"Auto":"Bestätigung"}`)}</small>
+        <strong>${escapeHtml(task.title||"")}</strong>
+        <p>${escapeHtml(task.description||"")}</p>
+        <div class="v2-ai-finding-actions">
+          <button class="v2-button small soft" type="button" data-ai-target-tab="${escapeHtml(task.targetTab||"trip")}">Öffnen</button>
+          ${needsConfirm?`<button class="v2-button small primary" type="button" data-ai-create-task="${escapeHtml(String(index))}" ${state.aiTaskCreateBusy?"disabled":""}>Aufgabe erstellen</button>`:""}
+        </div>
+      </article>
+    `;
+  }
+
+  function aiCompareMarkup(history){
+    const selected=arrayValue(state.aiCompareIds);
+    if(selected.length!==2)return "";
+    const left=history.find(entry=>entry.analysisId===selected[0]);
+    const right=history.find(entry=>entry.analysisId===selected[1]);
+    if(!left||!right)return "";
+    const leftView=toAdvisorView(left);
+    const rightView=toAdvisorView(right);
+    const leftKeys=new Set(arrayValue(leftView.suggestedTasks).map(item=>`${item.taskType||""}:${item.title||""}`));
+    const rightKeys=new Set(arrayValue(rightView.suggestedTasks).map(item=>`${item.taskType||""}:${item.title||""}`));
+    const newer=[...rightKeys].filter(key=>!leftKeys.has(key));
+    const gone=[...leftKeys].filter(key=>!rightKeys.has(key));
+    return `
+      <div class="v2-ai-compare">
+        <h6>Vergleich</h6>
+        <p><strong>Neu</strong>: ${escapeHtml(newer.length?newer.join(" · "):"keine")}</p>
+        <p><strong>Nicht mehr vorgeschlagen</strong>: ${escapeHtml(gone.length?gone.join(" · "):"keine")}</p>
+      </div>
+    `;
+  }
+
   function aiHistoryMarkup(customerId){
     if(state.aiHistoryCustomerId!==customerId)return "";
     const history=arrayValue(state.aiHistory);
-    const entries=history.length?history.map(entry=>`
+    const selected=new Set(arrayValue(state.aiCompareIds));
+    const entries=history.length?history.map(entry=>{
+      const checked=selected.has(entry.analysisId)?"checked":"";
+      const score=entry.score?.overall!=null?` · Score ${entry.score.overall}`:"";
+      const version=entry.schemaVersion?` · v${entry.schemaVersion}`:"";
+      return `
       <li>
-        <strong>${escapeHtml(entry.summary||"Gespeicherte Analyse")}</strong>
-        <span>${escapeHtml(entry.createdAt?formatDate(entry.createdAt):"Zeitpunkt nicht verfügbar")} · ${escapeHtml(`${Number(entry.openItemCount)||0} offen`)}</span>
+        <label class="v2-ai-history-select">
+          <input type="checkbox" data-ai-compare-id="${escapeHtml(entry.analysisId)}" ${checked}>
+          <span>
+            <strong>${escapeHtml(entry.summary||"Gespeicherte Analyse")}</strong>
+            <span>${escapeHtml(entry.createdAt?formatDate(entry.createdAt):"Zeitpunkt nicht verfügbar")} · ${escapeHtml(`${Number(entry.openItemCount)||0} offen`)}${escapeHtml(score)}${escapeHtml(version)}${entry.legacy?" · Legacy":""}</span>
+          </span>
+        </label>
       </li>
-    `).join(""):`<li><span>Noch keine Analyse gespeichert.</span></li>`;
+    `;
+    }).join(""):`<li><span>Noch keine Analyse gespeichert.</span></li>`;
     return `
       <section class="v2-ai-history" aria-labelledby="aiHistoryTitle">
         <div class="v2-workspace-section-head compact"><h5 id="aiHistoryTitle">Gespeicherte Analysen</h5><span>${history.length}</span></div>
+        <p class="v2-ai-history-hint">Zwei Analysen markieren zum Vergleich.</p>
         ${state.aiHistoryError?`<p class="v2-edit-status error">${escapeHtml(state.aiHistoryError)}</p>`:""}
         <ol>${entries}</ol>
+        ${aiCompareMarkup(history)}
         ${state.aiHistoryCursor?`<button class="v2-button soft" type="button" data-ai-history-more ${state.aiHistoryBusy?"disabled":""}>${state.aiHistoryBusy?"Lädt …":"Weitere Analysen laden"}</button>`:""}
+      </section>
+    `;
+  }
+
+  function aiAdvisorDashboardMarkup(analysis){
+    const view=toAdvisorView(analysis);
+    if(!view)return "";
+    const score=view.score||{};
+    const dims=score.dimensions||{};
+    const criticalCount=arrayValue(view.findings).concat(arrayValue(view.risks)).filter(item=>item.severity==="critical").length;
+    const importantCount=arrayValue(view.findings).concat(arrayValue(view.risks)).filter(item=>item.severity==="important").length;
+    const docFindings=arrayValue(view.findings).filter(item=>item.area==="documents").length;
+    const travelFindings=arrayValue(view.findings).filter(item=>item.area==="smartTravel").length;
+    return `
+      <section class="v2-ai-analysis v2-ai-advisor" aria-labelledby="aiAnalysisTitle">
+        <div class="v2-ai-advisor-head">
+          <div>
+            <p class="v2-eyebrow">AI Concierge Advisor</p>
+            <h4 id="aiAnalysisTitle">Concierge Score ${escapeHtml(score.overall!=null?String(score.overall):"—")}</h4>
+            <p>${escapeHtml(view.disclaimer||"AI-Vorschlag – bitte fachlich prüfen")}${view.legacy?" · Legacy-Format":""}</p>
+          </div>
+          <div class="v2-ai-score-ring" aria-hidden="true"><strong>${escapeHtml(score.overall!=null?String(score.overall):"—")}</strong><span>/100</span></div>
+        </div>
+        <div class="v2-ai-score-grid">
+          ${aiScoreChip("Vollständigkeit",dims.completeness)}
+          ${aiScoreChip("Zeitplanung",dims.scheduling)}
+          ${aiScoreChip("Organisation",dims.organization)}
+          ${aiScoreChip("Dokumente",dims.documents)}
+          ${aiScoreChip("Smart Travel",dims.smartTravel)}
+          ${aiScoreChip("Komfort",dims.comfort)}
+          ${aiScoreChip("Erlebnis",dims.experience)}
+          ${aiScoreChip("Risiken",dims.risk)}
+        </div>
+        <div class="v2-ai-status-cards">
+          <div class="v2-ai-status-card"><span>Kritisch</span><strong>${escapeHtml(String(criticalCount))}</strong></div>
+          <div class="v2-ai-status-card"><span>Wichtig</span><strong>${escapeHtml(String(importantCount))}</strong></div>
+          <div class="v2-ai-status-card"><span>Dokumente</span><strong>${escapeHtml(String(docFindings))}</strong></div>
+          <div class="v2-ai-status-card"><span>Smart Travel</span><strong>${escapeHtml(String(travelFindings))}</strong></div>
+        </div>
+        <section class="v2-ai-block">
+          <h5>Management-Zusammenfassung</h5>
+          <p>${escapeHtml(view.summary||"")}</p>
+        </section>
+        ${view.strengths.length?`<section class="v2-ai-block"><h5>Stärken</h5><ul>${view.strengths.map(item=>`<li><strong>${escapeHtml(item.title)}</strong> ${escapeHtml(item.description)}</li>`).join("")}</ul></section>`:""}
+        ${view.findings.length?`<section class="v2-ai-block"><h5>Handlungsfelder</h5><div class="v2-ai-finding-grid">${view.findings.map(item=>aiFindingCard(item)).join("")}</div></section>`:""}
+        ${view.risks.length?`<section class="v2-ai-block"><h5>Risiken</h5><div class="v2-ai-finding-grid">${view.risks.map(item=>aiFindingCard(item,{kind:"risk"})).join("")}</div></section>`:""}
+        ${view.wowMoments.length?`<section class="v2-ai-block"><h5>WOW-Momente</h5><ul>${view.wowMoments.map(item=>`<li><strong>${escapeHtml(item.title)}</strong> ${escapeHtml(item.description)}${item.optional?" <em>(optional)</em>":""}</li>`).join("")}</ul></section>`:""}
+        ${view.suggestedTasks.length?`<section class="v2-ai-block"><h5>Aufgaben</h5><div class="v2-ai-task-grid">${view.suggestedTasks.map((task,index)=>aiSuggestedTaskCard(task,index)).join("")}</div></section>`:""}
+        ${view.missingData.length?`<section class="v2-ai-block"><h5>Fehlende Daten</h5><ul>${view.missingData.map(item=>`<li><strong>${escapeHtml(item.field)}</strong> ${escapeHtml(item.reason)}</li>`).join("")}</ul></section>`:""}
+        <div class="v2-ai-analysis-actions">
+          <button class="v2-button primary" type="button" data-ai-save ${state.aiAnalysisSaving?"disabled":""}>${state.aiAnalysisSaving?"Speichert …":"Analyse speichern"}</button>
+          <button class="v2-button soft" type="button" data-ai-analyze ${state.aiAnalysisBusy?"disabled":""}>Erneut analysieren</button>
+          <button class="v2-button soft" type="button" data-ai-copy="${escapeHtml(view.conciergeNoteDraft||view.summary)}">Concierge-Entwurf kopieren</button>
+        </div>
+        ${state.aiAnalysisSaveMessage?`<p class="v2-edit-status ${escapeHtml(state.aiAnalysisSaveMessageKind)}">${escapeHtml(state.aiAnalysisSaveMessage)}</p>`:""}
       </section>
     `;
   }
@@ -4587,21 +4791,7 @@
       `).join("")
       :`<div class="v2-workspace-clear"><strong>Concierge-Readiness vollständig</strong><span>Keine weiteren Hinweise aus den vorhandenen Daten erkannt.</span></div>`;
     const aiAnalysis=state.aiAnalysisCustomerId===customer.customerId?state.aiAnalysis:null;
-    const urgencyLabels={immediate:"Sofort",this_week:"Diese Woche",before_trip:"Vor Reise",optional:"Optional"};
-    const impactLabels={high:"Hohe Wirkung",medium:"Mittlere Wirkung",low:"Geringe Wirkung"};
-    const aiMarkup=aiAnalysis?`
-      <section class="v2-ai-analysis" aria-labelledby="aiAnalysisTitle">
-        <p class="v2-eyebrow">AI-Vorschlag</p><h4 id="aiAnalysisTitle">${escapeHtml(aiAnalysis.summary)}</h4>
-        <p>${escapeHtml(aiAnalysis.disclaimer||"AI-Vorschlag – bitte fachlich prüfen")}</p>
-        ${arrayValue(aiAnalysis.strengths).length?`<h5>Stärken</h5><ul>${arrayValue(aiAnalysis.strengths).map(item=>`<li><strong>${escapeHtml(item.title)}</strong> ${escapeHtml(item.description)}</li>`).join("")}</ul>`:""}
-        ${arrayValue(aiAnalysis.concerns).length?`<h5>Hinweise</h5><ul>${arrayValue(aiAnalysis.concerns).map(item=>`<li><strong>${escapeHtml(item.title)}</strong> ${escapeHtml(item.description)}</li>`).join("")}</ul>`:""}
-        ${arrayValue(aiAnalysis.nextActions).map(item=>`<button class="v2-workspace-task" type="button" data-ai-target-tab="${escapeHtml(item.targetTab)}"><span class="v2-workspace-task-state"></span><span><small>${escapeHtml(`${urgencyLabels[item.urgency]||"Optional"} · ${impactLabels[item.impact]||"Geringe Wirkung"}`)}</small><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></span><span aria-hidden="true">→</span></button>`).join("")}
-        <div class="v2-ai-analysis-actions">
-          <button class="v2-button primary" type="button" data-ai-save ${state.aiAnalysisSaving?"disabled":""}>${state.aiAnalysisSaving?"Speichert …":"Analyse speichern"}</button>
-          <button class="v2-button soft" type="button" data-ai-copy="${escapeHtml(aiAnalysis.conciergeNoteDraft||aiAnalysis.summary)}">Concierge-Entwurf kopieren</button>
-        </div>
-        ${state.aiAnalysisSaveMessage?`<p class="v2-edit-status ${escapeHtml(state.aiAnalysisSaveMessageKind)}">${escapeHtml(state.aiAnalysisSaveMessage)}</p>`:""}
-      </section>`:"";
+    const aiMarkup=aiAnalysis?aiAdvisorDashboardMarkup(aiAnalysis):"";
     return `
       <section class="v2-concierge-overview-card" aria-labelledby="conciergeOverviewTitle">
         <div class="v2-workspace-section-head">
@@ -4626,7 +4816,7 @@
               <div><p class="v2-eyebrow">Concierge Intelligence</p><h4 id="conciergeIntelligenceTitle">Nächste Schritte</h4></div>
               <span class="v2-workspace-health ${intelligence.quality.level==="ready"?"ready":"attention"}">${escapeHtml(`${intelligence.quality.score}/100`)}</span>
             </div>
-            <button class="v2-button soft" type="button" data-ai-analyze ${state.aiAnalysisBusy?"disabled":""}>${state.aiAnalysisBusy?"AI analysiert...":"Reise mit AI analysieren"}</button>
+            <button class="v2-button soft" type="button" data-ai-analyze ${state.aiAnalysisBusy?"disabled":""}>${state.aiAnalysisBusy?"AI analysiert...":"Reise mit AI Concierge Advisor analysieren"}</button>
             ${state.aiAnalysisError?`<p class="v2-edit-status error">${escapeHtml(state.aiAnalysisError)}</p>`:""}
             <div class="v2-workspace-alerts" aria-label="Concierge Hinweise">${insightMarkup}</div>
             ${aiMarkup}
@@ -4691,17 +4881,27 @@
     render();
     try{
       const language=["de","en","it","fr"].includes(customer.portalLanguage)?customer.portalLanguage:"de";
+      const view=toAdvisorView(analysis);
+      const payload={
+        schemaVersion:2,
+        score:view.score,
+        summary:view.summary,
+        strengths:view.strengths,
+        findings:view.findings,
+        risks:view.risks,
+        recommendations:view.recommendations,
+        wowMoments:view.wowMoments,
+        suggestedTasks:view.suggestedTasks,
+        missingData:view.missingData,
+        confidence:view.confidence,
+        conciergeNoteDraft:view.conciergeNoteDraft,
+        disclaimer:view.disclaimer,
+        meta:analysis.meta||{}
+      };
       const result=await window.ACTFirebaseService?.saveConciergeAnalysis?.(
         customer.customerId,
         analysis.analysisId,
-        {
-          summary:analysis.summary,
-          strengths:arrayValue(analysis.strengths),
-          concerns:arrayValue(analysis.concerns),
-          nextActions:arrayValue(analysis.nextActions),
-          conciergeNoteDraft:analysis.conciergeNoteDraft,
-          disclaimer:analysis.disclaimer
-        },
+        payload,
         language
       );
       if(!result?.analysisId)throw new Error("save failed");
@@ -4716,9 +4916,12 @@
       const savedEntry={
         analysisId:result.analysisId,
         createdAt:result.createdAt||new Date().toISOString(),
-        summary:analysis.summary,
+        summary:view.summary,
+        score:view.score,
+        schemaVersion:2,
         itemCount:Number(result.itemCount)||0,
-        openItemCount:Number(result.openItemCount)||0
+        openItemCount:Number(result.openItemCount)||0,
+        ...payload
       };
       state.aiHistory=[savedEntry,...state.aiHistory.filter(entry=>entry.analysisId!==result.analysisId)];
       await loadAiTasks();
@@ -4768,6 +4971,31 @@
       state.aiTasksError="Gespeicherte AI-Aufgaben konnten nicht geladen werden.";
     }finally{
       state.aiTasksBusy=false;
+      render();
+    }
+  }
+
+  async function createSelectedAiTask(index){
+    const customer=customerById(state.selectedCustomerId);
+    const analysis=state.aiAnalysisCustomerId===customer?.customerId?state.aiAnalysis:null;
+    const view=toAdvisorView(analysis);
+    const task=arrayValue(view?.suggestedTasks)[index];
+    if(!customer||!analysis?.analysisId||!task||state.aiTaskCreateBusy)return;
+    state.aiTaskCreateBusy=true;
+    state.aiAnalysisSaveMessage="";
+    state.aiAnalysisSaveMessageKind="";
+    render();
+    try{
+      const result=await window.ACTFirebaseService?.createConciergeAnalysisTask?.(customer.customerId,analysis.analysisId,task);
+      if(!result?.itemId)throw new Error("create failed");
+      state.aiAnalysisSaveMessage="Aufgabe erstellt.";
+      state.aiAnalysisSaveMessageKind="success";
+      await loadAiTasks();
+    }catch(_){
+      state.aiAnalysisSaveMessage="Aufgabe konnte nicht erstellt werden.";
+      state.aiAnalysisSaveMessageKind="error";
+    }finally{
+      state.aiTaskCreateBusy=false;
       render();
     }
   }
@@ -7746,6 +7974,11 @@
         return;
       }
       if(event.target.closest("[data-ai-tasks-refresh]")){loadAiTasks();return;}
+      const aiCreateTask=event.target.closest("[data-ai-create-task]");
+      if(aiCreateTask){
+        createSelectedAiTask(Number(aiCreateTask.dataset.aiCreateTask));
+        return;
+      }
       const aiTaskStatus=event.target.closest("[data-ai-task-status]");
       if(aiTaskStatus){
         const task=arrayValue(state.aiTasks).find(item=>
@@ -7754,6 +7987,12 @@
           &&item.itemId===aiTaskStatus.dataset.aiTaskItem
         );
         if(task)updateAiTaskStatus(task,aiTaskStatus.dataset.aiTaskStatus);
+        return;
+      }
+      const aiJump=event.target.closest("[data-ai-jump-entity]");
+      if(aiJump&&state.selectedCustomerId){
+        const tab=AI_TARGET_TABS[aiJump.dataset.aiTargetTab]||"programm";
+        openWorkspaceTab(tab);
         return;
       }
       const aiTarget=event.target.closest("[data-ai-target-tab]");
@@ -7797,6 +8036,20 @@
       if(event.target.id==="documentUploadCustomerSelect"){state.documentUploadCustomerId=event.target.value;renderDocuments();}
       if(event.target.id==="aiTaskStatusFilter"){state.aiTaskStatusFilter=event.target.value;renderTasks();}
       if(event.target.id==="aiTaskSortSelect"){state.aiTaskSort=event.target.value;renderTasks();}
+      if(event.target.matches("[data-ai-compare-id]")){
+        const id=event.target.dataset.aiCompareId;
+        const selected=new Set(arrayValue(state.aiCompareIds));
+        if(event.target.checked){
+          if(selected.size>=2){
+            const first=[...selected][0];
+            selected.delete(first);
+          }
+          selected.add(id);
+        }else selected.delete(id);
+        state.aiCompareIds=[...selected];
+        render();
+        return;
+      }
       if(event.target.matches("[data-customer-image-upload]")){
         const file=event.target.files&&event.target.files[0];
         event.target.value="";

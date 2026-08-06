@@ -2,13 +2,25 @@ const fs=require("fs");
 const path=require("path");
 const {HttpsError}=require("firebase-functions/v2/https");
 const {isEmulator,portalShareSecret,openAiApiKey}=require("./secrets");
-const {buildAiConciergeContext,buildIntelligence,checkRateLimit:checkAiRateLimit,requestAnalysis}=require("./lib/conciergeAi");
+const {
+  buildAiConciergeContext,
+  buildIntelligence,
+  checkRateLimit:checkAiRateLimit,
+  requestAnalysis,
+  toAdvisorViewModel,
+  validateAdvisorAnalysis,
+  SCHEMA_VERSION,
+  PROMPT_VERSION
+}=require("./lib/conciergeAi");
 const {
   ITEM_STATUSES,
   canTransitionStatus,
   canonicalAnalysisHash,
+  inboxDocId,
   mergeItemState,
-  normalizeAnalysisItems
+  normalizeAnalysisItems,
+  normalizeConfirmTask,
+  taskInboxRecord
 }=require("./lib/aiAnalysisStore");
 
 function loadLocalEmulatorSecret(){
@@ -576,14 +588,42 @@ function analysisCustomerData(customer){
 
 function analysisSummary(docSnap,items){
   const data=docSnap.data()||{};
+  const advisor=toAdvisorViewModel(data);
   return {
     analysisId:docSnap.id,
     customerId:data.customerId||"",
     language:data.language||"de",
-    summary:data.summary||"",
-    disclaimer:data.disclaimer||"",
-    conciergeNoteDraft:data.conciergeNoteDraft||"",
-    strengths:Array.isArray(data.strengths)?data.strengths:[],
+    schemaVersion:Number(data.schemaVersion)||advisor.schemaVersion||1,
+    summary:advisor.summary||"",
+    disclaimer:advisor.disclaimer||"",
+    conciergeNoteDraft:advisor.conciergeNoteDraft||"",
+    strengths:advisor.strengths,
+    findings:advisor.findings,
+    risks:advisor.risks,
+    recommendations:advisor.recommendations,
+    wowMoments:advisor.wowMoments,
+    suggestedTasks:advisor.suggestedTasks,
+    missingData:advisor.missingData,
+    confidence:advisor.confidence,
+    score:advisor.score,
+    legacy:advisor.legacy===true,
+    // v1 compatibility fields for older clients
+    concerns:Array.isArray(data.concerns)?data.concerns:advisor.findings.map(item=>({
+      severity:item.severity,
+      title:item.title,
+      description:item.rationale,
+      targetTab:item.targetTab,
+      sourceInsightId:item.id
+    })),
+    nextActions:Array.isArray(data.nextActions)?data.nextActions:advisor.suggestedTasks.map(item=>({
+      priority:item.priority,
+      urgency:item.urgency,
+      impact:item.impact,
+      title:item.title,
+      description:item.description,
+      targetTab:item.targetTab,
+      sourceInsightId:item.sourceFindingId||""
+    })),
     createdAt:data.createdAt||"",
     createdBy:data.createdBy||"",
     itemCount:Number(data.itemCount)||0,
@@ -622,6 +662,22 @@ function requireAdminCallable(request){
 
 async function loadAiTaskContext(db,customerId){
   const customerRef=db.collection("customers").doc(customerId);
+  const tasksSnap=await customerRef.collection("aiTasks")
+    .orderBy("lastSeenAt","desc")
+    .limit(AI_TASK_CONTEXT_LIMIT)
+    .get();
+  if(!tasksSnap.empty){
+    return tasksSnap.docs.map(docSnap=>{
+      const item=docSnap.data()||{};
+      return {
+        stableKey:item.stableKey||docSnap.id,
+        title:item.title||"",
+        status:item.status||"open"
+      };
+    }).filter(item=>item.stableKey&&item.title&&["open","completed","dismissed"].includes(item.status));
+  }
+
+  // Legacy fallback for customers that only have analysis item snapshots.
   const analyses=await customerRef.collection("aiAnalyses")
     .orderBy("createdAt","desc")
     .limit(AI_ANALYSIS_HISTORY_PAGE_SIZE)
@@ -633,6 +689,7 @@ async function loadAiTaskContext(db,customerId){
     const items=await analysis.ref.collection("items").limit(remaining).get();
     items.docs.forEach(docSnap=>{
       const item=docSnap.data()||{};
+      if(item.itemType&&item.itemType!=="task")return;
       if(!byStableKey.has(item.stableKey)&&item.stableKey&&item.title&&["open","completed","dismissed"].includes(item.status)){
         byStableKey.set(item.stableKey,{stableKey:item.stableKey,title:item.title,status:item.status});
       }
@@ -682,19 +739,19 @@ async function saveConciergeAnalysis(request){
   const analysisId=validAnalysisId(request.data?.analysisId);
   if(!customerId||!analysisId)throw new HttpsError("invalid-argument","Kunden- oder Analyse-ID ist ungültig.");
   const analysis=request.data?.analysis;
-  let validated;
-  try{
-    const {validateAnalysis}=require("./lib/conciergeAi");
-    validated=validateAnalysis(analysis);
-  }catch(_){
-    throw new HttpsError("invalid-argument","Die Analyse ist ungültig.");
-  }
   const db=getDb();
   const customerRef=db.collection("customers").doc(customerId);
   const customerSnap=await customerRef.get();
   if(!customerSnap.exists)throw new HttpsError("not-found","Kunde nicht gefunden.");
   const customer=analysisCustomerData(customerSnap.data());
   const intelligence=buildIntelligence(customer);
+  const context=buildAiConciergeContext(customer,intelligence,[]);
+  let validated;
+  try{
+    validated=validateAdvisorAnalysis(analysis,context);
+  }catch(_){
+    throw new HttpsError("invalid-argument","Die Analyse ist ungültig.");
+  }
   const knownInsightIds=new Set((intelligence.insights||[]).map(item=>String(item.id||"")));
   const normalizedItems=normalizeAnalysisItems(validated,knownInsightIds);
   const contentHash=canonicalAnalysisHash(validated);
@@ -702,7 +759,6 @@ async function saveConciergeAnalysis(request){
   const now=new Date().toISOString();
   const analysisRef=customerRef.collection("aiAnalyses").doc(analysisId);
   const result=await db.runTransaction(async transaction=>{
-    try{
     const existing=await transaction.get(analysisRef);
     if(existing.exists){
       const existingData=existing.data()||{};
@@ -716,20 +772,21 @@ async function saveConciergeAnalysis(request){
         idempotent:true
       };
     }
-    const priorSnapshots=await Promise.all(normalizedItems.map(item=>transaction.get(
-      db.collectionGroup("items")
-        .where("customerId","==",customerId)
-        .where("stableKey","==",item.stableKey)
-        .orderBy("lastSeenAt","desc")
-        .limit(1)
+
+    const taskItems=normalizedItems.filter(item=>item.itemType==="task");
+    const priorTaskSnaps=await Promise.all(taskItems.map(item=>transaction.get(
+      customerRef.collection("aiTasks").doc(item.stableKey)
     )));
-    const itemRecords=normalizedItems.map((item,index)=>{
-      const previous=priorSnapshots[index].docs[0]?.data()||null;
+    const priorByKey=new Map(taskItems.map((item,index)=>[item.stableKey,priorTaskSnaps[index].exists?priorTaskSnaps[index].data():null]));
+
+    const itemRecords=normalizedItems.map(item=>{
+      const previous=item.itemType==="task"?priorByKey.get(item.stableKey)||null:null;
       const merged=mergeItemState(item,previous,now);
       return {
         ...merged,
         customerId,
         analysisId,
+        sourceAnalysisId:analysisId,
         createdAt:now,
         createdBy:actorUid,
         updatedAt:now,
@@ -741,10 +798,20 @@ async function saveConciergeAnalysis(request){
       analysisId,
       customerId,
       type:"trip_review",
-      schemaVersion:1,
+      schemaVersion:SCHEMA_VERSION,
       language,
+      model:validated.meta?.model||"",
+      promptVersion:validated.meta?.promptVersion||PROMPT_VERSION,
+      score:validated.score,
       summary:validated.summary,
       strengths:validated.strengths,
+      findings:validated.findings,
+      risks:validated.risks,
+      recommendations:validated.recommendations,
+      wowMoments:validated.wowMoments,
+      suggestedTasks:validated.suggestedTasks,
+      missingData:validated.missingData,
+      confidence:validated.confidence,
       disclaimer:validated.disclaimer,
       conciergeNoteDraft:validated.conciergeNoteDraft,
       contentHash,
@@ -757,11 +824,13 @@ async function saveConciergeAnalysis(request){
     });
     itemRecords.forEach(item=>{
       transaction.create(analysisRef.collection("items").doc(item.stableKey),item);
+      if(item.itemType==="task"){
+        const taskRef=customerRef.collection("aiTasks").doc(item.stableKey);
+        transaction.set(taskRef,item,{merge:true});
+        transaction.set(db.collection("aiTaskInbox").doc(inboxDocId(customerId,item.stableKey)),taskInboxRecord(item),{merge:true});
+      }
     });
     return {analysisId,createdAt:now,itemCount:itemRecords.length,openItemCount,idempotent:false};
-    }catch(error){
-      throw error;
-    }
   });
   return result;
 }
@@ -800,6 +869,29 @@ async function listConciergeAnalyses(request){
   };
 }
 
+function statusUpdateFields(status,actorUid,now){
+  const update={status,updatedAt:now,updatedBy:actorUid};
+  if(status==="completed"){
+    update.completedAt=now;
+    update.completedBy=actorUid;
+    update.dismissedAt=null;
+    update.dismissedBy=null;
+  }else if(status==="dismissed"){
+    update.dismissedAt=now;
+    update.dismissedBy=actorUid;
+    update.completedAt=null;
+    update.completedBy=null;
+  }else{
+    update.reopenedAt=now;
+    update.reopenedBy=actorUid;
+    update.completedAt=null;
+    update.completedBy=null;
+    update.dismissedAt=null;
+    update.dismissedBy=null;
+  }
+  return update;
+}
+
 async function updateConciergeAnalysisItemStatus(request){
   const actorUid=requireAdminCallable(request);
   const customerId=validCustomerId(request.data?.customerId);
@@ -810,55 +902,102 @@ async function updateConciergeAnalysisItemStatus(request){
     throw new HttpsError("invalid-argument","Status-Aktualisierung ist ungültig.");
   }
   const db=getDb();
-  const analysisRef=db.collection("customers").doc(customerId).collection("aiAnalyses").doc(analysisId);
+  const customerRef=db.collection("customers").doc(customerId);
+  const analysisRef=customerRef.collection("aiAnalyses").doc(analysisId);
   const itemRef=analysisRef.collection("items").doc(itemId);
+  const taskRef=customerRef.collection("aiTasks").doc(itemId);
+  const inboxRef=db.collection("aiTaskInbox").doc(inboxDocId(customerId,itemId));
   const now=new Date().toISOString();
   return db.runTransaction(async transaction=>{
-    const [analysisSnap,itemSnap,taskDocs]=await Promise.all([
+    const [analysisSnap,itemSnap,taskSnap,taskDocs]=await Promise.all([
       transaction.get(analysisRef),
       transaction.get(itemRef),
-      transaction.get(analysisRef.collection("items").where("itemType","==","task"))
+      transaction.get(taskRef),
+      transaction.get(customerRef.collection("aiTasks").limit(AI_TASK_LIST_LIMIT))
     ]);
-    if(!analysisSnap.exists||!itemSnap.exists)throw new HttpsError("not-found","Analyseaufgabe nicht gefunden.");
-    const item=itemSnap.data()||{};
-    if(item.customerId!==customerId||item.analysisId!==analysisId)throw new HttpsError("permission-denied","Analyseaufgabe ist ungültig.");
+    const sourceSnap=itemSnap.exists?itemSnap:taskSnap;
+    if(!analysisSnap.exists||!sourceSnap.exists)throw new HttpsError("not-found","Analyseaufgabe nicht gefunden.");
+    const item=sourceSnap.data()||{};
+    if(item.customerId&&item.customerId!==customerId)throw new HttpsError("permission-denied","Analyseaufgabe ist ungültig.");
     if(!canTransitionStatus(item.status,status))throw new HttpsError("failed-precondition","Dieser Statuswechsel ist nicht erlaubt.");
-    const update={status,updatedAt:now,updatedBy:actorUid};
-    if(status==="completed"){
-      update.completedAt=now;
-      update.completedBy=actorUid;
-      update.dismissedAt=null;
-      update.dismissedBy=null;
-    }else if(status==="dismissed"){
-      update.dismissedAt=now;
-      update.dismissedBy=actorUid;
-      update.completedAt=null;
-      update.completedBy=null;
-    }else{
-      update.reopenedAt=now;
-      update.reopenedBy=actorUid;
-      update.completedAt=null;
-      update.completedBy=null;
-      update.dismissedAt=null;
-      update.dismissedBy=null;
-    }
-    transaction.update(itemRef,update);
-    if(item.itemType==="task"){
-      const openItemCount=taskDocs.docs.reduce((count,docSnap)=>{
-        if(docSnap.id===itemId)return count+(status==="open"?1:0);
-        return count+(docSnap.data().status==="open"?1:0);
-      },0);
-      transaction.update(analysisRef,{openItemCount,updatedAt:now,updatedBy:actorUid});
-    }
+    const update=statusUpdateFields(status,actorUid,now);
+    if(itemSnap.exists)transaction.update(itemRef,update);
+    const nextTask={...item,...update,customerId,analysisId:item.analysisId||analysisId,sourceAnalysisId:item.sourceAnalysisId||analysisId,stableKey:item.stableKey||itemId,itemType:"task"};
+    transaction.set(taskRef,nextTask,{merge:true});
+    transaction.set(inboxRef,taskInboxRecord(nextTask),{merge:true});
+    const openItemCount=taskDocs.docs.reduce((count,docSnap)=>{
+      if(docSnap.id===itemId)return count+(status==="open"?1:0);
+      return count+(docSnap.data().status==="open"?1:0);
+    },taskSnap.exists?0:(status==="open"?1:0));
+    transaction.update(analysisRef,{openItemCount,updatedAt:now,updatedBy:actorUid});
     return {analysisId,itemId,status,updatedAt:now};
+  });
+}
+
+async function createConciergeAnalysisTask(request){
+  const actorUid=requireAdminCallable(request);
+  const customerId=validCustomerId(request.data?.customerId);
+  const analysisId=validAnalysisId(request.data?.analysisId);
+  if(!customerId||!analysisId)throw new HttpsError("invalid-argument","Kunden- oder Analyse-ID ist ungültig.");
+  const taskInput=request.data?.task;
+  if(!taskInput||typeof taskInput!=="object")throw new HttpsError("invalid-argument","Aufgabe ist ungültig.");
+  const db=getDb();
+  const customerRef=db.collection("customers").doc(customerId);
+  const analysisRef=customerRef.collection("aiAnalyses").doc(analysisId);
+  const analysisSnap=await analysisRef.get();
+  if(!analysisSnap.exists)throw new HttpsError("not-found","Analyse nicht gefunden.");
+  const normalized=normalizeConfirmTask(taskInput);
+  if(!normalized.title)throw new HttpsError("invalid-argument","Aufgabe ist ungültig.");
+  const now=new Date().toISOString();
+  const taskRef=customerRef.collection("aiTasks").doc(normalized.stableKey);
+  const itemRef=analysisRef.collection("items").doc(normalized.stableKey);
+  const inboxRef=db.collection("aiTaskInbox").doc(inboxDocId(customerId,normalized.stableKey));
+  return db.runTransaction(async transaction=>{
+    const [existing,taskDocs]=await Promise.all([
+      transaction.get(taskRef),
+      transaction.get(customerRef.collection("aiTasks").limit(AI_TASK_LIST_LIMIT))
+    ]);
+    const previous=existing.exists?existing.data():null;
+    const merged=mergeItemState(normalized,previous,now);
+    const record={
+      ...merged,
+      customerId,
+      analysisId,
+      sourceAnalysisId:analysisId,
+      createdAt:previous?.createdAt||now,
+      createdBy:previous?.createdBy||actorUid,
+      updatedAt:now,
+      updatedBy:actorUid
+    };
+    transaction.set(taskRef,record,{merge:true});
+    transaction.set(itemRef,record,{merge:true});
+    transaction.set(inboxRef,taskInboxRecord(record),{merge:true});
+    const openItemCount=taskDocs.docs.reduce((count,docSnap)=>{
+      if(docSnap.id===normalized.stableKey)return count+(record.status==="open"?1:0);
+      return count+(docSnap.data().status==="open"?1:0);
+    },existing.exists?0:(record.status==="open"?1:0));
+    transaction.update(analysisRef,{openItemCount,updatedAt:now,updatedBy:actorUid});
+    return {analysisId,itemId:normalized.stableKey,status:record.status,created:!existing.exists,updatedAt:now};
   });
 }
 
 async function listConciergeAnalysisTasks(request){
   requireAdminCallable(request);
   const db=getDb();
-  const snapshot=await db.collectionGroup("items")
-    .where("itemType","==","task")
+  const customerId=validCustomerId(request.data?.customerId);
+  if(customerId){
+    const snapshot=await db.collection("customers").doc(customerId).collection("aiTasks")
+      .orderBy("lastSeenAt","desc")
+      .limit(AI_TASK_LIST_LIMIT)
+      .get();
+    return {
+      tasks:snapshot.docs.map(docSnap=>{
+        const item=docSnap.data()||{};
+        return {itemId:docSnap.id,analysisId:item.analysisId||item.sourceAnalysisId||"",...item};
+      }).slice(0,100)
+    };
+  }
+  const snapshot=await db.collection("aiTaskInbox")
     .orderBy("lastSeenAt","desc")
     .limit(AI_TASK_LIST_LIMIT)
     .get();
@@ -867,8 +1006,8 @@ async function listConciergeAnalysisTasks(request){
     const item=docSnap.data()||{};
     if(!validCustomerId(item.customerId)||!item.stableKey||byStableKey.has(`${item.customerId}:${item.stableKey}`))return;
     byStableKey.set(`${item.customerId}:${item.stableKey}`,{
-      itemId:docSnap.id,
-      analysisId:item.analysisId,
+      itemId:item.itemId||item.stableKey,
+      analysisId:item.analysisId||"",
       ...item
     });
   });
@@ -906,5 +1045,6 @@ module.exports={
   saveConciergeAnalysis,
   listConciergeAnalyses,
   updateConciergeAnalysisItemStatus,
+  createConciergeAnalysisTask,
   listConciergeAnalysisTasks
 };

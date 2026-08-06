@@ -32,6 +32,56 @@ describe("AI analysis persistence schema",()=>{
     assert.equal(items[1].stableKey,"task:semantic:bookings:restaurant-reservieren");
   });
 
+  it("auto-creates advisor tasks with entity-based stable keys and skips confirm-only tasks",()=>{
+    const items=store.normalizeAnalysisItems({
+      schemaVersion:2,
+      findings:[{
+        id:"nav-gap",
+        area:"smartTravel",
+        severity:"critical",
+        title:"Navigation fehlt",
+        rationale:"Keine Koordinaten",
+        impact:"hoch",
+        recommendedAction:"Koordinaten ergänzen",
+        targetTab:"program",
+        confidence:"high",
+        refs:[{entityType:"programItem",entityId:"p1"}]
+      }],
+      risks:[],
+      suggestedTasks:[
+        {
+          createMode:"auto",
+          taskType:"add_navigation",
+          title:"Navigation ergänzen",
+          description:"Koordinaten setzen",
+          priority:1,
+          urgency:"immediate",
+          impact:"high",
+          targetTab:"program",
+          refs:[{entityType:"programItem",entityId:"p1"}],
+          sourceFindingId:"nav-gap"
+        },
+        {
+          createMode:"confirm",
+          taskType:"other",
+          title:"WOW organisieren",
+          description:"Optional",
+          priority:4,
+          urgency:"optional",
+          impact:"low",
+          targetTab:"concierge",
+          refs:[],
+          sourceFindingId:""
+        }
+      ]
+    });
+    assert.equal(items.some(item=>item.itemType==="finding"),true);
+    const tasks=items.filter(item=>item.itemType==="task");
+    assert.equal(tasks.length,1);
+    assert.equal(tasks[0].stableKey,"task:add-navigation:programitem:p1");
+    assert.equal(tasks[0].createMode,"auto");
+  });
+
   it("merges repeated open items and preserves completed or dismissed state",()=>{
     const first=store.mergeItemState({stableKey:"task:semantic:trip:check",itemType:"task"},{}, "2026-08-03T08:00:00.000Z");
     const repeated=store.mergeItemState(first,first,"2026-08-04T08:00:00.000Z");
@@ -55,5 +105,19 @@ describe("AI analysis persistence schema",()=>{
     assert.equal(store.canTransitionStatus("dismissed","open"),true);
     assert.equal(store.canTransitionStatus("completed","dismissed"),false);
     assert.equal(store.canTransitionStatus("open","unknown"),false);
+  });
+
+  it("builds inbox mirror ids without collectionGroup dependency",()=>{
+    assert.equal(store.inboxDocId("cust-1","task:semantic:trip:check"),"cust-1__task:semantic:trip:check");
+    const record=store.taskInboxRecord({
+      stableKey:"task:semantic:trip:check",
+      customerId:"cust-1",
+      analysisId:"a1",
+      status:"open",
+      title:"Check",
+      lastSeenAt:"2026-08-05T00:00:00.000Z"
+    });
+    assert.equal(record.customerId,"cust-1");
+    assert.equal(record.itemType,"task");
   });
 });

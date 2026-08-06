@@ -65,3 +65,9 @@ exports.listConciergeAnalysisTasks=onCall({
   cors:true,
   invoker:"public"
 },(request)=>loadImpl().listConciergeAnalysisTasks(request));
+
+exports.createConciergeAnalysisTask=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().createConciergeAnalysisTask(request));

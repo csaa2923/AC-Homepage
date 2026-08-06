@@ -1281,11 +1281,25 @@
     return result.data||{};
   }
 
-  async function listConciergeAnalysisTasks(){
+  async function listConciergeAnalysisTasks(customerId=null){
     const {functions,functionsModule,auth,authModule}=await callableFunctionsContext();
     await callableUserContext(auth,authModule);
     const callable=functionsModule.httpsCallable(functions,"listConciergeAnalysisTasks",{timeout:20000});
-    const result=await callable({});
+    const payload={};
+    const id=String(customerId||"").trim();
+    if(id)payload.customerId=id;
+    const result=await callable(payload);
+    return result.data||{};
+  }
+
+  async function createConciergeAnalysisTask(customerId,analysisId,task){
+    const id=String(customerId||"").trim();
+    const savedAnalysisId=String(analysisId||"").trim();
+    if(!id||!savedAnalysisId||!task)throw new Error("Aufgabe kann nicht erstellt werden.");
+    const {functions,functionsModule,auth,authModule}=await callableFunctionsContext();
+    await callableUserContext(auth,authModule);
+    const callable=functionsModule.httpsCallable(functions,"createConciergeAnalysisTask",{timeout:20000});
+    const result=await callable({customerId:id,analysisId:savedAnalysisId,task});
     return result.data||{};
   }
 
@@ -1418,6 +1432,7 @@
     listConciergeAnalyses,
     updateConciergeAnalysisItemStatus,
     listConciergeAnalysisTasks,
+    createConciergeAnalysisTask,
     denormalizeFromFirestore,
     normalizeForFirestore,
     resolvedContentType,

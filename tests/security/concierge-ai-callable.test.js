@@ -33,7 +33,7 @@ describe("AI concierge callable protocol",()=>{
   });
 
   it("keeps analysis persistence behind authenticated callable functions",()=>{
-    for(const name of ["saveConciergeAnalysis","listConciergeAnalyses","updateConciergeAnalysisItemStatus","listConciergeAnalysisTasks"]){
+    for(const name of ["saveConciergeAnalysis","listConciergeAnalyses","updateConciergeAnalysisItemStatus","listConciergeAnalysisTasks","createConciergeAnalysisTask"]){
       assert.deepEqual(functions[name].__endpoint.callableTrigger,{});
       assert.equal(functions[name].__endpoint.platform,"gcfv2");
       assert.equal(typeof impl[name],"function");
@@ -44,6 +44,9 @@ describe("AI concierge callable protocol",()=>{
     assert.match(source,/createdBy:actorUid/);
     assert.match(source,/completedBy=actorUid/);
     assert.match(source,/AI_ANALYSIS_HISTORY_PAGE_SIZE=5/);
+    assert.match(source,/collection\("aiTasks"\)/);
+    assert.match(source,/collection\("aiTaskInbox"\)/);
+    assert.doesNotMatch(source,/collectionGroup\("items"\)/);
   });
 
   it("answers OPTIONS with callable CORS and rejects an unauthenticated POST as callable auth error",async()=>{

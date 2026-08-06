@@ -93,6 +93,14 @@ service cloud.firestore {
           allow read, write: if false;
         }
       }
+
+      match /aiTasks/{taskId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /aiTaskInbox/{inboxId} {
+      allow read, write: if false;
     }
 
     match /templates/library/{type}/{templateId} {

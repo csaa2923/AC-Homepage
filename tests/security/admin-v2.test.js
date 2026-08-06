@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {describe,it} from "node:test";
@@ -33,10 +33,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=10/);
-    assert.match(html,/admin-v2\.css\?v=56/);
+    assert.match(html,/admin-v2\.css\?v=57/);
     assert.match(html,/class="v2-login-logo"[^>]+src="\.\.\/images\/logo\/alpine-concierge-logo-transparent\.png"[^>]+alt="Alpine Concierge Tirol"[^>]+width="1536" height="1024"/);
     assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
-    assert.match(html,/admin-v2\.js\?v=76/);
+    assert.match(html,/admin-v2\.js\?v=77/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(html,/concierge-intelligence-library\.js\?v=1/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
@@ -55,9 +55,14 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function workspaceLatestCommunicationValue\(customer\)/);
     assert.match(js,/library\.analyzeCustomerReadiness\(customer,/);
     assert.match(js,/Concierge Intelligence/);
-    assert.match(js,/Reise mit AI analysieren/);
+    assert.match(js,/Reise mit AI Concierge Advisor analysieren/);
     assert.match(js,/data-ai-target-tab/);
     assert.match(js,/analyzeConciergeTrip/);
+    assert.match(js,/function aiAdvisorDashboardMarkup\(/);
+    assert.match(js,/function toAdvisorView\(/);
+    assert.match(js,/Concierge Score/);
+    assert.match(js,/data-ai-create-task/);
+    assert.match(js,/createConciergeAnalysisTask/);
     assert.doesNotMatch(js,/Promise\.all\(\[loadAiAnalysisHistory\(customer\.customerId\),loadAiTasks\(\)\]\)/);
     assert.match(js,/state\.aiHistory=\[savedEntry,\.\.\.state\.aiHistory\.filter/);
     assert.match(js,/ACTFirebaseAuth\?\.requireAdmin\?\.\(\)/);
@@ -65,6 +70,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/Concierge-Entwurf kopieren/);
     assert.match(js,/Sofort/);
     assert.match(js,/Hohe Wirkung/);
+    assert.match(readProjectFile("customer-portal/admin-v2.css"),/\.v2-ai-advisor/);
   });
 
   it("provides save, history, filters, sorting and explicit task status controls for AI analyses",()=>{
@@ -85,7 +91,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/async function updateAiTaskStatus\(task,status\)/);
     assert.match(css,/\.workspace-ai-task-controls\{/);
     assert.match(css,/\.workspace-ai-task\.completed \.v2-workspace-task-state/);
-    assert.match(html,/firebase-service\.js\?v=31/);
+    assert.match(html,/firebase-service\.js\?v=32/);
   });
 
   it("keeps dashboard as cockpit and customer cards in the customer view only",()=>{
@@ -631,12 +637,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=56/);
+    assert.match(html,/admin-v2\.css\?v=57/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
-    assert.match(html,/firebase-service\.js\?v=31/);
-    assert.match(html,/admin-v2\.js\?v=76/);
+    assert.match(html,/firebase-service\.js\?v=32/);
+    assert.match(html,/admin-v2\.js\?v=77/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -756,9 +762,9 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/redact-public-snapshot\.js\?v=2/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
-    assert.match(html,/firebase-service\.js\?v=31/);
+    assert.match(html,/firebase-service\.js\?v=32/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=76/);
+    assert.match(html,/admin-v2\.js\?v=77/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -870,8 +876,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=56/);
-    assert.match(html,/admin-v2\.js\?v=76/);
+    assert.match(html,/admin-v2\.css\?v=57/);
+    assert.match(html,/admin-v2\.js\?v=77/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -1087,8 +1093,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=76/);
-    assert.match(html,/admin-v2\.css\?v=56/);
+    assert.match(html,/admin-v2\.js\?v=77/);
+    assert.match(html,/admin-v2\.css\?v=57/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);
     assert.match(js,/ACTAdminV2Communication\?\.bind/);

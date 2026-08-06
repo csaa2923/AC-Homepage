@@ -91,6 +91,8 @@ describe("firestore rules — share layer",()=>{
   it("denies direct customer, share and admin access to persisted AI analyses",async()=>{
     const analysisPath="customers/kunde-test/aiAnalyses/analysis-test";
     const itemPath=`${analysisPath}/items/task-semantic-trip-check`;
+    const taskPath="customers/kunde-test/aiTasks/task-semantic-trip-check";
+    const inboxPath="aiTaskInbox/kunde-test__task-semantic-trip-check";
     const customer=testEnv.authenticatedContext("customer-user",{role:"customer"});
     const share=testEnv.authenticatedContext("share-user",{});
     const admin=testEnv.authenticatedContext("admin-user",{role:"admin"});
@@ -104,5 +106,7 @@ describe("firestore rules — share layer",()=>{
       completedBy:"forged-user",
       status:"completed"
     }));
+    await assertFails(admin.firestore().doc(taskPath).set({status:"open"}));
+    await assertFails(admin.firestore().doc(inboxPath).set({status:"open"}));
   });
 });

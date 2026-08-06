@@ -10,8 +10,55 @@ const ai=require(join(root,"functions/lib/conciergeAi.js"));
 const impl=require(join(root,"functions/impl.js"));
 const store=require(join(root,"functions/lib/aiAnalysisStore.js"));
 
-function taskContextDb(analyses,{error}={}){
-  const itemSnapshot=items=>({docs:items.map(item=>({data:()=>item}))});
+function validAdvisorOutput(overrides={}){
+  return {
+    schemaVersion:2,
+    score:{
+      overall:82,
+      dimensions:{
+        completeness:80,scheduling:75,organization:84,documents:70,
+        smartTravel:68,comfort:88,experience:86,risk:78
+      }
+    },
+    summary:"Die Reise ist gut vorbereitet, offene Dokumente und Navigation brauchen noch Aufmerksamkeit.",
+    strengths:[{title:"Unterkunft klar",description:"Hotel und Zeitraum sind hinterlegt.",evidenceRefs:[]}],
+    findings:[{
+      id:"doc-gap-1",
+      area:"documents",
+      severity:"important",
+      title:"Ticket fehlt",
+      rationale:"Für die Bergbahn ist kein Ticket dokumentiert.",
+      impact:"Gast kann vor Ort verzögert werden.",
+      recommendedAction:"Ticket oder Voucher hochladen.",
+      targetTab:"documents",
+      confidence:"high",
+      refs:[{entityType:"document",entityId:"doc-1"}]
+    }],
+    risks:[],
+    recommendations:[{title:"Navigation prüfen",description:"Koordinaten ergänzen.",priority:2,targetTab:"program",refs:[]}],
+    wowMoments:[{title:"Sonnenuntergang",description:"Passend zur Region.",seasonFit:"Sommer",audienceFit:"Paar",optional:true,refs:[]}],
+    suggestedTasks:[{
+      createMode:"auto",
+      taskType:"upload_ticket",
+      title:"Ticket hochladen",
+      description:"Bergbahn-Ticket ergänzen.",
+      priority:1,
+      urgency:"immediate",
+      impact:"high",
+      targetTab:"documents",
+      refs:[{entityType:"document",entityId:"doc-1"}],
+      sourceFindingId:"doc-gap-1"
+    }],
+    missingData:[],
+    confidence:{overall:"high",notes:"Ausreichende Reisedaten"},
+    conciergeNoteDraft:"Wir finalisieren noch Ihre Tickets und Navigation.",
+    disclaimer:"AI-Vorschlag – bitte fachlich prüfen",
+    ...overrides
+  };
+}
+
+function taskContextDb({aiTasks=[],analyses=[],error}={}){
+  const itemSnapshot=items=>({docs:items.map(item=>({id:item.stableKey,data:()=>item}))});
   const analysisQuery={
     orderBy:()=>analysisQuery,
     limit:()=>analysisQuery,
@@ -22,7 +69,32 @@ function taskContextDb(analyses,{error}={}){
       }))};
     }
   };
-  return {collection:()=>({doc:()=>({collection:()=>analysisQuery})})};
+  const aiTasksQuery={
+    orderBy:()=>aiTasksQuery,
+    limit:()=>aiTasksQuery,
+    get:async()=>{
+      if(error)throw error;
+      return {
+        empty:!aiTasks.length,
+        docs:aiTasks.map(item=>({id:item.stableKey,data:()=>item}))
+      };
+    }
+  };
+  return {
+    collection:(name)=>{
+      if(name!=="customers")throw new Error(`unexpected collection ${name}`);
+      return {
+        doc:()=>({
+          collection:(sub)=>{
+            if(sub==="aiTasks")return aiTasksQuery;
+            if(sub==="aiAnalyses")return analysisQuery;
+            throw new Error(`unexpected subcollection ${sub}`);
+          }
+        })
+      };
+    },
+    collectionGroup:()=>{throw new Error("global collectionGroup must not be used");}
+  };
 }
 
 describe("concierge AI function helpers",()=>{
@@ -35,24 +107,62 @@ describe("concierge AI function helpers",()=>{
       tripName:"Synthetic trip",
       startDate:"2026-09-01",
       endDate:"2026-09-04",
-      documents:[{title:"Passport",url:"https://private.example/token",content:"private document text",type:"ID"}],
-      bookings:[{title:"Hotel",amount:9999,paymentDetails:"private",status:"Requested"}],
-      program:[{title:"Walk",description:"A short hike"}]
+      documents:[{id:"doc-1",title:"Passport",url:"https://private.example/token",content:"private document text",type:"ID"}],
+      bookings:[{id:"b1",title:"Hotel",amount:9999,paymentDetails:"private",status:"Requested"}],
+      program:[{id:"p1",title:"Walk",description:"A short hike",startLatitude:47.1,startLongitude:12.1,gpxFile:{name:"route.gpx"}}]
     },{quality:{score:90,counts:{critical:0,important:0,recommendation:1}},insights:[]},[{stableKey:"task:semantic:trip:check",title:"Existing task",status:"completed"}]);
     const serialized=JSON.stringify(context);
     assert.match(serialized,/Synthetic trip/);
+    assert.match(serialized,/"id":"p1"/);
+    assert.match(serialized,/"hasGpx":true/);
     assert.doesNotMatch(serialized,/synthetic@example|431234|secret|private\.example|private document text|9999|paymentDetails/);
     assert.equal(context.documents.total,1);
+    assert.equal(context.documents.items[0].id,"doc-1");
     assert.deepEqual(context.previousAiTasks,[{stableKey:"task:semantic:trip:check",title:"Existing task",status:"completed"}]);
   });
 
-  it("rejects malformed AI output and unknown target tabs",()=>{
+  it("validates advisor schema and strips unknown entity refs",()=>{
+    const context=ai.buildAiConciergeContext({
+      tripName:"Trip",
+      startDate:"2026-09-01",
+      endDate:"2026-09-02",
+      documents:[{id:"doc-1",title:"Ticket",type:"ticket"}],
+      program:[{id:"p1",title:"Hike"}]
+    },{insights:[]});
+    const valid=validAdvisorOutput();
+    const sanitized=ai.validateAdvisorAnalysis(valid,context);
+    assert.equal(sanitized.schemaVersion,2);
+    assert.equal(sanitized.findings[0].refs[0].entityId,"doc-1");
+    assert.throws(()=>ai.validateAdvisorAnalysis({...valid,schemaVersion:1},context));
+    assert.throws(()=>ai.validateAdvisorAnalysis({...valid,score:{overall:120,dimensions:valid.score.dimensions}},context));
+    const withUnknown=validAdvisorOutput({
+      findings:[{
+        ...valid.findings[0],
+        refs:[{entityType:"document",entityId:"missing-doc"}]
+      }]
+    });
+    assert.deepEqual(ai.validateAdvisorAnalysis(withUnknown,context).findings[0].refs,[]);
+  });
+
+  it("keeps v1 validateAnalysis for legacy payloads",()=>{
     const valid={summary:"Summary.",strengths:[],concerns:[],nextActions:[{priority:1,urgency:"immediate",impact:"high",title:"Check",description:"Check the supplied facts.",targetTab:"trip",sourceInsightId:""}],conciergeNoteDraft:"Note",disclaimer:"Review"};
     assert.deepEqual(ai.validateAnalysis(valid),valid);
     assert.throws(()=>ai.validateAnalysis({...valid,unexpected:true}));
-    assert.throws(()=>ai.validateAnalysis({...valid,concerns:[{severity:"critical",title:"x",description:"x",targetTab:"unknown"}]}));
-    assert.throws(()=>ai.validateAnalysis({...valid,nextActions:[{...valid.nextActions[0],urgency:"later"}]}));
-    assert.throws(()=>ai.validateAnalysis({...valid,nextActions:[valid.nextActions[0],{...valid.nextActions[0],impact:"low"}]}));
+  });
+
+  it("adapts legacy analyses into advisor view models",()=>{
+    const legacy=ai.toAdvisorViewModel({
+      summary:"Alt",
+      strengths:[{title:"S",description:"D"}],
+      concerns:[{severity:"important",title:"C",description:"Desc",targetTab:"trip",sourceInsightId:"x"}],
+      nextActions:[{priority:1,urgency:"immediate",impact:"high",title:"T",description:"D",targetTab:"documents",sourceInsightId:""}],
+      conciergeNoteDraft:"Note",
+      disclaimer:"Review"
+    });
+    assert.equal(legacy.schemaVersion,1);
+    assert.equal(legacy.legacy,true);
+    assert.equal(legacy.findings[0].title,"C");
+    assert.equal(legacy.suggestedTasks[0].createMode,"confirm");
   });
 
   it("derives trip phase and includes only relevant premium concierge context",()=>{
@@ -102,27 +212,28 @@ describe("concierge AI function helpers",()=>{
     );
   });
 
-  it("returns only valid prior tasks for customers with none, open tasks, or completed tasks",async()=>{
-    assert.deepEqual(await impl.loadAiTaskContext(taskContextDb([]),"synthetic-customer"),[]);
-    assert.deepEqual(await impl.loadAiTaskContext(taskContextDb([[
-      {stableKey:"task:one",title:"Open task",status:"open"},
-      {stableKey:"task:two",title:"Completed task",status:"completed"},
-      {stableKey:"task:invalid",title:"Ignored",status:"invalid"}
-    ]]),"synthetic-customer"),[
+  it("loads prior tasks from customer aiTasks without collectionGroup",async()=>{
+    const db=taskContextDb({
+      aiTasks:[
+        {stableKey:"task:one",title:"Open task",status:"open"},
+        {stableKey:"task:two",title:"Completed task",status:"completed"},
+        {stableKey:"task:invalid",title:"Ignored",status:"invalid"}
+      ]
+    });
+    assert.deepEqual(await impl.loadAiTaskContext(db,"synthetic-customer"),[
       {stableKey:"task:one",title:"Open task",status:"open"},
       {stableKey:"task:two",title:"Completed task",status:"completed"}
     ]);
   });
 
-  it("uses the newest customer analysis state and does not query global item collections",async()=>{
-    const db=taskContextDb([
-      [{stableKey:"task:one",title:"Current task",status:"completed"}],
-      [
-        {stableKey:"task:one",title:"Old task",status:"open"},
-        {stableKey:"task:two",title:"Dismissed task",status:"dismissed"}
-      ]
-    ]);
-    db.collectionGroup=()=>{throw new Error("global collectionGroup must not be used");};
+  it("falls back to analysis items when aiTasks is empty and never uses collectionGroup",async()=>{
+    const db=taskContextDb({
+      aiTasks:[],
+      analyses:[[
+        {stableKey:"task:one",title:"Current task",status:"completed",itemType:"task"},
+        {stableKey:"task:two",title:"Dismissed task",status:"dismissed",itemType:"task"}
+      ]]
+    });
     assert.deepEqual(await impl.loadAiTaskContext(db,"synthetic-customer"),[
       {stableKey:"task:one",title:"Current task",status:"completed"},
       {stableKey:"task:two",title:"Dismissed task",status:"dismissed"}
@@ -132,27 +243,30 @@ describe("concierge AI function helpers",()=>{
   it("surfaces a prior-task Firestore failure to the central handler",async()=>{
     const failure=Object.assign(new Error("Firestore unavailable"),{code:"unavailable"});
     await assert.rejects(
-      impl.loadAiTaskContext(taskContextDb([],{error:failure}),"synthetic-customer"),
+      impl.loadAiTaskContext(taskContextDb({error:failure}),"synthetic-customer"),
       error=>error===failure
     );
   });
 
-  it("accepts a valid OpenAI response",async()=>{
-    const output={
-      summary:"Summary.",
-      strengths:[],
-      concerns:[],
-      nextActions:[{priority:1,urgency:"immediate",impact:"high",title:"Check",description:"Check the supplied facts.",targetTab:"trip",sourceInsightId:""}],
-      conciergeNoteDraft:"Note",
-      disclaimer:"Review"
-    };
-    assert.deepEqual(await ai.requestAnalysis({
+  it("accepts a valid OpenAI advisor response",async()=>{
+    const context=ai.buildAiConciergeContext({
+      tripName:"Trip",
+      startDate:"2026-09-01",
+      endDate:"2026-09-02",
+      documents:[{id:"doc-1",title:"Ticket",type:"ticket"}],
+      program:[{id:"p1",title:"Hike"}]
+    },{insights:[]});
+    const output=validAdvisorOutput();
+    const result=await ai.requestAnalysis({
       apiKey:"test-key",
-      model:"test",
-      context:{},
+      model:"gpt-test",
+      context,
       language:"de",
       clientFactory:()=>({responses:{create:async()=>({output_text:JSON.stringify(output)})}})
-    }),output);
+    });
+    assert.equal(result.schemaVersion,2);
+    assert.equal(result.meta.model,"gpt-test");
+    assert.equal(result.score.overall,82);
   });
 
   it("keeps merge failures observable to their caller",()=>{

@@ -4995,9 +4995,72 @@
       ?`<button class="v2-button small primary task-card__action" type="button" data-ai-task-open-entity="${escapeHtml(task.itemId||task.stableKey||"")}" data-ai-task-customer="${escapeHtml(task.customerId||"")}"${disabled}>Öffnen</button>`
       :"";
     const gotoBtn=customerTarget
-      ?`<button class="v2-button small soft task-card__action task-card__action--secondary" type="button" data-ai-task-detail-goto="${escapeHtml(customerTarget.customerId)}" data-detail-tab="${escapeHtml(customerTarget.tab)}"${disabled}>Zum Kundenbereich</button>`
+      ?`<button class="v2-button small soft task-card__action task-card__action--secondary" type="button" data-ai-task-detail-goto="${escapeHtml(customerTarget.customerId)}" data-detail-tab="${escapeHtml(customerTarget.tab)}"${disabled}>Zum Kunden</button>`
       :"";
     return `${openBtn}${gotoBtn}${aiTaskStatusButtonsMarkup(task,{busy})}`;
+  }
+
+  function aiTaskDetailTechField(label,value){
+    const text=cleanValue(value)||"—";
+    return `<div><dt>${escapeHtml(label)}</dt><dd><code>${escapeHtml(text)}</code></dd></div>`;
+  }
+
+  function aiTaskDetailTechnicalMarkup(task,refs){
+    const refList=aiTaskRefList(task).filter(item=>cleanValue(item.entityType)&&cleanValue(item.entityId));
+    const hasRefs=refList.length>0
+      ||Boolean(cleanValue(refs.entityType)||cleanValue(refs.entityId)||cleanValue(refs.programItemId)||cleanValue(refs.bookingId)||cleanValue(refs.documentId)||cleanValue(refs.dayId));
+    const referencesMarkup=hasRefs
+      ?(refList.length
+        ?`<ul class="ai-task-detail-tech__refs">${refList.map(item=>`<li><code>${escapeHtml(`${item.entityType}:${item.entityId}`)}</code></li>`).join("")}</ul>`
+        :`<code>${escapeHtml([
+          refs.entityType&&`entityType=${refs.entityType}`,
+          refs.entityId&&`entityId=${refs.entityId}`,
+          refs.programItemId&&`programItemId=${refs.programItemId}`,
+          refs.bookingId&&`bookingId=${refs.bookingId}`,
+          refs.documentId&&`documentId=${refs.documentId}`,
+          refs.dayId&&`dayId=${refs.dayId}`
+        ].filter(Boolean).join(" · "))}</code>`)
+      :`<span>Keine Referenzen vorhanden.</span>`;
+    const source=`AI Concierge${task.analysisId?` · ${task.analysisId}`:""}`;
+    const taskId=cleanValue(task.itemId||task.stableKey);
+    return `
+      <section class="ai-task-detail-tech" data-ai-task-tech>
+        <button class="ai-task-detail-tech__toggle" type="button" id="aiTaskDetailTechToggle" data-ai-task-tech-toggle aria-expanded="false" aria-controls="aiTaskDetailTechPanel">
+          <span class="ai-task-detail-tech__chevron" aria-hidden="true"></span>
+          <span>Technische Details</span>
+        </button>
+        <div class="ai-task-detail-tech__panel" id="aiTaskDetailTechPanel" data-ai-task-tech-panel role="region" aria-labelledby="aiTaskDetailTechToggle" inert>
+          <div class="ai-task-detail-tech__panel-inner">
+            <dl class="ai-task-detail-meta ai-task-detail-tech__meta">
+              <div><dt>Quelle</dt><dd>${escapeHtml(source)}</dd></div>
+              <div><dt>Task-ID</dt><dd><code data-ai-task-detail-id>${escapeHtml(taskId||"—")}</code></dd></div>
+              <div data-ai-task-refs><dt>Referenzen</dt><dd>${referencesMarkup}</dd></div>
+              ${aiTaskDetailTechField("entityType",refs.entityType)}
+              ${aiTaskDetailTechField("entityId",refs.entityId)}
+              ${aiTaskDetailTechField("programItemId",refs.programItemId)}
+              ${aiTaskDetailTechField("bookingId",refs.bookingId)}
+              ${aiTaskDetailTechField("documentId",refs.documentId)}
+              ${aiTaskDetailTechField("dayId",refs.dayId)}
+            </dl>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  function toggleAiTaskDetailTechnical(forceOpen){
+    const root=document.querySelector("[data-ai-task-tech]");
+    if(!root)return false;
+    const next=typeof forceOpen==="boolean"?forceOpen:!root.classList.contains("is-open");
+    root.classList.toggle("is-open",next);
+    const toggle=root.querySelector("[data-ai-task-tech-toggle]");
+    const panel=root.querySelector("[data-ai-task-tech-panel]");
+    if(toggle)toggle.setAttribute("aria-expanded",next?"true":"false");
+    if(panel){
+      if(next)panel.removeAttribute("inert");
+      else panel.setAttribute("inert","");
+    }
+    return next;
   }
 
   function aiTaskListCardMarkup(task){
@@ -5084,19 +5147,8 @@
               <div><dt>Priorität</dt><dd>${escapeHtml(String(task.priority??"—"))}</dd></div>
               <div><dt>Phase</dt><dd>${escapeHtml(aiTaskPhaseLabel(task))}</dd></div>
               <div><dt>Status</dt><dd>${escapeHtml(aiTaskStatusLabel(status))}</dd></div>
-              <div><dt>Quelle</dt><dd>${escapeHtml(`AI Concierge${task.analysisId?` · ${task.analysisId}`:""}`)}</dd></div>
-              <div><dt>Task-ID</dt><dd><code data-ai-task-detail-id>${escapeHtml(task.itemId||task.stableKey||"")}</code></dd></div>
-              <div data-ai-task-refs><dt>Referenzen</dt><dd><code>${escapeHtml([
-                `entityType=${refs.entityType||"—"}`,
-                `entityId=${refs.entityId||"—"}`,
-                `programItemId=${refs.programItemId||"—"}`,
-                `bookingId=${refs.bookingId||"—"}`,
-                `documentId=${refs.documentId||"—"}`,
-                `dayId=${refs.dayId||"—"}`,
-                `targetTab=${refs.targetTab||"—"}`,
-                `customerId=${refs.customerId||"—"}`
-              ].join(" · "))}</code></dd></div>
             </dl>
+            ${aiTaskDetailTechnicalMarkup(task,refs)}
             ${actionMessage?`<p class="v2-edit-status ${escapeHtml(state.aiTasksMessageKind||"success")}" role="status">${escapeHtml(actionMessage)}</p>`:""}
             ${state.aiTasksError?`<p class="v2-edit-status error" role="alert">${escapeHtml(state.aiTasksError)}</p>`:""}
           </div>
@@ -5276,6 +5328,53 @@
     `;
   }
 
+  const CONCIERGE_INTELLIGENCE_OPEN_KEY_PREFIX="act-concierge-intelligence-open:";
+
+  function domSafeId(value){
+    return cleanValue(value).replace(/[^a-zA-Z0-9_-]/g,"_")||"unknown";
+  }
+
+  function conciergeIntelligenceOpenKey(customerId){
+    const id=cleanValue(customerId);
+    return id?`${CONCIERGE_INTELLIGENCE_OPEN_KEY_PREFIX}${id}`:"";
+  }
+
+  function readConciergeIntelligenceOpen(customerId){
+    const key=conciergeIntelligenceOpenKey(customerId);
+    if(!key)return false;
+    try{return localStorage.getItem(key)==="1";}
+    catch(_){return false;}
+  }
+
+  function writeConciergeIntelligenceOpen(customerId,open){
+    const key=conciergeIntelligenceOpenKey(customerId);
+    if(!key)return;
+    try{
+      if(open)localStorage.setItem(key,"1");
+      else localStorage.removeItem(key);
+    }catch(_){}
+  }
+
+  function toggleConciergeIntelligencePanel(customerId){
+    const id=cleanValue(customerId)||cleanValue(state.selectedCustomerId);
+    if(!id)return false;
+    const root=document.querySelector(`[data-concierge-intelligence="${id}"]`);
+    if(!root)return false;
+    const next=!root.classList.contains("is-open");
+    root.classList.toggle("is-open",next);
+    const toggle=root.querySelector("[data-concierge-intelligence-toggle]");
+    const panel=root.querySelector("[data-concierge-intelligence-panel]");
+    const label=toggle?.querySelector("[data-ci-toggle-label]");
+    if(toggle)toggle.setAttribute("aria-expanded",next?"true":"false");
+    if(label)label.textContent=next?"Zuklappen":"Aufklappen";
+    if(panel){
+      if(next)panel.removeAttribute("inert");
+      else panel.setAttribute("inert","");
+    }
+    writeConciergeIntelligenceOpen(id,next);
+    return next;
+  }
+
   function customerWorkspaceOverviewMarkup(customer,workspace){
     const intelligence=customerConciergeReadiness(customer,workspace);
     const warningMarkup=workspace.warnings.length
@@ -5312,6 +5411,15 @@
       :`<div class="v2-workspace-clear"><strong>Concierge-Readiness vollständig</strong><span>Keine weiteren Hinweise aus den vorhandenen Daten erkannt.</span></div>`;
     const aiAnalysis=state.aiAnalysisCustomerId===customer.customerId?state.aiAnalysis:null;
     const aiMarkup=aiAnalysis?aiAdvisorDashboardMarkup(aiAnalysis):"";
+    const intelligenceOpen=readConciergeIntelligenceOpen(customer.customerId);
+    const intelligenceSafeId=domSafeId(customer.customerId);
+    const intelligencePanelId=`conciergeIntelligencePanel-${intelligenceSafeId}`;
+    const intelligenceToggleId=`conciergeIntelligenceToggle-${intelligenceSafeId}`;
+    const advisorScore=aiAnalysis?toAdvisorView(aiAnalysis)?.score?.overall:null;
+    const intelligenceScore=advisorScore!=null?advisorScore:intelligence?.quality?.score;
+    const openFindingsCount=arrayValue(intelligence?.insights).length;
+    const intelligenceStatusReady=intelligence?.quality?.level==="ready"&&openFindingsCount===0&&openAiTasks.length===0;
+    const intelligenceStatusLabel=intelligenceStatusReady?"Bereit":"Handlungsbedarf";
     return `
       <section class="v2-concierge-overview-card" aria-labelledby="conciergeOverviewTitle">
         <div class="v2-workspace-section-head">
@@ -5331,16 +5439,32 @@
         </div>
         <div class="v2-workspace-alerts" aria-label="Warnungen">${warningMarkup}</div>
         ${intelligence?`
-          <section class="v2-concierge-intelligence" aria-labelledby="conciergeIntelligenceTitle">
-            <div class="v2-workspace-section-head compact">
-              <div><p class="v2-eyebrow">Concierge Intelligence</p><h4 id="conciergeIntelligenceTitle">Nächste Schritte</h4></div>
-              <span class="v2-workspace-health ${intelligence.quality.level==="ready"?"ready":"attention"}">${escapeHtml(`${intelligence.quality.score}/100`)}</span>
+          <section class="v2-concierge-intelligence ${intelligenceOpen?"is-open":""}" data-concierge-intelligence="${escapeHtml(customer.customerId)}">
+            <button class="v2-concierge-intelligence__toggle" type="button" id="${escapeHtml(intelligenceToggleId)}" data-concierge-intelligence-toggle data-customer-id="${escapeHtml(customer.customerId)}" aria-expanded="${intelligenceOpen?"true":"false"}" aria-controls="${escapeHtml(intelligencePanelId)}">
+              <span class="v2-concierge-intelligence__lead">
+                <span class="v2-eyebrow">Concierge Intelligence</span>
+                <span class="v2-concierge-intelligence__meta">
+                  <span>Score ${escapeHtml(intelligenceScore!=null?String(intelligenceScore):"—")}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>${escapeHtml(String(openFindingsCount))} ${openFindingsCount===1?"Hinweis":"Hinweise"}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>${escapeHtml(String(openAiTasks.length))} ${openAiTasks.length===1?"Aufgabe":"Aufgaben"}</span>
+                </span>
+              </span>
+              <span class="v2-workspace-health ${intelligenceStatusReady?"ready":"attention"}">${escapeHtml(intelligenceStatusLabel)}</span>
+              <span class="v2-concierge-intelligence__chevron" aria-hidden="true"></span>
+              <span class="v2-visually-hidden" data-ci-toggle-label>${intelligenceOpen?"Zuklappen":"Aufklappen"}</span>
+            </button>
+            <div class="v2-concierge-intelligence__panel" id="${escapeHtml(intelligencePanelId)}" data-concierge-intelligence-panel role="region" aria-labelledby="${escapeHtml(intelligenceToggleId)}" ${intelligenceOpen?"":"inert"}>
+              <div class="v2-concierge-intelligence__panel-inner">
+                <h4 id="conciergeIntelligenceBodyTitle-${escapeHtml(intelligenceSafeId)}" class="v2-concierge-intelligence__panel-title">Nächste Schritte</h4>
+                <button class="v2-button soft" type="button" data-ai-analyze ${state.aiAnalysisBusy?"disabled":""}>${state.aiAnalysisBusy?"AI analysiert...":"Reise mit AI Concierge Advisor analysieren"}</button>
+                ${state.aiAnalysisError?`<p class="v2-edit-status error">${escapeHtml(state.aiAnalysisError)}</p>`:""}
+                <div class="v2-workspace-alerts" aria-label="Concierge Hinweise">${insightMarkup}</div>
+                ${aiMarkup}
+                ${aiHistoryMarkup(customer.customerId)}
+              </div>
             </div>
-            <button class="v2-button soft" type="button" data-ai-analyze ${state.aiAnalysisBusy?"disabled":""}>${state.aiAnalysisBusy?"AI analysiert...":"Reise mit AI Concierge Advisor analysieren"}</button>
-            ${state.aiAnalysisError?`<p class="v2-edit-status error">${escapeHtml(state.aiAnalysisError)}</p>`:""}
-            <div class="v2-workspace-alerts" aria-label="Concierge Hinweise">${insightMarkup}</div>
-            ${aiMarkup}
-            ${aiHistoryMarkup(customer.customerId)}
           </section>
         `:""}
         <section class="v2-workspace-panel workspace-ai-overview-panel" id="workspaceAiTasksPanel">
@@ -8752,6 +8876,12 @@
       if(event.target.closest("a"))return;
       const open=event.target.closest("[data-open-editor]");
       if(open){openCustomerDetail(open.dataset.openEditor);return;}
+      const conciergeIntelligenceToggle=event.target.closest("[data-concierge-intelligence-toggle]");
+      if(conciergeIntelligenceToggle){
+        event.preventDefault();
+        toggleConciergeIntelligencePanel(conciergeIntelligenceToggle.getAttribute("data-customer-id")||state.selectedCustomerId||"");
+        return;
+      }
       if(event.target.closest("[data-ai-analyze]")){analyzeSelectedCustomerWithAi();return;}
       if(event.target.closest("[data-ai-save]")){saveSelectedAiAnalysis();return;}
       if(event.target.closest("[data-ai-history-more]")){
@@ -8785,6 +8915,11 @@
       if(event.target.closest("[data-ai-task-detail-close]")){
         event.preventDefault();
         closeAiTaskDetail();
+        return;
+      }
+      if(event.target.closest("[data-ai-task-tech-toggle]")){
+        event.preventDefault();
+        toggleAiTaskDetailTechnical();
         return;
       }
       const aiTaskDetailGoto=event.target.closest("[data-ai-task-detail-goto]");

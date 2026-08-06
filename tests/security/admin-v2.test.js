@@ -33,10 +33,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=10/);
-    assert.match(html,/admin-v2\.css\?v=64/);
+    assert.match(html,/admin-v2\.css\?v=66/);
     assert.match(html,/class="v2-login-logo"[^>]+src="\.\.\/images\/logo\/alpine-concierge-logo-transparent\.png"[^>]+alt="Alpine Concierge Tirol"[^>]+width="1536" height="1024"/);
     assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
-    assert.match(html,/admin-v2\.js\?v=85/);
+    assert.match(html,/admin-v2\.js\?v=87/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(html,/concierge-intelligence-library\.js\?v=1/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
@@ -71,6 +71,139 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/Sofort/);
     assert.match(js,/Hohe Wirkung/);
     assert.match(readProjectFile("customer-portal/admin-v2.css"),/\.v2-ai-advisor/);
+  });
+
+  it("makes Concierge Intelligence collapsible with per-customer persistence and a11y",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    const overviewFn=js.match(/function customerWorkspaceOverviewMarkup\(customer,workspace\)[\s\S]*?(?=\n  function workspaceFact)/)?.[0]||"";
+    const toggleFn=js.match(/function toggleConciergeIntelligencePanel\(customerId\)[\s\S]*?(?=\n  function customerWorkspaceOverviewMarkup)/)?.[0]||"";
+    const readFn=js.match(/function readConciergeIntelligenceOpen\(customerId\)[\s\S]*?(?=\n  function writeConciergeIntelligenceOpen)/)?.[0]||"";
+    const writeFn=js.match(/function writeConciergeIntelligenceOpen\(customerId,open\)[\s\S]*?(?=\n  function toggleConciergeIntelligencePanel)/)?.[0]||"";
+
+    assert.match(js,/const CONCIERGE_INTELLIGENCE_OPEN_KEY_PREFIX="act-concierge-intelligence-open:"/);
+    assert.match(js,/function readConciergeIntelligenceOpen\(customerId\)/);
+    assert.match(js,/function writeConciergeIntelligenceOpen\(customerId,open\)/);
+    assert.match(js,/function toggleConciergeIntelligencePanel\(customerId\)/);
+    assert.match(js,/data-concierge-intelligence-toggle/);
+    assert.match(js,/aria-expanded="\$\{intelligenceOpen\?"true":"false"\}"/);
+    assert.match(js,/aria-controls="\$\{escapeHtml\(intelligencePanelId\)\}"/);
+    assert.match(overviewFn,/class="v2-concierge-intelligence \$\{intelligenceOpen\?"is-open":""\}"/);
+    assert.match(overviewFn,/const intelligenceOpen=readConciergeIntelligenceOpen\(customer\.customerId\)/);
+    assert.match(overviewFn,/data-ai-analyze/);
+    assert.match(overviewFn,/aiAdvisorDashboardMarkup/);
+    assert.match(overviewFn,/aiHistoryMarkup\(customer\.customerId\)/);
+    assert.match(overviewFn,/Score \$\{escapeHtml\(intelligenceScore!=null\?String\(intelligenceScore\):"—"\)\}/);
+    assert.match(overviewFn,/v2-concierge-intelligence__chevron/);
+    assert.match(overviewFn,/conciergeIntelligencePanel-\$\{intelligenceSafeId\}/);
+    assert.match(overviewFn,/conciergeIntelligenceToggle-\$\{intelligenceSafeId\}/);
+    assert.match(overviewFn,/conciergeIntelligenceBodyTitle-\$\{escapeHtml\(intelligenceSafeId\)\}/);
+    assert.doesNotMatch(overviewFn,/id="conciergeIntelligenceTitle"/);
+    assert.match(readFn,/if\(!key\)return false/);
+    assert.match(readFn,/localStorage\.getItem\(key\)==="1"/);
+    assert.match(writeFn,/localStorage\.setItem\(key,"1"\)/);
+    assert.match(writeFn,/localStorage\.removeItem\(key\)/);
+    assert.match(toggleFn,/writeConciergeIntelligenceOpen\(id,next\)/);
+    assert.match(toggleFn,/setAttribute\("aria-expanded",next\?"true":"false"\)/);
+    assert.match(toggleFn,/setAttribute\("inert",""\)/);
+    assert.match(js,/closest\("\[data-concierge-intelligence-toggle\]"\)/);
+    assert.match(css,/\.v2-concierge-intelligence__toggle\{/);
+    assert.match(css,/min-height:44px/);
+    assert.match(css,/prefers-reduced-motion:reduce/);
+    assert.match(css,/grid-template-rows:0fr/);
+    assert.match(css,/\.v2-concierge-intelligence\.is-open \.v2-concierge-intelligence__panel\{grid-template-rows:1fr\}/);
+    assert.match(css,/overflow:hidden/);
+    assert.match(css,/focus-visible/);
+
+    const storage=new Map();
+    const localStorage={
+      getItem:(key)=>storage.has(key)?storage.get(key):null,
+      setItem:(key,value)=>{storage.set(key,String(value));},
+      removeItem:(key)=>{storage.delete(key);}
+    };
+    const cleanValue=(value)=>String(value??"").trim();
+    const keyPrefix="act-concierge-intelligence-open:";
+    const openKey=(customerId)=>{
+      const id=cleanValue(customerId);
+      return id?`${keyPrefix}${id}`:"";
+    };
+    const readOpen=(customerId)=>{
+      const key=openKey(customerId);
+      if(!key)return false;
+      return localStorage.getItem(key)==="1";
+    };
+    const writeOpen=(customerId,open)=>{
+      const key=openKey(customerId);
+      if(!key)return;
+      if(open)localStorage.setItem(key,"1");
+      else localStorage.removeItem(key);
+    };
+
+    assert.equal(readOpen(""),false);
+    assert.equal(readOpen("   "),false);
+    assert.equal(readOpen("cust-a"),false);
+    writeOpen("cust-a",true);
+    assert.equal(readOpen("cust-a"),true);
+    assert.equal(readOpen("cust-b"),false);
+    writeOpen("cust-b",true);
+    assert.equal(readOpen("cust-a"),true);
+    assert.equal(readOpen("cust-b"),true);
+    writeOpen("cust-a",false);
+    assert.equal(readOpen("cust-a"),false);
+    assert.equal(readOpen("cust-b"),true);
+    assert.equal(localStorage.getItem(`${keyPrefix}cust-b`),"1");
+
+    // Lightweight DOM toggle simulation (button + aria + per-customer class/state).
+    function makePanel(customerId,initiallyOpen=false){
+      const root={
+        classList:{
+          values:new Set(initiallyOpen?["is-open"]:[]),
+          contains(name){return this.values.has(name);},
+          toggle(name,force){
+            if(force)this.values.add(name);
+            else this.values.delete(name);
+          }
+        },
+        toggle:{
+          attrs:{"aria-expanded":initiallyOpen?"true":"false","data-customer-id":customerId},
+          label:{textContent:initiallyOpen?"Zuklappen":"Aufklappen"},
+          setAttribute(name,value){this.attrs[name]=value;},
+          getAttribute(name){return this.attrs[name];},
+          querySelector(sel){return sel.includes("data-ci-toggle-label")?this.label:null;}
+        },
+        panel:{attrs:initiallyOpen?{}:{inert:""},setAttribute(name,value){this.attrs[name]=value;},removeAttribute(name){delete this.attrs[name];}},
+        querySelector(sel){
+          if(sel.includes("data-concierge-intelligence-toggle"))return this.toggle;
+          if(sel.includes("data-concierge-intelligence-panel"))return this.panel;
+          return null;
+        }
+      };
+      return root;
+    }
+    function simulateToggle(root,customerId){
+      const next=!root.classList.contains("is-open");
+      root.classList.toggle("is-open",next);
+      root.toggle.setAttribute("aria-expanded",next?"true":"false");
+      root.toggle.label.textContent=next?"Zuklappen":"Aufklappen";
+      if(next)root.panel.removeAttribute("inert");
+      else root.panel.setAttribute("inert","");
+      writeOpen(customerId,next);
+      return next;
+    }
+    const panelA=makePanel("cust-a",false);
+    assert.equal(panelA.toggle.getAttribute("aria-expanded"),"false");
+    assert.equal(simulateToggle(panelA,"cust-a"),true);
+    assert.equal(panelA.classList.contains("is-open"),true);
+    assert.equal(panelA.toggle.getAttribute("aria-expanded"),"true");
+    assert.equal("inert" in panelA.panel.attrs,false);
+    assert.equal(simulateToggle(panelA,"cust-a"),false);
+    assert.equal(panelA.classList.contains("is-open"),false);
+    assert.equal(panelA.toggle.getAttribute("aria-expanded"),"false");
+    assert.equal(panelA.panel.attrs.inert,"");
+    const panelB=makePanel("cust-b",readOpen("cust-b"));
+    assert.equal(panelB.classList.contains("is-open"),true);
+    assert.equal(panelB.toggle.getAttribute("aria-expanded"),"true");
+    assert.match(overviewFn,/<button class="v2-concierge-intelligence__toggle" type="button"/);
   });
 
   it("provides save, history, filters, sorting and explicit task status controls for AI analyses",()=>{
@@ -133,7 +266,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function aiTaskStatusButtonsMarkup[\s\S]*?>Verwerfen</);
     assert.match(detailActionFn,/resolveAiTaskOpenTarget\(task\)/);
     assert.match(detailActionFn,/data-ai-task-open-entity=/);
-    assert.match(detailActionFn,/Zum Kundenbereich/);
+    assert.match(detailActionFn,/Zum Kunden/);
+    assert.doesNotMatch(detailActionFn,/Zum Kundenbereich/);
     assert.match(detailActionFn,/task-card__action--secondary/);
     assert.match(detailActionFn,/aiTaskStatusButtonsMarkup\(task,\{busy\}\)/);
     assert.match(js,/task-card__action--success/);
@@ -195,7 +329,48 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.doesNotMatch(detailActionFn,/data-ai-open-task=/);
     assert.match(detailRenderFn,/aiTaskDetailActionBarMarkup\(task\)/);
     assert.doesNotMatch(detailRenderFn,/aiTaskActionBarMarkup\(task\)/);
-    assert.match(detailRenderFn,/data-ai-task-refs/);
+    assert.match(detailRenderFn,/aiTaskDetailTechnicalMarkup\(task,refs\)/);
+    assert.match(detailRenderFn,/<div><dt>Kunde<\/dt>/);
+    assert.match(detailRenderFn,/<div><dt>Priorität<\/dt>/);
+    assert.match(detailRenderFn,/<div><dt>Phase<\/dt>/);
+    assert.match(detailRenderFn,/<div><dt>Status<\/dt>/);
+    assert.doesNotMatch(detailRenderFn,/<div><dt>Quelle<\/dt>/);
+    assert.doesNotMatch(detailRenderFn,/<div><dt>Task-ID<\/dt>/);
+  });
+
+  it("hides AI task technical details behind a collapsed accessible accordion",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const css=readProjectFile("customer-portal/admin-v2.css");
+    const techFn=js.match(/function aiTaskDetailTechnicalMarkup\(task,refs\)[\s\S]*?(?=\n  function toggleAiTaskDetailTechnical)/)?.[0]||"";
+    const toggleFn=js.match(/function toggleAiTaskDetailTechnical\(forceOpen\)[\s\S]*?(?=\n  function aiTaskListCardMarkup)/)?.[0]||"";
+    assert.match(js,/function aiTaskDetailTechnicalMarkup\(/);
+    assert.match(js,/function toggleAiTaskDetailTechnical\(/);
+    assert.match(techFn,/Technische Details/);
+    assert.match(techFn,/data-ai-task-tech-toggle/);
+    assert.match(techFn,/aria-expanded="false"/);
+    assert.match(techFn,/aria-controls="aiTaskDetailTechPanel"/);
+    assert.match(techFn,/id="aiTaskDetailTechPanel"/);
+    assert.match(techFn,/\binert\b/);
+    assert.match(techFn,/<div><dt>Quelle<\/dt>/);
+    assert.match(techFn,/data-ai-task-detail-id/);
+    assert.match(techFn,/data-ai-task-refs/);
+    assert.match(techFn,/Keine Referenzen vorhanden\./);
+    assert.match(techFn,/aiTaskDetailTechField\("entityType"/);
+    assert.match(techFn,/aiTaskDetailTechField\("entityId"/);
+    assert.match(techFn,/aiTaskDetailTechField\("programItemId"/);
+    assert.match(techFn,/aiTaskDetailTechField\("bookingId"/);
+    assert.match(techFn,/aiTaskDetailTechField\("documentId"/);
+    assert.match(techFn,/aiTaskDetailTechField\("dayId"/);
+    assert.match(techFn,/<button class="ai-task-detail-tech__toggle" type="button"/);
+    assert.match(toggleFn,/aria-expanded",next\?"true":"false"/);
+    assert.match(toggleFn,/setAttribute\("inert",""\)/);
+    assert.match(js,/closest\("\[data-ai-task-tech-toggle\]"\)/);
+    assert.match(css,/\.ai-task-detail-tech__toggle\{/);
+    assert.match(css,/min-height:44px/);
+    assert.match(css,/\.ai-task-detail-tech\.is-open \.ai-task-detail-tech__chevron/);
+    assert.match(css,/grid-template-rows:0fr/);
+    assert.match(css,/prefers-reduced-motion:reduce/);
+    assert.match(css,/overflow-wrap:anywhere/);
   });
 
   it("filters AI tasks by customer with URL/session persistence and deep links",()=>{
@@ -267,7 +442,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const createFn=js.match(/async function createSelectedAiTask[\s\S]*?(?=\n  const AI_TASK_CUSTOMER_FILTER_KEY|\n  function |\n  async function )/)?.[0]||"";
     const saveFn=js.match(/async function saveSelectedAiAnalysis[\s\S]*?(?=\n  async function |\n  function )/)?.[0]||"";
     const analyzeFn=js.match(/async function analyzeSelectedCustomerWithAi[\s\S]*?(?=\n  async function |\n  function )/)?.[0]||"";
-    assert.match(html,/admin-v2\.js\?v=85/);
+    assert.match(html,/admin-v2\.js\?v=87/);
     assert.match(js,/aiAnalysisPersisted:false/);
     assert.match(js,/function currentAiAnalysisIsPersisted\(/);
     assert.match(analyzeFn,/state\.aiAnalysisPersisted=false/);
@@ -832,12 +1007,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=64/);
+    assert.match(html,/admin-v2\.css\?v=66/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
     assert.match(html,/firebase-service\.js\?v=32/);
-    assert.match(html,/admin-v2\.js\?v=85/);
+    assert.match(html,/admin-v2\.js\?v=87/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -959,7 +1134,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-service\.js\?v=32/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=85/);
+    assert.match(html,/admin-v2\.js\?v=87/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -1071,8 +1246,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=64/);
-    assert.match(html,/admin-v2\.js\?v=85/);
+    assert.match(html,/admin-v2\.css\?v=66/);
+    assert.match(html,/admin-v2\.js\?v=87/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -1288,8 +1463,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=85/);
-    assert.match(html,/admin-v2\.css\?v=64/);
+    assert.match(html,/admin-v2\.js\?v=87/);
+    assert.match(html,/admin-v2\.css\?v=66/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);
     assert.match(js,/ACTAdminV2Communication\?\.bind/);

@@ -123,7 +123,7 @@ describe("AI task open target resolution",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     assert.match(html,/ai-task-open-target-library\.js\?v=1/);
-    assert.match(html,/admin-v2\.js\?v=85/);
+    assert.match(html,/admin-v2\.js\?v=87/);
     assert.match(js,/function canOpenEntityTarget\(/);
     assert.match(js,/resolveExecutableOpenTarget/);
     assert.match(js,/canOpenEntityTarget\(task\)\?resolveAiTaskOpenTarget\(task\):null/);

@@ -277,7 +277,67 @@ p{color:var(--muted);line-height:1.55}
 .v2-workspace-alert.warning>span:first-child{background:var(--amber);color:#7a5c1f}
 .v2-workspace-alert.critical{background:#fff1ee;border-color:#ebc7c0}
 .v2-workspace-alert.critical>span:first-child{background:var(--rose);color:#8b3d31}
-.v2-concierge-intelligence{display:grid;gap:10px;padding-top:2px}
+.v2-concierge-intelligence{display:grid;gap:0;padding-top:2px;min-width:0;border:1px solid rgba(16,40,32,.08);border-radius:16px;background:#fbfcfb;overflow:hidden}
+.v2-concierge-intelligence__toggle{
+  width:100%;
+  min-height:44px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:10px;
+  align-items:center;
+  padding:12px 14px;
+  border:0;
+  background:transparent;
+  text-align:left;
+  color:inherit;
+  cursor:pointer;
+  font:inherit;
+}
+.v2-concierge-intelligence__toggle:focus-visible{outline:2px solid var(--green-2);outline-offset:-2px;border-radius:14px}
+.v2-concierge-intelligence__lead{display:grid;gap:4px;min-width:0}
+.v2-concierge-intelligence__lead .v2-eyebrow{margin:0}
+.v2-concierge-intelligence__meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;color:var(--muted);font-size:12px;font-weight:800;line-height:1.35;overflow-wrap:anywhere}
+.v2-concierge-intelligence__toggle .v2-workspace-health{justify-self:end;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.v2-concierge-intelligence__chevron{
+  width:28px;height:28px;border-radius:999px;border:1px solid var(--line);background:#fff;
+  display:grid;place-items:center;flex:0 0 auto;transition:transform .18s ease;
+}
+.v2-concierge-intelligence__chevron::before{
+  content:"";
+  width:8px;height:8px;
+  border-right:2px solid var(--green);
+  border-bottom:2px solid var(--green);
+  transform:rotate(45deg) translate(-1px,-1px);
+}
+.v2-concierge-intelligence.is-open .v2-concierge-intelligence__chevron{transform:rotate(180deg)}
+.v2-concierge-intelligence__panel{
+  display:grid;
+  grid-template-rows:0fr;
+  transition:grid-template-rows .22s ease;
+  min-width:0;
+}
+.v2-concierge-intelligence.is-open .v2-concierge-intelligence__panel{grid-template-rows:1fr}
+.v2-concierge-intelligence__panel-inner{
+  overflow:hidden;
+  display:grid;
+  gap:10px;
+  min-width:0;
+  padding:0 14px;
+}
+.v2-concierge-intelligence.is-open .v2-concierge-intelligence__panel-inner{padding-bottom:14px;padding-top:2px}
+.v2-concierge-intelligence__panel-title{margin:0;font-size:16px}
+.v2-visually-hidden{
+  position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+@media (max-width:767px){
+  .v2-concierge-intelligence__toggle{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"lead chevron" "status chevron";row-gap:8px}
+  .v2-concierge-intelligence__lead{grid-area:lead}
+  .v2-concierge-intelligence__toggle .v2-workspace-health{grid-area:status;justify-self:start}
+  .v2-concierge-intelligence__chevron{grid-area:chevron;align-self:center}
+}
+@media (prefers-reduced-motion:reduce){
+  .v2-concierge-intelligence__panel,.v2-concierge-intelligence__chevron{transition:none}
+}
 .v2-ai-analysis{display:grid;gap:9px;padding:14px;border:1px solid #c8d9ed;border-radius:14px;background:#f3f8ff}
 .v2-ai-analysis h4,.v2-ai-analysis p{margin:0}
 .v2-ai-analysis-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -438,17 +498,57 @@ p{color:var(--muted);line-height:1.55}
 .ai-task-detail-header h2{margin:0}
 .ai-task-detail-body{min-height:0;overflow:auto;display:grid;gap:14px}
 .ai-task-detail-body>p{margin:0;color:var(--ink);line-height:1.5}
-.ai-task-detail-meta{display:grid;gap:10px;margin:0}
-.ai-task-detail-meta>div{display:grid;gap:2px}
+.ai-task-detail-meta{display:grid;gap:10px;margin:0;min-width:0}
+.ai-task-detail-meta>div{display:grid;gap:2px;min-width:0}
 .ai-task-detail-meta dt{color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
-.ai-task-detail-meta dd{margin:0;font-weight:750;word-break:break-word}
+.ai-task-detail-meta dd{margin:0;font-weight:750;word-break:break-word;overflow-wrap:anywhere}
 .ai-task-detail-meta code{font-size:12px}
+.ai-task-detail-tech{min-width:0;border:1px solid rgba(16,40,32,.08);border-radius:14px;background:#f8faf7;overflow:hidden}
+.ai-task-detail-tech__toggle{
+  width:100%;
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  font-weight:800;
+  text-align:left;
+  cursor:pointer;
+}
+.ai-task-detail-tech__toggle:focus-visible{outline:2px solid var(--green-2);outline-offset:-2px;border-radius:12px}
+.ai-task-detail-tech__chevron{
+  width:18px;height:18px;flex:0 0 auto;
+  display:grid;place-items:center;
+  transition:transform .18s ease;
+}
+.ai-task-detail-tech__chevron::before{
+  content:"";
+  width:7px;height:7px;
+  border-right:2px solid var(--green);
+  border-bottom:2px solid var(--green);
+  transform:rotate(-45deg);
+}
+.ai-task-detail-tech.is-open .ai-task-detail-tech__chevron{transform:rotate(90deg)}
+.ai-task-detail-tech__panel{display:grid;grid-template-rows:0fr;transition:grid-template-rows .2s ease;min-width:0}
+.ai-task-detail-tech.is-open .ai-task-detail-tech__panel{grid-template-rows:1fr}
+.ai-task-detail-tech__panel-inner{overflow:hidden;min-width:0;padding:0 12px}
+.ai-task-detail-tech.is-open .ai-task-detail-tech__panel-inner{padding-bottom:12px}
+.ai-task-detail-tech__meta{gap:8px}
+.ai-task-detail-tech__refs{margin:0;padding-left:1.1em;display:grid;gap:4px}
 .ai-task-detail-footer{border-top:1px solid var(--line);padding-top:12px}
 @media (max-width:767px){
   .task-card__actions{display:grid;grid-template-columns:1fr 1fr;justify-content:stretch}
   .task-card__actions .task-card__action:first-child{grid-column:1 / -1}
   .task-card__action,.task-card__actions .v2-button{width:100%;justify-content:center}
   .ai-task-detail-panel{width:100%;max-height:100dvh;border-radius:20px 20px 0 0;align-self:end}
+  .ai-task-detail-header{flex-wrap:wrap}
+}
+@media (prefers-reduced-motion:reduce){
+  .ai-task-detail-tech__panel,.ai-task-detail-tech__chevron{transition:none}
 }
 .admin-mobile-action-sheet{display:none}
 .v2-read-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}

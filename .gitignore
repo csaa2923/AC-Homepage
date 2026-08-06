@@ -24,6 +24,11 @@ deploy-functions-debug.log
 functions/diag-*.js
 functions/_diag/
 
+# Local temp / diagnostic artifacts
+tmp-ai-logs*
+tmp-*.log
+*.tmp
+
 # OS / editor
 .DS_Store
 Thumbs.db

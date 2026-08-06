@@ -26,6 +26,7 @@
     aiHistoryError:"",
     aiCompareIds:[],
     aiTaskCreateBusy:false,
+    aiAnalysisPersisted:false,
     aiTasks:[],
     aiTasksBusy:false,
     aiTasksError:"",
@@ -5108,12 +5109,20 @@
       </div>`;
   }
 
+  function currentAiAnalysisIsPersisted(){
+    const customer=customerById(state.selectedCustomerId);
+    const analysis=state.aiAnalysisCustomerId===customer?.customerId?state.aiAnalysis:null;
+    return Boolean(cleanValue(analysis?.analysisId)&&state.aiAnalysisPersisted);
+  }
+
   function aiSuggestedTaskCard(task,index){
     const urgencyLabels={immediate:"Sofort",this_week:"Diese Woche",before_trip:"Vor Reise",optional:"Optional"};
     const impactLabels={high:"Hohe Wirkung",medium:"Mittlere Wirkung",low:"Geringe Wirkung"};
     const existing=findAiTaskForSuggestion(state.selectedCustomerId,task);
+    const persisted=currentAiAnalysisIsPersisted();
     const openLabel="Öffnen";
-    const createLabel=!existing&&task.createMode!=="auto"?"Aufgabe erstellen":"";
+    const needsCreate=!existing&&task.createMode!=="auto";
+    const createLabel=needsCreate?(persisted?"Aufgabe erstellen":"Analyse zuerst speichern"):"";
     const openButton=aiActionButton({
       label:openLabel,
       className:"v2-button small soft",
@@ -5121,12 +5130,21 @@
         ?`data-ai-open-task="${escapeHtml(existing.itemId)}" data-ai-task-customer="${escapeHtml(existing.customerId)}"`
         :`data-ai-target-tab="${escapeHtml(task.targetTab||"trip")}"`
     });
-    const createButton=aiActionButton({
-      label:createLabel,
-      className:"v2-button small primary",
-      attrs:`data-ai-create-task="${escapeHtml(String(index))}"`,
-      disabled:state.aiTaskCreateBusy
-    });
+    const createButton=needsCreate
+      ?(persisted
+        ?aiActionButton({
+          label:createLabel,
+          className:"v2-button small primary",
+          attrs:`data-ai-create-task="${escapeHtml(String(index))}"`,
+          disabled:state.aiTaskCreateBusy||state.aiAnalysisSaving
+        })
+        :aiActionButton({
+          label:createLabel,
+          className:"v2-button small soft",
+          attrs:`data-ai-create-requires-save="${escapeHtml(String(index))}" title="Bitte die Analyse zuerst speichern"`,
+          disabled:true
+        }))
+      :"";
     return `
       <article class="v2-ai-task-card ${existing?"is-created":""}">
         <small>${escapeHtml(`${urgencyLabels[task.urgency]||"Optional"} · ${impactLabels[task.impact]||"Geringe Wirkung"} · ${task.createMode==="auto"?"Auto":"Bestätigung"}`)}${existing?" · Erstellt":""}</small>
@@ -5246,7 +5264,7 @@
         ${view.findings.length?`<section class="v2-ai-block"><h5>Handlungsfelder</h5><div class="v2-ai-finding-grid">${view.findings.map(item=>aiFindingCard(item)).join("")}</div></section>`:""}
         ${view.risks.length?`<section class="v2-ai-block"><h5>Risiken</h5><div class="v2-ai-finding-grid">${view.risks.map(item=>aiFindingCard(item,{kind:"risk"})).join("")}</div></section>`:""}
         ${view.wowMoments.length?`<section class="v2-ai-block"><h5>WOW-Momente</h5><ul>${view.wowMoments.map(item=>`<li><strong>${escapeHtml(item.title)}</strong> ${escapeHtml(item.description)}${item.optional?" <em>(optional)</em>":""}</li>`).join("")}</ul></section>`:""}
-        ${view.suggestedTasks.length?`<section class="v2-ai-block"><h5>Aufgaben</h5><div class="v2-ai-task-grid">${view.suggestedTasks.map((task,index)=>aiSuggestedTaskCard(task,index)).join("")}</div></section>`:""}
+        ${view.suggestedTasks.length?`<section class="v2-ai-block"><h5>Aufgaben</h5>${currentAiAnalysisIsPersisted()?"":`<p class="v2-muted" data-ai-tasks-save-hint>Aufgaben können erst nach dem Speichern der Analyse erstellt werden.</p>`}<div class="v2-ai-task-grid">${view.suggestedTasks.map((task,index)=>aiSuggestedTaskCard(task,index)).join("")}</div></section>`:""}
         ${view.missingData.length?`<section class="v2-ai-block"><h5>Fehlende Daten</h5><ul>${view.missingData.map(item=>`<li><strong>${escapeHtml(item.field)}</strong> ${escapeHtml(item.reason)}</li>`).join("")}</ul></section>`:""}
         <div class="v2-ai-analysis-actions">
           <button class="v2-button primary" type="button" data-ai-save ${state.aiAnalysisSaving?"disabled":""}>${state.aiAnalysisSaving?"Speichert …":"Analyse speichern"}</button>
@@ -5365,6 +5383,7 @@
       state.aiAnalysisSaveMessage="";
       state.aiAnalysisSaveMessageKind="";
       state.aiAnalysis.analysisId=result.analysisId||"";
+      state.aiAnalysisPersisted=false;
     }catch(error){
       state.aiAnalysisError=error?.message==="AI Concierge ist noch nicht konfiguriert."
         ?"AI Concierge ist noch nicht konfiguriert."
@@ -5378,7 +5397,7 @@
   async function saveSelectedAiAnalysis(){
     const customer=customerById(state.selectedCustomerId);
     const analysis=state.aiAnalysisCustomerId===customer?.customerId?state.aiAnalysis:null;
-    if(!customer||!analysis||state.aiAnalysisSaving)return;
+    if(!customer||!analysis||state.aiAnalysisSaving)return false;
     state.aiAnalysisSaving=true;
     state.aiAnalysisSaveMessage="";
     state.aiAnalysisSaveMessageKind="";
@@ -5409,6 +5428,8 @@
         language
       );
       if(!result?.analysisId)throw new Error("save failed");
+      state.aiAnalysis.analysisId=result.analysisId;
+      state.aiAnalysisPersisted=true;
       state.aiAnalysisSaveMessage="Analyse gespeichert.";
       state.aiAnalysisSaveMessageKind="success";
       if(state.aiHistoryCustomerId!==customer.customerId){
@@ -5429,9 +5450,11 @@
       };
       state.aiHistory=[savedEntry,...state.aiHistory.filter(entry=>entry.analysisId!==result.analysisId)];
       await loadAiTasks();
+      return true;
     }catch(_){
       state.aiAnalysisSaveMessage="Analyse konnte nicht gespeichert werden. Bitte erneut versuchen.";
       state.aiAnalysisSaveMessageKind="error";
+      return false;
     }finally{
       state.aiAnalysisSaving=false;
       render();
@@ -5497,17 +5520,36 @@
     }
   }
 
-  async function createSelectedAiTask(index){
+  async function createSelectedAiTask(index,{saveFirst=false}={}){
     const customer=customerById(state.selectedCustomerId);
     const analysis=state.aiAnalysisCustomerId===customer?.customerId?state.aiAnalysis:null;
     const view=toAdvisorView(analysis);
     const task=arrayValue(view?.suggestedTasks)[index];
-    if(!customer||!analysis?.analysisId||!task||state.aiTaskCreateBusy)return;
+    if(!customer||!analysis||!task||state.aiTaskCreateBusy||state.aiAnalysisSaving)return;
     const already=findAiTaskForSuggestion(customer.customerId,task);
     if(already?.itemId){
       state.aiAnalysisSaveMessage="Aufgabe bereits vorhanden.";
       state.aiAnalysisSaveMessageKind="success";
       openAiTaskById(customer.customerId,already.itemId);
+      render();
+      return;
+    }
+    if(!currentAiAnalysisIsPersisted()){
+      if(!saveFirst){
+        state.aiAnalysisSaveMessage="Bitte die Analyse zuerst speichern.";
+        state.aiAnalysisSaveMessageKind="warning";
+        render();
+        return;
+      }
+      const saved=await saveSelectedAiAnalysis();
+      if(!saved||!currentAiAnalysisIsPersisted())return;
+    }
+    const persistedAnalysis=state.aiAnalysisCustomerId===customer.customerId?state.aiAnalysis:null;
+    const analysisId=cleanValue(persistedAnalysis?.analysisId);
+    if(!analysisId){
+      state.aiAnalysisSaveMessage="Bitte die Analyse zuerst speichern.";
+      state.aiAnalysisSaveMessageKind="warning";
+      render();
       return;
     }
     state.aiTaskCreateBusy=true;
@@ -5515,14 +5557,14 @@
     state.aiAnalysisSaveMessageKind="";
     render();
     try{
-      const result=await window.ACTFirebaseService?.createConciergeAnalysisTask?.(customer.customerId,analysis.analysisId,task);
+      const result=await window.ACTFirebaseService?.createConciergeAnalysisTask?.(customer.customerId,analysisId,task);
       if(!result?.itemId)throw new Error("create failed");
       const now=result.updatedAt||new Date().toISOString();
       const primaryRef=aiTaskRefList(task)[0]||null;
       upsertAiTaskLocal({
         itemId:result.itemId,
         stableKey:result.itemId,
-        analysisId:analysis.analysisId,
+        analysisId,
         customerId:customer.customerId,
         status:result.status||"open",
         title:task.title,
@@ -5546,9 +5588,19 @@
       state.aiTaskCreateBusy=false;
       openAiTaskById(customer.customerId,result.itemId);
       await loadAiTasks();
-    }catch(_){
-      state.aiAnalysisSaveMessage="Aufgabe konnte nicht erstellt werden.";
-      state.aiAnalysisSaveMessageKind="error";
+    }catch(error){
+      const code=cleanValue(error?.code||error?.details?.code);
+      if(code==="functions/not-found"||/Analyse nicht gefunden/i.test(String(error?.message||""))){
+        state.aiAnalysisPersisted=false;
+        state.aiAnalysisSaveMessage="Bitte die Analyse zuerst speichern.";
+        state.aiAnalysisSaveMessageKind="warning";
+      }else if(code==="functions/already-exists"){
+        state.aiAnalysisSaveMessage="Aufgabe bereits vorhanden.";
+        state.aiAnalysisSaveMessageKind="success";
+      }else{
+        state.aiAnalysisSaveMessage="Aufgabe konnte nicht erstellt werden.";
+        state.aiAnalysisSaveMessageKind="error";
+      }
     }finally{
       state.aiTaskCreateBusy=false;
       render();
@@ -8714,7 +8766,16 @@
       }
       const aiCreateTask=event.target.closest("[data-ai-create-task]");
       if(aiCreateTask){
+        if(aiCreateTask.disabled)return;
         createSelectedAiTask(Number(aiCreateTask.dataset.aiCreateTask));
+        return;
+      }
+      const aiCreateRequiresSave=event.target.closest("[data-ai-create-requires-save]");
+      if(aiCreateRequiresSave){
+        event.preventDefault();
+        state.aiAnalysisSaveMessage="Bitte die Analyse zuerst speichern.";
+        state.aiAnalysisSaveMessageKind="warning";
+        render();
         return;
       }
       if(event.target.id==="aiTaskDetailOverlay"){

@@ -36,7 +36,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/admin-v2\.css\?v=64/);
     assert.match(html,/class="v2-login-logo"[^>]+src="\.\.\/images\/logo\/alpine-concierge-logo-transparent\.png"[^>]+alt="Alpine Concierge Tirol"[^>]+width="1536" height="1024"/);
     assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
-    assert.match(html,/admin-v2\.js\?v=84/);
+    assert.match(html,/admin-v2\.js\?v=85/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(html,/concierge-intelligence-library\.js\?v=1/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
@@ -246,7 +246,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function aiActionButton\(/);
     assert.match(js,/if\(!text\)return ""/);
     assert.match(js,/label:createLabel/);
-    assert.match(js,/createMode!=="auto"\?"Aufgabe erstellen":""/);
+    assert.match(js,/currentAiAnalysisIsPersisted\(\)/);
+    assert.match(js,/Analyse zuerst speichern/);
     assert.match(js,/Hard failure banners must not stay visible once valid history rows exist/);
     assert.match(js,/historyError!=="Historie teilweise geladen\."\)return ""/);
     assert.match(css,/\.v2-button\.small\.primary,\.v2-ai-finding-actions \.v2-button\.primary\{/);
@@ -257,6 +258,35 @@ describe("admin v2 dashboard and customer overview",()=>{
       /state\.aiHistory=more\?\[\.\.\.state\.aiHistory,\.\.\.entries\]:entries;[\s\S]{0,160}state\.aiHistoryError=""/.test(loadFn),
       "successful listConciergeAnalyses must clear aiHistoryError"
     );
+  });
+
+  it("requires a persisted analysisId before creating suggested AI tasks",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    const html=readProjectFile("customer-portal/admin-v2.html");
+    const cardFn=js.match(/function aiSuggestedTaskCard[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const createFn=js.match(/async function createSelectedAiTask[\s\S]*?(?=\n  const AI_TASK_CUSTOMER_FILTER_KEY|\n  function |\n  async function )/)?.[0]||"";
+    const saveFn=js.match(/async function saveSelectedAiAnalysis[\s\S]*?(?=\n  async function |\n  function )/)?.[0]||"";
+    const analyzeFn=js.match(/async function analyzeSelectedCustomerWithAi[\s\S]*?(?=\n  async function |\n  function )/)?.[0]||"";
+    assert.match(html,/admin-v2\.js\?v=85/);
+    assert.match(js,/aiAnalysisPersisted:false/);
+    assert.match(js,/function currentAiAnalysisIsPersisted\(/);
+    assert.match(analyzeFn,/state\.aiAnalysisPersisted=false/);
+    assert.match(saveFn,/state\.aiAnalysis\.analysisId=result\.analysisId/);
+    assert.match(saveFn,/state\.aiAnalysisPersisted=true/);
+    assert.match(saveFn,/return true/);
+    assert.match(saveFn,/return false/);
+    assert.match(cardFn,/currentAiAnalysisIsPersisted\(\)/);
+    assert.match(cardFn,/Analyse zuerst speichern/);
+    assert.match(cardFn,/data-ai-create-requires-save=/);
+    assert.match(cardFn,/data-ai-create-task=/);
+    assert.match(cardFn,/disabled:true/);
+    assert.match(js,/data-ai-tasks-save-hint/);
+    assert.match(createFn,/currentAiAnalysisIsPersisted\(\)/);
+    assert.match(createFn,/Bitte die Analyse zuerst speichern/);
+    assert.match(createFn,/Aufgabe bereits vorhanden/);
+    assert.match(createFn,/if\(!customer\|\|!analysis\|\|!task\|\|state\.aiTaskCreateBusy\|\|state\.aiAnalysisSaving\)return/);
+    assert.match(createFn,/openAiTaskById\(customer\.customerId,already\.itemId\)/);
+    assert.doesNotMatch(cardFn,/createMode!=="auto"\?"Aufgabe erstellen":""/);
   });
 
   it("keeps dashboard as cockpit and customer cards in the customer view only",()=>{
@@ -807,7 +837,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
     assert.match(html,/firebase-service\.js\?v=32/);
-    assert.match(html,/admin-v2\.js\?v=84/);
+    assert.match(html,/admin-v2\.js\?v=85/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -929,7 +959,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-service\.js\?v=32/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=84/);
+    assert.match(html,/admin-v2\.js\?v=85/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -1042,7 +1072,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     assert.match(html,/admin-v2\.css\?v=64/);
-    assert.match(html,/admin-v2\.js\?v=84/);
+    assert.match(html,/admin-v2\.js\?v=85/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -1258,7 +1288,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=84/);
+    assert.match(html,/admin-v2\.js\?v=85/);
     assert.match(html,/admin-v2\.css\?v=64/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);

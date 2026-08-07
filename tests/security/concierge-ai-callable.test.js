@@ -33,7 +33,7 @@ describe("AI concierge callable protocol",()=>{
   });
 
   it("keeps analysis persistence behind authenticated callable functions",()=>{
-    for(const name of ["saveConciergeAnalysis","listConciergeAnalyses","updateConciergeAnalysisItemStatus","listConciergeAnalysisTasks","createConciergeAnalysisTask"]){
+    for(const name of ["saveConciergeAnalysis","listConciergeAnalyses","updateConciergeAnalysisItemStatus","updateConciergeAnalysisTaskAction","listConciergeAnalysisTasks","createConciergeAnalysisTask"]){
       assert.deepEqual(functions[name].__endpoint.callableTrigger,{});
       assert.equal(functions[name].__endpoint.platform,"gcfv2");
       assert.equal(typeof impl[name],"function");

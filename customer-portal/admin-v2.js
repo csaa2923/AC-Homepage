@@ -39,6 +39,9 @@
     aiTaskDetailCustomerId:"",
     aiTaskDetailItemId:"",
     aiTaskDetailError:"",
+    aiTaskWorkspaceOpen:false,
+    aiTaskWorkspaceSaving:false,
+    aiTaskWorkspaceUnsavedLocal:false,
     aiEntityFocus:null,
     communicationMessage:"",
     communicationMessageKind:"",
@@ -4744,15 +4747,20 @@
   }
 
   function closeAiTaskDetail(){
+    persistAiTaskWorkspaceNoteFromDom();
     state.aiTaskDetailCustomerId="";
     state.aiTaskDetailItemId="";
     state.aiTaskDetailError="";
+    state.aiTaskWorkspaceOpen=false;
+    state.aiTaskWorkspaceSaving=false;
+    state.aiTaskWorkspaceUnsavedLocal=false;
     renderAiTaskDetail();
   }
 
   const AI_TARGET_TABS={customer:"kunde",trip:"reise",program:"programm",concierge:"concierge",bookings:"buchungen",documents:"dokumente",communication:"kommunikation",publishing:"veroeffentlichung"};
   const AI_ENTITY_TABS={programItem:"programm",booking:"buchungen",document:"dokumente",day:"programm",customer:"kunde",trip:"reise"};
   const aiOpenTargetLib=window.ACTAiTaskOpenTargetLibrary||null;
+  const aiActionWorkspaceLib=window.ACTAiTaskActionWorkspace||null;
 
   function aiTaskReferenceSnapshot(task){
     if(aiOpenTargetLib?.referenceSnapshot)return aiOpenTargetLib.referenceSnapshot(task);
@@ -4779,19 +4787,28 @@
     if(!customer)return null;
     return {
       ...customer,
-      program:generatedProgramDays(customer).map((day,index)=>({
+      // Preserve only real identifiers — never invent index-based ids for open-target matching.
+      program:generatedProgramDays(customer).map(day=>({
         ...day,
-        id:cleanValue(day.id||day.dayId||day.date)||String(index+1),
-        dayId:cleanValue(day.dayId||day.id||day.date)||String(index+1),
-        items:arrayValue(day.items).map((item,itemIndex)=>({
+        id:cleanValue(day.id||day.dayId||day.date),
+        dayId:cleanValue(day.dayId||day.id||day.date),
+        items:arrayValue(day.items).map(item=>({
           ...item,
-          id:cleanValue(item.id||item.programItemId)||`${index+1}-${itemIndex+1}`,
-          programItemId:cleanValue(item.programItemId||item.id)||`${index+1}-${itemIndex+1}`
+          id:cleanValue(item.id||item.programItemId),
+          programItemId:cleanValue(item.programItemId||item.id)
         }))
       })),
       documents:normalizedDocuments(customer),
       bookings:arrayValue(customer.bookings)
     };
+  }
+
+  function resolveAiTaskOpenPlan(task){
+    const customerId=cleanValue(task?.customerId);
+    if(!customerId||!task)return {type:"none",message:"Aufgabe ohne Kundenbezug."};
+    const customer=aiTaskCustomerForOpenTarget(customerById(customerId));
+    if(aiOpenTargetLib?.resolveOpenPlan)return aiOpenTargetLib.resolveOpenPlan(task,customer);
+    return {type:"soft",customerId,tab:"kunde"};
   }
 
   function resolveAiTaskOpenTarget(task){
@@ -4808,15 +4825,25 @@
     return Boolean(resolveAiTaskOpenTarget(task));
   }
 
+  function resolveAiTaskBookingTarget(task,{linkedBookingId=""}={}){
+    const customerId=cleanValue(task?.customerId);
+    if(!customerId||!task)return null;
+    const customer=aiTaskCustomerForOpenTarget(customerById(customerId));
+    if(aiOpenTargetLib?.resolveBookingTarget){
+      return aiOpenTargetLib.resolveBookingTarget(task,customer,{linkedBookingId});
+    }
+    return null;
+  }
+
   function resolveAiTaskCustomerTarget(task){
     const customerId=cleanValue(task?.customerId);
     if(!customerId)return null;
-    const openTarget=resolveAiTaskOpenTarget(task);
-    if(openTarget?.tab)return {customerId,tab:openTarget.tab};
+    const plan=resolveAiTaskOpenPlan(task);
+    if(plan?.tab)return {customerId,tab:plan.tab,message:plan.message||"",planType:plan.type||""};
     const fromEntity=AI_ENTITY_TABS[cleanValue(task?.entityType)]||"";
     const fromSection=AI_TARGET_TABS[cleanValue(task?.travelSection)]||"";
     const fromTab=AI_TARGET_TABS[cleanValue(task?.targetTab)]||"";
-    return {customerId,tab:fromTab||fromSection||fromEntity||"kunde"};
+    return {customerId,tab:fromTab||fromSection||fromEntity||"kunde",message:"",planType:"soft"};
   }
 
   function applyAiEntityFocus(){
@@ -4842,11 +4869,52 @@
     });
   }
 
+  function openAiTaskFallbackTarget(task,plan){
+    const customerId=cleanValue(plan?.customerId||task?.customerId);
+    const tab=cleanValue(plan?.tab)||"kunde";
+    const taskId=cleanValue(task?.itemId||task?.stableKey);
+    const restoreDetail=()=>{
+      state.aiEntityFocus=null;
+      if(taskId){
+        state.aiTaskDetailCustomerId=customerId;
+        state.aiTaskDetailItemId=taskId;
+      }
+      renderAiTaskDetail();
+    };
+    closeAiTaskDetail();
+    if(routeTo(`customers/${encodeURIComponent(customerId)}/${tab}`)===false){
+      state.aiTasksMessage="Ziel konnte nicht geöffnet werden.";
+      state.aiTasksMessageKind="error";
+      restoreDetail();
+      return false;
+    }
+    if(plan?.message){
+      state.aiTasksMessage=plan.message;
+      state.aiTasksMessageKind="warning";
+    }
+    if(plan?.allowCreateBooking&&window.ACTAdminV2Bookings?.openEditor){
+      window.requestAnimationFrame(()=>{
+        window.ACTAdminV2Bookings.openEditor(null,customerId);
+      });
+    }
+    return true;
+  }
+
   function openAiTaskEntityTarget(task){
     const refs=aiTaskReferenceSnapshot(task);
     console.info("[ACT Admin V2] AI task open refs",refs);
-    const resolved=resolveAiTaskOpenTarget(task);
-    if(!resolved||!canOpenEntityTarget(task)){
+    const plan=resolveAiTaskOpenPlan(task);
+    const resolved=plan?.type==="executable"?plan.target:null;
+    if(!resolved||!resolved.executable){
+      if(plan?.type==="fallback"||plan?.type==="blocked"||plan?.type==="soft"){
+        if(plan.type==="soft"&&!plan.message){
+          state.aiTasksMessage="Kein ausführbares Ziel für diese Aufgabe. Nutzen Sie „Zum Kunden“.";
+          state.aiTasksMessageKind="warning";
+          renderAiTaskDetail();
+          return false;
+        }
+        return openAiTaskFallbackTarget(task,plan);
+      }
       state.aiTasksMessage="Kein ausführbares Ziel für diese Aufgabe.";
       state.aiTasksMessageKind="error";
       renderAiTaskDetail();
@@ -4864,13 +4932,15 @@
     };
     state.aiEntityFocus={kind:resolved.kind,entityId:resolved.entityId};
     if(resolved.kind==="booking"){
-      const customer=customerById(customerId);
-      const booking=(customer?.bookings||[]).find(item=>cleanValue(item.bookingId||item.id)===resolved.entityId);
+      const liveCustomer=customerById(customerId);
+      const booking=(liveCustomer?.bookings||[]).find(item=>cleanValue(item.bookingId||item.id)===resolved.entityId);
       if(!booking){
-        state.aiTasksMessage="Die verknüpfte Buchung wurde nicht gefunden.";
-        state.aiTasksMessageKind="error";
-        restoreDetail();
-        return false;
+        return openAiTaskFallbackTarget(task,{
+          customerId,
+          tab:"buchungen",
+          message:`Buchung „${resolved.entityId}“ wurde nicht gefunden. Buchungsbereich wird geöffnet.`,
+          allowCreateBooking:true
+        });
       }
       closeAiTaskDetail();
       if(routeTo(`customers/${encodeURIComponent(customerId)}/buchungen`)===false){
@@ -4885,18 +4955,38 @@
       return true;
     }
     if(resolved.kind==="document"){
-      const customer=customerById(customerId);
-      const docs=customer?normalizedDocuments(customer):[];
+      const liveCustomer=customerById(customerId);
+      const docs=liveCustomer?normalizedDocuments(liveCustomer):[];
       const index=docs.findIndex(doc=>cleanValue(doc.documentId||doc.id)===resolved.entityId);
       if(index<0){
-        state.aiTasksMessage="Das verknüpfte Dokument wurde nicht gefunden.";
-        state.aiTasksMessageKind="error";
-        restoreDetail();
-        return false;
+        return openAiTaskFallbackTarget(task,{
+          customerId,
+          tab:"dokumente",
+          message:`Dokument „${resolved.entityId}“ wurde nicht gefunden. Dokumente-Tab wird geöffnet.`
+        });
       }
       closeAiTaskDetail();
       openDocumentEditor(customerId,index);
       applyAiEntityFocus();
+      return true;
+    }
+    if(resolved.kind==="programItem"||resolved.kind==="day"){
+      const liveCustomer=customerById(customerId);
+      closeAiTaskDetail();
+      if(routeTo(`customers/${encodeURIComponent(customerId)}/programm`)===false){
+        state.aiTasksMessage="Ziel konnte nicht geöffnet werden.";
+        state.aiTasksMessageKind="error";
+        restoreDetail();
+        return false;
+      }
+      if(liveCustomer){
+        window.requestAnimationFrame(()=>{
+          startProgramEdit(liveCustomer);
+          applyAiEntityFocus();
+        });
+      }else{
+        applyAiEntityFocus();
+      }
       return true;
     }
     closeAiTaskDetail();
@@ -4944,6 +5034,8 @@
     state.aiFocusTaskId=aiTaskFocusKey(resolvedId,resolvedTaskId);
     state.aiTaskDetailCustomerId=resolvedId;
     state.aiTaskDetailItemId=resolvedTaskId;
+    const hydrated=hydrateAiTaskWorkspaceFromSources(task);
+    state.aiTaskWorkspaceOpen=Boolean(hydrated.open);
     renderAiTaskDetail();
     focusAiTaskDetailPanel();
     return true;
@@ -4991,13 +5083,441 @@
     const disabled=busy?' disabled aria-busy="true"':"";
     const openTarget=canOpenEntityTarget(task)?resolveAiTaskOpenTarget(task):null;
     const customerTarget=resolveAiTaskCustomerTarget(task);
+    const workspaceOpen=Boolean(state.aiTaskWorkspaceOpen);
     const openBtn=openTarget
       ?`<button class="v2-button small primary task-card__action" type="button" data-ai-task-open-entity="${escapeHtml(task.itemId||task.stableKey||"")}" data-ai-task-customer="${escapeHtml(task.customerId||"")}"${disabled}>Öffnen</button>`
       :"";
     const gotoBtn=customerTarget
       ?`<button class="v2-button small soft task-card__action task-card__action--secondary" type="button" data-ai-task-detail-goto="${escapeHtml(customerTarget.customerId)}" data-detail-tab="${escapeHtml(customerTarget.tab)}"${disabled}>Zum Kunden</button>`
       :"";
-    return `${openBtn}${gotoBtn}${aiTaskStatusButtonsMarkup(task,{busy})}`;
+    const editBtn=`<button class="v2-button small soft task-card__action" type="button" data-ai-task-workspace-toggle aria-expanded="${workspaceOpen?"true":"false"}" aria-controls="aiTaskActionWorkspace"${disabled}>${workspaceOpen?"Workspace schließen":"Bearbeiten"}</button>`;
+    return `${openBtn}${gotoBtn}${editBtn}${aiTaskStatusButtonsMarkup(task,{busy})}`;
+  }
+
+  function aiTaskWorkspaceDraftId(task){
+    return cleanValue(task?.itemId||task?.stableKey);
+  }
+
+  function emptyAiTaskWorkspaceDraft(){
+    return aiActionWorkspaceLib?.emptyDraft
+      ?aiActionWorkspaceLib.emptyDraft()
+      :{open:false,note:"",workStatus:"todo",restaurantName:"",place:"",phone:"",website:"",mapsQuery:"",linkedBookingId:"",updatedAt:""};
+  }
+
+  function readAiTaskWorkspaceDraft(task){
+    const taskId=aiTaskWorkspaceDraftId(task);
+    if(!taskId||!aiActionWorkspaceLib?.readDraft)return emptyAiTaskWorkspaceDraft();
+    return aiActionWorkspaceLib.readDraft(taskId);
+  }
+
+  function writeAiTaskWorkspaceDraft(task,draft){
+    const taskId=aiTaskWorkspaceDraftId(task);
+    if(!taskId||!aiActionWorkspaceLib?.writeDraft)return false;
+    return aiActionWorkspaceLib.writeDraft(taskId,draft);
+  }
+
+  function hydrateAiTaskWorkspaceFromSources(task){
+    const local=readAiTaskWorkspaceDraft(task);
+    if(!aiActionWorkspaceLib?.resolveWorkspaceLoad){
+      state.aiTaskWorkspaceUnsavedLocal=false;
+      return local;
+    }
+    const resolved=aiActionWorkspaceLib.resolveWorkspaceLoad(task,local);
+    if(resolved.source==="server"||resolved.source==="default"){
+      writeAiTaskWorkspaceDraft(task,{
+        ...resolved.draft,
+        open:Boolean(local.open||resolved.draft.open)
+      });
+    }
+    state.aiTaskWorkspaceUnsavedLocal=Boolean(resolved.unsavedLocal);
+    return {
+      ...resolved.draft,
+      open:Boolean(local.open||resolved.draft.open)
+    };
+  }
+
+  function currentAiTaskWorkspaceView(task){
+    const local={
+      ...readAiTaskWorkspaceDraft(task),
+      open:Boolean(state.aiTaskWorkspaceOpen)
+    };
+    if(!aiActionWorkspaceLib?.resolveWorkspaceLoad){
+      return {draft:local,unsavedLocal:false};
+    }
+    const resolved=aiActionWorkspaceLib.resolveWorkspaceLoad(task,local);
+    state.aiTaskWorkspaceUnsavedLocal=Boolean(resolved.unsavedLocal);
+    return {
+      draft:{...resolved.draft,open:Boolean(state.aiTaskWorkspaceOpen)},
+      unsavedLocal:Boolean(resolved.unsavedLocal)
+    };
+  }
+
+  function resolveAiTaskActionModule(task){
+    if(aiActionWorkspaceLib?.resolveModule)return aiActionWorkspaceLib.resolveModule(task?.taskType);
+    return {
+      moduleId:"unknown",
+      moduleName:"Unbekannter Aufgabentyp",
+      context:"Action Workspace ist nicht geladen.",
+      targetActions:["customer_tab"],
+      fallback:"Bitte die Seite neu laden.",
+      known:false,
+      taskType:cleanValue(task?.taskType)||"unknown"
+    };
+  }
+
+  function collectAiTaskWorkspaceDraftFromDom(baseDraft){
+    const root=document.querySelector("[data-ai-task-workspace]");
+    const draft=aiActionWorkspaceLib?.normalizeDraft
+      ?aiActionWorkspaceLib.normalizeDraft(baseDraft||emptyAiTaskWorkspaceDraft())
+      :{...emptyAiTaskWorkspaceDraft(),...(baseDraft||{})};
+    draft.open=Boolean(state.aiTaskWorkspaceOpen);
+    if(!root)return draft;
+    const valueOf=(sel)=>{
+      const el=root.querySelector(sel);
+      return el?String(el.value||""):"";
+    };
+    draft.note=valueOf("[data-ai-task-workspace-note]");
+    if(root.querySelector("[data-ai-restaurant-module]")){
+      draft.restaurantName=valueOf("[data-ai-restaurant-name]");
+      draft.place=valueOf("[data-ai-restaurant-place]");
+      draft.phone=valueOf("[data-ai-restaurant-phone]");
+      draft.website=valueOf("[data-ai-restaurant-website]");
+      draft.mapsQuery=valueOf("[data-ai-restaurant-maps-query]");
+      draft.workStatus=valueOf("[data-ai-restaurant-work-status]")||"todo";
+      const linked=valueOf("[data-ai-restaurant-linked-booking]");
+      if(linked)draft.linkedBookingId=linked;
+    }
+    return aiActionWorkspaceLib?.normalizeDraft?aiActionWorkspaceLib.normalizeDraft(draft):draft;
+  }
+
+  function persistAiTaskWorkspaceDraftFromDom(){
+    const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
+    if(!task)return null;
+    const previous=readAiTaskWorkspaceDraft(task);
+    const draft=collectAiTaskWorkspaceDraftFromDom(previous);
+    const contentChanged=aiActionWorkspaceLib?.draftContentKey
+      ?aiActionWorkspaceLib.draftContentKey(previous)!==aiActionWorkspaceLib.draftContentKey(draft)
+      :true;
+    const next=contentChanged&&aiActionWorkspaceLib?.touchDraft
+      ?aiActionWorkspaceLib.touchDraft(draft)
+      :{...draft,updatedAt:previous.updatedAt||draft.updatedAt||""};
+    next.open=Boolean(state.aiTaskWorkspaceOpen);
+    writeAiTaskWorkspaceDraft(task,next);
+    if(contentChanged)state.aiTaskWorkspaceUnsavedLocal=true;
+    return next;
+  }
+
+  function persistAiTaskWorkspaceNoteFromDom(){
+    persistAiTaskWorkspaceDraftFromDom();
+  }
+
+  function aiTaskWorkspaceGenericMarkup(module,draft){
+    const actionLabels=aiActionWorkspaceLib?.targetActionLabels
+      ?aiActionWorkspaceLib.targetActionLabels(module.targetActions)
+      :(module.targetActions||[]).map(key=>({key,label:key}));
+    const actionsList=actionLabels.length
+      ?`<ul class="ai-task-workspace__actions">${actionLabels.map(item=>`<li>${escapeHtml(item.label)}</li>`).join("")}</ul>`
+      :`<p class="v2-muted">Keine Zielaktionen hinterlegt.</p>`;
+    return `
+      <div class="ai-task-workspace__block">
+        <h4>Verfügbare Zielaktionen</h4>
+        ${actionsList}
+      </div>
+      <div class="ai-task-workspace__block">
+        <h4>Hinweis</h4>
+        <p>${escapeHtml(module.fallback)}</p>
+        ${module.known?"":`<p class="ai-task-workspace__unknown" role="status">Unbekannter taskType: <code>${escapeHtml(module.taskType)}</code></p>`}
+      </div>
+      <label class="ai-task-workspace__note">
+        <span>Notiz</span>
+        <textarea data-ai-task-workspace-note rows="3" maxlength="2000" placeholder="Kurznotiz für diese Aufgabe…">${escapeHtml(draft.note||"")}</textarea>
+      </label>
+    `;
+  }
+
+  function aiTaskRestaurantModuleMarkup(task,draft){
+    const linkedBookingId=cleanValue(draft.linkedBookingId||"");
+    const bookingTarget=resolveAiTaskBookingTarget(task,{linkedBookingId});
+    const bookingOk=bookingTarget?.status==="open";
+    const bookingId=cleanValue(bookingTarget?.bookingId||linkedBookingId);
+    const links=aiActionWorkspaceLib?.restaurantActionLinks
+      ?aiActionWorkspaceLib.restaurantActionLinks(draft,{mapSearchUrl})
+      :{canCall:false,canOpenWebsite:false,canOpenMaps:false,phoneHref:"",websiteHref:"",mapsHref:""};
+    const statusOptions=(aiActionWorkspaceLib?.workStatusOptions?.()||[
+      {value:"todo",label:"Offen"},
+      {value:"researched",label:"Recherchiert"},
+      {value:"requested",label:"Angefragt"},
+      {value:"reserved",label:"Reserviert"},
+      {value:"blocked",label:"Blockiert"}
+    ]).map(item=>`<option value="${escapeHtml(item.value)}" ${draft.workStatus===item.value?"selected":""}>${escapeHtml(item.label)}</option>`).join("");
+    const callBtn=links.canCall
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.phoneHref)}" data-ai-restaurant-call>Anrufen</a>`
+      :`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" disabled title="Gültige Telefonnummer eingeben">Anrufen</button>`;
+    const webBtn=links.canOpenWebsite
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.websiteHref)}" target="_blank" rel="noopener noreferrer" data-ai-restaurant-website>Website</a>`
+      :`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" disabled title="Gültige http(s)-URL eingeben">Website</button>`;
+    const mapsBtn=links.canOpenMaps
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.mapsHref)}" target="_blank" rel="noopener noreferrer" data-ai-restaurant-maps>In Maps öffnen</a>`
+      :`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" disabled title="Maps-Suchtext, Name oder Ort eingeben">In Maps öffnen</button>`;
+    const bookingBtn=bookingOk
+      ?`<button class="v2-button small primary ai-task-workspace__action-btn" type="button" data-ai-restaurant-open-booking="${escapeHtml(bookingId)}">Buchung öffnen</button>`
+      :`<button class="v2-button small soft ai-task-workspace__action-btn" type="button" data-ai-restaurant-create-booking>Buchung anlegen</button>`;
+    const bookingHint=bookingOk
+      ?`<p class="ai-task-workspace__hint">Verknüpfte Buchung: <code>${escapeHtml(bookingId)}</code></p>`
+      :(linkedBookingId&&bookingTarget?.status==="missing"
+        ?`<p class="ai-task-workspace__hint warning" role="status">Verknüpfte Buchung nicht mehr vorhanden</p>`
+        :(bookingTarget?.status==="missing"
+          ?`<p class="ai-task-workspace__hint warning" role="status">${escapeHtml(bookingTarget.message||`Buchung „${bookingId}“ wurde nicht gefunden.`)} Sie können eine neue Restaurant-Buchung anlegen.</p>`
+          :(bookingTarget?.status==="blocked"
+            ?`<p class="ai-task-workspace__hint warning" role="status">${escapeHtml(bookingTarget.message||"Buchungsziel fehlt.")}</p>`
+            :`<p class="ai-task-workspace__hint" role="status">Noch keine Restaurant-Buchung verknüpft.</p>`)));
+    return `
+      <div class="ai-task-restaurant" data-ai-restaurant-module>
+        <input type="hidden" data-ai-restaurant-linked-booking value="${escapeHtml(linkedBookingId||(bookingOk?bookingId:""))}">
+        <div class="ai-task-workspace__block">
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <label class="ai-task-workspace__field">
+            <span>Status der Reservierungsarbeit</span>
+            <select data-ai-restaurant-work-status aria-label="Arbeitsstand Restaurant">
+              ${statusOptions}
+            </select>
+          </label>
+          <p class="ai-task-workspace__hint">„Reserviert“ erledigt die AI-Aufgabe nicht automatisch.</p>
+        </div>
+        <div class="ai-task-restaurant__fields">
+          <label class="ai-task-workspace__field">
+            <span>Restaurant</span>
+            <input type="text" data-ai-restaurant-name maxlength="160" value="${escapeHtml(draft.restaurantName||"")}" autocomplete="organization">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Ort</span>
+            <input type="text" data-ai-restaurant-place maxlength="160" value="${escapeHtml(draft.place||"")}" autocomplete="address-level2">
+          </label>
+          <div class="ai-task-workspace__field-row">
+            <label class="ai-task-workspace__field">
+              <span>Telefon</span>
+              <input type="tel" data-ai-restaurant-phone maxlength="40" value="${escapeHtml(draft.phone||"")}" autocomplete="tel">
+            </label>
+            ${callBtn}
+          </div>
+          <div class="ai-task-workspace__field-row">
+            <label class="ai-task-workspace__field">
+              <span>Website</span>
+              <input type="url" data-ai-restaurant-website maxlength="300" value="${escapeHtml(draft.website||"")}" placeholder="https://…" autocomplete="url">
+            </label>
+            ${webBtn}
+          </div>
+          <div class="ai-task-workspace__field-row">
+            <label class="ai-task-workspace__field">
+              <span>Maps-Suchtext</span>
+              <input type="text" data-ai-restaurant-maps-query maxlength="200" value="${escapeHtml(draft.mapsQuery||"")}" placeholder="Name + Ort">
+            </label>
+            ${mapsBtn}
+          </div>
+        </div>
+        <label class="ai-task-workspace__note">
+          <span>Notiz</span>
+          <textarea data-ai-task-workspace-note rows="3" maxlength="2000" placeholder="z. B. Rückruf am Abend, Wunschfenster…">${escapeHtml(draft.note||"")}</textarea>
+        </label>
+        <div class="ai-task-workspace__block">
+          <h4>Buchung</h4>
+          ${bookingHint}
+          <div class="ai-task-workspace__action-row">${bookingBtn}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function aiTaskActionWorkspaceMarkup(task){
+    const module=resolveAiTaskActionModule(task);
+    const view=currentAiTaskWorkspaceView(task);
+    const draft=view.draft;
+    const open=Boolean(state.aiTaskWorkspaceOpen);
+    const saving=Boolean(state.aiTaskWorkspaceSaving);
+    const busy=Boolean(state.aiTasksBusy||saving);
+    const body=module.moduleId==="reserve_restaurant"
+      ?aiTaskRestaurantModuleMarkup(task,draft)
+      :aiTaskWorkspaceGenericMarkup(module,draft);
+    const unsaved=view.unsavedLocal
+      ?`<p class="ai-task-workspace__unsaved warning" role="status">Ungespeicherte lokale Änderungen — Server bleibt Quelle der Wahrheit, bis Sie speichern.</p>`
+      :"";
+    const saveDisabled=busy?' disabled aria-busy="true"':"";
+    return `
+      <section class="ai-task-workspace ${open?"is-open":""}" data-ai-task-workspace data-task-type="${escapeHtml(module.taskType)}" data-module-id="${escapeHtml(module.moduleId)}" ${open?"":"hidden"}>
+        <div class="ai-task-workspace__panel" id="aiTaskActionWorkspace" role="region" aria-labelledby="aiTaskWorkspaceTitle">
+          <header class="ai-task-workspace__head">
+            <p class="v2-eyebrow">Action Workspace</p>
+            <h3 id="aiTaskWorkspaceTitle">${escapeHtml(module.moduleName)}</h3>
+            <p class="ai-task-workspace__context">${escapeHtml(module.context)}</p>
+          </header>
+          <div class="ai-task-workspace__body">
+            ${body}
+            ${unsaved}
+            <div class="ai-task-workspace__persist">
+              <button class="v2-button small primary" type="button" data-ai-task-workspace-save${saveDisabled}>${saving?"Speichert …":"Arbeitsstand speichern"}</button>
+              <p class="ai-task-workspace__draft-hint v2-muted">Lokal als Entwurf, serverseitig erst nach „Arbeitsstand speichern“.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  async function saveAiTaskWorkspaceAction(){
+    if(state.aiTaskWorkspaceSaving||state.aiTasksBusy)return false;
+    const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
+    if(!task){
+      state.aiTasksMessage="Aufgabe nicht geladen.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    const module=resolveAiTaskActionModule(task);
+    const actionWorkspace=aiActionWorkspaceLib?.draftToActionWorkspace
+      ?aiActionWorkspaceLib.draftToActionWorkspace(draft,module.moduleId)
+      :{
+        module:module.moduleId||"other",
+        workStatus:draft.workStatus||"todo",
+        note:draft.note||"",
+        research:{
+          name:draft.restaurantName||"",
+          place:draft.place||"",
+          phone:draft.phone||"",
+          website:draft.website||"",
+          mapsQuery:draft.mapsQuery||""
+        },
+        linkedBookingId:draft.linkedBookingId||""
+      };
+    const priorStatus=cleanValue(task.status)||"open";
+    state.aiTaskWorkspaceSaving=true;
+    state.aiTasksMessage="Arbeitsstand wird gespeichert …";
+    state.aiTasksMessageKind="success";
+    renderAiTaskDetail();
+    try{
+      const result=await window.ACTFirebaseService?.updateConciergeAnalysisTaskAction?.(
+        task.customerId,
+        task.itemId||task.stableKey,
+        actionWorkspace
+      );
+      if(!result?.actionWorkspace)throw new Error("workspace save failed");
+      const savedAt=result.updatedAt||result.actionWorkspace.lastActionAt||new Date().toISOString();
+      upsertAiTaskLocal({
+        ...task,
+        status:priorStatus,
+        actionWorkspace:result.actionWorkspace,
+        updatedAt:savedAt,
+        lastActionAt:result.actionWorkspace.lastActionAt||savedAt,
+        lastActionBy:result.actionWorkspace.lastActionBy||""
+      });
+      const savedDraft=aiActionWorkspaceLib?.actionWorkspaceToDraft
+        ?aiActionWorkspaceLib.actionWorkspaceToDraft(result.actionWorkspace,{open:true})
+        :{...draft,open:true,updatedAt:savedAt};
+      writeAiTaskWorkspaceDraft(task,{...savedDraft,open:true});
+      state.aiTaskWorkspaceOpen=true;
+      state.aiTaskWorkspaceUnsavedLocal=false;
+      state.aiTasksMessage="Arbeitsstand gespeichert.";
+      state.aiTasksMessageKind="success";
+      return true;
+    }catch(_){
+      state.aiTasksMessage="Arbeitsstand konnte nicht gespeichert werden.";
+      state.aiTasksMessageKind="error";
+      return false;
+    }finally{
+      state.aiTaskWorkspaceSaving=false;
+      renderAiTaskDetail();
+    }
+  }
+
+  function toggleAiTaskActionWorkspace(forceOpen){
+    const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
+    if(!task)return false;
+    const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    const next=typeof forceOpen==="boolean"?forceOpen:!state.aiTaskWorkspaceOpen;
+    state.aiTaskWorkspaceOpen=next;
+    writeAiTaskWorkspaceDraft(task,{...draft,open:next});
+    renderAiTaskDetail();
+    return next;
+  }
+
+  function openAiTaskRestaurantBooking({create=false}={}){
+    const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
+    if(!task){
+      state.aiTasksMessage="Aufgabe nicht geladen.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    const customerId=cleanValue(task.customerId);
+    const customer=customerById(customerId);
+    if(!customerId||!customer){
+      state.aiTasksMessage="Kunde für die Buchung wurde nicht gefunden.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    if(!window.ACTAdminV2Bookings?.openEditor){
+      state.aiTasksMessage="Buchungseditor ist nicht verfügbar.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const bookingTarget=resolveAiTaskBookingTarget(task,{linkedBookingId:draft.linkedBookingId||""});
+    if(bookingTarget?.status==="blocked"){
+      state.aiTasksMessage=bookingTarget.message||"Buchungsziel fehlt.";
+      state.aiTasksMessageKind="warning";
+      renderAiTaskDetail();
+      return false;
+    }
+    if(!create&&bookingTarget?.status==="open"&&bookingTarget.bookingId){
+      const booking=(customer.bookings||[]).find(item=>cleanValue(item.bookingId||item.id)===bookingTarget.bookingId);
+      if(!booking){
+        state.aiTasksMessage=bookingTarget.message||"Die verknüpfte Buchung wurde nicht gefunden.";
+        state.aiTasksMessageKind="warning";
+        renderAiTaskDetail();
+        return false;
+      }
+      writeAiTaskWorkspaceDraft(task,{...draft,open:true,linkedBookingId:bookingTarget.bookingId});
+      closeAiTaskDetail();
+      if(routeTo(`customers/${encodeURIComponent(customerId)}/buchungen`)===false){
+        state.aiTasksMessage="Buchungsbereich konnte nicht geöffnet werden.";
+        state.aiTasksMessageKind="error";
+        return false;
+      }
+      window.requestAnimationFrame(()=>{
+        window.ACTAdminV2Bookings.openEditor(booking,customerId);
+      });
+      return true;
+    }
+    writeAiTaskWorkspaceDraft(task,{...draft,open:true,linkedBookingId:""});
+    const seed={
+      ...(window.ACTBookingLibrary?.defaultBooking?.(customer)||{}),
+      customerId,
+      type:"Restaurant",
+      bookingStatus:"Angefragt",
+      title:draft.restaurantName||"",
+      address:draft.place||"",
+      phone:draft.phone||"",
+      website:aiActionWorkspaceLib?.normalizeWebsiteHref?.(draft.website)||safeWebUrl(draft.website)||"",
+      navigationUrl:mapSearchUrl(aiActionWorkspaceLib?.resolveMapsQuery?.(draft)||draft.mapsQuery||[draft.restaurantName,draft.place].filter(Boolean).join(" "))||"",
+      internalNote:draft.note||""
+    };
+    delete seed.bookingId;
+    closeAiTaskDetail();
+    if(routeTo(`customers/${encodeURIComponent(customerId)}/buchungen`)===false){
+      state.aiTasksMessage="Buchungsbereich konnte nicht geöffnet werden.";
+      state.aiTasksMessageKind="error";
+      return false;
+    }
+    if(bookingTarget?.status==="missing"&&bookingTarget.message){
+      state.aiTasksMessage=bookingTarget.message;
+      state.aiTasksMessageKind="warning";
+    }
+    window.requestAnimationFrame(()=>{
+      window.ACTAdminV2Bookings.openEditor(seed,customerId);
+    });
+    return true;
   }
 
   function aiTaskDetailTechField(label,value){
@@ -5129,6 +5649,8 @@
     const status=cleanValue(task.status)||"open";
     const actionMessage=cleanValue(state.aiTasksMessage);
     const refs=aiTaskReferenceSnapshot(task);
+    const workspaceView=currentAiTaskWorkspaceView(task);
+    state.aiTaskWorkspaceOpen=Boolean(state.aiTaskWorkspaceOpen||workspaceView.draft.open);
     console.info("[ACT Admin V2] AI task detail refs",task.title||"",refs);
     host.innerHTML=`
       <div class="ai-task-detail-overlay" id="aiTaskDetailOverlay">
@@ -5148,6 +5670,7 @@
               <div><dt>Phase</dt><dd>${escapeHtml(aiTaskPhaseLabel(task))}</dd></div>
               <div><dt>Status</dt><dd>${escapeHtml(aiTaskStatusLabel(status))}</dd></div>
             </dl>
+            ${aiTaskActionWorkspaceMarkup(task)}
             ${aiTaskDetailTechnicalMarkup(task,refs)}
             ${actionMessage?`<p class="v2-edit-status ${escapeHtml(state.aiTasksMessageKind||"success")}" role="status">${escapeHtml(actionMessage)}</p>`:""}
             ${state.aiTasksError?`<p class="v2-edit-status error" role="alert">${escapeHtml(state.aiTasksError)}</p>`:""}
@@ -8922,14 +9445,46 @@
         toggleAiTaskDetailTechnical();
         return;
       }
+      if(event.target.closest("[data-ai-task-workspace-toggle]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        persistAiTaskWorkspaceDraftFromDom();
+        toggleAiTaskActionWorkspace();
+        return;
+      }
+      if(event.target.closest("[data-ai-task-workspace-save]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        saveAiTaskWorkspaceAction();
+        return;
+      }
+      const openRestaurantBooking=event.target.closest("[data-ai-restaurant-open-booking]");
+      if(openRestaurantBooking){
+        event.preventDefault();
+        if(state.aiTasksBusy)return;
+        openAiTaskRestaurantBooking({create:false});
+        return;
+      }
+      if(event.target.closest("[data-ai-restaurant-create-booking]")){
+        event.preventDefault();
+        if(state.aiTasksBusy)return;
+        openAiTaskRestaurantBooking({create:true});
+        return;
+      }
       const aiTaskDetailGoto=event.target.closest("[data-ai-task-detail-goto]");
       if(aiTaskDetailGoto){
         event.preventDefault();
         if(state.aiTasksBusy)return;
         const customerId=aiTaskDetailGoto.getAttribute("data-ai-task-detail-goto")||"";
         const tab=aiTaskDetailGoto.getAttribute("data-detail-tab")||"kunde";
+        const task=findAiTaskByIds(customerId,state.aiTaskDetailItemId);
+        const customerTarget=task?resolveAiTaskCustomerTarget(task):null;
         closeAiTaskDetail();
-        if(customerId)routeTo(`customers/${encodeURIComponent(customerId)}/${tab}`);
+        if(customerId)routeTo(`customers/${encodeURIComponent(customerId)}/${customerTarget?.tab||tab}`);
+        if(customerTarget?.message){
+          state.aiTasksMessage=customerTarget.message;
+          state.aiTasksMessageKind="warning";
+        }
         return;
       }
       const aiOpenEntity=event.target.closest("[data-ai-task-open-entity]");
@@ -9002,6 +9557,10 @@
     });
     document.addEventListener("input",event=>{
       if(window.ACTAdminV2Bookings?.handleInput?.(event))return;
+      if(event.target.closest("[data-ai-task-workspace]")){
+        persistAiTaskWorkspaceDraftFromDom();
+        return;
+      }
       handleWizardInput(event);
       handleCustomerEditInput(event);
       handleTripEditInput(event);
@@ -9013,6 +9572,13 @@
     document.addEventListener("change",event=>{
       if(window.ACTAdminV2Bookings?.handleChange?.(event))return;
       if(window.ACTAdminV2Communication?.handleChange?.(event))return;
+      if(event.target.closest("[data-ai-restaurant-module]")){
+        persistAiTaskWorkspaceDraftFromDom();
+        if(event.target.matches("[data-ai-restaurant-phone],[data-ai-restaurant-website],[data-ai-restaurant-maps-query],[data-ai-restaurant-name],[data-ai-restaurant-place],[data-ai-restaurant-work-status]")){
+          renderAiTaskDetail();
+        }
+        return;
+      }
       if(event.target.matches("[data-program-travel-upload]")){
         handleProgramTravelUpload(event.target);
         return;

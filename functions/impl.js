@@ -22,6 +22,10 @@ const {
   normalizeConfirmTask,
   taskInboxRecord
 }=require("./lib/aiAnalysisStore");
+const {
+  persistConciergeAnalysisTaskAction,
+  validTaskId
+}=require("./lib/aiTaskActionUpdate");
 
 function loadLocalEmulatorSecret(){
   const file=path.join(__dirname,".secret.local");
@@ -934,6 +938,33 @@ async function updateConciergeAnalysisItemStatus(request){
   });
 }
 
+async function updateConciergeAnalysisTaskAction(request){
+  const actorUid=requireAdminCallable(request);
+  const customerId=validCustomerId(request.data?.customerId);
+  const taskId=validTaskId(request.data?.taskId);
+  const actionWorkspace=request.data?.actionWorkspace;
+  if(!customerId||!taskId)throw new HttpsError("invalid-argument","Kunden- oder Aufgaben-ID ist ungültig.");
+  if(!actionWorkspace||typeof actionWorkspace!=="object"||Array.isArray(actionWorkspace)){
+    throw new HttpsError("invalid-argument","actionWorkspace ist ungültig.");
+  }
+  try{
+    return await persistConciergeAnalysisTaskAction({
+      db:getDb(),
+      customerId,
+      taskId,
+      actionWorkspace,
+      actorUid
+    });
+  }catch(error){
+    if(error instanceof HttpsError)throw error;
+    const code=String(error?.code||"");
+    if(code==="not-found")throw new HttpsError("not-found",error.message||"Nicht gefunden.");
+    if(code==="permission-denied")throw new HttpsError("permission-denied",error.message||"Keine Berechtigung.");
+    if(code==="invalid-argument")throw new HttpsError("invalid-argument",error.message||"Eingabe ungültig.");
+    throw new HttpsError("unavailable","Arbeitsstand konnte nicht gespeichert werden.");
+  }
+}
+
 async function createConciergeAnalysisTask(request){
   const actorUid=requireAdminCallable(request);
   const customerId=validCustomerId(request.data?.customerId);
@@ -1045,6 +1076,7 @@ module.exports={
   saveConciergeAnalysis,
   listConciergeAnalyses,
   updateConciergeAnalysisItemStatus,
+  updateConciergeAnalysisTaskAction,
   createConciergeAnalysisTask,
   listConciergeAnalysisTasks
 };

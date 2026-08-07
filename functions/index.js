@@ -60,6 +60,12 @@ exports.updateConciergeAnalysisItemStatus=onCall({
   invoker:"public"
 },(request)=>loadImpl().updateConciergeAnalysisItemStatus(request));
 
+exports.updateConciergeAnalysisTaskAction=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().updateConciergeAnalysisTaskAction(request));
+
 exports.listConciergeAnalysisTasks=onCall({
   region:"europe-west1",
   cors:true,

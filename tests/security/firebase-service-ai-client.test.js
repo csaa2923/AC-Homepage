@@ -53,13 +53,14 @@ describe("firebase service AI callable client",()=>{
   });
 
   it("wires persistence, controlled history and status updates through authenticated callables",()=>{
-    for(const name of ["saveConciergeAnalysis","listConciergeAnalyses","updateConciergeAnalysisItemStatus","listConciergeAnalysisTasks","createConciergeAnalysisTask"]){
+    for(const name of ["saveConciergeAnalysis","listConciergeAnalyses","updateConciergeAnalysisItemStatus","updateConciergeAnalysisTaskAction","listConciergeAnalysisTasks","createConciergeAnalysisTask"]){
       assert.equal(typeof loadService()[name],"function");
       assert.match(source,new RegExp(`httpsCallable\\(functions,"${name}"`));
     }
     assert.match(source,/callable\(\{customerId:id,analysisId:savedAnalysisId,analysis,language\}\)/);
     assert.match(source,/callable\(\{customerId:id,cursor:cursor\|\|null\}\)/);
     assert.match(source,/callable\(\{customerId:id,analysisId:savedAnalysisId,itemId:savedItemId,status\}\)/);
+    assert.match(source,/callable\(\{customerId:id,taskId:savedTaskId,actionWorkspace\}\)/);
     assert.match(source,/callable\(\{customerId:id,analysisId:savedAnalysisId,task\}\)/);
     assert.doesNotMatch(source,/collection\(ready\.db,"customers"\).*aiAnalyses/s);
   });

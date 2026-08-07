@@ -1281,6 +1281,19 @@
     return result.data||{};
   }
 
+  async function updateConciergeAnalysisTaskAction(customerId,taskId,actionWorkspace){
+    const id=String(customerId||"").trim();
+    const savedTaskId=String(taskId||"").trim();
+    if(!id||!savedTaskId||!actionWorkspace||typeof actionWorkspace!=="object"){
+      throw new Error("Arbeitsstand kann nicht gespeichert werden.");
+    }
+    const {functions,functionsModule,auth,authModule}=await callableFunctionsContext();
+    await callableUserContext(auth,authModule);
+    const callable=functionsModule.httpsCallable(functions,"updateConciergeAnalysisTaskAction",{timeout:20000});
+    const result=await callable({customerId:id,taskId:savedTaskId,actionWorkspace});
+    return result.data||{};
+  }
+
   async function listConciergeAnalysisTasks(customerId=null){
     const {functions,functionsModule,auth,authModule}=await callableFunctionsContext();
     await callableUserContext(auth,authModule);
@@ -1431,6 +1444,7 @@
     saveConciergeAnalysis,
     listConciergeAnalyses,
     updateConciergeAnalysisItemStatus,
+    updateConciergeAnalysisTaskAction,
     listConciergeAnalysisTasks,
     createConciergeAnalysisTask,
     denormalizeFromFirestore,

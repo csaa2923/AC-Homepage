@@ -4,6 +4,7 @@ const crypto=require("crypto");
 
 const ITEM_TYPES=new Set(["concern","task","finding","risk"]);
 const ITEM_STATUSES=new Set(["open","completed","dismissed"]);
+const WORK_STATUSES=new Set(["todo","researched","requested","reserved","blocked"]);
 const MANUAL_STATUS_TRANSITIONS={
   open:new Set(["open","completed","dismissed"]),
   completed:new Set(["completed","open"]),
@@ -199,8 +200,91 @@ function inboxDocId(customerId,stableKey){
   return `${text(customerId,120)}__${text(stableKey,200)}`.slice(0,700);
 }
 
-function taskInboxRecord(task){
+function normalizeHttpUrl(value,max=300){
+  const raw=text(value,max);
+  if(!raw)return "";
+  if(/^(javascript|data|vbscript|file):/i.test(raw)){
+    const error=new Error("Website-URL ist ungültig.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  if(/^[a-z][a-z0-9+.-]*:/i.test(raw)&&!/^https?:\/\//i.test(raw)){
+    const error=new Error("Website-URL muss http oder https verwenden.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  const withProtocol=/^https?:\/\//i.test(raw)?raw:`https://${raw}`;
+  try{
+    const url=new URL(withProtocol);
+    if(url.protocol!=="http:"&&url.protocol!=="https:"){
+      const error=new Error("Website-URL muss http oder https verwenden.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    if(!url.hostname||!url.hostname.includes(".")){
+      const error=new Error("Website-URL ist ungültig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return url.href.slice(0,max);
+  }catch(error){
+    if(error?.code==="invalid-argument")throw error;
+    const invalid=new Error("Website-URL ist ungültig.");
+    invalid.code="invalid-argument";
+    throw invalid;
+  }
+}
+
+function normalizeActionWorkspace(raw,{
+  validBookingIds=null,
+  moduleHint="",
+  actorUid="",
+  now=""
+}={}){
+  if(!raw||typeof raw!=="object"||Array.isArray(raw)){
+    const error=new Error("actionWorkspace ist ungültig.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  const workStatus=text(raw.workStatus,20);
+  if(!WORK_STATUSES.has(workStatus)){
+    const error=new Error("Arbeitsstand ist ungültig.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  const researchRaw=raw.research&&typeof raw.research==="object"&&!Array.isArray(raw.research)?raw.research:{};
+  const research={
+    name:text(researchRaw.name??raw.restaurantName??raw.name,160),
+    place:text(researchRaw.place??raw.place,160),
+    phone:text(researchRaw.phone??raw.phone,40),
+    website:normalizeHttpUrl(researchRaw.website??raw.website,300),
+    mapsQuery:text(researchRaw.mapsQuery??raw.mapsQuery,200)
+  };
+  let linkedBookingId=text(raw.linkedBookingId,120);
+  if(linkedBookingId){
+    if(!(validBookingIds instanceof Set)||!validBookingIds.has(linkedBookingId)){
+      const error=new Error("Verknüpfte Buchung ist ungültig oder gehört nicht zu diesem Kunden.");
+      error.code="invalid-argument";
+      throw error;
+    }
+  }else{
+    linkedBookingId="";
+  }
+  const stamp=text(now,40)||new Date().toISOString();
+  const actor=text(actorUid,128);
   return {
+    module:text(raw.module||moduleHint,40)||"other",
+    workStatus,
+    note:text(raw.note,2000),
+    research,
+    linkedBookingId,
+    lastActionAt:stamp,
+    lastActionBy:actor
+  };
+}
+
+function taskInboxRecord(task){
+  const record={
     itemId:text(task.stableKey,240),
     stableKey:text(task.stableKey,240),
     customerId:text(task.customerId,120),
@@ -225,6 +309,12 @@ function taskInboxRecord(task){
     updatedAt:text(task.updatedAt,40),
     updatedBy:text(task.updatedBy,128)
   };
+  if(task.actionWorkspace&&typeof task.actionWorkspace==="object"){
+    record.actionWorkspace=task.actionWorkspace;
+  }
+  if(task.lastActionAt)record.lastActionAt=text(task.lastActionAt,40);
+  if(task.lastActionBy)record.lastActionBy=text(task.lastActionBy,128);
+  return record;
 }
 
 function canonicalAnalysisHash(analysis){
@@ -300,13 +390,16 @@ function canonicalAnalysisHash(analysis){
 module.exports={
   ITEM_STATUSES,
   ITEM_TYPES,
+  WORK_STATUSES,
   canTransitionStatus,
   canonicalAnalysisHash,
   inboxDocId,
   mergeItemState,
+  normalizeActionWorkspace,
   normalizeAnalysisItems,
   normalizeAdvisorItems,
   normalizeConfirmTask,
+  normalizeHttpUrl,
   safeInsightId,
   semanticPart,
   shouldAutoCreateTask,

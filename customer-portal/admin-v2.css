@@ -479,12 +479,15 @@ p{color:var(--muted);line-height:1.55}
   padding:calc(16px + var(--mobile-safe-top)) 16px calc(16px + var(--mobile-safe-bottom));
   background:rgba(23,35,31,.52);
   backdrop-filter:blur(8px);
+  overflow:auto;
+  overscroll-behavior:contain;
 }
 .ai-task-detail-panel{
   width:min(640px,100%);
-  max-height:min(88dvh,820px);
-  display:grid;
-  grid-template-rows:auto 1fr auto;
+  max-height:min(90dvh,820px);
+  min-height:0;
+  display:flex;
+  flex-direction:column;
   gap:14px;
   overflow:hidden;
   padding:22px;
@@ -494,16 +497,40 @@ p{color:var(--muted);line-height:1.55}
   box-shadow:var(--shadow);
   outline:none;
 }
-.ai-task-detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.ai-task-detail-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  flex:0 0 auto;
+  min-width:0;
+}
 .ai-task-detail-header h2{margin:0}
-.ai-task-detail-body{min-height:0;overflow:auto;display:grid;gap:14px}
-.ai-task-detail-body>p{margin:0;color:var(--ink);line-height:1.5}
-.ai-task-detail-meta{display:grid;gap:10px;margin:0;min-width:0}
+.ai-task-detail-body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  -webkit-overflow-scrolling:touch;
+}
+.ai-task-detail-body>p{margin:0;color:var(--ink);line-height:1.5;flex:0 0 auto}
+.ai-task-detail-meta{display:grid;gap:10px;margin:0;min-width:0;flex:0 0 auto}
 .ai-task-detail-meta>div{display:grid;gap:2px;min-width:0}
 .ai-task-detail-meta dt{color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .ai-task-detail-meta dd{margin:0;font-weight:750;word-break:break-word;overflow-wrap:anywhere}
 .ai-task-detail-meta code{font-size:12px}
-.ai-task-detail-tech{min-width:0;border:1px solid rgba(16,40,32,.08);border-radius:14px;background:#f8faf7;overflow:hidden}
+.ai-task-detail-tech{
+  flex:0 0 auto;
+  min-width:0;
+  border:1px solid rgba(16,40,32,.08);
+  border-radius:14px;
+  background:#f8faf7;
+  overflow:hidden;
+}
 .ai-task-detail-tech__toggle{
   width:100%;
   min-height:44px;
@@ -533,18 +560,35 @@ p{color:var(--muted);line-height:1.55}
   transform:rotate(-45deg);
 }
 .ai-task-detail-tech.is-open .ai-task-detail-tech__chevron{transform:rotate(90deg)}
-.ai-task-detail-tech__panel{display:grid;grid-template-rows:0fr;transition:grid-template-rows .2s ease;min-width:0}
-.ai-task-detail-tech.is-open .ai-task-detail-tech__panel{grid-template-rows:1fr}
-.ai-task-detail-tech__panel-inner{overflow:hidden;min-width:0;padding:0 12px}
+/* 0fr→auto (not 1fr): 1fr inside a height-capped scroll body clips expanded content */
+.ai-task-detail-tech__panel{
+  display:grid;
+  grid-template-rows:0fr;
+  transition:grid-template-rows .2s ease;
+  min-width:0;
+  interpolate-size:allow-keywords;
+}
+.ai-task-detail-tech.is-open .ai-task-detail-tech__panel{grid-template-rows:auto}
+.ai-task-detail-tech__panel-inner{overflow:hidden;min-width:0;min-height:0;padding:0 12px}
 .ai-task-detail-tech.is-open .ai-task-detail-tech__panel-inner{padding-bottom:12px}
 .ai-task-detail-tech__meta{gap:8px}
 .ai-task-detail-tech__refs{margin:0;padding-left:1.1em;display:grid;gap:4px}
-.ai-task-detail-footer{border-top:1px solid var(--line);padding-top:12px}
+.ai-task-detail-footer{
+  flex:0 0 auto;
+  border-top:1px solid var(--line);
+  padding-top:12px;
+  background:var(--surface);
+}
 @media (max-width:767px){
   .task-card__actions{display:grid;grid-template-columns:1fr 1fr;justify-content:stretch}
   .task-card__actions .task-card__action:first-child{grid-column:1 / -1}
   .task-card__action,.task-card__actions .v2-button{width:100%;justify-content:center}
-  .ai-task-detail-panel{width:100%;max-height:100dvh;border-radius:20px 20px 0 0;align-self:end}
+  .ai-task-detail-panel{
+    width:100%;
+    max-height:min(90dvh,calc(100dvh - var(--mobile-safe-top) - var(--mobile-safe-bottom) - 24px));
+    border-radius:20px 20px 0 0;
+    align-self:end;
+  }
   .ai-task-detail-header{flex-wrap:wrap}
 }
 @media (prefers-reduced-motion:reduce){

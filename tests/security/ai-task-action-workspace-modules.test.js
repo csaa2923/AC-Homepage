@@ -162,9 +162,9 @@ describe("AI task action workspace transfer and booking modules",()=>{
     const bookingFn=js.match(/function aiTaskBookingModuleMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
     const openFn=js.match(/function openAiTaskWorkspaceBooking[\s\S]*?(?=\n  function )/)?.[0]||"";
 
-    assert.match(html,/ai-task-action-workspace\.js\?v=4/);
-    assert.match(html,/admin-v2\.js\?v=93/);
-    assert.match(html,/admin-v2\.css\?v=72/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=6/);
+    assert.match(html,/admin-v2\.js\?v=94/);
+    assert.match(html,/admin-v2\.css\?v=73/);
     assert.match(js,/function aiTaskTransferModuleMarkup\(/);
     assert.match(js,/function aiTaskBookingModuleMarkup\(/);
     assert.match(js,/function openAiTaskWorkspaceBooking\(/);

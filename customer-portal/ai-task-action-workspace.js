@@ -35,10 +35,31 @@
     blocked:"Blockiert"
   };
 
+  /** Document / ticket operational status (Ops Ready 6.7) — not Task-Status. */
+  const DOCUMENT_WORK_STATUSES=["missing","requested","received","checked","blocked"];
+  const DOCUMENT_WORK_STATUS_LABELS={
+    missing:"Fehlt",
+    requested:"Angefragt",
+    received:"Erhalten",
+    checked:"Geprüft",
+    blocked:"Blockiert"
+  };
+
+  const VOUCHER_STATUSES=["pending","valid","incomplete","invalid","blocked"];
+  const VOUCHER_STATUS_LABELS={
+    pending:"Ausstehend",
+    valid:"Gültig",
+    incomplete:"Unvollständig",
+    invalid:"Ungültig",
+    blocked:"Blockiert"
+  };
+
   const ALL_WORK_STATUSES=Array.from(new Set([
     ...WORK_STATUSES,
     ...TRANSFER_WORK_STATUSES,
-    ...BOOKING_WORK_STATUSES
+    ...BOOKING_WORK_STATUSES,
+    ...DOCUMENT_WORK_STATUSES,
+    ...VOUCHER_STATUSES
   ]));
 
   const TRANSFER_TYPES=[
@@ -56,6 +77,28 @@
     {value:"activity",label:"Aktivität"},
     {value:"spa",label:"Spa"},
     {value:"ticket",label:"Ticket"},
+    {value:"other",label:"Sonstiges"}
+  ];
+
+  const DOCUMENT_KINDS=[
+    {value:"document",label:"Dokument"},
+    {value:"pdf",label:"PDF"},
+    {value:"image",label:"Bild"},
+    {value:"passport",label:"Reisepass"},
+    {value:"visa",label:"Visum"},
+    {value:"insurance",label:"Versicherung"},
+    {value:"invoice",label:"Rechnung"},
+    {value:"contract",label:"Vertrag"},
+    {value:"other",label:"Sonstiges"}
+  ];
+
+  const TICKET_KINDS=[
+    {value:"ticket",label:"Ticket"},
+    {value:"boarding_pass",label:"Boarding Pass"},
+    {value:"train",label:"Fahrkarte"},
+    {value:"flight",label:"Flug"},
+    {value:"transfer",label:"Transfer"},
+    {value:"activity",label:"Aktivität"},
     {value:"other",label:"Sonstiges"}
   ];
 
@@ -106,14 +149,20 @@
       moduleName:"Ticket hochladen",
       context:"Fehlendes Ticket als Dokument im Kundenbereich hinterlegen.",
       targetActions:["entity_open","customer_tab","document_editor"],
-      fallback:"Wechseln Sie zu Dokumente oder öffnen Sie das verknüpfte Dokument-Ziel."
+      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      hasForm:true,
+      persistServer:true,
+      workStatusSet:"document"
     },
     check_voucher:{
       moduleId:"check_voucher",
       moduleName:"Voucher prüfen",
       context:"Vorhandenen Voucher auf Gültigkeit und Zuordnung prüfen.",
       targetActions:["entity_open","customer_tab","document_editor"],
-      fallback:"Öffnen Sie das Dokument oder den Dokumente-Tab zur Prüfung."
+      fallback:"Prüfstatus und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      hasForm:true,
+      persistServer:true,
+      workStatusSet:"voucher"
     },
     prepare_weather_alternative:{
       moduleId:"prepare_weather_alternative",
@@ -141,7 +190,10 @@
       moduleName:"Dokument hochladen",
       context:"Fehlendes Reisedokument hochladen und zuordnen.",
       targetActions:["entity_open","customer_tab","document_editor"],
-      fallback:"Wechseln Sie zu Dokumente, um Dateien hochzuladen oder zu bearbeiten."
+      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      hasForm:true,
+      persistServer:true,
+      workStatusSet:"document"
     },
     confirm_booking:{
       moduleId:"confirm_booking",
@@ -191,6 +243,8 @@
     const id=cleanValue(moduleId);
     if(id==="confirm_transfer")return "transfer";
     if(id==="confirm_booking")return "booking";
+    if(id==="upload_document"||id==="upload_ticket")return "document";
+    if(id==="check_voucher")return "voucher";
     return "restaurant";
   }
 
@@ -198,13 +252,41 @@
     const set=workStatusSetFor(moduleId);
     if(set==="transfer")return TRANSFER_WORK_STATUSES.slice();
     if(set==="booking")return BOOKING_WORK_STATUSES.slice();
+    if(set==="document")return DOCUMENT_WORK_STATUSES.slice();
+    if(set==="voucher")return VOUCHER_STATUSES.slice();
     return WORK_STATUSES.slice();
   }
 
   function normalizeWorkStatus(value,moduleId=""){
     const status=cleanValue(value);
+    const set=workStatusSetFor(moduleId);
+    // Document/voucher modules keep restaurant-compatible workStatus default;
+    // operational progress lives in documentWorkStatus / voucherStatus.
+    if(set==="document"||set==="voucher"){
+      return WORK_STATUSES.includes(status)?status:"todo";
+    }
     const allowed=moduleId?workStatusesFor(moduleId):ALL_WORK_STATUSES;
     return allowed.includes(status)?status:"todo";
+  }
+
+  function normalizeDocumentWorkStatus(value){
+    const status=cleanValue(value);
+    return DOCUMENT_WORK_STATUSES.includes(status)?status:"missing";
+  }
+
+  function normalizeVoucherStatus(value){
+    const status=cleanValue(value);
+    return VOUCHER_STATUSES.includes(status)?status:"pending";
+  }
+
+  function normalizeDocumentKind(value){
+    const kind=cleanValue(value);
+    return DOCUMENT_KINDS.some(item=>item.value===kind)?kind:"document";
+  }
+
+  function normalizeTicketKind(value){
+    const kind=cleanValue(value);
+    return TICKET_KINDS.some(item=>item.value===kind)?kind:"ticket";
   }
 
   function normalizeTransferType(value){
@@ -240,13 +322,28 @@
       flightNumber:"",
       bookingKind:"hotel",
       provider:"",
-      bookingReference:""
+      bookingReference:"",
+      documentTitle:"",
+      documentKind:"document",
+      referenceNumber:"",
+      documentDate:"",
+      documentWorkStatus:"missing",
+      voucherStatus:"pending",
+      linkedDocumentId:""
     };
   }
 
   function normalizeDraft(raw,moduleId=""){
     const base=emptyDraft();
     if(!raw||typeof raw!=="object")return base;
+    const module=cleanValue(moduleId);
+    const kindRaw=cleanValue(raw.documentKind);
+    let documentKind="document";
+    if(module==="upload_ticket")documentKind=normalizeTicketKind(kindRaw||"ticket");
+    else if(DOCUMENT_KINDS.some(item=>item.value===kindRaw))documentKind=kindRaw;
+    else if(TICKET_KINDS.some(item=>item.value===kindRaw))documentKind=kindRaw;
+    else if(kindRaw)documentKind=normalizeDocumentKind(kindRaw);
+    else documentKind=module==="upload_ticket"?"ticket":"document";
     return {
       open:Boolean(raw.open),
       note:cleanValue(raw.note),
@@ -269,7 +366,14 @@
       flightNumber:cleanValue(raw.flightNumber),
       bookingKind:normalizeBookingKind(raw.bookingKind),
       provider:cleanValue(raw.provider),
-      bookingReference:cleanValue(raw.bookingReference)
+      bookingReference:cleanValue(raw.bookingReference),
+      documentTitle:cleanValue(raw.documentTitle),
+      documentKind,
+      referenceNumber:cleanValue(raw.referenceNumber||raw.bookingReference),
+      documentDate:cleanValue(raw.documentDate),
+      documentWorkStatus:normalizeDocumentWorkStatus(raw.documentWorkStatus),
+      voucherStatus:normalizeVoucherStatus(raw.voucherStatus),
+      linkedDocumentId:cleanValue(raw.linkedDocumentId)
     };
   }
 
@@ -295,7 +399,14 @@
       &&!d.flightNumber
       &&d.bookingKind==="hotel"
       &&!d.provider
-      &&!d.bookingReference;
+      &&!d.bookingReference
+      &&!d.documentTitle
+      &&(d.documentKind==="document"||d.documentKind==="ticket")
+      &&!d.referenceNumber
+      &&!d.documentDate
+      &&d.documentWorkStatus==="missing"
+      &&d.voucherStatus==="pending"
+      &&!d.linkedDocumentId;
   }
 
   function draftContentKey(draft){
@@ -320,7 +431,14 @@
       flightNumber:d.flightNumber,
       bookingKind:d.bookingKind,
       provider:d.provider,
-      bookingReference:d.bookingReference
+      bookingReference:d.bookingReference,
+      documentTitle:d.documentTitle,
+      documentKind:d.documentKind,
+      referenceNumber:d.referenceNumber,
+      documentDate:d.documentDate,
+      documentWorkStatus:d.documentWorkStatus,
+      voucherStatus:d.voucherStatus,
+      linkedDocumentId:d.linkedDocumentId
     });
   }
 
@@ -329,10 +447,16 @@
     return Number.isFinite(stamp)?stamp:0;
   }
 
+  function isDocumentWorkspaceModule(moduleId=""){
+    const id=cleanValue(moduleId);
+    return id==="upload_document"||id==="upload_ticket"||id==="check_voucher";
+  }
+
   function actionWorkspaceToDraft(actionWorkspace,{open=false,preserve=null}={}){
-    const base=preserve&&typeof preserve==="object"?normalizeDraft(preserve):emptyDraft();
+    const moduleId=cleanValue(actionWorkspace?.module);
+    const base=preserve&&typeof preserve==="object"?normalizeDraft(preserve,moduleId):emptyDraft();
     if(!actionWorkspace||typeof actionWorkspace!=="object"){
-      return normalizeDraft({...base,open});
+      return normalizeDraft({...base,open},moduleId);
     }
     const research=actionWorkspace.research&&typeof actionWorkspace.research==="object"
       ?actionWorkspace.research
@@ -348,15 +472,24 @@
       website:research.website||actionWorkspace.website||base.website,
       mapsQuery:research.mapsQuery||actionWorkspace.mapsQuery||base.mapsQuery,
       linkedBookingId:actionWorkspace.linkedBookingId??base.linkedBookingId,
+      documentTitle:actionWorkspace.documentTitle??base.documentTitle,
+      documentKind:actionWorkspace.documentKind||base.documentKind,
+      provider:actionWorkspace.provider??base.provider,
+      referenceNumber:actionWorkspace.referenceNumber??base.referenceNumber,
+      documentDate:actionWorkspace.documentDate??base.documentDate,
+      documentWorkStatus:actionWorkspace.documentWorkStatus||base.documentWorkStatus,
+      voucherStatus:actionWorkspace.voucherStatus||base.voucherStatus,
+      linkedDocumentId:actionWorkspace.linkedDocumentId??base.linkedDocumentId,
       updatedAt:actionWorkspace.lastActionAt||actionWorkspace.updatedAt||base.updatedAt
-    });
+    },moduleId);
   }
 
   function draftToActionWorkspace(draft,moduleId=""){
-    const d=normalizeDraft(draft,"reserve_restaurant");
+    const module=cleanValue(moduleId)||"other";
+    const d=normalizeDraft(draft,module);
     const status=WORK_STATUSES.includes(d.workStatus)?d.workStatus:"todo";
-    return {
-      module:cleanValue(moduleId)||"other",
+    const payload={
+      module,
       workStatus:status,
       note:d.note,
       research:{
@@ -368,6 +501,17 @@
       },
       linkedBookingId:d.linkedBookingId
     };
+    if(isDocumentWorkspaceModule(module)){
+      payload.documentTitle=d.documentTitle;
+      payload.documentKind=d.documentKind;
+      payload.provider=d.provider;
+      payload.referenceNumber=d.referenceNumber;
+      payload.documentDate=d.documentDate;
+      payload.documentWorkStatus=module==="check_voucher"?"":d.documentWorkStatus;
+      payload.voucherStatus=module==="check_voucher"?d.voucherStatus:"";
+      payload.linkedDocumentId=d.linkedDocumentId;
+    }
+    return payload;
   }
 
   function hasServerActionWorkspace(task){
@@ -634,6 +778,44 @@
     return bookings.some(item=>cleanValue(item?.bookingId||item?.id)===id);
   }
 
+  function resolveTaskDocumentId(task,draft){
+    const d=normalizeDraft(draft);
+    if(d.linkedDocumentId)return d.linkedDocumentId;
+    const typed=cleanValue(task?.documentId);
+    if(typed)return typed;
+    if(cleanValue(task?.entityType)==="document")return cleanValue(task?.entityId);
+    const refs=Array.isArray(task?.refs)?task.refs:[];
+    const documentRef=refs.find(item=>cleanValue(item?.entityType)==="document"&&cleanValue(item?.entityId));
+    return cleanValue(documentRef?.entityId);
+  }
+
+  function documentExists(customer,documentId){
+    const id=cleanValue(documentId);
+    if(!id||!customer)return false;
+    const docs=Array.isArray(customer.documents)?customer.documents:[];
+    return docs.some(item=>cleanValue(item?.documentId||item?.id)===id);
+  }
+
+  function findCustomerDocument(customer,documentId){
+    const id=cleanValue(documentId);
+    if(!id||!customer)return null;
+    const docs=Array.isArray(customer.documents)?customer.documents:[];
+    return docs.find(item=>cleanValue(item?.documentId||item?.id)===id)||null;
+  }
+
+  function seedDocumentDraftFromTask(task,draft,moduleId=""){
+    const module=cleanValue(moduleId)||cleanValue(task?.taskType);
+    const base=normalizeDraft(draft,module);
+    const linkedDocumentId=resolveTaskDocumentId(task,base);
+    const title=base.documentTitle||cleanValue(task?.title);
+    return normalizeDraft({
+      ...base,
+      documentTitle:title,
+      linkedDocumentId,
+      note:base.note||cleanValue(task?.description).slice(0,500)
+    },module);
+  }
+
   function resolveModule(taskType){
     const type=cleanValue(taskType);
     if(type&&MODULE_REGISTRY[type]){
@@ -663,6 +845,12 @@
     if(set==="booking"){
       return BOOKING_WORK_STATUSES.map(value=>({value,label:BOOKING_WORK_STATUS_LABELS[value]||value}));
     }
+    if(set==="document"){
+      return DOCUMENT_WORK_STATUSES.map(value=>({value,label:DOCUMENT_WORK_STATUS_LABELS[value]||value}));
+    }
+    if(set==="voucher"){
+      return VOUCHER_STATUSES.map(value=>({value,label:VOUCHER_STATUS_LABELS[value]||value}));
+    }
     return WORK_STATUSES.map(value=>({value,label:WORK_STATUS_LABELS[value]||value}));
   }
 
@@ -672,6 +860,22 @@
 
   function bookingKindOptions(){
     return BOOKING_KINDS.slice();
+  }
+
+  function documentKindOptions(){
+    return DOCUMENT_KINDS.slice();
+  }
+
+  function ticketKindOptions(){
+    return TICKET_KINDS.slice();
+  }
+
+  function documentWorkStatusOptions(){
+    return DOCUMENT_WORK_STATUSES.map(value=>({value,label:DOCUMENT_WORK_STATUS_LABELS[value]||value}));
+  }
+
+  function voucherStatusOptions(){
+    return VOUCHER_STATUSES.map(value=>({value,label:VOUCHER_STATUS_LABELS[value]||value}));
   }
 
   function moduleSupportsServerPersist(moduleId){
@@ -687,9 +891,15 @@
     TRANSFER_WORK_STATUS_LABELS,
     BOOKING_WORK_STATUSES,
     BOOKING_WORK_STATUS_LABELS,
+    DOCUMENT_WORK_STATUSES,
+    DOCUMENT_WORK_STATUS_LABELS,
+    VOUCHER_STATUSES,
+    VOUCHER_STATUS_LABELS,
     ALL_WORK_STATUSES,
     TRANSFER_TYPES,
     BOOKING_KINDS,
+    DOCUMENT_KINDS,
+    TICKET_KINDS,
     TASK_TYPES,
     MODULE_REGISTRY,
     FALLBACK_MODULE,
@@ -707,8 +917,12 @@
     readDraft,
     writeDraft,
     normalizeWorkStatus,
+    normalizeDocumentWorkStatus,
+    normalizeVoucherStatus,
     normalizeTransferType,
     normalizeBookingKind,
+    normalizeDocumentKind,
+    normalizeTicketKind,
     normalizePhoneHref,
     normalizeMailtoHref,
     normalizeWebsiteHref,
@@ -721,12 +935,20 @@
     bookingSeedFromDraft,
     resolveTaskBookingId,
     bookingExists,
+    resolveTaskDocumentId,
+    documentExists,
+    findCustomerDocument,
+    seedDocumentDraftFromTask,
     resolveModule,
     listRegisteredTaskTypes,
     targetActionLabels,
     workStatusOptions,
     transferTypeOptions,
     bookingKindOptions,
+    documentKindOptions,
+    ticketKindOptions,
+    documentWorkStatusOptions,
+    voucherStatusOptions,
     moduleSupportsServerPersist,
     workStatusesFor
   };

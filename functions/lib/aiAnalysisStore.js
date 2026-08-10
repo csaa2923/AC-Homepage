@@ -5,6 +5,9 @@ const crypto=require("crypto");
 const ITEM_TYPES=new Set(["concern","task","finding","risk"]);
 const ITEM_STATUSES=new Set(["open","completed","dismissed"]);
 const WORK_STATUSES=new Set(["todo","researched","requested","reserved","blocked"]);
+const DOCUMENT_WORK_STATUSES=new Set(["missing","requested","received","checked","blocked"]);
+const VOUCHER_STATUSES=new Set(["pending","valid","incomplete","invalid","blocked"]);
+const DOCUMENT_MODULES=new Set(["upload_document","upload_ticket","check_voucher"]);
 const MANUAL_STATUS_TRANSITIONS={
   open:new Set(["open","completed","dismissed"]),
   completed:new Set(["completed","open"]),
@@ -237,6 +240,7 @@ function normalizeHttpUrl(value,max=300){
 
 function normalizeActionWorkspace(raw,{
   validBookingIds=null,
+  validDocumentIds=null,
   moduleHint="",
   actorUid="",
   now=""
@@ -270,14 +274,53 @@ function normalizeActionWorkspace(raw,{
   }else{
     linkedBookingId="";
   }
+
+  const moduleName=text(raw.module||moduleHint,40)||"other";
+  const documentTitle=text(raw.documentTitle,160);
+  const documentKind=text(raw.documentKind,40);
+  const provider=text(raw.provider,160);
+  const referenceNumber=text(raw.referenceNumber,120);
+  const documentDate=text(raw.documentDate,40);
+  const documentWorkStatus=text(raw.documentWorkStatus,20);
+  if(documentWorkStatus&&!DOCUMENT_WORK_STATUSES.has(documentWorkStatus)){
+    const error=new Error("Dokumentstatus ist ungültig.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  const voucherStatus=text(raw.voucherStatus,20);
+  if(voucherStatus&&!VOUCHER_STATUSES.has(voucherStatus)){
+    const error=new Error("Voucher-Prüfstatus ist ungültig.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  let linkedDocumentId=text(raw.linkedDocumentId,120);
+  if(linkedDocumentId){
+    if(!(validDocumentIds instanceof Set)||!validDocumentIds.has(linkedDocumentId)){
+      const error=new Error("Verknüpftes Dokument ist ungültig oder gehört nicht zu diesem Kunden.");
+      error.code="invalid-argument";
+      throw error;
+    }
+  }else{
+    linkedDocumentId="";
+  }
+
   const stamp=text(now,40)||new Date().toISOString();
   const actor=text(actorUid,128);
+  // Always return allowlisted keys only (unknown fields stripped). Restaurant payloads keep empty document fields.
   return {
-    module:text(raw.module||moduleHint,40)||"other",
+    module:moduleName,
     workStatus,
     note:text(raw.note,2000),
     research,
     linkedBookingId,
+    documentTitle:DOCUMENT_MODULES.has(moduleName)||documentTitle?documentTitle:"",
+    documentKind:DOCUMENT_MODULES.has(moduleName)||documentKind?documentKind:"",
+    provider:DOCUMENT_MODULES.has(moduleName)||provider?provider:"",
+    referenceNumber:DOCUMENT_MODULES.has(moduleName)||referenceNumber?referenceNumber:"",
+    documentDate:DOCUMENT_MODULES.has(moduleName)||documentDate?documentDate:"",
+    documentWorkStatus:DOCUMENT_MODULES.has(moduleName)||documentWorkStatus?documentWorkStatus:"",
+    voucherStatus:DOCUMENT_MODULES.has(moduleName)||voucherStatus?voucherStatus:"",
+    linkedDocumentId,
     lastActionAt:stamp,
     lastActionBy:actor
   };
@@ -391,6 +434,9 @@ module.exports={
   ITEM_STATUSES,
   ITEM_TYPES,
   WORK_STATUSES,
+  DOCUMENT_WORK_STATUSES,
+  VOUCHER_STATUSES,
+  DOCUMENT_MODULES,
   canTransitionStatus,
   canonicalAnalysisHash,
   inboxDocId,

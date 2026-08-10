@@ -199,14 +199,16 @@ describe("AI task open target resolution",()=>{
   it("wires hardened open-target flow into admin-v2",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/ai-task-open-target-library\.js\?v=2/);
-    assert.match(html,/admin-v2\.js\?v=93/);
+    assert.match(html,/ai-task-open-target-library\.js\?v=3/);
+    assert.match(html,/admin-v2\.js\?v=94/);
     assert.match(js,/function canOpenEntityTarget\(/);
     assert.match(js,/function resolveAiTaskOpenPlan\(/);
     assert.match(js,/function resolveAiTaskBookingTarget\(/);
+    assert.match(js,/function resolveAiTaskDocumentTarget\(/);
     assert.match(js,/resolveExecutableOpenTarget/);
     assert.match(js,/resolveOpenPlan/);
     assert.match(js,/resolveBookingTarget/);
+    assert.match(js,/resolveDocumentTarget/);
     assert.match(js,/canOpenEntityTarget\(task\)\?resolveAiTaskOpenTarget\(task\):null/);
     assert.match(js,/startProgramEdit/);
     assert.match(js,/openAiTaskFallbackTarget/);

@@ -24,6 +24,19 @@ async function resolveValidBookingIds(db,customerId,linkedBookingId){
   return valid;
 }
 
+function resolveValidDocumentIds(customerData,linkedDocumentId){
+  const documentId=text(linkedDocumentId,120);
+  const valid=new Set();
+  if(!documentId)return valid;
+  const docs=Array.isArray(customerData?.documents)?customerData.documents:[];
+  const hit=docs.some(item=>{
+    const id=text(item?.documentId||item?.id,120);
+    return id&&id===documentId;
+  });
+  if(hit)valid.add(documentId);
+  return valid;
+}
+
 function actionWorkspacePatch(actionWorkspace,actorUid,now){
   return {
     actionWorkspace,
@@ -56,12 +69,16 @@ async function persistConciergeAnalysisTaskAction({
   }
   const taskRef=customerRef.collection("aiTasks").doc(taskId);
   const inboxRef=db.collection("aiTaskInbox").doc(inboxDocId(customerId,taskId));
+  const customerData=customerSnap.data()||{};
   const linkedBookingId=text(actionWorkspaceInput?.linkedBookingId,120);
+  const linkedDocumentId=text(actionWorkspaceInput?.linkedDocumentId,120);
   const validBookingIds=await resolveValidBookingIds(db,customerId,linkedBookingId);
+  const validDocumentIds=resolveValidDocumentIds(customerData,linkedDocumentId);
   let actionWorkspace;
   try{
     actionWorkspace=normalizeActionWorkspace(actionWorkspaceInput,{
       validBookingIds,
+      validDocumentIds,
       moduleHint:text(actionWorkspaceInput?.module,40),
       actorUid,
       now:stamp
@@ -123,5 +140,6 @@ module.exports={
   actionWorkspacePatch,
   persistConciergeAnalysisTaskAction,
   resolveValidBookingIds,
+  resolveValidDocumentIds,
   validTaskId
 };

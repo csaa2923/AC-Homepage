@@ -331,6 +331,54 @@
     };
   }
 
+  function resolveDocumentTarget(task,customer,{linkedDocumentId=""}={}){
+    const typed=normalizeTypedIds(task);
+    if(!typed.customerId)return null;
+    if(task?.entityMissing===true){
+      return {
+        status:"blocked",
+        customerId:typed.customerId,
+        tab:"dokumente",
+        message:"Das verknüpfte Dokumentziel fehlt (entityMissing)."
+      };
+    }
+    const fromRefs=arrayValue(task?.refs).find(item=>cleanValue(item?.entityType)==="document"&&cleanValue(item?.entityId));
+    const documentId=cleanValue(linkedDocumentId)
+      ||typed.documentId
+      ||(typed.entityType==="document"?typed.entityId:"")
+      ||cleanValue(fromRefs?.entityId);
+    if(documentId&&entityExists(customer,"document",documentId)){
+      return {
+        status:"open",
+        customerId:typed.customerId,
+        documentId,
+        tab:"dokumente",
+        kind:"document",
+        executable:true
+      };
+    }
+    if(documentId){
+      return {
+        status:"missing",
+        customerId:typed.customerId,
+        documentId,
+        tab:"dokumente",
+        kind:"document",
+        executable:false,
+        message:fallbackMessage("document",documentId)
+      };
+    }
+    return {
+      status:"create",
+      customerId:typed.customerId,
+      documentId:"",
+      tab:"dokumente",
+      kind:"document",
+      executable:false,
+      message:"Noch kein Dokument verknüpft."
+    };
+  }
+
   return {
     OPEN_ENTITY_KINDS,
     ENTITY_TABS,
@@ -346,6 +394,7 @@
     resolveSoftOpenTarget,
     resolveOpenPlan,
     canOpenEntityTarget,
-    resolveBookingTarget
+    resolveBookingTarget,
+    resolveDocumentTarget
   };
 });

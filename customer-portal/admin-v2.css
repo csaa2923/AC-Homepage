@@ -664,7 +664,26 @@ p{color:var(--muted);line-height:1.55}
 .ai-task-workspace__hint.warning{color:#8a4b2a}
 .ai-task-restaurant{display:grid;gap:14px;min-width:0}
 .ai-task-restaurant__fields{display:grid;gap:10px;min-width:0}
-.ai-task-transfer,.ai-task-booking{display:grid;gap:14px;min-width:0}
+.ai-task-transfer,.ai-task-booking,.ai-task-document,.ai-task-ticket,.ai-task-voucher{display:grid;gap:14px;min-width:0}
+.ai-task-document-card{
+  display:grid;
+  gap:4px;
+  min-width:0;
+  padding:12px;
+  border:1px solid rgba(16,40,32,.1);
+  border-radius:12px;
+  background:#fff;
+}
+.ai-task-document-card__title{margin:0;font-size:15px;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}
+.ai-task-document-card__file,.ai-task-document-card__meta{
+  margin:0;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.ai-task-document-card__meta code{font-size:12px;overflow-wrap:anywhere}
 .ai-task-workspace__grid{
   display:grid;
   gap:10px;

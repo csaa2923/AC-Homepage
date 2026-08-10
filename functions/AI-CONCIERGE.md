@@ -1,4 +1,4 @@
-# AI Concierge Advisor (Ops Ready 6.6)
+# AI Concierge Advisor (Ops Ready 6.7b)
 
 `analyzeConciergeTrip` is an authenticated Firebase Callable Function for Admin V2.
 It loads the customer record server-side and only sends a minimized allowlist to
@@ -51,6 +51,9 @@ Task detail dialog
 | `reserve_restaurant` | `reserve_restaurant` | yes | yes (`updateConciergeAnalysisTaskAction`) |
 | `confirm_transfer` | `confirm_transfer` | yes | no (session draft only) |
 | `confirm_booking` | `confirm_booking` | yes | no (session draft only) |
+| `upload_document` | `upload_document` | yes | yes (`updateConciergeAnalysisTaskAction`) |
+| `upload_ticket` | `upload_ticket` | yes | yes (`updateConciergeAnalysisTaskAction`) |
+| `check_voucher` | `check_voucher` | yes | yes (`updateConciergeAnalysisTaskAction`) |
 | other / unknown | `unknown` / generic | no | no |
 
 Unknown `taskType` never fails silently: generic fallback lists target actions and
@@ -88,12 +91,13 @@ Behaviour:
 
 Load priority when opening a task:
 
-1. Server `actionWorkspace` (restaurant / server-capable modules)
-2. Local `sessionStorage` draft
+1. Server `actionWorkspace` (restaurant / document / ticket / voucher)
+2. Local `sessionStorage` draft only when newer than `lastActionAt` and content differs
 3. Defaults
 
 A newer local draft may show as unsaved local changes; server remains source of
-truth until „Arbeitsstand speichern“. No silent overwrite of newer server data.
+truth until „Arbeitsstand speichern“. After a successful save the local draft is
+updated from the server response. No silent overwrite of newer server data.
 No autosave-to-server on every keystroke.
 
 ### Status vs workStatus
@@ -108,8 +112,11 @@ Work-status labels (never mixed with Task-Status):
 - Restaurant: Offen / Recherchiert / Angefragt / **Reserviert** / Blockiert
 - Transfer: Offen / Recherchiert / Angefragt / **Bestätigt** / Blockiert
 - Booking: Offen / Angefragt / **Bestätigt** / **Storniert** / Blockiert
+- Document / Ticket (`documentWorkStatus`): Fehlt / Angefragt / Erhalten / **Geprüft** / Blockiert
+- Voucher (`voucherStatus`): Ausstehend / **Gültig** / Unvollständig / Ungültig / Blockiert
 
-`workStatus` never auto-completes the AI task. Completing remains an explicit
+Operational document/voucher statuses must **not** be written into server
+`actionWorkspace.workStatus` (restaurant whitelist). Completing remains an explicit
 `updateConciergeAnalysisItemStatus` action.
 
 ### Module persistence summary
@@ -119,9 +126,37 @@ Work-status labels (never mixed with Task-Status):
 | Restaurant | Local draft + server via `updateConciergeAnalysisTaskAction` |
 | Transfer | Local session draft only (Ops Ready 6.5/6.6) |
 | Booking | Local session draft only (Ops Ready 6.5/6.6) |
+| Document / Ticket / Voucher | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.7b) |
 
 Transfer/Booking may open/create a booking through the existing booking editor;
 that does not persist Action Workspace fields to the backend.
+
+Document / Ticket / Voucher reuse existing Admin V2 document open/upload
+(`ACTFirebaseStorage.uploadCustomerDocument` + `saveDraftCustomer`). On successful
+upload the real `documentId` is stored as `linkedDocumentId` (local draft; can be
+persisted via the action callable). Task `status` is never auto-completed when
+document/voucher work status changes.
+
+### Document fields (additive, server + local)
+
+```text
+documentTitle, documentKind, provider, referenceNumber, documentDate,
+documentWorkStatus, voucherStatus, linkedDocumentId, note
+```
+
+Whitelists:
+
+- `documentWorkStatus`: `missing` | `requested` | `received` | `checked` | `blocked`
+- `voucherStatus`: `pending` | `valid` | `incomplete` | `invalid` | `blocked`
+
+`linkedDocumentId` is accepted only when the document exists on the same
+customer record (`customers/{customerId}.documents[]`). Foreign or missing IDs
+are rejected. Storage paths / tokens / share URLs are never copied.
+
+Server `workStatus` stays restaurant-compatible (`todo` | `researched` |
+`requested` | `reserved` | `blocked`). Document/voucher progress uses the
+dedicated fields above — never auto-sets task `status` to `completed` /
+`dismissed`.
 
 ## Action Workspace schema (server)
 
@@ -140,6 +175,14 @@ actionWorkspace: {
     mapsQuery: string
   },
   linkedBookingId: string,  // only when booking exists for this customer
+  documentTitle: string,
+  documentKind: string,
+  provider: string,
+  referenceNumber: string,
+  documentDate: string,
+  documentWorkStatus: "missing" | "requested" | "received" | "checked" | "blocked" | "",
+  voucherStatus: "pending" | "valid" | "incomplete" | "invalid" | "blocked" | "",
+  linkedDocumentId: string,  // only when document exists for this customer
   lastActionAt: timestamp,
   lastActionBy: string
 }
@@ -153,6 +196,8 @@ Top-level companion fields written by the action callable:
 Server `workStatus` whitelist remains restaurant-compatible (`reserved`). Transfer
 `confirmed` / booking `cancelled` are client draft values until a future backend
 extension; they must not be sent through `updateConciergeAnalysisTaskAction` today.
+
+Older restaurant-only `actionWorkspace` records remain valid (additive fields).
 
 ## Callable: `updateConciergeAnalysisTaskAction`
 
@@ -174,10 +219,13 @@ Server checks:
 - `customerId` / `taskId` valid; customer exists
 - Task exists under `customers/{customerId}/aiTasks/{taskId}`
 - Rejects cross-customer task ownership mismatches
-- `workStatus` whitelist
+- `workStatus` whitelist (restaurant-compatible)
+- `documentWorkStatus` / `voucherStatus` whitelists when set
 - String length limits; website only `http`/`https` (`javascript:` / `data:` blocked)
 - `linkedBookingId` accepted only if `bookings/{id}` exists and `customerId` matches
-- Unknown fields are not copied through (allowlisted normalize)
+- `linkedDocumentId` accepted only if document exists on the same customer
+- Unknown fields are not copied through (allowlisted normalize); no tokens /
+  storage paths / share URLs
 
 Writes only:
 

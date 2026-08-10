@@ -4879,6 +4879,42 @@
     return null;
   }
 
+  function resolveAiTaskDocumentTarget(task,{linkedDocumentId=""}={}){
+    const customerId=cleanValue(task?.customerId);
+    if(!customerId||!task)return null;
+    const customer=aiTaskCustomerForOpenTarget(customerById(customerId));
+    if(aiOpenTargetLib?.resolveDocumentTarget){
+      return aiOpenTargetLib.resolveDocumentTarget(task,customer,{linkedDocumentId});
+    }
+    const documentId=cleanValue(linkedDocumentId)
+      ||(aiActionWorkspaceLib?.resolveTaskDocumentId
+        ?aiActionWorkspaceLib.resolveTaskDocumentId(task,{linkedDocumentId})
+        :"");
+    if(documentId&&aiActionWorkspaceLib?.documentExists?.(customer,documentId)){
+      return {status:"open",customerId,documentId,tab:"dokumente",kind:"document",executable:true};
+    }
+    if(documentId){
+      return {
+        status:"missing",
+        customerId,
+        documentId,
+        tab:"dokumente",
+        kind:"document",
+        executable:false,
+        message:`Dokument „${documentId}“ wurde nicht gefunden.`
+      };
+    }
+    return {
+      status:"create",
+      customerId,
+      documentId:"",
+      tab:"dokumente",
+      kind:"document",
+      executable:false,
+      message:"Noch kein Dokument verknüpft."
+    };
+  }
+
   function resolveAiTaskCustomerTarget(task){
     const customerId=cleanValue(task?.customerId);
     if(!customerId)return null;
@@ -5262,7 +5298,8 @@
       :{
         open:false,note:"",workStatus:"todo",restaurantName:"",place:"",phone:"",website:"",mapsQuery:"",linkedBookingId:"",updatedAt:"",
         transferType:"taxi",transferCompany:"",contactPerson:"",email:"",pickupPlace:"",dropoffPlace:"",transferDate:"",transferTime:"",flightNumber:"",
-        bookingKind:"hotel",provider:"",bookingReference:""
+        bookingKind:"hotel",provider:"",bookingReference:"",
+        documentTitle:"",documentKind:"document",referenceNumber:"",documentDate:"",documentWorkStatus:"missing",voucherStatus:"pending",linkedDocumentId:""
       };
   }
 
@@ -5374,6 +5411,17 @@
       draft.workStatus=valueOf("[data-ai-booking-work-status]")||"todo";
       const linked=valueOf("[data-ai-booking-linked-booking]");
       if(linked)draft.linkedBookingId=linked;
+    }
+    if(root.querySelector("[data-ai-document-module], [data-ai-ticket-module], [data-ai-voucher-module]")){
+      draft.documentTitle=valueOf("[data-ai-document-title]");
+      draft.documentKind=valueOf("[data-ai-document-kind]")||draft.documentKind||"document";
+      draft.provider=valueOf("[data-ai-document-provider]")||draft.provider;
+      draft.referenceNumber=valueOf("[data-ai-document-reference]");
+      draft.documentDate=valueOf("[data-ai-document-date]");
+      draft.documentWorkStatus=valueOf("[data-ai-document-work-status]")||draft.documentWorkStatus||"missing";
+      draft.voucherStatus=valueOf("[data-ai-voucher-status]")||draft.voucherStatus||"pending";
+      const linked=valueOf("[data-ai-document-linked-document]");
+      if(linked)draft.linkedDocumentId=linked;
     }
     return aiActionWorkspaceLib?.normalizeDraft?aiActionWorkspaceLib.normalizeDraft(draft):draft;
   }
@@ -5706,6 +5754,199 @@
     `;
   }
 
+  function aiTaskDocumentCardHint(docTarget,linkedDocumentId,doc){
+    if(docTarget?.status==="open"&&doc){
+      const title=cleanValue(doc.title||doc.fileName)||linkedDocumentId;
+      const fileName=cleanValue(doc.fileName);
+      return `<div class="ai-task-document-card" role="status">
+        <strong class="ai-task-document-card__title">${escapeHtml(title)}</strong>
+        ${fileName&&fileName!==title?`<span class="ai-task-document-card__file">${escapeHtml(fileName)}</span>`:""}
+        <span class="ai-task-document-card__meta">Verknüpft: <code>${escapeHtml(linkedDocumentId||docTarget.documentId||"")}</code></span>
+      </div>`;
+    }
+    if(linkedDocumentId&&docTarget?.status==="missing"){
+      return `<p class="ai-task-workspace__hint warning" role="status">Verknüpftes Dokument nicht mehr vorhanden. Bitte neu hochladen oder den Dokumentenbereich öffnen.</p>`;
+    }
+    if(docTarget?.status==="blocked"){
+      return `<p class="ai-task-workspace__hint warning" role="status">${escapeHtml(docTarget.message||"Dokumentziel fehlt.")}</p>`;
+    }
+    return `<p class="ai-task-workspace__hint" role="status">Noch kein Dokument verknüpft. Laden Sie eine Datei hoch oder öffnen Sie den Dokumentenbereich.</p>`;
+  }
+
+  function aiTaskDocumentModuleActions(task,draft,{uploadLabel="Dokument hochladen",openLabel="Dokument öffnen"}={}){
+    const linkedDocumentId=cleanValue(draft.linkedDocumentId||"");
+    const docTarget=resolveAiTaskDocumentTarget(task,{linkedDocumentId});
+    const customer=customerById(cleanValue(task.customerId));
+    const doc=aiActionWorkspaceLib?.findCustomerDocument
+      ?aiActionWorkspaceLib.findCustomerDocument(customer,docTarget?.documentId||linkedDocumentId)
+      :null;
+    const openUrl=doc?documentOpenUrl(doc):"";
+    const busy=Boolean(state.aiTasksBusy||state.aiTaskWorkspaceSaving);
+    const disabled=busy?' disabled aria-busy="true"':"";
+    const openDocBtn=docTarget?.status==="open"
+      ?`<button class="v2-button small primary ai-task-workspace__action-btn" type="button" data-ai-workspace-open-document${disabled}>${escapeHtml(openLabel)}</button>`
+      :`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" disabled title="Kein gültiges Dokument verknüpft">${escapeHtml(openLabel)}</button>`;
+    const fileBtn=openUrl
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(openUrl)}" target="_blank" rel="noopener noreferrer" data-ai-workspace-open-file>QR/PDF öffnen</a>`
+      :`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" disabled title="Keine sichere Datei-URL vorhanden">QR/PDF öffnen</button>`;
+    const uploadBtn=`<button class="v2-button small soft ai-task-workspace__action-btn" type="button" data-ai-workspace-upload-document${disabled}>${escapeHtml(uploadLabel)}</button>
+      <input type="file" hidden data-ai-workspace-upload-input accept=".pdf,image/*,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" ${busy?"disabled":""}>`;
+    const areaBtn=`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" data-ai-workspace-open-documents${disabled}>Dokumentenbereich öffnen</button>`;
+    return {
+      linkedDocumentId:linkedDocumentId||(docTarget?.status==="open"?cleanValue(docTarget.documentId):""),
+      hint:aiTaskDocumentCardHint(docTarget,linkedDocumentId,doc),
+      actions:`<div class="ai-task-workspace__action-row">${openDocBtn}${fileBtn}${uploadBtn}${areaBtn}</div>`
+    };
+  }
+
+  function aiTaskDocumentModuleMarkup(task,draft){
+    const seeded=aiActionWorkspaceLib?.seedDocumentDraftFromTask
+      ?aiActionWorkspaceLib.seedDocumentDraftFromTask(task,draft,"upload_document")
+      :draft;
+    const statusOptions=(aiActionWorkspaceLib?.documentWorkStatusOptions?.()||[]).map(item=>
+      `<option value="${escapeHtml(item.value)}" ${seeded.documentWorkStatus===item.value?"selected":""}>${escapeHtml(item.label)}</option>`
+    ).join("");
+    const kindOptions=(aiActionWorkspaceLib?.documentKindOptions?.()||[]).map(item=>
+      `<option value="${escapeHtml(item.value)}" ${seeded.documentKind===item.value?"selected":""}>${escapeHtml(item.label)}</option>`
+    ).join("");
+    const actions=aiTaskDocumentModuleActions(task,seeded,{uploadLabel:"Dokument hochladen",openLabel:"Dokument öffnen"});
+    return `
+      <div class="ai-task-document" data-ai-document-module>
+        <input type="hidden" data-ai-document-linked-document value="${escapeHtml(actions.linkedDocumentId)}">
+        <div class="ai-task-workspace__block">
+          <h4>Dokumentstatus <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <label class="ai-task-workspace__field">
+            <span>Status der Dokumentarbeit</span>
+            <select data-ai-document-work-status aria-label="Dokumentstatus">${statusOptions}</select>
+          </label>
+          <p class="ai-task-workspace__hint">„Geprüft“ erledigt die AI-Aufgabe nicht automatisch.</p>
+        </div>
+        <div class="ai-task-workspace__grid">
+          <label class="ai-task-workspace__field">
+            <span>Dokumenttitel</span>
+            <input type="text" data-ai-document-title maxlength="160" value="${escapeHtml(seeded.documentTitle||"")}" aria-label="Dokumenttitel">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Dokumenttyp</span>
+            <select data-ai-document-kind aria-label="Dokumenttyp">${kindOptions}</select>
+          </label>
+        </div>
+        <label class="ai-task-workspace__note">
+          <span>Beschreibung / Arbeitsnotiz</span>
+          <textarea data-ai-task-workspace-note rows="3" maxlength="2000" placeholder="Was fehlt noch, wer liefert nach…" aria-label="Beschreibung Dokument">${escapeHtml(seeded.note||"")}</textarea>
+        </label>
+        <div class="ai-task-workspace__block">
+          <h4>Dokument</h4>
+          ${actions.hint}
+          ${actions.actions}
+        </div>
+      </div>
+    `;
+  }
+
+  function aiTaskTicketModuleMarkup(task,draft){
+    const seeded=aiActionWorkspaceLib?.seedDocumentDraftFromTask
+      ?aiActionWorkspaceLib.seedDocumentDraftFromTask(task,draft,"upload_ticket")
+      :draft;
+    const statusOptions=(aiActionWorkspaceLib?.documentWorkStatusOptions?.()||[]).map(item=>
+      `<option value="${escapeHtml(item.value)}" ${seeded.documentWorkStatus===item.value?"selected":""}>${escapeHtml(item.label)}</option>`
+    ).join("");
+    const kindOptions=(aiActionWorkspaceLib?.ticketKindOptions?.()||[]).map(item=>
+      `<option value="${escapeHtml(item.value)}" ${seeded.documentKind===item.value?"selected":""}>${escapeHtml(item.label)}</option>`
+    ).join("");
+    const actions=aiTaskDocumentModuleActions(task,seeded,{uploadLabel:"Ticket hochladen",openLabel:"Ticket öffnen"});
+    return `
+      <div class="ai-task-ticket" data-ai-ticket-module>
+        <input type="hidden" data-ai-document-linked-document value="${escapeHtml(actions.linkedDocumentId)}">
+        <div class="ai-task-workspace__block">
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <label class="ai-task-workspace__field">
+            <span>Status der Ticketarbeit</span>
+            <select data-ai-document-work-status aria-label="Ticket-Arbeitsstand">${statusOptions}</select>
+          </label>
+          <p class="ai-task-workspace__hint">„Geprüft“ erledigt die AI-Aufgabe nicht automatisch.</p>
+        </div>
+        <div class="ai-task-workspace__grid">
+          <label class="ai-task-workspace__field">
+            <span>Ticketart</span>
+            <select data-ai-document-kind aria-label="Ticketart">${kindOptions}</select>
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Anbieter</span>
+            <input type="text" data-ai-document-provider maxlength="160" value="${escapeHtml(seeded.provider||"")}" aria-label="Anbieter Ticket">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Buchungs-/Ticketnummer</span>
+            <input type="text" data-ai-document-reference maxlength="120" value="${escapeHtml(seeded.referenceNumber||"")}" aria-label="Ticketnummer">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Datum</span>
+            <input type="date" data-ai-document-date value="${escapeHtml(seeded.documentDate||"")}" aria-label="Ticketdatum">
+          </label>
+        </div>
+        <label class="ai-task-workspace__note">
+          <span>Notiz</span>
+          <textarea data-ai-task-workspace-note rows="3" maxlength="2000" placeholder="Sitzplatz, Abholhinweis…" aria-label="Notiz Ticket">${escapeHtml(seeded.note||"")}</textarea>
+        </label>
+        <div class="ai-task-workspace__block">
+          <h4>Ticket-Dokument</h4>
+          ${actions.hint}
+          ${actions.actions}
+        </div>
+      </div>
+    `;
+  }
+
+  function aiTaskVoucherModuleMarkup(task,draft){
+    const seeded=aiActionWorkspaceLib?.seedDocumentDraftFromTask
+      ?aiActionWorkspaceLib.seedDocumentDraftFromTask(task,draft,"check_voucher")
+      :draft;
+    const statusOptions=(aiActionWorkspaceLib?.voucherStatusOptions?.()||[]).map(item=>
+      `<option value="${escapeHtml(item.value)}" ${seeded.voucherStatus===item.value?"selected":""}>${escapeHtml(item.label)}</option>`
+    ).join("");
+    const actions=aiTaskDocumentModuleActions(task,seeded,{uploadLabel:"Dokument ersetzen / hochladen",openLabel:"Voucher öffnen"});
+    return `
+      <div class="ai-task-voucher" data-ai-voucher-module>
+        <input type="hidden" data-ai-document-linked-document value="${escapeHtml(actions.linkedDocumentId)}">
+        <div class="ai-task-workspace__block">
+          <h4>Prüfstatus <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <label class="ai-task-workspace__field">
+            <span>Status der Voucherprüfung</span>
+            <select data-ai-voucher-status aria-label="Voucher-Prüfstatus">${statusOptions}</select>
+          </label>
+          <p class="ai-task-workspace__hint">„Gültig“ erledigt die AI-Aufgabe nicht automatisch.</p>
+        </div>
+        <div class="ai-task-workspace__grid">
+          <label class="ai-task-workspace__field">
+            <span>Voucher-Titel</span>
+            <input type="text" data-ai-document-title maxlength="160" value="${escapeHtml(seeded.documentTitle||"")}" aria-label="Voucher-Titel">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Anbieter</span>
+            <input type="text" data-ai-document-provider maxlength="160" value="${escapeHtml(seeded.provider||"")}" aria-label="Anbieter Voucher">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Buchungsnummer</span>
+            <input type="text" data-ai-document-reference maxlength="120" value="${escapeHtml(seeded.referenceNumber||"")}" aria-label="Voucher-Buchungsnummer">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Gültigkeit / Datum</span>
+            <input type="date" data-ai-document-date value="${escapeHtml(seeded.documentDate||"")}" aria-label="Voucher-Gültigkeit">
+          </label>
+        </div>
+        <label class="ai-task-workspace__note">
+          <span>Notiz</span>
+          <textarea data-ai-task-workspace-note rows="3" maxlength="2000" placeholder="Prüfergebnis, Einschränkungen…" aria-label="Notiz Voucher">${escapeHtml(seeded.note||"")}</textarea>
+        </label>
+        <div class="ai-task-workspace__block">
+          <h4>Voucher-Dokument</h4>
+          ${actions.hint}
+          ${actions.actions}
+        </div>
+      </div>
+    `;
+  }
+
   function aiTaskActionWorkspaceMarkup(task){
     const module=resolveAiTaskActionModule(task);
     const view=currentAiTaskWorkspaceView(task);
@@ -5717,6 +5958,9 @@
     if(module.moduleId==="reserve_restaurant")body=aiTaskRestaurantModuleMarkup(task,draft);
     else if(module.moduleId==="confirm_transfer")body=aiTaskTransferModuleMarkup(task,draft);
     else if(module.moduleId==="confirm_booking")body=aiTaskBookingModuleMarkup(task,draft);
+    else if(module.moduleId==="upload_document")body=aiTaskDocumentModuleMarkup(task,draft);
+    else if(module.moduleId==="upload_ticket")body=aiTaskTicketModuleMarkup(task,draft);
+    else if(module.moduleId==="check_voucher")body=aiTaskVoucherModuleMarkup(task,draft);
     const canServerPersist=aiActionWorkspaceLib?.moduleSupportsServerPersist
       ?aiActionWorkspaceLib.moduleSupportsServerPersist(module.moduleId)
       :module.moduleId==="reserve_restaurant";
@@ -5929,6 +6173,167 @@
 
   function openAiTaskRestaurantBooking(options){
     return openAiTaskWorkspaceBooking(options);
+  }
+
+  function openAiTaskWorkspaceDocumentsArea(){
+    const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
+    if(!task){
+      state.aiTasksMessage="Aufgabe nicht geladen.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    writeAiTaskWorkspaceDraft(task,{...draft,open:true});
+    const customerId=cleanValue(task.customerId);
+    if(!customerId||!customerById(customerId)){
+      state.aiTasksMessage="Kunde für Dokumente wurde nicht gefunden.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    closeAiTaskDetail();
+    if(routeTo(`customers/${encodeURIComponent(customerId)}/dokumente`)===false){
+      state.aiTasksMessage="Dokumentenbereich konnte nicht geöffnet werden.";
+      state.aiTasksMessageKind="error";
+      return false;
+    }
+    return true;
+  }
+
+  function openAiTaskWorkspaceDocument({edit=true}={}){
+    const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
+    if(!task){
+      state.aiTasksMessage="Aufgabe nicht geladen.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    const docTarget=resolveAiTaskDocumentTarget(task,{linkedDocumentId:draft.linkedDocumentId||""});
+    const customerId=cleanValue(task.customerId);
+    const customer=customerById(customerId);
+    if(!customerId||!customer){
+      state.aiTasksMessage="Kunde für das Dokument wurde nicht gefunden.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    if(docTarget?.status==="blocked"){
+      state.aiTasksMessage=docTarget.message||"Dokumentziel fehlt.";
+      state.aiTasksMessageKind="warning";
+      renderAiTaskDetail();
+      return false;
+    }
+    if(docTarget?.status!=="open"||!docTarget.documentId){
+      state.aiTasksMessage=docTarget?.message||"Kein gültiges Dokument verknüpft. Bitte hochladen oder Dokumentenbereich öffnen.";
+      state.aiTasksMessageKind="warning";
+      renderAiTaskDetail();
+      return false;
+    }
+    const docs=normalizedDocuments(customer);
+    const index=docs.findIndex(doc=>cleanValue(doc.documentId||doc.id)===docTarget.documentId);
+    if(index<0){
+      state.aiTasksMessage=`Dokument „${docTarget.documentId}“ wurde nicht gefunden. Dokumentenbereich wird geöffnet.`;
+      state.aiTasksMessageKind="warning";
+      writeAiTaskWorkspaceDraft(task,{...draft,open:true,linkedDocumentId:""});
+      return openAiTaskWorkspaceDocumentsArea();
+    }
+    writeAiTaskWorkspaceDraft(task,{...draft,open:true,linkedDocumentId:docTarget.documentId});
+    closeAiTaskDetail();
+    if(edit){
+      openDocumentEditor(customerId,index);
+      applyAiEntityFocus();
+    }else if(routeTo(`customers/${encodeURIComponent(customerId)}/dokumente`)===false){
+      state.aiTasksMessage="Dokumentenbereich konnte nicht geöffnet werden.";
+      state.aiTasksMessageKind="error";
+      return false;
+    }
+    return true;
+  }
+
+  async function uploadAiTaskWorkspaceDocument(files){
+    const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
+    if(!task){
+      state.aiTasksMessage="Aufgabe nicht geladen.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    const customerId=cleanValue(task.customerId);
+    const fileList=Array.from(files||[]).filter(Boolean);
+    if(!fileList.length){
+      state.aiTasksMessage="Bitte eine Datei auswählen.";
+      state.aiTasksMessageKind="warning";
+      renderAiTaskDetail();
+      return false;
+    }
+    if(!customerId||!customerById(customerId)){
+      state.aiTasksMessage="Kunde für den Upload wurde nicht gefunden.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    if(!documentUploadReady()){
+      state.aiTasksMessage=documentUploadUnavailableMessage();
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const priorStatus=cleanValue(task.status)||"open";
+    state.aiTasksMessage="Dokument wird hochgeladen …";
+    state.aiTasksMessageKind="success";
+    renderAiTaskDetail();
+    try{
+      const file=fileList[0];
+      validateDocumentUploadFile(file);
+      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      const uploaded=await window.ACTFirebaseStorage.uploadCustomerDocument(
+        customerId,
+        file,
+        {title:cleanValue(draft.documentTitle)||file.name,type:documentTypeForUpload(file)}
+      );
+      const documentItem=documentFromUploadedFile(uploaded,file);
+      if(cleanValue(draft.documentTitle))documentItem.title=cleanValue(draft.documentTitle);
+      if(cleanValue(draft.referenceNumber))documentItem.referenceNumber=cleanValue(draft.referenceNumber);
+      if(cleanValue(draft.provider))documentItem.issuer=cleanValue(draft.provider);
+      if(cleanValue(draft.documentDate))documentItem.issueDate=cleanValue(draft.documentDate);
+      const module=resolveAiTaskActionModule(task);
+      if(module.moduleId==="upload_ticket"){
+        documentItem.category="Ticket";
+        documentItem.documentType="Ticket";
+      }else if(module.moduleId==="check_voucher"){
+        documentItem.category="Voucher";
+        documentItem.documentType="Voucher";
+      }
+      const latestCustomer=customerById(customerId);
+      await persistUploadedDocument(latestCustomer,documentItem);
+      const documentId=cleanValue(documentItem.documentId||documentItem.id);
+      if(!documentId)throw new Error("Upload ohne documentId");
+      const nextDraft={
+        ...draft,
+        open:true,
+        linkedDocumentId:documentId,
+        documentTitle:cleanValue(draft.documentTitle)||cleanValue(documentItem.title)||file.name,
+        documentWorkStatus:draft.documentWorkStatus==="missing"?"received":draft.documentWorkStatus
+      };
+      writeAiTaskWorkspaceDraft(task,aiActionWorkspaceLib?.touchDraft?aiActionWorkspaceLib.touchDraft(nextDraft):nextDraft);
+      upsertAiTaskLocal({...task,status:priorStatus});
+      state.aiTasksMessage="Dokument hochgeladen. Arbeitsstand lokal aktualisiert — Task-Status unverändert.";
+      state.aiTasksMessageKind="success";
+      renderAiTaskDetail();
+      return true;
+    }catch(error){
+      const message=error&&error.message?error.message:"";
+      state.aiTasksMessage=message===documentUploadUnavailableMessage()
+        ?message
+        :"Dokument konnte nicht hochgeladen werden. Bitte Datei prüfen und erneut versuchen.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
   }
 
   function aiTaskDetailTechField(label,value){
@@ -9906,6 +10311,32 @@
         openAiTaskWorkspaceBooking({create:true});
         return;
       }
+      if(event.target.closest("[data-ai-workspace-open-document]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        openAiTaskWorkspaceDocument({edit:true});
+        return;
+      }
+      if(event.target.closest("[data-ai-workspace-open-documents]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        openAiTaskWorkspaceDocumentsArea();
+        return;
+      }
+      if(event.target.closest("[data-ai-workspace-upload-document]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        const input=document.querySelector("[data-ai-workspace-upload-input]");
+        if(!input){
+          state.aiTasksMessage="Upload ist gerade nicht verfügbar.";
+          state.aiTasksMessageKind="error";
+          renderAiTaskDetail();
+          return;
+        }
+        input.value="";
+        input.click();
+        return;
+      }
       const aiTaskDetailGoto=event.target.closest("[data-ai-task-detail-goto]");
       if(aiTaskDetailGoto){
         event.preventDefault();
@@ -10063,6 +10494,11 @@
       if(event.target.matches("[data-document-upload]")){
         startDocumentUploads(event.target.files,event.target.dataset.uploadCustomer||state.documentUploadCustomerId);
         event.target.value="";
+      }
+      if(event.target.matches("[data-ai-workspace-upload-input]")){
+        const files=event.target.files;
+        event.target.value="";
+        if(files?.length)uploadAiTaskWorkspaceDocument(files);
       }
     });
     document.addEventListener("dragover",event=>{

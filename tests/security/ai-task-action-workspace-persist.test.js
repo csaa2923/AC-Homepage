@@ -266,10 +266,14 @@ describe("AI task action workspace persistence (backend)",()=>{
       ...baseWorkspace,
       secretToken:"nope",
       storagePath:"customers/x/file",
+      filePath:"/tmp/x",
+      shareUrl:"https://evil.example/share",
       research:{...baseWorkspace.research,internal:"x"}
     },{actorUid:"a1",now:"2026-08-07T12:00:00.000Z"});
     assert.equal(normalized.secretToken,undefined);
     assert.equal(normalized.storagePath,undefined);
+    assert.equal(normalized.filePath,undefined);
+    assert.equal(normalized.shareUrl,undefined);
     assert.equal(normalized.research.internal,undefined);
     const without=store.taskInboxRecord({
       stableKey:"t1",
@@ -301,6 +305,216 @@ describe("AI task action workspace persistence (backend)",()=>{
     });
     assert.equal(withAw.actionWorkspace.workStatus,"researched");
     assert.equal(withAw.lastActionBy,"a1");
+  });
+
+  it("accepts documentWorkStatus and voucherStatus whitelists and rejects invalid values",()=>{
+    for(const status of ["missing","requested","received","checked","blocked"]){
+      const ok=store.normalizeActionWorkspace({
+        module:"upload_document",
+        workStatus:"todo",
+        note:"",
+        research:{},
+        linkedBookingId:"",
+        documentWorkStatus:status,
+        documentTitle:"Pass"
+      },{actorUid:"a1",now:"2026-08-10T10:00:00.000Z"});
+      assert.equal(ok.documentWorkStatus,status);
+      assert.equal(ok.workStatus,"todo");
+    }
+    for(const status of ["pending","valid","incomplete","invalid","blocked"]){
+      const ok=store.normalizeActionWorkspace({
+        module:"check_voucher",
+        workStatus:"todo",
+        note:"",
+        research:{},
+        linkedBookingId:"",
+        voucherStatus:status
+      },{actorUid:"a1",now:"2026-08-10T10:00:00.000Z"});
+      assert.equal(ok.voucherStatus,status);
+    }
+    for(const bad of ["completed","dismissed","open","done","approved"]){
+      assert.throws(
+        ()=>store.normalizeActionWorkspace({
+          module:"upload_document",
+          workStatus:"todo",
+          note:"",
+          research:{},
+          documentWorkStatus:bad
+        },{actorUid:"a1"}),
+        error=>error.code==="invalid-argument"
+      );
+      assert.throws(
+        ()=>store.normalizeActionWorkspace({
+          module:"check_voucher",
+          workStatus:"todo",
+          note:"",
+          research:{},
+          voucherStatus:bad
+        },{actorUid:"a1"}),
+        error=>error.code==="invalid-argument"
+      );
+    }
+  });
+
+  it("accepts linkedDocumentId only for documents of the same customer",async()=>{
+    const db=createMemoryDb({
+      "customers/cust-a":{
+        customerId:"cust-a",
+        documents:[
+          {documentId:"doc-a",title:"Pass"},
+          {id:"doc-alt",title:"Alt"}
+        ]
+      },
+      "customers/cust-b":{
+        customerId:"cust-b",
+        documents:[{documentId:"doc-b",title:"Fremd"}]
+      },
+      "customers/cust-a/aiTasks/task-doc":{
+        customerId:"cust-a",
+        status:"open",
+        lifecycle:"active",
+        stableKey:"task-doc",
+        title:"Dokument",
+        completedAt:null,
+        dismissedAt:null
+      }
+    });
+    const ok=await actionUpdate.persistConciergeAnalysisTaskAction({
+      db,
+      customerId:"cust-a",
+      taskId:"task-doc",
+      actorUid:"admin1",
+      now:"2026-08-10T11:00:00.000Z",
+      actionWorkspace:{
+        module:"upload_document",
+        workStatus:"todo",
+        note:"Scan erhalten",
+        research:{},
+        linkedBookingId:"",
+        documentTitle:"Reisepass",
+        documentKind:"passport",
+        provider:"",
+        referenceNumber:"P-1",
+        documentDate:"2026-08-01",
+        documentWorkStatus:"received",
+        voucherStatus:"",
+        linkedDocumentId:"doc-a"
+      }
+    });
+    assert.equal(ok.actionWorkspace.linkedDocumentId,"doc-a");
+    assert.equal(ok.actionWorkspace.documentWorkStatus,"received");
+    assert.equal(ok.actionWorkspace.documentTitle,"Reisepass");
+    assert.equal(ok.status,"open");
+    assert.equal(ok.lifecycle,"active");
+    assert.equal(db._docs.get("customers/cust-a/aiTasks/task-doc").status,"open");
+    assert.equal(db._docs.get("customers/cust-a/aiTasks/task-doc").completedAt,null);
+    assert.equal(db._docs.get("customers/cust-a/aiTasks/task-doc").dismissedAt,null);
+    assert.equal(db._docs.get("aiTaskInbox/cust-a__task-doc").actionWorkspace.linkedDocumentId,"doc-a");
+    assert.equal(db._docs.get("aiTaskInbox/cust-a__task-doc").status,"open");
+
+    const alt=await actionUpdate.persistConciergeAnalysisTaskAction({
+      db,
+      customerId:"cust-a",
+      taskId:"task-doc",
+      actorUid:"admin1",
+      actionWorkspace:{
+        module:"upload_ticket",
+        workStatus:"todo",
+        note:"",
+        research:{},
+        documentTitle:"Ticket",
+        documentKind:"train",
+        documentWorkStatus:"checked",
+        linkedDocumentId:"doc-alt"
+      }
+    });
+    assert.equal(alt.actionWorkspace.linkedDocumentId,"doc-alt");
+    assert.equal(alt.status,"open");
+
+    await assert.rejects(
+      actionUpdate.persistConciergeAnalysisTaskAction({
+        db,
+        customerId:"cust-a",
+        taskId:"task-doc",
+        actorUid:"admin1",
+        actionWorkspace:{
+          module:"upload_document",
+          workStatus:"todo",
+          note:"",
+          research:{},
+          documentWorkStatus:"received",
+          linkedDocumentId:"doc-b"
+        }
+      }),
+      error=>error.code==="invalid-argument"
+    );
+    await assert.rejects(
+      actionUpdate.persistConciergeAnalysisTaskAction({
+        db,
+        customerId:"cust-a",
+        taskId:"task-doc",
+        actorUid:"admin1",
+        actionWorkspace:{
+          module:"upload_document",
+          workStatus:"todo",
+          note:"",
+          research:{},
+          documentWorkStatus:"received",
+          linkedDocumentId:"missing-doc"
+        }
+      }),
+      error=>error.code==="invalid-argument"
+    );
+  });
+
+  it("round-trips additive document fields and keeps legacy restaurant workspaces valid",()=>{
+    const legacy=store.normalizeActionWorkspace({
+      module:"reserve_restaurant",
+      workStatus:"researched",
+      note:"alt",
+      research:{name:"Alm",place:"",phone:"",website:"",mapsQuery:""},
+      linkedBookingId:""
+    },{actorUid:"a1",now:"2026-08-10T12:00:00.000Z"});
+    assert.equal(legacy.workStatus,"researched");
+    assert.equal(legacy.documentTitle,"");
+    assert.equal(legacy.linkedDocumentId,"");
+
+    const doc=store.normalizeActionWorkspace({
+      module:"upload_document",
+      workStatus:"todo",
+      note:"Notiz",
+      research:{},
+      linkedBookingId:"",
+      documentTitle:"Pass",
+      documentKind:"passport",
+      provider:"Botschaft",
+      referenceNumber:"R-9",
+      documentDate:"2026-07-01",
+      documentWorkStatus:"checked",
+      voucherStatus:"",
+      linkedDocumentId:"",
+      secretToken:"strip-me",
+      storagePath:"customers/x/y"
+    },{actorUid:"a1",now:"2026-08-10T12:05:00.000Z",validDocumentIds:new Set()});
+    assert.equal(doc.documentTitle,"Pass");
+    assert.equal(doc.documentKind,"passport");
+    assert.equal(doc.provider,"Botschaft");
+    assert.equal(doc.referenceNumber,"R-9");
+    assert.equal(doc.documentDate,"2026-07-01");
+    assert.equal(doc.documentWorkStatus,"checked");
+    assert.equal(doc.secretToken,undefined);
+    assert.equal(doc.storagePath,undefined);
+
+    const voucher=store.normalizeActionWorkspace({
+      module:"check_voucher",
+      workStatus:"todo",
+      note:"",
+      research:{},
+      voucherStatus:"valid",
+      documentTitle:"Voucher A"
+    },{actorUid:"a1",now:"2026-08-10T12:06:00.000Z"});
+    assert.equal(voucher.voucherStatus,"valid");
+    assert.equal(voucher.workStatus,"todo");
   });
 });
 
@@ -390,6 +604,7 @@ describe("AI task action workspace persistence (frontend)",()=>{
     assert.equal(payload.module,"reserve_restaurant");
     assert.equal(payload.research.name,"Hütte");
     assert.equal(payload.linkedBookingId,"booking-9");
+    assert.equal("linkedDocumentId" in payload,false);
     const back=lib.actionWorkspaceToDraft({
       ...payload,
       lastActionAt:"2026-08-07T13:05:00.000Z",
@@ -406,6 +621,43 @@ describe("AI task action workspace persistence (frontend)",()=>{
     assert.doesNotMatch(JSON.stringify(payload),/"status"|completed|dismissed/);
   });
 
+  it("round-trips document fields through draft/actionWorkspace mapping",()=>{
+    const draft=lib.normalizeDraft({
+      open:true,
+      note:"Kopie da",
+      documentTitle:"Zugticket",
+      documentKind:"train",
+      provider:"ÖBB",
+      referenceNumber:"T-99",
+      documentDate:"2026-08-20",
+      documentWorkStatus:"received",
+      linkedDocumentId:"doc-9",
+      updatedAt:"2026-08-10T13:00:00.000Z"
+    },"upload_ticket");
+    const payload=lib.draftToActionWorkspace(draft,"upload_ticket");
+    assert.equal(payload.module,"upload_ticket");
+    assert.equal(payload.workStatus,"todo");
+    assert.equal(payload.documentTitle,"Zugticket");
+    assert.equal(payload.documentKind,"train");
+    assert.equal(payload.provider,"ÖBB");
+    assert.equal(payload.referenceNumber,"T-99");
+    assert.equal(payload.documentDate,"2026-08-20");
+    assert.equal(payload.documentWorkStatus,"received");
+    assert.equal(payload.linkedDocumentId,"doc-9");
+    const back=lib.actionWorkspaceToDraft({
+      ...payload,
+      lastActionAt:"2026-08-10T13:05:00.000Z",
+      lastActionBy:"admin"
+    },{open:true});
+    assert.equal(back.documentTitle,"Zugticket");
+    assert.equal(back.documentKind,"train");
+    assert.equal(back.provider,"ÖBB");
+    assert.equal(back.referenceNumber,"T-99");
+    assert.equal(back.documentWorkStatus,"received");
+    assert.equal(back.linkedDocumentId,"doc-9");
+    assert.equal(back.workStatus,"todo");
+  });
+
   it("wires save button, firebase callable client, and keeps pins/regressions",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
@@ -418,9 +670,9 @@ describe("AI task action workspace persistence (frontend)",()=>{
     const restaurantFn=js.match(/function aiTaskRestaurantModuleMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
 
     assert.match(html,/firebase-service\.js\?v=33/);
-    assert.match(html,/ai-task-action-workspace\.js\?v=4/);
-    assert.match(html,/admin-v2\.js\?v=93/);
-    assert.match(html,/admin-v2\.css\?v=72/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=6/);
+    assert.match(html,/admin-v2\.js\?v=94/);
+    assert.match(html,/admin-v2\.css\?v=73/);
     assert.match(service,/httpsCallable\(functions,"updateConciergeAnalysisTaskAction"/);
     assert.match(service,/async function updateConciergeAnalysisTaskAction/);
     assert.match(service,/await callableUserContext\(auth,authModule\);[\s\S]*updateConciergeAnalysisTaskAction/);

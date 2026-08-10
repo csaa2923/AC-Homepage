@@ -200,7 +200,7 @@ describe("AI task open target resolution",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     assert.match(html,/ai-task-open-target-library\.js\?v=2/);
-    assert.match(html,/admin-v2\.js\?v=91/);
+    assert.match(html,/admin-v2\.js\?v=93/);
     assert.match(js,/function canOpenEntityTarget\(/);
     assert.match(js,/function resolveAiTaskOpenPlan\(/);
     assert.match(js,/function resolveAiTaskBookingTarget\(/);
@@ -214,8 +214,9 @@ describe("AI task open target resolution",()=>{
     assert.match(js,/resolveAiTaskBookingTarget\(task/);
     assert.match(js,/Kein ausführbares Ziel für diese Aufgabe/);
     assert.match(js,/data-ai-task-refs/);
-    assert.match(js,/\[ACT Admin V2\] AI task open refs/);
+    assert.doesNotMatch(js,/\[ACT Admin V2\] AI task open refs/);
     const openFn=js.match(/function openAiTaskEntityTarget[\s\S]*?(?=\n  function focusAiTaskDetailPanel)/)?.[0]||"";
+    assert.doesNotMatch(openFn,/console\.(info|log|debug)\(/);
     assert.match(openFn,/programItem|\.kind==="day"/);
     assert.match(openFn,/startProgramEdit/);
     assert.match(openFn,/openDocumentEditor/);

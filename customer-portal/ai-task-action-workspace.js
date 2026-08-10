@@ -6,6 +6,8 @@
   "use strict";
 
   const DRAFT_KEY_PREFIX="act-ai-task-workspace-draft:";
+
+  /** Restaurant / server-compatible work statuses (Ops Ready 6.2–6.4). */
   const WORK_STATUSES=["todo","researched","requested","reserved","blocked"];
   const WORK_STATUS_LABELS={
     todo:"Offen",
@@ -14,6 +16,49 @@
     reserved:"Reserviert",
     blocked:"Blockiert"
   };
+
+  const TRANSFER_WORK_STATUSES=["todo","researched","requested","confirmed","blocked"];
+  const TRANSFER_WORK_STATUS_LABELS={
+    todo:"Offen",
+    researched:"Recherchiert",
+    requested:"Angefragt",
+    confirmed:"Bestätigt",
+    blocked:"Blockiert"
+  };
+
+  const BOOKING_WORK_STATUSES=["todo","requested","confirmed","cancelled","blocked"];
+  const BOOKING_WORK_STATUS_LABELS={
+    todo:"Offen",
+    requested:"Angefragt",
+    confirmed:"Bestätigt",
+    cancelled:"Storniert",
+    blocked:"Blockiert"
+  };
+
+  const ALL_WORK_STATUSES=Array.from(new Set([
+    ...WORK_STATUSES,
+    ...TRANSFER_WORK_STATUSES,
+    ...BOOKING_WORK_STATUSES
+  ]));
+
+  const TRANSFER_TYPES=[
+    {value:"taxi",label:"Taxi"},
+    {value:"shuttle",label:"Shuttle"},
+    {value:"private",label:"Privattransfer"},
+    {value:"rental",label:"Mietwagen"},
+    {value:"train",label:"Bahn"},
+    {value:"other",label:"Sonstiges"}
+  ];
+
+  const BOOKING_KINDS=[
+    {value:"hotel",label:"Hotel"},
+    {value:"restaurant",label:"Restaurant"},
+    {value:"activity",label:"Aktivität"},
+    {value:"spa",label:"Spa"},
+    {value:"ticket",label:"Ticket"},
+    {value:"other",label:"Sonstiges"}
+  ];
+
   const TASK_TYPES=[
     "reserve_restaurant",
     "confirm_transfer",
@@ -35,14 +80,19 @@
       context:"Recherche und Reservierung eines Restaurants für den Kunden.",
       targetActions:["entity_open","customer_tab","booking_editor"],
       fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
-      hasForm:true
+      hasForm:true,
+      persistServer:true,
+      workStatusSet:"restaurant"
     },
     confirm_transfer:{
       moduleId:"confirm_transfer",
       moduleName:"Transfer bestätigen",
       context:"Transferzeiten und Bestätigung mit Anbieter oder Fahrer abstimmen.",
       targetActions:["entity_open","customer_tab","booking_editor"],
-      fallback:"Öffnen Sie die verknüpfte Buchung oder den Programmpunkt, um den Transfer zu bestätigen."
+      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      hasForm:true,
+      persistServer:false,
+      workStatusSet:"transfer"
     },
     add_navigation:{
       moduleId:"add_navigation",
@@ -98,7 +148,10 @@
       moduleName:"Buchung bestätigen",
       context:"Offene Buchung prüfen und Bestätigung dokumentieren.",
       targetActions:["entity_open","customer_tab","booking_editor"],
-      fallback:"Öffnen Sie die verknüpfte Buchung oder den Buchungen-Tab."
+      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      hasForm:true,
+      persistServer:false,
+      workStatusSet:"booking"
     },
     other:{
       moduleId:"other",
@@ -134,9 +187,34 @@
     return id?`${DRAFT_KEY_PREFIX}${id}`:"";
   }
 
-  function normalizeWorkStatus(value){
+  function workStatusSetFor(moduleId){
+    const id=cleanValue(moduleId);
+    if(id==="confirm_transfer")return "transfer";
+    if(id==="confirm_booking")return "booking";
+    return "restaurant";
+  }
+
+  function workStatusesFor(moduleId){
+    const set=workStatusSetFor(moduleId);
+    if(set==="transfer")return TRANSFER_WORK_STATUSES.slice();
+    if(set==="booking")return BOOKING_WORK_STATUSES.slice();
+    return WORK_STATUSES.slice();
+  }
+
+  function normalizeWorkStatus(value,moduleId=""){
     const status=cleanValue(value);
-    return WORK_STATUSES.includes(status)?status:"todo";
+    const allowed=moduleId?workStatusesFor(moduleId):ALL_WORK_STATUSES;
+    return allowed.includes(status)?status:"todo";
+  }
+
+  function normalizeTransferType(value){
+    const type=cleanValue(value);
+    return TRANSFER_TYPES.some(item=>item.value===type)?type:"taxi";
+  }
+
+  function normalizeBookingKind(value){
+    const kind=cleanValue(value);
+    return BOOKING_KINDS.some(item=>item.value===kind)?kind:"hotel";
   }
 
   function emptyDraft(){
@@ -150,24 +228,48 @@
       website:"",
       mapsQuery:"",
       linkedBookingId:"",
-      updatedAt:""
+      updatedAt:"",
+      transferType:"taxi",
+      transferCompany:"",
+      contactPerson:"",
+      email:"",
+      pickupPlace:"",
+      dropoffPlace:"",
+      transferDate:"",
+      transferTime:"",
+      flightNumber:"",
+      bookingKind:"hotel",
+      provider:"",
+      bookingReference:""
     };
   }
 
-  function normalizeDraft(raw){
+  function normalizeDraft(raw,moduleId=""){
     const base=emptyDraft();
     if(!raw||typeof raw!=="object")return base;
     return {
       open:Boolean(raw.open),
       note:cleanValue(raw.note),
-      workStatus:normalizeWorkStatus(raw.workStatus),
+      workStatus:normalizeWorkStatus(raw.workStatus,moduleId),
       restaurantName:cleanValue(raw.restaurantName),
       place:cleanValue(raw.place),
       phone:cleanValue(raw.phone),
       website:cleanValue(raw.website),
       mapsQuery:cleanValue(raw.mapsQuery),
       linkedBookingId:cleanValue(raw.linkedBookingId),
-      updatedAt:cleanValue(raw.updatedAt)
+      updatedAt:cleanValue(raw.updatedAt),
+      transferType:normalizeTransferType(raw.transferType),
+      transferCompany:cleanValue(raw.transferCompany),
+      contactPerson:cleanValue(raw.contactPerson),
+      email:cleanValue(raw.email),
+      pickupPlace:cleanValue(raw.pickupPlace),
+      dropoffPlace:cleanValue(raw.dropoffPlace),
+      transferDate:cleanValue(raw.transferDate),
+      transferTime:cleanValue(raw.transferTime),
+      flightNumber:cleanValue(raw.flightNumber),
+      bookingKind:normalizeBookingKind(raw.bookingKind),
+      provider:cleanValue(raw.provider),
+      bookingReference:cleanValue(raw.bookingReference)
     };
   }
 
@@ -181,7 +283,19 @@
       &&!d.phone
       &&!d.website
       &&!d.mapsQuery
-      &&!d.linkedBookingId;
+      &&!d.linkedBookingId
+      &&d.transferType==="taxi"
+      &&!d.transferCompany
+      &&!d.contactPerson
+      &&!d.email
+      &&!d.pickupPlace
+      &&!d.dropoffPlace
+      &&!d.transferDate
+      &&!d.transferTime
+      &&!d.flightNumber
+      &&d.bookingKind==="hotel"
+      &&!d.provider
+      &&!d.bookingReference;
   }
 
   function draftContentKey(draft){
@@ -194,7 +308,19 @@
       phone:d.phone,
       website:d.website,
       mapsQuery:d.mapsQuery,
-      linkedBookingId:d.linkedBookingId
+      linkedBookingId:d.linkedBookingId,
+      transferType:d.transferType,
+      transferCompany:d.transferCompany,
+      contactPerson:d.contactPerson,
+      email:d.email,
+      pickupPlace:d.pickupPlace,
+      dropoffPlace:d.dropoffPlace,
+      transferDate:d.transferDate,
+      transferTime:d.transferTime,
+      flightNumber:d.flightNumber,
+      bookingKind:d.bookingKind,
+      provider:d.provider,
+      bookingReference:d.bookingReference
     });
   }
 
@@ -203,32 +329,35 @@
     return Number.isFinite(stamp)?stamp:0;
   }
 
-  function actionWorkspaceToDraft(actionWorkspace,{open=false}={}){
+  function actionWorkspaceToDraft(actionWorkspace,{open=false,preserve=null}={}){
+    const base=preserve&&typeof preserve==="object"?normalizeDraft(preserve):emptyDraft();
     if(!actionWorkspace||typeof actionWorkspace!=="object"){
-      return normalizeDraft({...emptyDraft(),open});
+      return normalizeDraft({...base,open});
     }
     const research=actionWorkspace.research&&typeof actionWorkspace.research==="object"
       ?actionWorkspace.research
       :{};
     return normalizeDraft({
+      ...base,
       open,
-      note:actionWorkspace.note,
-      workStatus:actionWorkspace.workStatus,
-      restaurantName:research.name||actionWorkspace.restaurantName||actionWorkspace.name,
-      place:research.place||actionWorkspace.place,
-      phone:research.phone||actionWorkspace.phone,
-      website:research.website||actionWorkspace.website,
-      mapsQuery:research.mapsQuery||actionWorkspace.mapsQuery,
-      linkedBookingId:actionWorkspace.linkedBookingId,
-      updatedAt:actionWorkspace.lastActionAt||actionWorkspace.updatedAt||""
+      note:actionWorkspace.note??base.note,
+      workStatus:actionWorkspace.workStatus||base.workStatus,
+      restaurantName:research.name||actionWorkspace.restaurantName||actionWorkspace.name||base.restaurantName,
+      place:research.place||actionWorkspace.place||base.place,
+      phone:research.phone||actionWorkspace.phone||base.phone,
+      website:research.website||actionWorkspace.website||base.website,
+      mapsQuery:research.mapsQuery||actionWorkspace.mapsQuery||base.mapsQuery,
+      linkedBookingId:actionWorkspace.linkedBookingId??base.linkedBookingId,
+      updatedAt:actionWorkspace.lastActionAt||actionWorkspace.updatedAt||base.updatedAt
     });
   }
 
   function draftToActionWorkspace(draft,moduleId=""){
-    const d=normalizeDraft(draft);
+    const d=normalizeDraft(draft,"reserve_restaurant");
+    const status=WORK_STATUSES.includes(d.workStatus)?d.workStatus:"todo";
     return {
       module:cleanValue(moduleId)||"other",
-      workStatus:d.workStatus,
+      workStatus:status,
       note:d.note,
       research:{
         name:d.restaurantName,
@@ -245,15 +374,11 @@
     return Boolean(task?.actionWorkspace&&typeof task.actionWorkspace==="object");
   }
 
-  /**
-   * Load priority: server actionWorkspace → local draft → defaults.
-   * Newer local drafts are kept and flagged as unsaved; never silently overwrite newer server data.
-   */
   function resolveWorkspaceLoad(task,localDraft){
     const local=normalizeDraft(localDraft);
     const hasServer=hasServerActionWorkspace(task);
     if(hasServer){
-      const serverDraft=actionWorkspaceToDraft(task.actionWorkspace,{open:local.open});
+      const serverDraft=actionWorkspaceToDraft(task.actionWorkspace,{open:local.open,preserve:local});
       const localNewer=parseTime(local.updatedAt)>parseTime(task.actionWorkspace.lastActionAt||serverDraft.updatedAt);
       const contentDiffers=draftContentKey(local)!==draftContentKey(serverDraft);
       if(localNewer&&contentDiffers&&!isDraftEmpty({...local,open:false})){
@@ -337,6 +462,14 @@
     return `tel:${digits}`;
   }
 
+  function normalizeMailtoHref(value){
+    const email=cleanValue(value);
+    if(!email)return "";
+    if(/^(javascript|data|vbscript):/i.test(email))return "";
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return "";
+    return `mailto:${email}`;
+  }
+
   function normalizeWebsiteHref(value){
     const raw=cleanValue(value);
     if(!raw)return "";
@@ -385,6 +518,104 @@
     };
   }
 
+  function transferActionLinks(draft,helpers={}){
+    const d=normalizeDraft(draft,"confirm_transfer");
+    const phoneHref=normalizePhoneHref(d.phone);
+    const mailHref=normalizeMailtoHref(d.email);
+    const websiteHref=normalizeWebsiteHref(d.website);
+    const mapsPickupHref=buildMapsSearchUrl(d.pickupPlace,helpers.mapSearchUrl);
+    const mapsDropoffHref=buildMapsSearchUrl(d.dropoffPlace,helpers.mapSearchUrl);
+    return {
+      phoneHref,
+      mailHref,
+      websiteHref,
+      mapsPickupHref,
+      mapsDropoffHref,
+      canCall:Boolean(phoneHref),
+      canMail:Boolean(mailHref),
+      canOpenWebsite:Boolean(websiteHref),
+      canOpenMapsPickup:Boolean(mapsPickupHref),
+      canOpenMapsDropoff:Boolean(mapsDropoffHref)
+    };
+  }
+
+  function bookingActionLinks(draft){
+    const d=normalizeDraft(draft,"confirm_booking");
+    const phoneHref=normalizePhoneHref(d.phone);
+    const websiteHref=normalizeWebsiteHref(d.website);
+    return {
+      phoneHref,
+      websiteHref,
+      canCall:Boolean(phoneHref),
+      canOpenWebsite:Boolean(websiteHref)
+    };
+  }
+
+  function bookingSeedType(moduleId,draft){
+    const module=cleanValue(moduleId);
+    const d=normalizeDraft(draft,module);
+    if(module==="confirm_transfer"){
+      const map={taxi:"Transfer",shuttle:"Transfer",private:"Transfer",rental:"Mietwagen",train:"Bahn",other:"Transfer"};
+      return map[d.transferType]||"Transfer";
+    }
+    if(module==="confirm_booking"){
+      const map={hotel:"Hotel",restaurant:"Restaurant",activity:"Aktivität",spa:"Spa",ticket:"Ticket",other:"Concierge-Service"};
+      return map[d.bookingKind]||"Concierge-Service";
+    }
+    return "Restaurant";
+  }
+
+  function bookingSeedFromDraft(moduleId,draft,customerId=""){
+    const module=cleanValue(moduleId);
+    const d=normalizeDraft(draft,module);
+    const type=bookingSeedType(module,d);
+    if(module==="confirm_transfer"){
+      return {
+        customerId,
+        type,
+        bookingStatus:d.workStatus==="confirmed"?"Bestätigt":"Angefragt",
+        title:d.transferCompany||"Transfer",
+        provider:d.transferCompany||"",
+        phone:d.phone||"",
+        website:normalizeWebsiteHref(d.website)||"",
+        address:d.pickupPlace||"",
+        confirmationNumber:"",
+        internalNote:[
+          d.note,
+          d.contactPerson&&`Kontakt: ${d.contactPerson}`,
+          d.email&&`E-Mail: ${d.email}`,
+          d.dropoffPlace&&`Ziel: ${d.dropoffPlace}`,
+          d.transferDate&&`Datum: ${d.transferDate}`,
+          d.transferTime&&`Uhrzeit: ${d.transferTime}`,
+          d.flightNumber&&`Flug: ${d.flightNumber}`
+        ].filter(Boolean).join("\n")
+      };
+    }
+    if(module==="confirm_booking"){
+      return {
+        customerId,
+        type,
+        bookingStatus:d.workStatus==="confirmed"?"Bestätigt":d.workStatus==="cancelled"?"Storniert":"Angefragt",
+        title:d.provider||type,
+        provider:d.provider||"",
+        phone:d.phone||"",
+        website:normalizeWebsiteHref(d.website)||"",
+        confirmationNumber:d.bookingReference||"",
+        internalNote:d.note||""
+      };
+    }
+    return {
+      customerId,
+      type:"Restaurant",
+      bookingStatus:"Angefragt",
+      title:d.restaurantName||"",
+      address:d.place||"",
+      phone:d.phone||"",
+      website:normalizeWebsiteHref(d.website)||"",
+      internalNote:d.note||""
+    };
+  }
+
   function resolveTaskBookingId(task,draft){
     const d=normalizeDraft(draft);
     if(d.linkedBookingId)return d.linkedBookingId;
@@ -424,14 +655,41 @@
       .map(key=>({key,label:TARGET_ACTION_LABELS[key]||key}));
   }
 
-  function workStatusOptions(){
+  function workStatusOptions(moduleId=""){
+    const set=workStatusSetFor(moduleId);
+    if(set==="transfer"){
+      return TRANSFER_WORK_STATUSES.map(value=>({value,label:TRANSFER_WORK_STATUS_LABELS[value]||value}));
+    }
+    if(set==="booking"){
+      return BOOKING_WORK_STATUSES.map(value=>({value,label:BOOKING_WORK_STATUS_LABELS[value]||value}));
+    }
     return WORK_STATUSES.map(value=>({value,label:WORK_STATUS_LABELS[value]||value}));
+  }
+
+  function transferTypeOptions(){
+    return TRANSFER_TYPES.slice();
+  }
+
+  function bookingKindOptions(){
+    return BOOKING_KINDS.slice();
+  }
+
+  function moduleSupportsServerPersist(moduleId){
+    const module=resolveModule(moduleId);
+    return module.persistServer===true;
   }
 
   return {
     DRAFT_KEY_PREFIX,
     WORK_STATUSES,
     WORK_STATUS_LABELS,
+    TRANSFER_WORK_STATUSES,
+    TRANSFER_WORK_STATUS_LABELS,
+    BOOKING_WORK_STATUSES,
+    BOOKING_WORK_STATUS_LABELS,
+    ALL_WORK_STATUSES,
+    TRANSFER_TYPES,
+    BOOKING_KINDS,
     TASK_TYPES,
     MODULE_REGISTRY,
     FALLBACK_MODULE,
@@ -449,16 +707,27 @@
     readDraft,
     writeDraft,
     normalizeWorkStatus,
+    normalizeTransferType,
+    normalizeBookingKind,
     normalizePhoneHref,
+    normalizeMailtoHref,
     normalizeWebsiteHref,
     buildMapsSearchUrl,
     resolveMapsQuery,
     restaurantActionLinks,
+    transferActionLinks,
+    bookingActionLinks,
+    bookingSeedType,
+    bookingSeedFromDraft,
     resolveTaskBookingId,
     bookingExists,
     resolveModule,
     listRegisteredTaskTypes,
     targetActionLabels,
-    workStatusOptions
+    workStatusOptions,
+    transferTypeOptions,
+    bookingKindOptions,
+    moduleSupportsServerPersist,
+    workStatusesFor
   };
 });

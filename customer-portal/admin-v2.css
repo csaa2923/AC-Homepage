@@ -64,6 +64,13 @@ p{color:var(--muted);line-height:1.55}
 .v2-button:hover,.v2-classic-link:hover,.v2-text-link:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(20,38,31,.10)}
 .v2-button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
 .v2-button:disabled:hover{transform:none;box-shadow:none}
+.v2-button[aria-busy="true"]{opacity:.7;cursor:progress;pointer-events:none}
+.v2-button.danger,.v2-button.small.danger{
+  border-color:#e2b8b0;
+  background:#fff8f6;
+  color:#8b3d31;
+}
+.v2-button.danger:hover:not(:disabled){background:#ffefea}
 .v2-button.small{min-height:44px}
 .v2-classic-link{margin-top:auto;min-height:auto;padding:10px 8px;border:0;border-radius:0;background:transparent;box-shadow:none;color:var(--muted);font-size:12px;font-weight:650;text-align:left;text-decoration:underline;text-underline-offset:3px}
 .v2-classic-link:hover{transform:none;box-shadow:none;color:var(--green)}
@@ -597,8 +604,9 @@ p{color:var(--muted);line-height:1.55}
 .ai-task-workspace__block h4{margin:0;font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
 .ai-task-workspace__block p{margin:0;line-height:1.45;overflow-wrap:anywhere}
 .ai-task-workspace__actions{margin:0;padding-left:1.15em;display:grid;gap:4px}
-.ai-task-workspace__unknown{margin:0;font-size:13px}
-.ai-task-workspace__unknown code{font-size:12px;overflow-wrap:anywhere}
+.ai-task-workspace__unknown,.ai-task-workspace__empty{margin:0;font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+.ai-task-workspace__unknown code,.ai-task-workspace__empty code{font-size:12px;overflow-wrap:anywhere;word-break:break-word}
+.ai-task-workspace__hint code,.ai-task-workspace__action-btn{overflow-wrap:anywhere;max-width:100%}
 .ai-task-workspace__note{display:grid;gap:6px;min-width:0;font-weight:750}
 .ai-task-workspace__note span{font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
 .ai-task-workspace__note textarea{
@@ -625,6 +633,7 @@ p{color:var(--muted);line-height:1.55}
 .ai-task-workspace__field input,
 .ai-task-workspace__field select{
   width:100%;
+  max-width:100%;
   min-height:44px;
   min-width:0;
   padding:10px 12px;
@@ -633,6 +642,7 @@ p{color:var(--muted);line-height:1.55}
   background:#fff;
   color:inherit;
   font:inherit;
+  overflow-wrap:anywhere;
 }
 .ai-task-workspace__field input:focus-visible,
 .ai-task-workspace__field select:focus-visible{outline:2px solid var(--green-2);outline-offset:1px}
@@ -654,23 +664,45 @@ p{color:var(--muted);line-height:1.55}
 .ai-task-workspace__hint.warning{color:#8a4b2a}
 .ai-task-restaurant{display:grid;gap:14px;min-width:0}
 .ai-task-restaurant__fields{display:grid;gap:10px;min-width:0}
+.ai-task-transfer,.ai-task-booking{display:grid;gap:14px;min-width:0}
+.ai-task-workspace__grid{
+  display:grid;
+  gap:10px;
+  min-width:0;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.ai-task-workspace__grid .ai-task-workspace__field-row{grid-column:1 / -1}
 @media (max-width:767px){
   .task-card__actions{display:grid;grid-template-columns:1fr 1fr;justify-content:stretch}
+  .ai-task-workspace__grid{grid-template-columns:1fr}
   .task-card__actions .task-card__action:first-child{grid-column:1 / -1}
   .task-card__action,.task-card__actions .v2-button{width:100%;justify-content:center}
+  .ai-task-detail-overlay{
+    padding:0;
+    place-items:end stretch;
+    overflow-x:hidden;
+  }
   .ai-task-detail-panel{
     width:100%;
+    max-width:100%;
     max-height:min(90dvh,calc(100dvh - var(--mobile-safe-top) - var(--mobile-safe-bottom) - 24px));
     border-radius:20px 20px 0 0;
     align-self:end;
+    padding:18px 16px calc(16px + var(--mobile-safe-bottom));
   }
   .ai-task-detail-header{flex-wrap:wrap}
+  .ai-task-detail-header h2{overflow-wrap:anywhere;word-break:break-word}
+  .ai-task-detail-footer .task-card__actions{min-width:0}
   .ai-task-workspace__panel{padding:12px}
-  .ai-task-workspace__note textarea{min-height:96px}
+  .ai-task-workspace__note textarea{min-height:96px;max-width:100%}
   [data-ai-task-workspace-toggle]{min-height:44px}
   .ai-task-workspace__field-row{grid-template-columns:1fr;align-items:stretch}
-  .ai-task-workspace__action-btn{width:100%}
+  .ai-task-workspace__action-btn{width:100%;white-space:normal}
   .ai-task-workspace__action-row{display:grid;grid-template-columns:1fr}
+}
+@media (max-width:430px){
+  .ai-task-detail-panel{padding-left:14px;padding-right:14px}
+  .ai-task-workspace__panel{padding:10px}
 }
 @media (prefers-reduced-motion:reduce){
   .ai-task-detail-tech__panel,.ai-task-detail-tech__chevron{transition:none}

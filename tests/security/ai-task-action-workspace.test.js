@@ -141,16 +141,17 @@ describe("AI task action workspace registry and drafts",()=>{
     const detailActionFn=js.match(/function aiTaskDetailActionBarMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
     const workspaceFn=js.match(/function aiTaskActionWorkspaceMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
     const restaurantFn=js.match(/function aiTaskRestaurantModuleMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
-    const openBookingFn=js.match(/function openAiTaskRestaurantBooking[\s\S]*?(?=\n  function )/)?.[0]||"";
+    const openBookingFn=js.match(/function openAiTaskWorkspaceBooking[\s\S]*?(?=\n  function openAiTaskRestaurantBooking|\n  function )/)?.[0]||"";
     const toggleFn=js.match(/function toggleAiTaskActionWorkspace[\s\S]*?(?=\n  function )/)?.[0]||"";
 
-    assert.match(html,/ai-task-action-workspace\.js\?v=3/);
-    assert.match(html,/admin-v2\.js\?v=91/);
-    assert.match(html,/admin-v2\.css\?v=70/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=4/);
+    assert.match(html,/admin-v2\.js\?v=93/);
+    assert.match(html,/admin-v2\.css\?v=72/);
     assert.match(js,/ACTAiTaskActionWorkspace/);
     assert.match(js,/function aiTaskActionWorkspaceMarkup\(/);
     assert.match(js,/function toggleAiTaskActionWorkspace\(/);
     assert.match(js,/function aiTaskRestaurantModuleMarkup\(/);
+    assert.match(js,/function openAiTaskWorkspaceBooking\(/);
     assert.match(js,/function openAiTaskRestaurantBooking\(/);
     assert.match(js,/data-ai-task-workspace-toggle/);
     assert.match(js,/closest\("\[data-ai-task-workspace-toggle\]"\)/);
@@ -178,7 +179,7 @@ describe("AI task action workspace registry and drafts",()=>{
     assert.match(restaurantFn,/erledigt die AI-Aufgabe nicht automatisch/);
     assert.match(openBookingFn,/ACTAdminV2Bookings\.openEditor/);
     assert.match(openBookingFn,/linkedBookingId/);
-    assert.match(openBookingFn,/type:"Restaurant"/);
+    assert.match(openBookingFn,/type\s*=\s*["']Restaurant["']|type:\s*["']Restaurant["']/);
     assert.match(openBookingFn,/persistAiTaskWorkspaceDraftFromDom|writeAiTaskWorkspaceDraft/);
     assert.match(toggleFn,/writeAiTaskWorkspaceDraft/);
     assert.match(toggleFn,/renderAiTaskDetail\(\)/);

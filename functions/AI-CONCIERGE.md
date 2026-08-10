@@ -1,4 +1,4 @@
-# AI Concierge Advisor (Ops Ready 6.4)
+# AI Concierge Advisor (Ops Ready 6.6)
 
 `analyzeConciergeTrip` is an authenticated Firebase Callable Function for Admin V2.
 It loads the customer record server-side and only sends a minimized allowlist to
@@ -30,7 +30,100 @@ are not saved automatically.
 Legacy schema v1 analyses remain readable through an adapter.
 Older tasks without `actionWorkspace` remain valid (additive field, no migration).
 
-## Action Workspace schema
+## Frontend Action Workspace architecture (Admin V2)
+
+Shell lives in the AI task detail dialog (`admin-v2.js` + `admin-v2.css`).
+Module registry and draft helpers live in `ai-task-action-workspace.js`
+(`window.ACTAiTaskActionWorkspace`).
+
+```text
+Task detail dialog
+  └─ Action Workspace region (#aiTaskActionWorkspace)
+       ├─ Registry resolveModule(taskType)
+       ├─ Module body (form or generic fallback)
+       └─ Persist block (server save XOR local-only hint)
+```
+
+### Registry
+
+| taskType | moduleId | Form | Server persist |
+| --- | --- | --- | --- |
+| `reserve_restaurant` | `reserve_restaurant` | yes | yes (`updateConciergeAnalysisTaskAction`) |
+| `confirm_transfer` | `confirm_transfer` | yes | no (session draft only) |
+| `confirm_booking` | `confirm_booking` | yes | no (session draft only) |
+| other / unknown | `unknown` / generic | no | no |
+
+Unknown `taskType` never fails silently: generic fallback lists target actions and
+shows an explicit „Unbekannter Aufgabentyp“ message.
+
+### Deep-Link
+
+Supported hash:
+
+```text
+#tasks?task=<taskId>&workspace=1
+```
+
+Optional customer filter (id only, never customer name):
+
+```text
+#tasks?customer=<customerId>&task=<taskId>&workspace=1
+```
+
+Behaviour:
+
+1. Load / wait for AI task inbox
+2. Resolve task by `taskId` across loaded tasks
+3. Open detail dialog; with `workspace=1|true|open` open the Action Workspace
+4. Set customer filter from the task’s `customerId` when known
+5. Invalid `taskId` → stay on tasks list with a clear warning (no stuck dialog)
+6. Deep-link forces `open:true` on the draft **without** wiping other draft fields
+
+### Drafts / UI-state persistence
+
+- Keyed per `taskId` in `sessionStorage` (`act-ai-task-workspace-draft:<taskId>`)
+- Stores form fields + `open` (workspace open/closed) per task
+- No cross-task leak: switching tasks reads that task’s draft only
+- Reload restores draft + open flag when the same task is opened again
+
+Load priority when opening a task:
+
+1. Server `actionWorkspace` (restaurant / server-capable modules)
+2. Local `sessionStorage` draft
+3. Defaults
+
+A newer local draft may show as unsaved local changes; server remains source of
+truth until „Arbeitsstand speichern“. No silent overwrite of newer server data.
+No autosave-to-server on every keystroke.
+
+### Status vs workStatus
+
+| Field | UI label | Meaning | Values |
+| --- | --- | --- | --- |
+| `status` | Task-Status | Inbox lifecycle | Offen / Erledigt / Verworfen (`open` \| `completed` \| `dismissed`) |
+| `actionWorkspace.workStatus` | Arbeitsstand | Module work progress | see below |
+
+Work-status labels (never mixed with Task-Status):
+
+- Restaurant: Offen / Recherchiert / Angefragt / **Reserviert** / Blockiert
+- Transfer: Offen / Recherchiert / Angefragt / **Bestätigt** / Blockiert
+- Booking: Offen / Angefragt / **Bestätigt** / **Storniert** / Blockiert
+
+`workStatus` never auto-completes the AI task. Completing remains an explicit
+`updateConciergeAnalysisItemStatus` action.
+
+### Module persistence summary
+
+| Module | Persist |
+| --- | --- |
+| Restaurant | Local draft + server via `updateConciergeAnalysisTaskAction` |
+| Transfer | Local session draft only (Ops Ready 6.5/6.6) |
+| Booking | Local session draft only (Ops Ready 6.5/6.6) |
+
+Transfer/Booking may open/create a booking through the existing booking editor;
+that does not persist Action Workspace fields to the backend.
+
+## Action Workspace schema (server)
 
 Optional object on AI tasks (`customers/{customerId}/aiTasks/{taskId}` and inbox mirror):
 
@@ -57,15 +150,9 @@ Top-level companion fields written by the action callable:
 - `updatedAt` / `updatedBy`
 - `lastActionAt` / `lastActionBy`
 
-### Status vs workStatus
-
-| Field | Meaning | Values |
-| --- | --- | --- |
-| `status` | Task lifecycle (inbox / Erledigt / Verworfen) | `open` \| `completed` \| `dismissed` |
-| `actionWorkspace.workStatus` | Operational work progress inside a module | `todo` \| `researched` \| `requested` \| `reserved` \| `blocked` |
-
-`workStatus: "reserved"` does **not** auto-complete the task. Completing remains an
-explicit `updateConciergeAnalysisItemStatus` action.
+Server `workStatus` whitelist remains restaurant-compatible (`reserved`). Transfer
+`confirmed` / booking `cancelled` are client draft values until a future backend
+extension; they must not be sent through `updateConciergeAnalysisTaskAction` today.
 
 ## Callable: `updateConciergeAnalysisTaskAction`
 
@@ -99,17 +186,15 @@ Writes only:
 
 Client access is Callable-only (no direct client writes to `aiTasks`).
 
-## Client load / draft rules
+## Frontend UX contracts (6.6)
 
-Priority when opening a task:
-
-1. Server `actionWorkspace`
-2. Local `sessionStorage` draft
-3. Defaults
-
-Local drafts may carry `updatedAt`. A newer local draft is shown as unsaved local
-changes; server remains source of truth until an explicit „Arbeitsstand speichern“.
-No silent overwrite of newer server data. No autosave-to-server on every keystroke.
+- A11y: `aria-expanded` / `aria-controls` on workspace toggle; dialog focus trap;
+  Escape closes; focus returns to the opening control; labels + `aria-live` on
+  status/error messages; ≥44px touch targets
+- Mobile: bottom sheet ≤ ~90dvh; body scrolls; footer always reachable; single-column
+  forms; no horizontal overflow; long URLs/names wrap
+- Buttons: primary / soft secondary / danger destructive; disabled + busy states
+- Errors: generic user-facing messages; no tokens or customer PII in console logs
 
 ## Secrets
 

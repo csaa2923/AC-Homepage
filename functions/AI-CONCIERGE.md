@@ -1,4 +1,4 @@
-# AI Concierge Advisor (Ops Ready 6.8)
+# AI Concierge Advisor (Ops Ready 6.8b)
 
 `analyzeConciergeTrip` is an authenticated Firebase Callable Function for Admin V2.
 It loads the customer record server-side and only sends a minimized allowlist to
@@ -54,9 +54,9 @@ Task detail dialog
 | `upload_document` | `upload_document` | yes | yes (`updateConciergeAnalysisTaskAction`) |
 | `upload_ticket` | `upload_ticket` | yes | yes (`updateConciergeAnalysisTaskAction`) |
 | `check_voucher` | `check_voucher` | yes | yes (`updateConciergeAnalysisTaskAction`) |
-| `add_navigation` | `add_navigation` | yes | no (session draft only, Ops Ready 6.8) |
-| `prepare_weather_alternative` | `prepare_weather_alternative` | yes | no (session draft only, Ops Ready 6.8) |
-| `reschedule_program` | `reschedule_program` | yes | no (session draft only, Ops Ready 6.8) |
+| `add_navigation` | `add_navigation` | yes | yes (`updateConciergeAnalysisTaskAction`, Ops Ready 6.8b) |
+| `prepare_weather_alternative` | `prepare_weather_alternative` | yes | yes (`updateConciergeAnalysisTaskAction`, Ops Ready 6.8b) |
+| `reschedule_program` | `reschedule_program` | yes | yes (`updateConciergeAnalysisTaskAction`, Ops Ready 6.8b) |
 | other / unknown | `unknown` / generic | no | no |
 
 Unknown `taskType` never fails silently: generic fallback lists target actions and
@@ -133,7 +133,7 @@ Operational document/voucher/program statuses must **not** be written into serve
 | Transfer | Local session draft only (Ops Ready 6.5/6.6) |
 | Booking | Local session draft only (Ops Ready 6.5/6.6) |
 | Document / Ticket / Voucher | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.7b) |
-| Navigation / Wetter-Alternative / Verschieben | Local session draft only (Ops Ready 6.8) |
+| Navigation / Wetter-Alternative / Verschieben | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.8b) |
 
 Transfer/Booking may open/create a booking through the existing booking editor;
 that does not persist Action Workspace fields to the backend.
@@ -165,35 +165,41 @@ Server `workStatus` stays restaurant-compatible (`todo` | `researched` |
 dedicated fields above — never auto-sets task `status` to `completed` /
 `dismissed`.
 
-### Program / Navigation draft fields (additive, local — Ops Ready 6.8)
+### Program / Navigation fields (additive, server + local — Ops Ready 6.8b)
 
 ```text
 navigationStart, navigationDestination, navigationQuery, navigationNote,
 alternativeTitle, alternativePlace, alternativeTime, linkedAlternativeProgramItemId,
-proposedDate, proposedTime, rescheduleReason, programWorkStatus,
-programItemTitle, programItemDate, programItemTime, note
+proposedDate, proposedTime, rescheduleReason, programWorkStatus, note
 ```
+
+`programWorkStatus` whitelist (union across navigation / weather / reschedule):
+
+`todo` | `researched` | `prepared` | `reviewed` | `confirmed` | `checked` | `blocked`
+
+Server `workStatus` stays restaurant-compatible (`todo` for these modules).
+`prepared` / `reviewed` / `confirmed` never auto-set task `status` to `completed` /
+`dismissed`.
+
+`linkedAlternativeProgramItemId` is accepted only when the program item exists on the
+same customer (`customers/{customerId}.program[].items[]` with real `id` /
+`programItemId` / `stableId`). Temporary placeholders (`program-<timestamp>`,
+`dayIndex-itemIndex`) are rejected. Missing linked alternatives show a clear UI hint.
+
+`proposedDate` / `proposedTime` are workspace suggestions only — they never mutate
+the real program document or publication. Real changes remain a conscious
+Programmeditor action.
+
+Navigation fields are plain text (start / destination / query / note) with length
+limits; scheme URLs (`javascript:`, `data:`, …) are stripped. Live Maps/GPX/KML
+links continue to come from the program item via travel helpers, not from
+`actionWorkspace`.
 
 Reuse:
 
-- Open-Target: `resolveProgramItemTarget` / `openAiTaskEntityTarget` / program editor focus
+- Open-Target: `resolveProgramItemTarget` / program editor focus
 - Travel: `ACTTravelActionsLibrary.programItemActions` (Maps, Navigation, GPX, KML)
-- Program editor: `startProgramEdit`, `addProgramItem` (seeded alternative), no auto publish
-
-Reschedule drafts never mutate real program `date`/`time`; only internal notes + editor open.
-
-### Server persist root cause (6.8)
-
-`normalizeActionWorkspace` still requires restaurant `workStatus` and only allowlists
-restaurant + document fields. Program statuses (`prepared`, `checked`, `confirmed`,
-`reviewed`) would be rejected if sent as `workStatus`. Navigation/alternative fields
-would be stripped.
-
-**No second callable.** Minimal future extension (6.8b):
-
-1. Add `programWorkStatus` whitelist + navigation/alternative/reschedule allowlist fields
-2. Validate `linkedAlternativeProgramItemId` against customer program item ids
-3. Keep restaurant `workStatus: "todo"` for these modules (document-style)
+- Program editor: `startProgramEdit`, seeded alternative create, no auto publish
 
 ## Action Workspace schema (server)
 
@@ -220,6 +226,18 @@ actionWorkspace: {
   documentWorkStatus: "missing" | "requested" | "received" | "checked" | "blocked" | "",
   voucherStatus: "pending" | "valid" | "incomplete" | "invalid" | "blocked" | "",
   linkedDocumentId: string,  // only when document exists for this customer
+  navigationStart: string,
+  navigationDestination: string,
+  navigationQuery: string,
+  navigationNote: string,
+  alternativeTitle: string,
+  alternativePlace: string,
+  alternativeTime: string,
+  linkedAlternativeProgramItemId: string,  // only when program item exists for this customer
+  proposedDate: string,   // suggestion only — does not mutate program
+  proposedTime: string,   // suggestion only — does not mutate program
+  rescheduleReason: string,
+  programWorkStatus: "todo" | "researched" | "prepared" | "reviewed" | "confirmed" | "checked" | "blocked" | "",
   lastActionAt: timestamp,
   lastActionBy: string
 }
@@ -234,7 +252,7 @@ Server `workStatus` whitelist remains restaurant-compatible (`reserved`). Transf
 `confirmed` / booking `cancelled` are client draft values until a future backend
 extension; they must not be sent through `updateConciergeAnalysisTaskAction` today.
 
-Older restaurant-only `actionWorkspace` records remain valid (additive fields).
+Older restaurant-/document-only `actionWorkspace` records remain valid (additive fields).
 
 ## Callable: `updateConciergeAnalysisTaskAction`
 
@@ -257,12 +275,15 @@ Server checks:
 - Task exists under `customers/{customerId}/aiTasks/{taskId}`
 - Rejects cross-customer task ownership mismatches
 - `workStatus` whitelist (restaurant-compatible)
-- `documentWorkStatus` / `voucherStatus` whitelists when set
+- `documentWorkStatus` / `voucherStatus` / `programWorkStatus` whitelists when set
 - String length limits; website only `http`/`https` (`javascript:` / `data:` blocked)
+- Navigation/program text fields strip dangerous schemes
 - `linkedBookingId` accepted only if `bookings/{id}` exists and `customerId` matches
 - `linkedDocumentId` accepted only if document exists on the same customer
+- `linkedAlternativeProgramItemId` accepted only if program item exists on the same customer
 - Unknown fields are not copied through (allowlisted normalize); no tokens /
   storage paths / share URLs
+- Never mutates program `date`/`time` or task `status`/`lifecycle`
 
 Writes only:
 

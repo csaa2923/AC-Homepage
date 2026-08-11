@@ -478,6 +478,8 @@ describe("AI task action workspace persistence (backend)",()=>{
     assert.equal(legacy.workStatus,"researched");
     assert.equal(legacy.documentTitle,"");
     assert.equal(legacy.linkedDocumentId,"");
+    assert.equal(legacy.programWorkStatus,"");
+    assert.equal(legacy.navigationStart,"");
 
     const doc=store.normalizeActionWorkspace({
       module:"upload_document",
@@ -515,6 +517,208 @@ describe("AI task action workspace persistence (backend)",()=>{
     },{actorUid:"a1",now:"2026-08-10T12:06:00.000Z"});
     assert.equal(voucher.voucherStatus,"valid");
     assert.equal(voucher.workStatus,"todo");
+  });
+
+  it("accepts programWorkStatus whitelist and rejects invalid values",()=>{
+    for(const status of ["todo","researched","prepared","reviewed","confirmed","checked","blocked"]){
+      const ok=store.normalizeActionWorkspace({
+        module:"add_navigation",
+        workStatus:"todo",
+        note:"",
+        research:{},
+        programWorkStatus:status,
+        navigationStart:"A",
+        navigationDestination:"B"
+      },{actorUid:"a1",now:"2026-08-11T08:00:00.000Z"});
+      assert.equal(ok.programWorkStatus,status);
+      assert.equal(ok.workStatus,"todo");
+    }
+    for(const bad of ["completed","dismissed","open","done","approved",""]){
+      if(!bad)continue;
+      assert.throws(
+        ()=>store.normalizeActionWorkspace({
+          module:"reschedule_program",
+          workStatus:"todo",
+          note:"",
+          research:{},
+          programWorkStatus:bad
+        },{actorUid:"a1"}),
+        error=>error.code==="invalid-argument"
+      );
+    }
+  });
+
+  it("accepts linkedAlternativeProgramItemId only for program items of the same customer",async()=>{
+    const db=createMemoryDb({
+      "customers/cust-a":{
+        customerId:"cust-a",
+        program:[{
+          id:"day-1",
+          date:"2026-08-20",
+          items:[
+            {id:"prog-a",title:"Wanderung"},
+            {programItemId:"alt-a",title:"Museum"}
+          ]
+        }]
+      },
+      "customers/cust-b":{
+        customerId:"cust-b",
+        program:[{items:[{id:"prog-b",title:"Fremd"}]}]
+      },
+      "customers/cust-a/aiTasks/task-nav":{
+        customerId:"cust-a",
+        status:"open",
+        lifecycle:"active",
+        stableKey:"task-nav",
+        title:"Navigation",
+        completedAt:null,
+        dismissedAt:null
+      }
+    });
+    const ok=await actionUpdate.persistConciergeAnalysisTaskAction({
+      db,
+      customerId:"cust-a",
+      taskId:"task-nav",
+      actorUid:"admin1",
+      now:"2026-08-11T09:00:00.000Z",
+      actionWorkspace:{
+        module:"prepare_weather_alternative",
+        workStatus:"todo",
+        note:"Alternative vorbereitet",
+        research:{},
+        linkedBookingId:"",
+        alternativeTitle:"Museum",
+        alternativePlace:"Ischgl",
+        alternativeTime:"14:00",
+        programWorkStatus:"prepared",
+        linkedAlternativeProgramItemId:"alt-a",
+        proposedDate:"",
+        proposedTime:"",
+        rescheduleReason:"",
+        navigationStart:"",
+        navigationDestination:"",
+        navigationQuery:"",
+        navigationNote:""
+      }
+    });
+    assert.equal(ok.actionWorkspace.linkedAlternativeProgramItemId,"alt-a");
+    assert.equal(ok.actionWorkspace.programWorkStatus,"prepared");
+    assert.equal(ok.actionWorkspace.alternativeTitle,"Museum");
+    assert.equal(ok.status,"open");
+    assert.equal(ok.lifecycle,"active");
+    assert.equal(db._docs.get("customers/cust-a/aiTasks/task-nav").status,"open");
+    assert.equal(db._docs.get("customers/cust-a/aiTasks/task-nav").completedAt,null);
+    assert.equal(db._docs.get("aiTaskInbox/cust-a__task-nav").actionWorkspace.linkedAlternativeProgramItemId,"alt-a");
+    assert.equal(db._docs.get("aiTaskInbox/cust-a__task-nav").status,"open");
+
+    await assert.rejects(
+      actionUpdate.persistConciergeAnalysisTaskAction({
+        db,
+        customerId:"cust-a",
+        taskId:"task-nav",
+        actorUid:"admin1",
+        actionWorkspace:{
+          module:"prepare_weather_alternative",
+          workStatus:"todo",
+          note:"",
+          research:{},
+          programWorkStatus:"prepared",
+          linkedAlternativeProgramItemId:"prog-b"
+        }
+      }),
+      error=>error.code==="invalid-argument"
+    );
+    await assert.rejects(
+      actionUpdate.persistConciergeAnalysisTaskAction({
+        db,
+        customerId:"cust-a",
+        taskId:"task-nav",
+        actorUid:"admin1",
+        actionWorkspace:{
+          module:"prepare_weather_alternative",
+          workStatus:"todo",
+          note:"",
+          research:{},
+          programWorkStatus:"prepared",
+          linkedAlternativeProgramItemId:"missing-prog"
+        }
+      }),
+      error=>error.code==="invalid-argument"
+    );
+    await assert.rejects(
+      actionUpdate.persistConciergeAnalysisTaskAction({
+        db,
+        customerId:"cust-a",
+        taskId:"task-nav",
+        actorUid:"admin1",
+        actionWorkspace:{
+          module:"prepare_weather_alternative",
+          workStatus:"todo",
+          note:"",
+          research:{},
+          programWorkStatus:"prepared",
+          linkedAlternativeProgramItemId:"program-1750000000000"
+        }
+      }),
+      error=>error.code==="invalid-argument"
+    );
+  });
+
+  it("round-trips navigation and reschedule suggestion fields without mutating program data",()=>{
+    const nav=store.normalizeActionWorkspace({
+      module:"add_navigation",
+      workStatus:"todo",
+      note:"Notiz",
+      research:{},
+      navigationStart:"Silvrettabahn",
+      navigationDestination:"Idalp",
+      navigationQuery:"Idalp Ischgl",
+      navigationNote:"Parkplatz oben",
+      programWorkStatus:"checked",
+      navigationUrl:"https://maps.example/should-strip",
+      gpxUrl:"https://example.com/x.gpx",
+      secretToken:"nope",
+      javascriptUrl:"javascript:alert(1)"
+    },{actorUid:"a1",now:"2026-08-11T10:00:00.000Z"});
+    assert.equal(nav.navigationStart,"Silvrettabahn");
+    assert.equal(nav.navigationDestination,"Idalp");
+    assert.equal(nav.navigationQuery,"Idalp Ischgl");
+    assert.equal(nav.navigationNote,"Parkplatz oben");
+    assert.equal(nav.programWorkStatus,"checked");
+    assert.equal(nav.navigationUrl,undefined);
+    assert.equal(nav.gpxUrl,undefined);
+    assert.equal(nav.secretToken,undefined);
+
+    const stripped=store.normalizeActionWorkspace({
+      module:"add_navigation",
+      workStatus:"todo",
+      note:"",
+      research:{},
+      navigationStart:"javascript:alert(1)",
+      navigationDestination:"data:text/html,x",
+      programWorkStatus:"todo"
+    },{actorUid:"a1",now:"2026-08-11T10:01:00.000Z"});
+    assert.equal(stripped.navigationStart,"");
+    assert.equal(stripped.navigationDestination,"");
+
+    const reschedule=store.normalizeActionWorkspace({
+      module:"reschedule_program",
+      workStatus:"todo",
+      note:"",
+      research:{},
+      proposedDate:"2026-08-22",
+      proposedTime:"11:30",
+      rescheduleReason:"Wetterfenster",
+      programWorkStatus:"reviewed",
+      programDate:"2026-08-20",
+      programTime:"09:00"
+    },{actorUid:"a1",now:"2026-08-11T10:02:00.000Z"});
+    assert.equal(reschedule.proposedDate,"2026-08-22");
+    assert.equal(reschedule.proposedTime,"11:30");
+    assert.equal(reschedule.rescheduleReason,"Wetterfenster");
+    assert.equal(reschedule.programDate,undefined);
+    assert.equal(reschedule.programTime,undefined);
+    assert.equal(reschedule.programWorkStatus,"reviewed");
   });
 });
 
@@ -658,6 +862,59 @@ describe("AI task action workspace persistence (frontend)",()=>{
     assert.equal(back.workStatus,"todo");
   });
 
+  it("loads server program workspace first and keeps newer local drafts unsaved",()=>{
+    const previous=globalThis.sessionStorage;
+    globalThis.sessionStorage=memoryStorage();
+    try{
+      const task={
+        itemId:"task-prog",
+        actionWorkspace:{
+          module:"add_navigation",
+          workStatus:"todo",
+          note:"Servernotiz",
+          research:{},
+          navigationStart:"Server-Start",
+          navigationDestination:"Server-Ziel",
+          navigationQuery:"Server-Ziel",
+          programWorkStatus:"prepared",
+          lastActionAt:"2026-08-11T08:00:00.000Z",
+          lastActionBy:"admin"
+        }
+      };
+      const fromServer=lib.resolveWorkspaceLoad(task,lib.emptyDraft());
+      assert.equal(fromServer.source,"server");
+      assert.equal(fromServer.draft.navigationStart,"Server-Start");
+      assert.equal(fromServer.draft.programWorkStatus,"prepared");
+      assert.equal(fromServer.unsavedLocal,false);
+
+      lib.writeDraft("task-prog",{
+        open:true,
+        note:"Lokale neuere Notiz",
+        navigationStart:"Lokal-Start",
+        navigationDestination:"Lokal-Ziel",
+        programWorkStatus:"checked",
+        updatedAt:"2026-08-11T09:00:00.000Z"
+      });
+      const newerLocal=lib.resolveWorkspaceLoad(task,lib.readDraft("task-prog"));
+      assert.equal(newerLocal.source,"local_newer");
+      assert.equal(newerLocal.unsavedLocal,true);
+      assert.equal(newerLocal.draft.navigationStart,"Lokal-Start");
+
+      const olderLocal=lib.resolveWorkspaceLoad(task,{
+        ...lib.readDraft("task-prog"),
+        note:"alt",
+        navigationStart:"Alt",
+        updatedAt:"2026-08-11T07:00:00.000Z"
+      });
+      assert.equal(olderLocal.source,"server");
+      assert.equal(olderLocal.draft.navigationStart,"Server-Start");
+      assert.equal(olderLocal.unsavedLocal,false);
+    }finally{
+      if(previous===undefined)delete globalThis.sessionStorage;
+      else globalThis.sessionStorage=previous;
+    }
+  });
+
   it("wires save button, firebase callable client, and keeps pins/regressions",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
@@ -670,7 +927,7 @@ describe("AI task action workspace persistence (frontend)",()=>{
     const restaurantFn=js.match(/function aiTaskRestaurantModuleMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
 
     assert.match(html,/firebase-service\.js\?v=33/);
-    assert.match(html,/ai-task-action-workspace\.js\?v=7/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=8/);
     assert.match(html,/admin-v2\.js\?v=95/);
     assert.match(html,/admin-v2\.css\?v=74/);
     assert.match(service,/httpsCallable\(functions,"updateConciergeAnalysisTaskAction"/);

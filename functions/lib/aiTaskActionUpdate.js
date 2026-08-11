@@ -37,6 +37,30 @@ function resolveValidDocumentIds(customerData,linkedDocumentId){
   return valid;
 }
 
+function resolveValidProgramItemIds(customerData,linkedProgramItemId){
+  const programItemId=text(linkedProgramItemId,120);
+  const valid=new Set();
+  if(!programItemId)return valid;
+  // Reject obvious temporary/index-style placeholders — never invent or accept them.
+  if(/^program-\d+$/i.test(programItemId))return valid;
+  if(/^\d+-\d+$/.test(programItemId))return valid;
+  const days=Array.isArray(customerData?.program)
+    ?customerData.program
+    :(Array.isArray(customerData?.programItems)?customerData.programItems:[]);
+  const hit=days.some(day=>{
+    const items=Array.isArray(day?.items)
+      ?day.items
+      :(Array.isArray(day?.activities)?day.activities
+        :(Array.isArray(day?.programItems)?day.programItems:[]));
+    return items.some(item=>{
+      const id=text(item?.id||item?.programItemId||item?.stableId,120);
+      return id&&id===programItemId;
+    });
+  });
+  if(hit)valid.add(programItemId);
+  return valid;
+}
+
 function actionWorkspacePatch(actionWorkspace,actorUid,now){
   return {
     actionWorkspace,
@@ -72,13 +96,16 @@ async function persistConciergeAnalysisTaskAction({
   const customerData=customerSnap.data()||{};
   const linkedBookingId=text(actionWorkspaceInput?.linkedBookingId,120);
   const linkedDocumentId=text(actionWorkspaceInput?.linkedDocumentId,120);
+  const linkedAlternativeProgramItemId=text(actionWorkspaceInput?.linkedAlternativeProgramItemId,120);
   const validBookingIds=await resolveValidBookingIds(db,customerId,linkedBookingId);
   const validDocumentIds=resolveValidDocumentIds(customerData,linkedDocumentId);
+  const validProgramItemIds=resolveValidProgramItemIds(customerData,linkedAlternativeProgramItemId);
   let actionWorkspace;
   try{
     actionWorkspace=normalizeActionWorkspace(actionWorkspaceInput,{
       validBookingIds,
       validDocumentIds,
+      validProgramItemIds,
       moduleHint:text(actionWorkspaceInput?.module,40),
       actorUid,
       now:stamp
@@ -141,5 +168,6 @@ module.exports={
   persistConciergeAnalysisTaskAction,
   resolveValidBookingIds,
   resolveValidDocumentIds,
+  resolveValidProgramItemIds,
   validTaskId
 };

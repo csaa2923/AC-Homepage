@@ -42,13 +42,13 @@ const sampleCustomer={
   }]
 };
 
-describe("AI task action workspace program modules (Ops Ready 6.8)",()=>{
-  it("registers navigation, weather-alternative and reschedule modules as local forms",()=>{
+describe("AI task action workspace program modules (Ops Ready 6.8 / 6.8b)",()=>{
+  it("registers navigation, weather-alternative and reschedule modules with server persist",()=>{
     for(const type of ["add_navigation","prepare_weather_alternative","reschedule_program"]){
       const module=lib.resolveModule(type);
       assert.equal(module.hasForm,true);
-      assert.equal(module.persistServer,false);
-      assert.equal(lib.moduleSupportsServerPersist(type),false);
+      assert.equal(module.persistServer,true);
+      assert.equal(lib.moduleSupportsServerPersist(type),true);
     }
     assert.deepEqual(lib.NAVIGATION_WORK_STATUSES,["todo","researched","prepared","checked","blocked"]);
     assert.deepEqual(lib.WEATHER_ALT_WORK_STATUSES,["todo","researched","prepared","confirmed","blocked"]);
@@ -143,7 +143,7 @@ describe("AI task action workspace program modules (Ops Ready 6.8)",()=>{
     assert.equal(entry.item.time,"09:00");
   });
 
-  it("round-trips program drafts per taskId and keeps lifecycle status out",()=>{
+  it("round-trips program drafts and server payloads without mutating lifecycle",()=>{
     const previous=globalThis.sessionStorage;
     globalThis.sessionStorage=memoryStorage();
     try{
@@ -176,6 +176,52 @@ describe("AI task action workspace program modules (Ops Ready 6.8)",()=>{
       },"prepare_weather_alternative");
       assert.equal(normalized.programWorkStatus,"confirmed");
       assert.equal(normalized.workStatus,"todo");
+
+      const navPayload=lib.draftToActionWorkspace({
+        programWorkStatus:"checked",
+        navigationStart:"Silvretta",
+        navigationDestination:"Idalp",
+        navigationQuery:"Idalp",
+        navigationNote:"Parkplatz",
+        note:"x"
+      },"add_navigation");
+      assert.equal(navPayload.workStatus,"todo");
+      assert.equal(navPayload.programWorkStatus,"checked");
+      assert.equal(navPayload.navigationStart,"Silvretta");
+      assert.equal(navPayload.module,"add_navigation");
+      assert.doesNotMatch(JSON.stringify(navPayload),/"status":"completed"/);
+
+      const weatherPayload=lib.draftToActionWorkspace({
+        programWorkStatus:"confirmed",
+        alternativeTitle:"Museum",
+        alternativePlace:"Ischgl",
+        alternativeTime:"14:00",
+        linkedAlternativeProgramItemId:"alt-1",
+        note:"Schlechtwetter"
+      },"prepare_weather_alternative");
+      assert.equal(weatherPayload.alternativeTitle,"Museum");
+      assert.equal(weatherPayload.linkedAlternativeProgramItemId,"alt-1");
+      assert.equal(weatherPayload.workStatus,"todo");
+
+      const reschedulePayload=lib.draftToActionWorkspace({
+        programWorkStatus:"reviewed",
+        proposedDate:"2026-08-21",
+        proposedTime:"11:00",
+        rescheduleReason:"Puffer"
+      },"reschedule_program");
+      assert.equal(reschedulePayload.proposedDate,"2026-08-21");
+      assert.equal(reschedulePayload.proposedTime,"11:00");
+      assert.equal(reschedulePayload.rescheduleReason,"Puffer");
+      assert.equal(reschedulePayload.workStatus,"todo");
+
+      const back=lib.actionWorkspaceToDraft({
+        ...navPayload,
+        lastActionAt:"2026-08-11T08:00:00.000Z",
+        lastActionBy:"admin"
+      },{open:true});
+      assert.equal(back.navigationDestination,"Idalp");
+      assert.equal(back.programWorkStatus,"checked");
+      assert.equal(back.workStatus,"todo");
     }finally{
       if(previous===undefined)delete globalThis.sessionStorage;
       else globalThis.sessionStorage=previous;
@@ -191,7 +237,7 @@ describe("AI task action workspace program modules (Ops Ready 6.8)",()=>{
     const openFn=js.match(/function openAiTaskWorkspaceProgram\([\s\S]*?(?=\n  function openAiTaskWorkspaceDocument|\n  async function )/)?.[0]||"";
     const saveProgramFn=js.match(/async function saveProgramEdit\([\s\S]*?(?=\n  function documentVisibleValue|\n  function )/)?.[0]||"";
 
-    assert.match(html,/ai-task-action-workspace\.js\?v=7/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=8/);
     assert.match(html,/ai-task-open-target-library\.js\?v=4/);
     assert.match(html,/admin-v2\.js\?v=95/);
     assert.match(html,/admin-v2\.css\?v=74/);
@@ -221,8 +267,10 @@ describe("AI task action workspace program modules (Ops Ready 6.8)",()=>{
     assert.match(css,/\.ai-task-reschedule/);
     assert.match(css,/\.ai-task-program-card/);
     assert.match(css,/\.ai-task-detail-footer\{[\s\S]*flex:0 0 auto/);
-    assert.match(docs,/add_navigation|Ops Ready 6\.8/);
-    assert.match(docs,/Server persist root cause \(6\.8\)/);
+    assert.match(docs,/add_navigation|Ops Ready 6\.8b/);
+    assert.match(docs,/programWorkStatus/);
+    assert.match(docs,/linkedAlternativeProgramItemId/);
+    assert.match(docs,/workspace suggestions only|suggestions only|Vorschlag/);
     assert.match(readProjectFile("customer-portal/ai-task-open-target-library.js"),/function resolveProgramItemTarget/);
   });
 });

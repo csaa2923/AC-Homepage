@@ -178,7 +178,7 @@ describe("AI task action workspace polish (Ops Ready 6.6)",()=>{
   it("keeps restaurant / transfer / booking regressions and 6.1–6.5 wiring",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/ai-task-action-workspace\.js\?v=7/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=8/);
     assert.match(html,/admin-v2\.js\?v=95/);
     assert.match(html,/admin-v2\.css\?v=74/);
     assert.match(js,/function aiTaskRestaurantModuleMarkup\(/);

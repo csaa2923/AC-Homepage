@@ -7,7 +7,9 @@ const ITEM_STATUSES=new Set(["open","completed","dismissed"]);
 const WORK_STATUSES=new Set(["todo","researched","requested","reserved","blocked"]);
 const DOCUMENT_WORK_STATUSES=new Set(["missing","requested","received","checked","blocked"]);
 const VOUCHER_STATUSES=new Set(["pending","valid","incomplete","invalid","blocked"]);
+const PROGRAM_WORK_STATUSES=new Set(["todo","researched","prepared","reviewed","confirmed","checked","blocked"]);
 const DOCUMENT_MODULES=new Set(["upload_document","upload_ticket","check_voucher"]);
+const PROGRAM_MODULES=new Set(["add_navigation","prepare_weather_alternative","reschedule_program"]);
 const MANUAL_STATUS_TRANSITIONS={
   open:new Set(["open","completed","dismissed"]),
   completed:new Set(["completed","open"]),
@@ -238,9 +240,18 @@ function normalizeHttpUrl(value,max=300){
   }
 }
 
+function safePlainWorkspaceText(value,max=200){
+  const cleaned=text(value,max);
+  if(!cleaned)return "";
+  // Navigation/program fields are plain text only — never executable or scheme URLs.
+  if(/^(javascript|data|vbscript|file):/i.test(cleaned))return "";
+  return cleaned;
+}
+
 function normalizeActionWorkspace(raw,{
   validBookingIds=null,
   validDocumentIds=null,
+  validProgramItemIds=null,
   moduleHint="",
   actorUid="",
   now=""
@@ -304,9 +315,37 @@ function normalizeActionWorkspace(raw,{
     linkedDocumentId="";
   }
 
+  const programWorkStatus=text(raw.programWorkStatus,20);
+  if(programWorkStatus&&!PROGRAM_WORK_STATUSES.has(programWorkStatus)){
+    const error=new Error("Programm-Arbeitsstand ist ungültig.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  const navigationStart=safePlainWorkspaceText(raw.navigationStart,200);
+  const navigationDestination=safePlainWorkspaceText(raw.navigationDestination,200);
+  const navigationQuery=safePlainWorkspaceText(raw.navigationQuery,200);
+  const navigationNote=safePlainWorkspaceText(raw.navigationNote,2000);
+  const alternativeTitle=safePlainWorkspaceText(raw.alternativeTitle,160);
+  const alternativePlace=safePlainWorkspaceText(raw.alternativePlace,200);
+  const alternativeTime=safePlainWorkspaceText(raw.alternativeTime,40);
+  const proposedDate=safePlainWorkspaceText(raw.proposedDate,40);
+  const proposedTime=safePlainWorkspaceText(raw.proposedTime,40);
+  const rescheduleReason=safePlainWorkspaceText(raw.rescheduleReason,2000);
+  let linkedAlternativeProgramItemId=text(raw.linkedAlternativeProgramItemId,120);
+  if(linkedAlternativeProgramItemId){
+    if(!(validProgramItemIds instanceof Set)||!validProgramItemIds.has(linkedAlternativeProgramItemId)){
+      const error=new Error("Verknüpfter Alternativ-Programmpunkt ist ungültig oder gehört nicht zu diesem Kunden.");
+      error.code="invalid-argument";
+      throw error;
+    }
+  }else{
+    linkedAlternativeProgramItemId="";
+  }
+
   const stamp=text(now,40)||new Date().toISOString();
   const actor=text(actorUid,128);
-  // Always return allowlisted keys only (unknown fields stripped). Restaurant payloads keep empty document fields.
+  const keepProgram=PROGRAM_MODULES.has(moduleName);
+  // Always return allowlisted keys only (unknown fields stripped).
   return {
     module:moduleName,
     workStatus,
@@ -321,6 +360,18 @@ function normalizeActionWorkspace(raw,{
     documentWorkStatus:DOCUMENT_MODULES.has(moduleName)||documentWorkStatus?documentWorkStatus:"",
     voucherStatus:DOCUMENT_MODULES.has(moduleName)||voucherStatus?voucherStatus:"",
     linkedDocumentId,
+    navigationStart:keepProgram||navigationStart?navigationStart:"",
+    navigationDestination:keepProgram||navigationDestination?navigationDestination:"",
+    navigationQuery:keepProgram||navigationQuery?navigationQuery:"",
+    navigationNote:keepProgram||navigationNote?navigationNote:"",
+    alternativeTitle:keepProgram||alternativeTitle?alternativeTitle:"",
+    alternativePlace:keepProgram||alternativePlace?alternativePlace:"",
+    alternativeTime:keepProgram||alternativeTime?alternativeTime:"",
+    linkedAlternativeProgramItemId,
+    proposedDate:keepProgram||proposedDate?proposedDate:"",
+    proposedTime:keepProgram||proposedTime?proposedTime:"",
+    rescheduleReason:keepProgram||rescheduleReason?rescheduleReason:"",
+    programWorkStatus:keepProgram||programWorkStatus?programWorkStatus:"",
     lastActionAt:stamp,
     lastActionBy:actor
   };
@@ -436,7 +487,9 @@ module.exports={
   WORK_STATUSES,
   DOCUMENT_WORK_STATUSES,
   VOUCHER_STATUSES,
+  PROGRAM_WORK_STATUSES,
   DOCUMENT_MODULES,
+  PROGRAM_MODULES,
   canTransitionStatus,
   canonicalAnalysisHash,
   inboxDocId,

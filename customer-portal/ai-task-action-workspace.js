@@ -175,7 +175,7 @@
       targetActions:["entity_open","customer_tab","program_focus"],
       fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
-      persistServer:false,
+      persistServer:true,
       workStatusSet:"navigation"
     },
     upload_ticket:{
@@ -205,7 +205,7 @@
       targetActions:["entity_open","customer_tab","program_focus"],
       fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
-      persistServer:false,
+      persistServer:true,
       workStatusSet:"weather_alternative"
     },
     reschedule_program:{
@@ -215,7 +215,7 @@
       targetActions:["entity_open","customer_tab","program_focus"],
       fallback:"Arbeitsstand und Task-Status sind getrennt. Änderung am echten Programm nur über den Programmeditor.",
       hasForm:true,
-      persistServer:false,
+      persistServer:true,
       workStatusSet:"reschedule"
     },
     complete_customer_data:{
@@ -609,6 +609,18 @@
       documentWorkStatus:actionWorkspace.documentWorkStatus||base.documentWorkStatus,
       voucherStatus:actionWorkspace.voucherStatus||base.voucherStatus,
       linkedDocumentId:actionWorkspace.linkedDocumentId??base.linkedDocumentId,
+      navigationStart:actionWorkspace.navigationStart??base.navigationStart,
+      navigationDestination:actionWorkspace.navigationDestination??base.navigationDestination,
+      navigationQuery:actionWorkspace.navigationQuery??base.navigationQuery,
+      navigationNote:actionWorkspace.navigationNote??base.navigationNote,
+      alternativeTitle:actionWorkspace.alternativeTitle??base.alternativeTitle,
+      alternativePlace:actionWorkspace.alternativePlace??base.alternativePlace,
+      alternativeTime:actionWorkspace.alternativeTime??base.alternativeTime,
+      linkedAlternativeProgramItemId:actionWorkspace.linkedAlternativeProgramItemId??base.linkedAlternativeProgramItemId,
+      proposedDate:actionWorkspace.proposedDate??base.proposedDate,
+      proposedTime:actionWorkspace.proposedTime??base.proposedTime,
+      rescheduleReason:actionWorkspace.rescheduleReason??base.rescheduleReason,
+      programWorkStatus:actionWorkspace.programWorkStatus||base.programWorkStatus,
       updatedAt:actionWorkspace.lastActionAt||actionWorkspace.updatedAt||base.updatedAt
     },moduleId);
   }
@@ -639,6 +651,22 @@
       payload.documentWorkStatus=module==="check_voucher"?"":d.documentWorkStatus;
       payload.voucherStatus=module==="check_voucher"?d.voucherStatus:"";
       payload.linkedDocumentId=d.linkedDocumentId;
+    }
+    if(isProgramWorkspaceModule(module)){
+      payload.navigationStart=d.navigationStart;
+      payload.navigationDestination=d.navigationDestination;
+      payload.navigationQuery=d.navigationQuery;
+      payload.navigationNote=d.navigationNote;
+      payload.alternativeTitle=d.alternativeTitle;
+      payload.alternativePlace=d.alternativePlace;
+      payload.alternativeTime=d.alternativeTime;
+      payload.linkedAlternativeProgramItemId=d.linkedAlternativeProgramItemId;
+      payload.proposedDate=d.proposedDate;
+      payload.proposedTime=d.proposedTime;
+      payload.rescheduleReason=d.rescheduleReason||(module==="reschedule_program"?d.note:"");
+      payload.programWorkStatus=d.programWorkStatus;
+      // Keep restaurant-compatible server workStatus; ops progress in programWorkStatus.
+      payload.workStatus="todo";
     }
     return payload;
   }

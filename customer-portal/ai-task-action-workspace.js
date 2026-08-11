@@ -54,12 +54,43 @@
     blocked:"Blockiert"
   };
 
+  /** Navigation / program operational statuses (Ops Ready 6.8) — not Task-Status. */
+  const NAVIGATION_WORK_STATUSES=["todo","researched","prepared","checked","blocked"];
+  const NAVIGATION_WORK_STATUS_LABELS={
+    todo:"Offen",
+    researched:"Recherchiert",
+    prepared:"Vorbereitet",
+    checked:"Geprüft",
+    blocked:"Blockiert"
+  };
+
+  const WEATHER_ALT_WORK_STATUSES=["todo","researched","prepared","confirmed","blocked"];
+  const WEATHER_ALT_WORK_STATUS_LABELS={
+    todo:"Offen",
+    researched:"Recherchiert",
+    prepared:"Vorbereitet",
+    confirmed:"Bestätigt",
+    blocked:"Blockiert"
+  };
+
+  const RESCHEDULE_WORK_STATUSES=["todo","reviewed","prepared","confirmed","blocked"];
+  const RESCHEDULE_WORK_STATUS_LABELS={
+    todo:"Offen",
+    reviewed:"Geprüft",
+    prepared:"Vorbereitet",
+    confirmed:"Bestätigt",
+    blocked:"Blockiert"
+  };
+
   const ALL_WORK_STATUSES=Array.from(new Set([
     ...WORK_STATUSES,
     ...TRANSFER_WORK_STATUSES,
     ...BOOKING_WORK_STATUSES,
     ...DOCUMENT_WORK_STATUSES,
-    ...VOUCHER_STATUSES
+    ...VOUCHER_STATUSES,
+    ...NAVIGATION_WORK_STATUSES,
+    ...WEATHER_ALT_WORK_STATUSES,
+    ...RESCHEDULE_WORK_STATUSES
   ]));
 
   const TRANSFER_TYPES=[
@@ -142,7 +173,10 @@
       moduleName:"Navigation hinterlegen",
       context:"Karten- und Navigationslinks für einen Programmpunkt ergänzen.",
       targetActions:["entity_open","customer_tab","program_focus"],
-      fallback:"Öffnen Sie den Programmpunkt und hinterlegen Sie Maps-/Navigationslinks im bestehenden Travel-Bereich."
+      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      hasForm:true,
+      persistServer:false,
+      workStatusSet:"navigation"
     },
     upload_ticket:{
       moduleId:"upload_ticket",
@@ -169,14 +203,20 @@
       moduleName:"Wetter-Alternative vorbereiten",
       context:"Bei schlechtem Wetter eine Ersatzaktivität im Programm vorsehen.",
       targetActions:["entity_open","customer_tab","program_focus"],
-      fallback:"Öffnen Sie das Programm und ergänzen Sie eine wetterfeste Alternative."
+      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      hasForm:true,
+      persistServer:false,
+      workStatusSet:"weather_alternative"
     },
     reschedule_program:{
       moduleId:"reschedule_program",
       moduleName:"Programm verschieben",
       context:"Programmpunkt zeitlich anpassen oder neu einplanen.",
       targetActions:["entity_open","customer_tab","program_focus"],
-      fallback:"Öffnen Sie den Programmpunkt oder den Programm-Tab zur Umschichtung."
+      fallback:"Arbeitsstand und Task-Status sind getrennt. Änderung am echten Programm nur über den Programmeditor.",
+      hasForm:true,
+      persistServer:false,
+      workStatusSet:"reschedule"
     },
     complete_customer_data:{
       moduleId:"complete_customer_data",
@@ -245,7 +285,15 @@
     if(id==="confirm_booking")return "booking";
     if(id==="upload_document"||id==="upload_ticket")return "document";
     if(id==="check_voucher")return "voucher";
+    if(id==="add_navigation")return "navigation";
+    if(id==="prepare_weather_alternative")return "weather_alternative";
+    if(id==="reschedule_program")return "reschedule";
     return "restaurant";
+  }
+
+  function isProgramWorkspaceModule(moduleId=""){
+    const id=cleanValue(moduleId);
+    return id==="add_navigation"||id==="prepare_weather_alternative"||id==="reschedule_program";
   }
 
   function workStatusesFor(moduleId){
@@ -254,19 +302,37 @@
     if(set==="booking")return BOOKING_WORK_STATUSES.slice();
     if(set==="document")return DOCUMENT_WORK_STATUSES.slice();
     if(set==="voucher")return VOUCHER_STATUSES.slice();
+    if(set==="navigation")return NAVIGATION_WORK_STATUSES.slice();
+    if(set==="weather_alternative")return WEATHER_ALT_WORK_STATUSES.slice();
+    if(set==="reschedule")return RESCHEDULE_WORK_STATUSES.slice();
     return WORK_STATUSES.slice();
   }
 
   function normalizeWorkStatus(value,moduleId=""){
     const status=cleanValue(value);
     const set=workStatusSetFor(moduleId);
-    // Document/voucher modules keep restaurant-compatible workStatus default;
-    // operational progress lives in documentWorkStatus / voucherStatus.
-    if(set==="document"||set==="voucher"){
+    // Document/voucher/program modules keep restaurant-compatible workStatus default;
+    // operational progress lives in dedicated fields.
+    if(set==="document"||set==="voucher"||set==="navigation"||set==="weather_alternative"||set==="reschedule"){
       return WORK_STATUSES.includes(status)?status:"todo";
     }
     const allowed=moduleId?workStatusesFor(moduleId):ALL_WORK_STATUSES;
     return allowed.includes(status)?status:"todo";
+  }
+
+  function normalizeProgramWorkStatus(value,moduleId=""){
+    const status=cleanValue(value);
+    if(moduleId&&isProgramWorkspaceModule(moduleId)){
+      const allowed=workStatusesFor(moduleId);
+      return allowed.includes(status)?status:"todo";
+    }
+    // Draft storage may omit moduleId — accept the union of program statuses.
+    const union=new Set([
+      ...NAVIGATION_WORK_STATUSES,
+      ...WEATHER_ALT_WORK_STATUSES,
+      ...RESCHEDULE_WORK_STATUSES
+    ]);
+    return union.has(status)?status:"todo";
   }
 
   function normalizeDocumentWorkStatus(value){
@@ -329,7 +395,22 @@
       documentDate:"",
       documentWorkStatus:"missing",
       voucherStatus:"pending",
-      linkedDocumentId:""
+      linkedDocumentId:"",
+      navigationStart:"",
+      navigationDestination:"",
+      navigationQuery:"",
+      navigationNote:"",
+      alternativeTitle:"",
+      alternativePlace:"",
+      alternativeTime:"",
+      linkedAlternativeProgramItemId:"",
+      proposedDate:"",
+      proposedTime:"",
+      rescheduleReason:"",
+      programWorkStatus:"todo",
+      programItemTitle:"",
+      programItemDate:"",
+      programItemTime:""
     };
   }
 
@@ -373,7 +454,25 @@
       documentDate:cleanValue(raw.documentDate),
       documentWorkStatus:normalizeDocumentWorkStatus(raw.documentWorkStatus),
       voucherStatus:normalizeVoucherStatus(raw.voucherStatus),
-      linkedDocumentId:cleanValue(raw.linkedDocumentId)
+      linkedDocumentId:cleanValue(raw.linkedDocumentId),
+      navigationStart:cleanValue(raw.navigationStart),
+      navigationDestination:cleanValue(raw.navigationDestination),
+      navigationQuery:cleanValue(raw.navigationQuery),
+      navigationNote:cleanValue(raw.navigationNote),
+      alternativeTitle:cleanValue(raw.alternativeTitle),
+      alternativePlace:cleanValue(raw.alternativePlace),
+      alternativeTime:cleanValue(raw.alternativeTime),
+      linkedAlternativeProgramItemId:cleanValue(raw.linkedAlternativeProgramItemId),
+      proposedDate:cleanValue(raw.proposedDate),
+      proposedTime:cleanValue(raw.proposedTime),
+      rescheduleReason:cleanValue(raw.rescheduleReason),
+      programWorkStatus:normalizeProgramWorkStatus(
+        raw.programWorkStatus||(isProgramWorkspaceModule(module)?raw.workStatus:""),
+        module
+      ),
+      programItemTitle:cleanValue(raw.programItemTitle),
+      programItemDate:cleanValue(raw.programItemDate),
+      programItemTime:cleanValue(raw.programItemTime)
     };
   }
 
@@ -406,7 +505,22 @@
       &&!d.documentDate
       &&d.documentWorkStatus==="missing"
       &&d.voucherStatus==="pending"
-      &&!d.linkedDocumentId;
+      &&!d.linkedDocumentId
+      &&!d.navigationStart
+      &&!d.navigationDestination
+      &&!d.navigationQuery
+      &&!d.navigationNote
+      &&!d.alternativeTitle
+      &&!d.alternativePlace
+      &&!d.alternativeTime
+      &&!d.linkedAlternativeProgramItemId
+      &&!d.proposedDate
+      &&!d.proposedTime
+      &&!d.rescheduleReason
+      &&d.programWorkStatus==="todo"
+      &&!d.programItemTitle
+      &&!d.programItemDate
+      &&!d.programItemTime;
   }
 
   function draftContentKey(draft){
@@ -438,7 +552,22 @@
       documentDate:d.documentDate,
       documentWorkStatus:d.documentWorkStatus,
       voucherStatus:d.voucherStatus,
-      linkedDocumentId:d.linkedDocumentId
+      linkedDocumentId:d.linkedDocumentId,
+      navigationStart:d.navigationStart,
+      navigationDestination:d.navigationDestination,
+      navigationQuery:d.navigationQuery,
+      navigationNote:d.navigationNote,
+      alternativeTitle:d.alternativeTitle,
+      alternativePlace:d.alternativePlace,
+      alternativeTime:d.alternativeTime,
+      linkedAlternativeProgramItemId:d.linkedAlternativeProgramItemId,
+      proposedDate:d.proposedDate,
+      proposedTime:d.proposedTime,
+      rescheduleReason:d.rescheduleReason,
+      programWorkStatus:d.programWorkStatus,
+      programItemTitle:d.programItemTitle,
+      programItemDate:d.programItemDate,
+      programItemTime:d.programItemTime
     });
   }
 
@@ -816,6 +945,226 @@
     },module);
   }
 
+  function resolveTaskProgramItemId(task,draft){
+    const d=normalizeDraft(draft);
+    // Prefer explicit task refs — draft does not invent program ids.
+    const typed=cleanValue(task?.programItemId);
+    if(typed)return typed;
+    if(cleanValue(task?.entityType)==="programItem")return cleanValue(task?.entityId);
+    const refs=Array.isArray(task?.refs)?task.refs:[];
+    const programRef=refs.find(item=>cleanValue(item?.entityType)==="programItem"&&cleanValue(item?.entityId));
+    if(programRef)return cleanValue(programRef.entityId);
+    return "";
+  }
+
+  function resolveTaskDayId(task){
+    const typed=cleanValue(task?.dayId);
+    if(typed)return typed;
+    if(cleanValue(task?.entityType)==="day")return cleanValue(task?.entityId);
+    const refs=Array.isArray(task?.refs)?task.refs:[];
+    const dayRef=refs.find(item=>cleanValue(item?.entityType)==="day"&&cleanValue(item?.entityId));
+    return cleanValue(dayRef?.entityId);
+  }
+
+  function programItemRealId(item){
+    return cleanValue(item?.id||item?.programItemId||item?.stableId);
+  }
+
+  function listCustomerProgramItems(customer){
+    const days=Array.isArray(customer?.program)
+      ?customer.program
+      :(Array.isArray(customer?.programItems)?customer.programItems:[]);
+    const out=[];
+    days.forEach((day,dayIndex)=>{
+      const dayId=cleanValue(day?.id||day?.dayId||day?.date);
+      const items=Array.isArray(day?.items)
+        ?day.items
+        :(Array.isArray(day?.activities)?day.activities
+          :(Array.isArray(day?.programItems)?day.programItems:[]));
+      items.forEach((item,itemIndex)=>{
+        const id=programItemRealId(item);
+        if(!id)return;
+        out.push({
+          id,
+          item,
+          day,
+          dayId,
+          dayIndex,
+          itemIndex,
+          title:cleanValue(item?.title||item?.name),
+          date:cleanValue(day?.date||dayId),
+          time:cleanValue(item?.time||item?.startTime),
+          location:cleanValue(item?.location||item?.place||item?.address||item?.venueName||item?.meetingPoint),
+          meetingPoint:cleanValue(item?.meetingPoint),
+          destination:cleanValue(item?.location||item?.address||item?.venueName||item?.endAddress),
+          navigationUrl:cleanValue(item?.navigationUrl||item?.navUrl||item?.googleMapsUrl||item?.mapsUrl),
+          gpxFile:item?.gpxFile&&typeof item.gpxFile==="object"?item.gpxFile:null,
+          kmlFile:item?.kmlFile&&typeof item.kmlFile==="object"?item.kmlFile:null
+        });
+      });
+    });
+    return out;
+  }
+
+  function findCustomerProgramItem(customer,programItemId){
+    const id=cleanValue(programItemId);
+    if(!id||!customer)return null;
+    return listCustomerProgramItems(customer).find(entry=>entry.id===id)||null;
+  }
+
+  function programItemExists(customer,programItemId){
+    return Boolean(findCustomerProgramItem(customer,programItemId));
+  }
+
+  function travelAttachmentUrl(file){
+    if(!file||typeof file!=="object")return "";
+    const url=cleanValue(file.url||file.downloadUrl||file.downloadURL);
+    if(!url)return "";
+    if(/^(javascript|data|vbscript|file):/i.test(url))return "";
+    if(!/^https?:\/\//i.test(url))return "";
+    return url;
+  }
+
+  function programTravelActions(item,helpers={}){
+    const source=item&&typeof item==="object"?item:{};
+    const travelLib=helpers.travelLib||null;
+    if(travelLib?.programItemActions){
+      const actions=travelLib.programItemActions(source,helpers.userAgent);
+      const mapsHref=cleanValue(actions?.maps?.url)||"";
+      const navigationHref=cleanValue(actions?.navigation?.url)||"";
+      const gpxUrl=actions?.gpx?.show?cleanValue(actions.gpx.url):"";
+      const kmlUrl=actions?.kml?.show?cleanValue(actions.kml.url):"";
+      return {
+        mapsHref:normalizeWebsiteHref(mapsHref)||mapsHref,
+        navigationHref:normalizeWebsiteHref(navigationHref)||navigationHref,
+        gpxUrl:normalizeWebsiteHref(gpxUrl)||gpxUrl,
+        gpxFileName:cleanValue(actions?.gpx?.fileName),
+        kmlUrl:normalizeWebsiteHref(kmlUrl)||kmlUrl,
+        kmlFileName:cleanValue(actions?.kml?.fileName),
+        canOpenMaps:Boolean(actions?.maps?.show&&mapsHref),
+        canOpenNavigation:Boolean(actions?.navigation?.show&&navigationHref),
+        canOpenGpx:Boolean(gpxUrl),
+        canOpenKml:Boolean(kmlUrl)
+      };
+    }
+    const mapsQuery=cleanValue(source.location||source.address||source.venueName||source.meetingPoint);
+    const mapsHref=buildMapsSearchUrl(mapsQuery,helpers.mapSearchUrl);
+    const navigationHref=normalizeWebsiteHref(source.navigationUrl||source.googleMapsUrl)||"";
+    const gpxUrl=travelAttachmentUrl(source.gpxFile);
+    const kmlUrl=travelAttachmentUrl(source.kmlFile);
+    return {
+      mapsHref,
+      navigationHref,
+      gpxUrl,
+      gpxFileName:cleanValue(source.gpxFile?.fileName),
+      kmlUrl,
+      kmlFileName:cleanValue(source.kmlFile?.fileName),
+      canOpenMaps:Boolean(mapsHref),
+      canOpenNavigation:Boolean(navigationHref),
+      canOpenGpx:Boolean(gpxUrl),
+      canOpenKml:Boolean(kmlUrl)
+    };
+  }
+
+  function navigationActionLinks(draft,programItem,helpers={}){
+    const d=normalizeDraft(draft,"add_navigation");
+    const startQuery=d.navigationStart||cleanValue(programItem?.meetingPoint)||"";
+    const destQuery=d.navigationDestination||d.navigationQuery||cleanValue(programItem?.destination||programItem?.location)||"";
+    const mapsStartHref=buildMapsSearchUrl(startQuery,helpers.mapSearchUrl);
+    const mapsDestHref=buildMapsSearchUrl(destQuery,helpers.mapSearchUrl);
+    const travel=programTravelActions(programItem?.item||programItem||{},helpers);
+    return {
+      mapsStartHref,
+      mapsDestHref,
+      navigationHref:travel.navigationHref,
+      gpxUrl:travel.gpxUrl,
+      gpxFileName:travel.gpxFileName,
+      kmlUrl:travel.kmlUrl,
+      kmlFileName:travel.kmlFileName,
+      canOpenMapsStart:Boolean(mapsStartHref),
+      canOpenMapsDest:Boolean(mapsDestHref),
+      canOpenNavigation:travel.canOpenNavigation,
+      canOpenGpx:travel.canOpenGpx,
+      canOpenKml:travel.canOpenKml
+    };
+  }
+
+  function weatherContextFromTask(task){
+    const description=cleanValue(task?.description);
+    const title=cleanValue(task?.title);
+    const urgency=cleanValue(task?.urgency);
+    const impact=cleanValue(task?.impact);
+    const bits=[title,description,urgency&&`Dringlichkeit: ${urgency}`,impact&&`Impact: ${impact}`].filter(Boolean);
+    return bits.join(" — ").slice(0,600);
+  }
+
+  function seedProgramDraftFromTask(task,draft,moduleId="",programItem=null){
+    const module=cleanValue(moduleId)||cleanValue(task?.taskType);
+    const base=normalizeDraft(draft,module);
+    const entry=programItem&&typeof programItem==="object"?programItem:null;
+    const title=base.programItemTitle||cleanValue(entry?.title)||cleanValue(task?.title);
+    const date=base.programItemDate||cleanValue(entry?.date)||"";
+    const time=base.programItemTime||cleanValue(entry?.time)||"";
+    const next={
+      ...base,
+      programItemTitle:title,
+      programItemDate:date,
+      programItemTime:time,
+      note:base.note||cleanValue(task?.description).slice(0,500)
+    };
+    if(module==="add_navigation"){
+      next.navigationStart=base.navigationStart||cleanValue(entry?.meetingPoint)||cleanValue(entry?.location)||"";
+      next.navigationDestination=base.navigationDestination||cleanValue(entry?.destination||entry?.location)||"";
+      next.navigationQuery=base.navigationQuery||next.navigationDestination||"";
+      next.navigationNote=base.navigationNote||base.note||"";
+    }
+    if(module==="prepare_weather_alternative"){
+      next.alternativeTitle=base.alternativeTitle||(title?`Alternative: ${title}`:"");
+      next.alternativePlace=base.alternativePlace||"";
+      next.alternativeTime=base.alternativeTime||time||"";
+      if(!base.note)next.note=weatherContextFromTask(task).slice(0,500);
+    }
+    if(module==="reschedule_program"){
+      next.proposedDate=base.proposedDate||"";
+      next.proposedTime=base.proposedTime||"";
+      next.rescheduleReason=base.rescheduleReason||base.note||"";
+    }
+    return normalizeDraft(next,module);
+  }
+
+  function alternativeProgramSeedFromDraft(draft,task={}){
+    const d=normalizeDraft(draft,"prepare_weather_alternative");
+    return {
+      title:d.alternativeTitle||"Schlechtwetter-Alternative",
+      location:d.alternativePlace||"",
+      time:d.alternativeTime||"",
+      startTime:d.alternativeTime||"",
+      description:d.note||"",
+      notes:d.note||"",
+      internalNotes:[
+        "Aus AI-Aufgabe vorbereitet (Wetter-Alternative).",
+        cleanValue(task?.title)&&`Ursprung: ${cleanValue(task.title)}`,
+        d.programItemTitle&&`Bezug: ${d.programItemTitle}`
+      ].filter(Boolean).join("\n"),
+      category:"Aktivität",
+      weatherPlaceholder:"Schlechtwetter-Alternative"
+    };
+  }
+
+  function reschedulePrepareHint(draft,programItem){
+    const d=normalizeDraft(draft,"reschedule_program");
+    const currentDate=cleanValue(programItem?.date||d.programItemDate);
+    const currentTime=cleanValue(programItem?.time||d.programItemTime);
+    return {
+      currentDate,
+      currentTime,
+      proposedDate:d.proposedDate,
+      proposedTime:d.proposedTime,
+      reason:d.rescheduleReason||d.note,
+      mutatesProgram:false
+    };
+  }
+
   function resolveModule(taskType){
     const type=cleanValue(taskType);
     if(type&&MODULE_REGISTRY[type]){
@@ -851,7 +1200,20 @@
     if(set==="voucher"){
       return VOUCHER_STATUSES.map(value=>({value,label:VOUCHER_STATUS_LABELS[value]||value}));
     }
+    if(set==="navigation"){
+      return NAVIGATION_WORK_STATUSES.map(value=>({value,label:NAVIGATION_WORK_STATUS_LABELS[value]||value}));
+    }
+    if(set==="weather_alternative"){
+      return WEATHER_ALT_WORK_STATUSES.map(value=>({value,label:WEATHER_ALT_WORK_STATUS_LABELS[value]||value}));
+    }
+    if(set==="reschedule"){
+      return RESCHEDULE_WORK_STATUSES.map(value=>({value,label:RESCHEDULE_WORK_STATUS_LABELS[value]||value}));
+    }
     return WORK_STATUSES.map(value=>({value,label:WORK_STATUS_LABELS[value]||value}));
+  }
+
+  function programWorkStatusOptions(moduleId=""){
+    return workStatusOptions(moduleId);
   }
 
   function transferTypeOptions(){
@@ -895,6 +1257,12 @@
     DOCUMENT_WORK_STATUS_LABELS,
     VOUCHER_STATUSES,
     VOUCHER_STATUS_LABELS,
+    NAVIGATION_WORK_STATUSES,
+    NAVIGATION_WORK_STATUS_LABELS,
+    WEATHER_ALT_WORK_STATUSES,
+    WEATHER_ALT_WORK_STATUS_LABELS,
+    RESCHEDULE_WORK_STATUSES,
+    RESCHEDULE_WORK_STATUS_LABELS,
     ALL_WORK_STATUSES,
     TRANSFER_TYPES,
     BOOKING_KINDS,
@@ -919,6 +1287,7 @@
     normalizeWorkStatus,
     normalizeDocumentWorkStatus,
     normalizeVoucherStatus,
+    normalizeProgramWorkStatus,
     normalizeTransferType,
     normalizeBookingKind,
     normalizeDocumentKind,
@@ -939,6 +1308,18 @@
     documentExists,
     findCustomerDocument,
     seedDocumentDraftFromTask,
+    isProgramWorkspaceModule,
+    resolveTaskProgramItemId,
+    resolveTaskDayId,
+    listCustomerProgramItems,
+    findCustomerProgramItem,
+    programItemExists,
+    programTravelActions,
+    navigationActionLinks,
+    weatherContextFromTask,
+    seedProgramDraftFromTask,
+    alternativeProgramSeedFromDraft,
+    reschedulePrepareHint,
     resolveModule,
     listRegisteredTaskTypes,
     targetActionLabels,
@@ -949,6 +1330,7 @@
     ticketKindOptions,
     documentWorkStatusOptions,
     voucherStatusOptions,
+    programWorkStatusOptions,
     moduleSupportsServerPersist,
     workStatusesFor
   };

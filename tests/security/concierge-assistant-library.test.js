@@ -279,7 +279,7 @@ describe("smart concierge assistant", () => {
     assert.match(portalCss, /min-width:900px/);
     assert.doesNotMatch(portalJs, /openai|chatgpt|hallucin|Notification\(|pushManager/i);
     assert.match(adminHtml, /concierge-assistant-library\.js\?v=2/);
-    assert.match(adminHtml, /admin-v2\.js\?v=94/);
+    assert.match(adminHtml, /admin-v2\.js\?v=95/);
     assert.match(adminHtml, /redact-allowlist\.js\?v=13/);
     assert.match(adminJs, /\["concierge","Concierge"\]/);
     assert.match(adminJs, /function conciergeTabMarkup\(/);

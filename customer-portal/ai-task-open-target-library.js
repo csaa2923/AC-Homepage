@@ -379,6 +379,84 @@
     };
   }
 
+  function resolveProgramItemTarget(task,customer,{linkedProgramItemId=""}={}){
+    const typed=normalizeTypedIds(task);
+    if(!typed.customerId)return null;
+    if(task?.entityMissing===true){
+      return {
+        status:"blocked",
+        customerId:typed.customerId,
+        tab:"programm",
+        kind:"programItem",
+        executable:false,
+        message:"Das verknüpfte Programmziel fehlt (entityMissing)."
+      };
+    }
+    const fromRefs=arrayValue(task?.refs).find(item=>cleanValue(item?.entityType)==="programItem"&&cleanValue(item?.entityId));
+    const programItemId=cleanValue(linkedProgramItemId)
+      ||typed.programItemId
+      ||(typed.entityType==="programItem"?typed.entityId:"")
+      ||cleanValue(fromRefs?.entityId);
+    const dayId=typed.dayId||(typed.entityType==="day"?typed.entityId:"");
+    if(programItemId&&entityExists(customer,"programItem",programItemId)){
+      return {
+        status:"open",
+        customerId:typed.customerId,
+        programItemId,
+        dayId,
+        tab:"programm",
+        kind:"programItem",
+        executable:true
+      };
+    }
+    if(programItemId){
+      return {
+        status:"missing",
+        customerId:typed.customerId,
+        programItemId,
+        dayId,
+        tab:"programm",
+        kind:"programItem",
+        executable:false,
+        message:fallbackMessage("programItem",programItemId)
+      };
+    }
+    if(dayId&&entityExists(customer,"day",dayId)){
+      return {
+        status:"day",
+        customerId:typed.customerId,
+        programItemId:"",
+        dayId,
+        tab:"programm",
+        kind:"day",
+        executable:true,
+        message:"Kein Programmpunkt verknüpft — Reisetag wird geöffnet."
+      };
+    }
+    if(dayId){
+      return {
+        status:"missing",
+        customerId:typed.customerId,
+        programItemId:"",
+        dayId,
+        tab:"programm",
+        kind:"day",
+        executable:false,
+        message:fallbackMessage("day",dayId)
+      };
+    }
+    return {
+      status:"fallback",
+      customerId:typed.customerId,
+      programItemId:"",
+      dayId:"",
+      tab:"programm",
+      kind:"programItem",
+      executable:false,
+      message:"Kein Programmpunkt verknüpft. Programm-Tab öffnen."
+    };
+  }
+
   return {
     OPEN_ENTITY_KINDS,
     ENTITY_TABS,
@@ -395,6 +473,7 @@
     resolveOpenPlan,
     canOpenEntityTarget,
     resolveBookingTarget,
-    resolveDocumentTarget
+    resolveDocumentTarget,
+    resolveProgramItemTarget
   };
 });

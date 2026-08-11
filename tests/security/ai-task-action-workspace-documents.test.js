@@ -160,10 +160,10 @@ describe("AI task action workspace document modules (Ops Ready 6.7 / 6.7b)",()=>
     const uploadFn=js.match(/async function uploadAiTaskWorkspaceDocument\([\s\S]*?(?=\n  function )/)?.[0]||"";
     const openFn=js.match(/function openAiTaskWorkspaceDocument\([\s\S]*?(?=\n  async function uploadAiTaskWorkspaceDocument|\n  function )/)?.[0]||"";
 
-    assert.match(html,/ai-task-action-workspace\.js\?v=6/);
-    assert.match(html,/ai-task-open-target-library\.js\?v=3/);
-    assert.match(html,/admin-v2\.js\?v=94/);
-    assert.match(html,/admin-v2\.css\?v=73/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=7/);
+    assert.match(html,/ai-task-open-target-library\.js\?v=4/);
+    assert.match(html,/admin-v2\.js\?v=95/);
+    assert.match(html,/admin-v2\.css\?v=74/);
     assert.match(js,/function aiTaskDocumentModuleMarkup\(/);
     assert.match(js,/function aiTaskTicketModuleMarkup\(/);
     assert.match(js,/function aiTaskVoucherModuleMarkup\(/);

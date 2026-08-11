@@ -1432,7 +1432,10 @@
     const allDay=Boolean(item.allDay||item.fullDay||normalizeText(firstValue(item.time,item.startTime,item.timeStart,item.beginn,item.start))==="ganztagig");
     const startTime=normalizeProgramTime(firstValue(item.startTime,item.timeFrom,item.timeStart,item.beginn,item.start,item.time,item.hour));
     const endTime=normalizeProgramTime(firstValue(item.endTime,item.timeTo,item.timeEnd,item.ende,item.end));
+    const realId=cleanValue(firstValue(item.id,item.programItemId,item.stableId));
     return {
+      id:realId,
+      programItemId:realId,
       time:allDay?"":startTime,
       startTime:allDay?"":startTime,
       endTime:allDay?"":endTime,
@@ -1811,6 +1814,10 @@
       date:day.date,
       title:day.title||`Tag ${dayIndex+1}`,
       items:day.items.map((item,itemIndex)=>({
+        ...(cleanValue(item.id||item.programItemId)?{
+          id:cleanValue(item.id||item.programItemId),
+          programItemId:cleanValue(item.programItemId||item.id)
+        }:{}),
         time:item.allDay?"":item.time,
         startTime:item.allDay?"":item.startTime,
         endTime:item.allDay?"":item.endTime,
@@ -1993,6 +2000,30 @@
         if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
         await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(fullCustomer),AUTH_TIMEOUT_MS,"saveDraftCustomer");
         updateLocalCustomer(fullCustomer);
+        const pendingAlt=state.aiWorkspacePendingAlternative;
+        if(pendingAlt?.programItemId&&pendingAlt?.taskId){
+          const savedCustomer=fullCustomer;
+          const exists=aiActionWorkspaceLib?.programItemExists
+            ?aiActionWorkspaceLib.programItemExists(savedCustomer,pendingAlt.programItemId)
+            :false;
+          const task=findAiTaskByIds(pendingAlt.customerId,pendingAlt.taskId);
+          if(task&&exists){
+            const draft=readAiTaskWorkspaceDraft(task);
+            writeAiTaskWorkspaceDraft(task,{
+              ...draft,
+              linkedAlternativeProgramItemId:pendingAlt.programItemId,
+              open:Boolean(draft.open)
+            });
+            // Never auto-complete the AI task after creating an alternative.
+            if(cleanValue(task.status)!==cleanValue(pendingAlt.priorStatus||task.status)){
+              upsertAiTaskLocal({...task,status:pendingAlt.priorStatus||task.status});
+            }
+          }else if(task&&!exists){
+            const draft=readAiTaskWorkspaceDraft(task);
+            writeAiTaskWorkspaceDraft(task,{...draft,linkedAlternativeProgramItemId:""});
+          }
+          state.aiWorkspacePendingAlternative=null;
+        }
         resetProgramEditState({keepMessage:true});
         setProgramEditMessage("Programm erfolgreich gespeichert.","success");
         render();
@@ -4915,6 +4946,42 @@
     };
   }
 
+  function resolveAiTaskProgramItemTarget(task,{linkedProgramItemId=""}={}){
+    const customerId=cleanValue(task?.customerId);
+    if(!customerId||!task)return null;
+    const customer=aiTaskCustomerForOpenTarget(customerById(customerId));
+    if(aiOpenTargetLib?.resolveProgramItemTarget){
+      return aiOpenTargetLib.resolveProgramItemTarget(task,customer,{linkedProgramItemId});
+    }
+    const programItemId=cleanValue(linkedProgramItemId)
+      ||(aiActionWorkspaceLib?.resolveTaskProgramItemId
+        ?aiActionWorkspaceLib.resolveTaskProgramItemId(task,{})
+        :"");
+    if(programItemId&&aiActionWorkspaceLib?.programItemExists?.(customer,programItemId)){
+      return {status:"open",customerId,programItemId,tab:"programm",kind:"programItem",executable:true};
+    }
+    if(programItemId){
+      return {
+        status:"missing",
+        customerId,
+        programItemId,
+        tab:"programm",
+        kind:"programItem",
+        executable:false,
+        message:`Programmpunkt „${programItemId}“ wurde nicht gefunden. Programm-Tab wird geöffnet.`
+      };
+    }
+    return {
+      status:"fallback",
+      customerId,
+      programItemId:"",
+      tab:"programm",
+      kind:"programItem",
+      executable:false,
+      message:"Kein Programmpunkt verknüpft. Programm-Tab öffnen."
+    };
+  }
+
   function resolveAiTaskCustomerTarget(task){
     const customerId=cleanValue(task?.customerId);
     if(!customerId)return null;
@@ -5299,7 +5366,11 @@
         open:false,note:"",workStatus:"todo",restaurantName:"",place:"",phone:"",website:"",mapsQuery:"",linkedBookingId:"",updatedAt:"",
         transferType:"taxi",transferCompany:"",contactPerson:"",email:"",pickupPlace:"",dropoffPlace:"",transferDate:"",transferTime:"",flightNumber:"",
         bookingKind:"hotel",provider:"",bookingReference:"",
-        documentTitle:"",documentKind:"document",referenceNumber:"",documentDate:"",documentWorkStatus:"missing",voucherStatus:"pending",linkedDocumentId:""
+        documentTitle:"",documentKind:"document",referenceNumber:"",documentDate:"",documentWorkStatus:"missing",voucherStatus:"pending",linkedDocumentId:"",
+        navigationStart:"",navigationDestination:"",navigationQuery:"",navigationNote:"",
+        alternativeTitle:"",alternativePlace:"",alternativeTime:"",linkedAlternativeProgramItemId:"",
+        proposedDate:"",proposedTime:"",rescheduleReason:"",programWorkStatus:"todo",
+        programItemTitle:"",programItemDate:"",programItemTime:""
       };
   }
 
@@ -5422,6 +5493,30 @@
       draft.voucherStatus=valueOf("[data-ai-voucher-status]")||draft.voucherStatus||"pending";
       const linked=valueOf("[data-ai-document-linked-document]");
       if(linked)draft.linkedDocumentId=linked;
+    }
+    if(root.querySelector("[data-ai-navigation-module], [data-ai-weather-alt-module], [data-ai-reschedule-module]")){
+      draft.programWorkStatus=valueOf("[data-ai-program-work-status]")||draft.programWorkStatus||"todo";
+      draft.programItemTitle=valueOf("[data-ai-program-item-title]")||draft.programItemTitle;
+      draft.programItemDate=valueOf("[data-ai-program-item-date]")||draft.programItemDate;
+      draft.programItemTime=valueOf("[data-ai-program-item-time]")||draft.programItemTime;
+      draft.navigationStart=valueOf("[data-ai-navigation-start]");
+      draft.navigationDestination=valueOf("[data-ai-navigation-destination]");
+      draft.navigationQuery=valueOf("[data-ai-navigation-query]");
+      draft.navigationNote=valueOf("[data-ai-navigation-note]");
+      draft.alternativeTitle=valueOf("[data-ai-alternative-title]");
+      draft.alternativePlace=valueOf("[data-ai-alternative-place]");
+      draft.alternativeTime=valueOf("[data-ai-alternative-time]");
+      const linkedAlt=valueOf("[data-ai-alternative-linked-program]");
+      if(linkedAlt)draft.linkedAlternativeProgramItemId=linkedAlt;
+      draft.proposedDate=valueOf("[data-ai-proposed-date]");
+      draft.proposedTime=valueOf("[data-ai-proposed-time]");
+      draft.rescheduleReason=valueOf("[data-ai-reschedule-reason]");
+      if(root.querySelector("[data-ai-navigation-module],[data-ai-weather-alt-module]")){
+        draft.note=valueOf("[data-ai-task-workspace-note]")||draft.note;
+      }
+      if(root.querySelector("[data-ai-reschedule-module]")){
+        draft.note=valueOf("[data-ai-task-workspace-note]")||draft.rescheduleReason||draft.note;
+      }
     }
     return aiActionWorkspaceLib?.normalizeDraft?aiActionWorkspaceLib.normalizeDraft(draft):draft;
   }
@@ -5947,6 +6042,279 @@
     `;
   }
 
+  function aiTaskProgramContextCard(entry,programTarget){
+    if(entry){
+      return `<div class="ai-task-program-card" role="status">
+        <strong class="ai-task-program-card__title">${escapeHtml(entry.title||"Programmpunkt")}</strong>
+        <span class="ai-task-program-card__meta">${escapeHtml([entry.date,entry.time].filter(Boolean).join(" · ")||"Ohne Datum/Uhrzeit")}</span>
+        ${entry.location?`<span class="ai-task-program-card__meta">${escapeHtml(entry.location)}</span>`:""}
+        <span class="ai-task-program-card__meta">ID: <code>${escapeHtml(entry.id)}</code></span>
+      </div>`;
+    }
+    if(programTarget?.status==="missing"){
+      return `<p class="ai-task-workspace__hint warning" role="status">${escapeHtml(programTarget.message||"Verknüpfter Programmpunkt nicht mehr vorhanden.")}</p>`;
+    }
+    if(programTarget?.status==="blocked"){
+      return `<p class="ai-task-workspace__hint warning" role="status">${escapeHtml(programTarget.message||"Programmziel fehlt.")}</p>`;
+    }
+    return `<p class="ai-task-workspace__hint warning" role="status">Kein Programmpunkt verknüpft. Öffnen Sie das Programm und wählen Sie den passenden Punkt im Editor.</p>`;
+  }
+
+  function aiTaskNavigationModuleMarkup(task,draft){
+    const customer=customerById(cleanValue(task.customerId));
+    const programItemId=aiActionWorkspaceLib?.resolveTaskProgramItemId
+      ?aiActionWorkspaceLib.resolveTaskProgramItemId(task,draft)
+      :"";
+    const entry=aiActionWorkspaceLib?.findCustomerProgramItem
+      ?aiActionWorkspaceLib.findCustomerProgramItem(customer,programItemId)
+      :null;
+    const programTarget=resolveAiTaskProgramItemTarget(task,{linkedProgramItemId:programItemId});
+    const seeded=aiActionWorkspaceLib?.seedProgramDraftFromTask
+      ?aiActionWorkspaceLib.seedProgramDraftFromTask(task,draft,"add_navigation",entry)
+      :draft;
+    const statusOptions=(aiActionWorkspaceLib?.programWorkStatusOptions?.("add_navigation")||[]).map(item=>
+      `<option value="${escapeHtml(item.value)}" ${seeded.programWorkStatus===item.value?"selected":""}>${escapeHtml(item.label)}</option>`
+    ).join("");
+    const links=aiActionWorkspaceLib?.navigationActionLinks
+      ?aiActionWorkspaceLib.navigationActionLinks(seeded,entry,{
+        mapSearchUrl,
+        travelLib:window.ACTTravelActionsLibrary
+      })
+      :{};
+    const busy=Boolean(state.aiTasksBusy||state.aiTaskWorkspaceSaving);
+    const disabled=busy?' disabled aria-busy="true"':"";
+    const openProgramBtn=programTarget?.executable
+      ?`<button class="v2-button small primary ai-task-workspace__action-btn" type="button" data-ai-workspace-open-program${disabled}>Programmpunkt öffnen</button>`
+      :`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" data-ai-workspace-open-program${disabled}>Programm öffnen</button>`;
+    const mapsStart=links.canOpenMapsStart
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.mapsStartHref)}" target="_blank" rel="noopener noreferrer">Start in Maps</a>`
+      :"";
+    const mapsDest=links.canOpenMapsDest
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.mapsDestHref)}" target="_blank" rel="noopener noreferrer">Ziel in Maps</a>`
+      :"";
+    const navBtn=links.canOpenNavigation
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.navigationHref)}" target="_blank" rel="noopener noreferrer">Navigation öffnen</a>`
+      :"";
+    const gpxBtn=links.canOpenGpx
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.gpxUrl)}" target="_blank" rel="noopener noreferrer" download>${escapeHtml(links.gpxFileName?`GPX: ${links.gpxFileName}`:"GPX öffnen")}</a>`
+      :"";
+    const kmlBtn=links.canOpenKml
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.kmlUrl)}" target="_blank" rel="noopener noreferrer" download>${escapeHtml(links.kmlFileName?`KML: ${links.kmlFileName}`:"KML öffnen")}</a>`
+      :"";
+    return `
+      <div class="ai-task-navigation" data-ai-navigation-module>
+        <div class="ai-task-workspace__block">
+          <h4>Programmpunkt</h4>
+          ${aiTaskProgramContextCard(entry,programTarget)}
+          <div class="ai-task-workspace__grid">
+            <label class="ai-task-workspace__field">
+              <span>Programmpunkt</span>
+              <input type="text" data-ai-program-item-title maxlength="160" value="${escapeHtml(seeded.programItemTitle||"")}" aria-label="Programmpunkt Titel" readonly>
+            </label>
+            <label class="ai-task-workspace__field">
+              <span>Datum</span>
+              <input type="text" data-ai-program-item-date maxlength="40" value="${escapeHtml(seeded.programItemDate||"")}" aria-label="Programmpunkt Datum" readonly>
+            </label>
+            <label class="ai-task-workspace__field">
+              <span>Uhrzeit</span>
+              <input type="text" data-ai-program-item-time maxlength="40" value="${escapeHtml(seeded.programItemTime||"")}" aria-label="Programmpunkt Uhrzeit" readonly>
+            </label>
+          </div>
+        </div>
+        <div class="ai-task-workspace__block">
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <label class="ai-task-workspace__field">
+            <span>Status der Navigationsarbeit</span>
+            <select data-ai-program-work-status aria-label="Navigations-Arbeitsstand">${statusOptions}</select>
+          </label>
+          <p class="ai-task-workspace__hint">„Geprüft“ erledigt die AI-Aufgabe nicht automatisch.</p>
+        </div>
+        <div class="ai-task-workspace__grid">
+          <label class="ai-task-workspace__field">
+            <span>Startpunkt</span>
+            <input type="text" data-ai-navigation-start maxlength="200" value="${escapeHtml(seeded.navigationStart||"")}" aria-label="Startpunkt Navigation">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Ziel</span>
+            <input type="text" data-ai-navigation-destination maxlength="200" value="${escapeHtml(seeded.navigationDestination||"")}" aria-label="Ziel Navigation">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Maps-Suchtext / Zieladresse</span>
+            <input type="text" data-ai-navigation-query maxlength="200" value="${escapeHtml(seeded.navigationQuery||"")}" aria-label="Maps Suchtext">
+          </label>
+        </div>
+        <label class="ai-task-workspace__note">
+          <span>Navigationsnotiz</span>
+          <textarea data-ai-navigation-note rows="2" maxlength="2000" placeholder="Treffpunkt, Parkplatz, Hinweis…" aria-label="Navigationsnotiz">${escapeHtml(seeded.navigationNote||"")}</textarea>
+        </label>
+        <label class="ai-task-workspace__note">
+          <span>Arbeitsnotiz</span>
+          <textarea data-ai-task-workspace-note rows="2" maxlength="2000" placeholder="Offene Punkte zur Navigation…" aria-label="Notiz Navigation">${escapeHtml(seeded.note||"")}</textarea>
+        </label>
+        <div class="ai-task-workspace__block">
+          <h4>Aktionen</h4>
+          <div class="ai-task-workspace__action-row">${openProgramBtn}${mapsStart}${mapsDest}${navBtn}${gpxBtn}${kmlBtn}</div>
+          ${!links.canOpenGpx&&!links.canOpenKml?`<p class="ai-task-workspace__hint">Keine GPX-/KML-Datei am Programmpunkt hinterlegt.</p>`:""}
+        </div>
+      </div>
+    `;
+  }
+
+  function aiTaskWeatherAltModuleMarkup(task,draft){
+    const customer=customerById(cleanValue(task.customerId));
+    const programItemId=aiActionWorkspaceLib?.resolveTaskProgramItemId
+      ?aiActionWorkspaceLib.resolveTaskProgramItemId(task,draft)
+      :"";
+    const entry=aiActionWorkspaceLib?.findCustomerProgramItem
+      ?aiActionWorkspaceLib.findCustomerProgramItem(customer,programItemId)
+      :null;
+    const programTarget=resolveAiTaskProgramItemTarget(task,{linkedProgramItemId:programItemId});
+    const seeded=aiActionWorkspaceLib?.seedProgramDraftFromTask
+      ?aiActionWorkspaceLib.seedProgramDraftFromTask(task,draft,"prepare_weather_alternative",entry)
+      :draft;
+    const altId=cleanValue(seeded.linkedAlternativeProgramItemId);
+    const altEntry=altId&&aiActionWorkspaceLib?.findCustomerProgramItem
+      ?aiActionWorkspaceLib.findCustomerProgramItem(customer,altId)
+      :null;
+    const weatherContext=aiActionWorkspaceLib?.weatherContextFromTask
+      ?aiActionWorkspaceLib.weatherContextFromTask(task)
+      :cleanValue(task.description);
+    const statusOptions=(aiActionWorkspaceLib?.programWorkStatusOptions?.("prepare_weather_alternative")||[]).map(item=>
+      `<option value="${escapeHtml(item.value)}" ${seeded.programWorkStatus===item.value?"selected":""}>${escapeHtml(item.label)}</option>`
+    ).join("");
+    const mapsHref=mapSearchUrl(seeded.alternativePlace||seeded.programItemTitle||"");
+    const busy=Boolean(state.aiTasksBusy||state.aiTaskWorkspaceSaving);
+    const disabled=busy?' disabled aria-busy="true"':"";
+    const openOrigin=programTarget?.executable||programTarget?.status==="fallback"||programTarget?.status==="missing"
+      ?`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" data-ai-workspace-open-program${disabled}>Ursprünglichen Programmpunkt öffnen</button>`
+      :"";
+    const createAlt=`<button class="v2-button small primary ai-task-workspace__action-btn" type="button" data-ai-workspace-create-alternative${disabled}>Alternativ-Programmpunkt anlegen</button>`;
+    const openAlt=altEntry
+      ?`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" data-ai-workspace-open-alternative${disabled}>Bestehenden Alternativpunkt öffnen</button>`
+      :(altId?`<p class="ai-task-workspace__hint warning" role="status">Verknüpfter Alternativpunkt nicht mehr vorhanden.</p>`:"");
+    const mapsBtn=mapsHref
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(mapsHref)}" target="_blank" rel="noopener noreferrer">Maps öffnen</a>`
+      :"";
+    return `
+      <div class="ai-task-weather-alt" data-ai-weather-alt-module>
+        <input type="hidden" data-ai-alternative-linked-program value="${escapeHtml(altId)}">
+        <div class="ai-task-workspace__block">
+          <h4>Ursprünglicher Programmpunkt</h4>
+          ${aiTaskProgramContextCard(entry,programTarget)}
+          ${weatherContext?`<p class="ai-task-workspace__hint" role="status">${escapeHtml(weatherContext)}</p>`:""}
+        </div>
+        <div class="ai-task-workspace__block">
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <label class="ai-task-workspace__field">
+            <span>Status der Alternativarbeit</span>
+            <select data-ai-program-work-status aria-label="Wetter-Alternative Arbeitsstand">${statusOptions}</select>
+          </label>
+          <p class="ai-task-workspace__hint">„Bestätigt“ erledigt die AI-Aufgabe nicht automatisch.</p>
+        </div>
+        <div class="ai-task-workspace__grid">
+          <label class="ai-task-workspace__field">
+            <span>Alternativprogramm</span>
+            <input type="text" data-ai-alternative-title maxlength="160" value="${escapeHtml(seeded.alternativeTitle||"")}" aria-label="Alternativprogramm">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Ort</span>
+            <input type="text" data-ai-alternative-place maxlength="200" value="${escapeHtml(seeded.alternativePlace||"")}" aria-label="Ort Alternative">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Uhrzeit</span>
+            <input type="time" data-ai-alternative-time value="${escapeHtml(seeded.alternativeTime||"")}" aria-label="Uhrzeit Alternative">
+          </label>
+        </div>
+        <label class="ai-task-workspace__note">
+          <span>Notiz</span>
+          <textarea data-ai-task-workspace-note rows="3" maxlength="2000" placeholder="Warum diese Alternative, was ist vorbereitet…" aria-label="Notiz Wetter-Alternative">${escapeHtml(seeded.note||"")}</textarea>
+        </label>
+        <div class="ai-task-workspace__block">
+          <h4>Aktionen</h4>
+          <div class="ai-task-workspace__action-row">${openOrigin}${createAlt}${openAlt}${mapsBtn}</div>
+          <p class="ai-task-workspace__hint">Neue Alternativen werden nur über den bestehenden Programmeditor angelegt — keine Auto-Veröffentlichung.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function aiTaskRescheduleModuleMarkup(task,draft){
+    const customer=customerById(cleanValue(task.customerId));
+    const programItemId=aiActionWorkspaceLib?.resolveTaskProgramItemId
+      ?aiActionWorkspaceLib.resolveTaskProgramItemId(task,draft)
+      :"";
+    const entry=aiActionWorkspaceLib?.findCustomerProgramItem
+      ?aiActionWorkspaceLib.findCustomerProgramItem(customer,programItemId)
+      :null;
+    const programTarget=resolveAiTaskProgramItemTarget(task,{linkedProgramItemId:programItemId});
+    const seeded=aiActionWorkspaceLib?.seedProgramDraftFromTask
+      ?aiActionWorkspaceLib.seedProgramDraftFromTask(task,draft,"reschedule_program",entry)
+      :draft;
+    const hint=aiActionWorkspaceLib?.reschedulePrepareHint
+      ?aiActionWorkspaceLib.reschedulePrepareHint(seeded,entry)
+      :{};
+    const statusOptions=(aiActionWorkspaceLib?.programWorkStatusOptions?.("reschedule_program")||[]).map(item=>
+      `<option value="${escapeHtml(item.value)}" ${seeded.programWorkStatus===item.value?"selected":""}>${escapeHtml(item.label)}</option>`
+    ).join("");
+    const busy=Boolean(state.aiTasksBusy||state.aiTaskWorkspaceSaving);
+    const disabled=busy?' disabled aria-busy="true"':"";
+    const openProgram=`<button class="v2-button small primary ai-task-workspace__action-btn" type="button" data-ai-workspace-open-program${disabled}>Programmpunkt öffnen</button>`;
+    const prepareBtn=`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" data-ai-workspace-prepare-reschedule${disabled}>Änderung im Programmeditor vorbereiten</button>`;
+    return `
+      <div class="ai-task-reschedule" data-ai-reschedule-module>
+        <div class="ai-task-workspace__block">
+          <h4>Ursprünglicher Programmpunkt</h4>
+          ${aiTaskProgramContextCard(entry,programTarget)}
+          <div class="ai-task-workspace__grid">
+            <label class="ai-task-workspace__field">
+              <span>Bisheriges Datum</span>
+              <input type="text" data-ai-program-item-date maxlength="40" value="${escapeHtml(hint.currentDate||seeded.programItemDate||"")}" aria-label="Bisheriges Datum" readonly>
+            </label>
+            <label class="ai-task-workspace__field">
+              <span>Bisherige Uhrzeit</span>
+              <input type="text" data-ai-program-item-time maxlength="40" value="${escapeHtml(hint.currentTime||seeded.programItemTime||"")}" aria-label="Bisherige Uhrzeit" readonly>
+            </label>
+            <label class="ai-task-workspace__field">
+              <span>Programmpunkt</span>
+              <input type="text" data-ai-program-item-title maxlength="160" value="${escapeHtml(seeded.programItemTitle||"")}" aria-label="Programmpunkt" readonly>
+            </label>
+          </div>
+        </div>
+        <div class="ai-task-workspace__block">
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <label class="ai-task-workspace__field">
+            <span>Status der Verschiebung</span>
+            <select data-ai-program-work-status aria-label="Verschiebungs-Arbeitsstand">${statusOptions}</select>
+          </label>
+          <p class="ai-task-workspace__hint">Vorschläge ändern das echte Programm nicht automatisch.</p>
+        </div>
+        <div class="ai-task-workspace__grid">
+          <label class="ai-task-workspace__field">
+            <span>Vorgeschlagenes neues Datum</span>
+            <input type="date" data-ai-proposed-date value="${escapeHtml(seeded.proposedDate||"")}" aria-label="Vorgeschlagenes Datum">
+          </label>
+          <label class="ai-task-workspace__field">
+            <span>Vorgeschlagene neue Uhrzeit</span>
+            <input type="time" data-ai-proposed-time value="${escapeHtml(seeded.proposedTime||"")}" aria-label="Vorgeschlagene Uhrzeit">
+          </label>
+        </div>
+        <label class="ai-task-workspace__note">
+          <span>Begründung / Notiz</span>
+          <textarea data-ai-reschedule-reason rows="3" maxlength="2000" placeholder="Warum verschieben…" aria-label="Begründung Verschiebung">${escapeHtml(seeded.rescheduleReason||seeded.note||"")}</textarea>
+        </label>
+        <label class="ai-task-workspace__note" hidden>
+          <span>Notiz</span>
+          <textarea data-ai-task-workspace-note rows="1" maxlength="2000">${escapeHtml(seeded.note||seeded.rescheduleReason||"")}</textarea>
+        </label>
+        <div class="ai-task-workspace__block">
+          <h4>Aktionen</h4>
+          <div class="ai-task-workspace__action-row">${openProgram}${prepareBtn}</div>
+          <p class="ai-task-workspace__hint warning" role="status">Datum/Uhrzeit des echten Programmpunkts werden hier nicht verändert — nur bewusst im Programmeditor.</p>
+        </div>
+      </div>
+    `;
+  }
+
   function aiTaskActionWorkspaceMarkup(task){
     const module=resolveAiTaskActionModule(task);
     const view=currentAiTaskWorkspaceView(task);
@@ -5961,6 +6329,9 @@
     else if(module.moduleId==="upload_document")body=aiTaskDocumentModuleMarkup(task,draft);
     else if(module.moduleId==="upload_ticket")body=aiTaskTicketModuleMarkup(task,draft);
     else if(module.moduleId==="check_voucher")body=aiTaskVoucherModuleMarkup(task,draft);
+    else if(module.moduleId==="add_navigation")body=aiTaskNavigationModuleMarkup(task,draft);
+    else if(module.moduleId==="prepare_weather_alternative")body=aiTaskWeatherAltModuleMarkup(task,draft);
+    else if(module.moduleId==="reschedule_program")body=aiTaskRescheduleModuleMarkup(task,draft);
     const canServerPersist=aiActionWorkspaceLib?.moduleSupportsServerPersist
       ?aiActionWorkspaceLib.moduleSupportsServerPersist(module.moduleId)
       :module.moduleId==="reserve_restaurant";
@@ -6198,6 +6569,176 @@
       state.aiTasksMessageKind="error";
       return false;
     }
+    return true;
+  }
+
+  function openAiTaskWorkspaceProgram({
+    createAlternative=false,
+    openAlternative=false,
+    prepareReschedule=false
+  }={}){
+    const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
+    if(!task){
+      state.aiTasksMessage="Aufgabe nicht geladen.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    writeAiTaskWorkspaceDraft(task,{...draft,open:true});
+    const customerId=cleanValue(task.customerId);
+    const customer=customerById(customerId);
+    if(!customerId||!customer){
+      state.aiTasksMessage="Kunde für das Programm wurde nicht gefunden.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const priorStatus=cleanValue(task.status)||"open";
+    const originId=aiActionWorkspaceLib?.resolveTaskProgramItemId
+      ?aiActionWorkspaceLib.resolveTaskProgramItemId(task,draft)
+      :"";
+    const focusId=openAlternative
+      ?cleanValue(draft.linkedAlternativeProgramItemId)
+      :originId;
+    const programTarget=resolveAiTaskProgramItemTarget(task,{
+      linkedProgramItemId:focusId||originId
+    });
+
+    closeAiTaskDetail();
+    if(routeTo(`customers/${encodeURIComponent(customerId)}/programm`)===false){
+      state.aiTasksMessage="Programm konnte nicht geöffnet werden.";
+      state.aiTasksMessageKind="error";
+      return false;
+    }
+    const liveCustomer=customerById(customerId)||customer;
+    startProgramEdit(liveCustomer);
+
+    if(createAlternative){
+      const seed=aiActionWorkspaceLib?.alternativeProgramSeedFromDraft
+        ?aiActionWorkspaceLib.alternativeProgramSeedFromDraft(draft,task)
+        :{title:draft.alternativeTitle||"Schlechtwetter-Alternative"};
+      const newId=(typeof crypto!=="undefined"&&crypto.randomUUID)
+        ?crypto.randomUUID()
+        :`program-${Date.now()}`;
+      const originEntry=aiActionWorkspaceLib?.findCustomerProgramItem
+        ?aiActionWorkspaceLib.findCustomerProgramItem(liveCustomer,originId)
+        :null;
+      let dayIndex=0;
+      if(originEntry&&Number.isFinite(originEntry.dayIndex))dayIndex=originEntry.dayIndex;
+      const day=state.programEditDraft?.days?.[dayIndex];
+      if(!day){
+        state.aiTasksMessage="Programmtag für Alternative nicht gefunden.";
+        state.aiTasksMessageKind="warning";
+        return false;
+      }
+      day.items.push({
+        id:newId,
+        programItemId:newId,
+        time:seed.time||"",
+        startTime:seed.startTime||seed.time||"",
+        endTime:"",
+        allDay:false,
+        title:seed.title||"Schlechtwetter-Alternative",
+        description:seed.description||"",
+        category:seed.category||"Aktivität",
+        location:seed.location||"",
+        venueName:"",
+        locationAddress:seed.location||"",
+        locationCity:"",
+        locationCountry:"",
+        eventUrl:"",
+        websiteUrl:"",
+        contactName:"",
+        contactPhone:"",
+        contactEmail:"",
+        meetingPoint:"",
+        price:"",
+        currency:"EUR",
+        priority:"",
+        imageUrl:"",
+        ticketNumber:"",
+        voucherNumber:"",
+        weatherPlaceholder:seed.weatherPlaceholder||"Schlechtwetter-Alternative",
+        notes:seed.notes||"",
+        internalNotes:seed.internalNotes||"",
+        conciergeHint:"",
+        conciergePriority:"3",
+        conciergeReminderMinutes:"",
+        conciergeReminderActive:true,
+        ...emptyProgramTravelFields()
+      });
+      state.aiEntityFocus={kind:"programItem",entityId:newId,customerId};
+      writeAiTaskWorkspaceDraft(task,{
+        ...draft,
+        open:true,
+        linkedAlternativeProgramItemId:newId
+      });
+      state.aiWorkspacePendingAlternative={
+        taskId:aiTaskWorkspaceDraftId(task),
+        customerId,
+        programItemId:newId,
+        priorStatus
+      };
+      setProgramEditMessage("Ungespeicherte Aenderungen — Alternativpunkt vorbereitet","dirty");
+      renderCustomerDetail();
+      applyAiEntityFocus();
+      state.aiTasksMessage="Alternativ-Programmpunkt im Editor vorbereitet. Bitte bewusst speichern. Task-Status bleibt unverändert.";
+      state.aiTasksMessageKind="success";
+      return true;
+    }
+
+    if(prepareReschedule){
+      const entry=aiActionWorkspaceLib?.findCustomerProgramItem
+        ?aiActionWorkspaceLib.findCustomerProgramItem(liveCustomer,originId)
+        :null;
+      if(entry&&state.programEditDraft?.days?.[entry.dayIndex]?.items?.[entry.itemIndex]){
+        const item=state.programEditDraft.days[entry.dayIndex].items[entry.itemIndex];
+        const proposedNote=[
+          cleanValue(item.internalNotes),
+          draft.proposedDate&&`AI-Vorschlag Datum: ${draft.proposedDate}`,
+          draft.proposedTime&&`AI-Vorschlag Uhrzeit: ${draft.proposedTime}`,
+          (draft.rescheduleReason||draft.note)&&`Begründung: ${draft.rescheduleReason||draft.note}`
+        ].filter(Boolean).join("\n");
+        item.internalNotes=proposedNote;
+        // Do NOT mutate item.time / day.date automatically.
+        state.aiEntityFocus={kind:"programItem",entityId:entry.id,customerId};
+        setProgramEditMessage("Vorschlag nur als Notiz — Datum/Uhrzeit bitte bewusst anpassen","dirty");
+      }
+      renderCustomerDetail();
+      applyAiEntityFocus();
+      state.aiTasksMessage="Verschiebungsvorschlag im Programmeditor vorbereitet. Echtes Datum/Uhrzeit wurden nicht geändert.";
+      state.aiTasksMessageKind="success";
+      return true;
+    }
+
+    if(openAlternative&&focusId){
+      const alt=aiActionWorkspaceLib?.findCustomerProgramItem
+        ?aiActionWorkspaceLib.findCustomerProgramItem(liveCustomer,focusId)
+        :null;
+      if(!alt){
+        state.aiTasksMessage="Verknüpfter Alternativpunkt nicht mehr vorhanden. Programm wurde geöffnet.";
+        state.aiTasksMessageKind="warning";
+        writeAiTaskWorkspaceDraft(task,{...draft,open:true,linkedAlternativeProgramItemId:""});
+        renderCustomerDetail();
+        return true;
+      }
+      state.aiEntityFocus={kind:"programItem",entityId:focusId,customerId};
+      renderCustomerDetail();
+      applyAiEntityFocus();
+      return true;
+    }
+
+    if(programTarget?.status==="open"&&programTarget.programItemId){
+      state.aiEntityFocus={kind:"programItem",entityId:programTarget.programItemId,customerId};
+    }else if(programTarget?.status==="day"&&programTarget.dayId){
+      state.aiEntityFocus={kind:"day",entityId:programTarget.dayId,customerId};
+    }else if(programTarget?.message){
+      state.aiTasksMessage=programTarget.message;
+      state.aiTasksMessageKind="warning";
+    }
+    renderCustomerDetail();
+    applyAiEntityFocus();
     return true;
   }
 
@@ -10335,6 +10876,30 @@
         }
         input.value="";
         input.click();
+        return;
+      }
+      if(event.target.closest("[data-ai-workspace-open-program]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        openAiTaskWorkspaceProgram();
+        return;
+      }
+      if(event.target.closest("[data-ai-workspace-create-alternative]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        openAiTaskWorkspaceProgram({createAlternative:true});
+        return;
+      }
+      if(event.target.closest("[data-ai-workspace-open-alternative]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        openAiTaskWorkspaceProgram({openAlternative:true});
+        return;
+      }
+      if(event.target.closest("[data-ai-workspace-prepare-reschedule]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        openAiTaskWorkspaceProgram({prepareReschedule:true});
         return;
       }
       const aiTaskDetailGoto=event.target.closest("[data-ai-task-detail-goto]");

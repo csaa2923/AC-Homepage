@@ -1,4 +1,4 @@
-# AI Concierge Advisor (Ops Ready 6.7b)
+# AI Concierge Advisor (Ops Ready 6.8)
 
 `analyzeConciergeTrip` is an authenticated Firebase Callable Function for Admin V2.
 It loads the customer record server-side and only sends a minimized allowlist to
@@ -54,6 +54,9 @@ Task detail dialog
 | `upload_document` | `upload_document` | yes | yes (`updateConciergeAnalysisTaskAction`) |
 | `upload_ticket` | `upload_ticket` | yes | yes (`updateConciergeAnalysisTaskAction`) |
 | `check_voucher` | `check_voucher` | yes | yes (`updateConciergeAnalysisTaskAction`) |
+| `add_navigation` | `add_navigation` | yes | no (session draft only, Ops Ready 6.8) |
+| `prepare_weather_alternative` | `prepare_weather_alternative` | yes | no (session draft only, Ops Ready 6.8) |
+| `reschedule_program` | `reschedule_program` | yes | no (session draft only, Ops Ready 6.8) |
 | other / unknown | `unknown` / generic | no | no |
 
 Unknown `taskType` never fails silently: generic fallback lists target actions and
@@ -114,8 +117,11 @@ Work-status labels (never mixed with Task-Status):
 - Booking: Offen / Angefragt / **Bestätigt** / **Storniert** / Blockiert
 - Document / Ticket (`documentWorkStatus`): Fehlt / Angefragt / Erhalten / **Geprüft** / Blockiert
 - Voucher (`voucherStatus`): Ausstehend / **Gültig** / Unvollständig / Ungültig / Blockiert
+- Navigation (`programWorkStatus`): Offen / Recherchiert / **Vorbereitet** / **Geprüft** / Blockiert
+- Wetter-Alternative (`programWorkStatus`): Offen / Recherchiert / Vorbereitet / **Bestätigt** / Blockiert
+- Verschieben (`programWorkStatus`): Offen / Geprüft / Vorbereitet / **Bestätigt** / Blockiert
 
-Operational document/voucher statuses must **not** be written into server
+Operational document/voucher/program statuses must **not** be written into server
 `actionWorkspace.workStatus` (restaurant whitelist). Completing remains an explicit
 `updateConciergeAnalysisItemStatus` action.
 
@@ -127,6 +133,7 @@ Operational document/voucher statuses must **not** be written into server
 | Transfer | Local session draft only (Ops Ready 6.5/6.6) |
 | Booking | Local session draft only (Ops Ready 6.5/6.6) |
 | Document / Ticket / Voucher | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.7b) |
+| Navigation / Wetter-Alternative / Verschieben | Local session draft only (Ops Ready 6.8) |
 
 Transfer/Booking may open/create a booking through the existing booking editor;
 that does not persist Action Workspace fields to the backend.
@@ -157,6 +164,36 @@ Server `workStatus` stays restaurant-compatible (`todo` | `researched` |
 `requested` | `reserved` | `blocked`). Document/voucher progress uses the
 dedicated fields above — never auto-sets task `status` to `completed` /
 `dismissed`.
+
+### Program / Navigation draft fields (additive, local — Ops Ready 6.8)
+
+```text
+navigationStart, navigationDestination, navigationQuery, navigationNote,
+alternativeTitle, alternativePlace, alternativeTime, linkedAlternativeProgramItemId,
+proposedDate, proposedTime, rescheduleReason, programWorkStatus,
+programItemTitle, programItemDate, programItemTime, note
+```
+
+Reuse:
+
+- Open-Target: `resolveProgramItemTarget` / `openAiTaskEntityTarget` / program editor focus
+- Travel: `ACTTravelActionsLibrary.programItemActions` (Maps, Navigation, GPX, KML)
+- Program editor: `startProgramEdit`, `addProgramItem` (seeded alternative), no auto publish
+
+Reschedule drafts never mutate real program `date`/`time`; only internal notes + editor open.
+
+### Server persist root cause (6.8)
+
+`normalizeActionWorkspace` still requires restaurant `workStatus` and only allowlists
+restaurant + document fields. Program statuses (`prepared`, `checked`, `confirmed`,
+`reviewed`) would be rejected if sent as `workStatus`. Navigation/alternative fields
+would be stripped.
+
+**No second callable.** Minimal future extension (6.8b):
+
+1. Add `programWorkStatus` whitelist + navigation/alternative/reschedule allowlist fields
+2. Validate `linkedAlternativeProgramItemId` against customer program item ids
+3. Keep restaurant `workStatus: "todo"` for these modules (document-style)
 
 ## Action Workspace schema (server)
 

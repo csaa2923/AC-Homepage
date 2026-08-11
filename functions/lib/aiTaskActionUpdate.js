@@ -73,6 +73,7 @@ function actionWorkspacePatch(actionWorkspace,actorUid,now){
 
 /**
  * Persist actionWorkspace on aiTasks + aiTaskInbox without touching task status/lifecycle.
+ * Merges with previous actionWorkspace so one module save cannot wipe another family's fields.
  * @param {{db:any,customerId:string,taskId:string,actionWorkspace:object,actorUid:string,now?:string}} args
  */
 async function persistConciergeAnalysisTaskAction({
@@ -100,20 +101,6 @@ async function persistConciergeAnalysisTaskAction({
   const validBookingIds=await resolveValidBookingIds(db,customerId,linkedBookingId);
   const validDocumentIds=resolveValidDocumentIds(customerData,linkedDocumentId);
   const validProgramItemIds=resolveValidProgramItemIds(customerData,linkedAlternativeProgramItemId);
-  let actionWorkspace;
-  try{
-    actionWorkspace=normalizeActionWorkspace(actionWorkspaceInput,{
-      validBookingIds,
-      validDocumentIds,
-      validProgramItemIds,
-      moduleHint:text(actionWorkspaceInput?.module,40),
-      actorUid,
-      now:stamp
-    });
-  }catch(error){
-    if(!error.code)error.code="invalid-argument";
-    throw error;
-  }
 
   return db.runTransaction(async transaction=>{
     const taskSnap=await transaction.get(taskRef);
@@ -126,6 +113,21 @@ async function persistConciergeAnalysisTaskAction({
     if(task.customerId&&text(task.customerId,120)!==customerId){
       const error=new Error("Analyseaufgabe ist ungültig.");
       error.code="permission-denied";
+      throw error;
+    }
+    let actionWorkspace;
+    try{
+      actionWorkspace=normalizeActionWorkspace(actionWorkspaceInput,{
+        validBookingIds,
+        validDocumentIds,
+        validProgramItemIds,
+        moduleHint:text(actionWorkspaceInput?.module,40),
+        actorUid,
+        now:stamp,
+        previous:task.actionWorkspace&&typeof task.actionWorkspace==="object"?task.actionWorkspace:null
+      });
+    }catch(error){
+      if(!error.code)error.code="invalid-argument";
       throw error;
     }
     const priorStatus=text(task.status,20)||"open";

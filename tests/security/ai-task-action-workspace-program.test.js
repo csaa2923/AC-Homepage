@@ -237,9 +237,9 @@ describe("AI task action workspace program modules (Ops Ready 6.8 / 6.8b)",()=>{
     const openFn=js.match(/function openAiTaskWorkspaceProgram\([\s\S]*?(?=\n  function openAiTaskWorkspaceDocument|\n  async function )/)?.[0]||"";
     const saveProgramFn=js.match(/async function saveProgramEdit\([\s\S]*?(?=\n  function documentVisibleValue|\n  function )/)?.[0]||"";
 
-    assert.match(html,/ai-task-action-workspace\.js\?v=9/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=10/);
     assert.match(html,/ai-task-open-target-library\.js\?v=4/);
-    assert.match(html,/admin-v2\.js\?v=96/);
+    assert.match(html,/admin-v2\.js\?v=97/);
     assert.match(html,/admin-v2\.css\?v=75/);
     assert.match(html,/travel-actions-library\.js\?v=11/);
     assert.match(js,/function aiTaskNavigationModuleMarkup\(/);

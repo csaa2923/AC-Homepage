@@ -192,7 +192,7 @@
       moduleName:"Restaurant reservieren",
       context:"Recherche und Reservierung eines Restaurants für den Kunden.",
       targetActions:["entity_open","customer_tab","booking_editor"],
-      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      fallback:"Arbeitsstand und Aufgabenstatus sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
       persistServer:true,
       workStatusSet:"restaurant"
@@ -202,9 +202,9 @@
       moduleName:"Transfer bestätigen",
       context:"Transferzeiten und Bestätigung mit Anbieter oder Fahrer abstimmen.",
       targetActions:["entity_open","customer_tab","booking_editor"],
-      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      fallback:"Arbeitsstand und Aufgabenstatus sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
-      persistServer:false,
+      persistServer:true,
       workStatusSet:"transfer"
     },
     add_navigation:{
@@ -212,7 +212,7 @@
       moduleName:"Navigation hinterlegen",
       context:"Karten- und Navigationslinks für einen Programmpunkt ergänzen.",
       targetActions:["entity_open","customer_tab","program_focus"],
-      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      fallback:"Arbeitsstand und Aufgabenstatus sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
       persistServer:true,
       workStatusSet:"navigation"
@@ -222,7 +222,7 @@
       moduleName:"Ticket hochladen",
       context:"Fehlendes Ticket als Dokument im Kundenbereich hinterlegen.",
       targetActions:["entity_open","customer_tab","document_editor"],
-      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      fallback:"Arbeitsstand und Aufgabenstatus sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
       persistServer:true,
       workStatusSet:"document"
@@ -232,7 +232,7 @@
       moduleName:"Voucher prüfen",
       context:"Vorhandenen Voucher auf Gültigkeit und Zuordnung prüfen.",
       targetActions:["entity_open","customer_tab","document_editor"],
-      fallback:"Prüfstatus und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      fallback:"Prüfstatus und Aufgabenstatus sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
       persistServer:true,
       workStatusSet:"voucher"
@@ -242,7 +242,7 @@
       moduleName:"Wetter-Alternative vorbereiten",
       context:"Bei schlechtem Wetter eine Ersatzaktivität im Programm vorsehen.",
       targetActions:["entity_open","customer_tab","program_focus"],
-      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      fallback:"Arbeitsstand und Aufgabenstatus sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
       persistServer:true,
       workStatusSet:"weather_alternative"
@@ -252,7 +252,7 @@
       moduleName:"Programm verschieben",
       context:"Programmpunkt zeitlich anpassen oder neu einplanen.",
       targetActions:["entity_open","customer_tab","program_focus"],
-      fallback:"Arbeitsstand und Task-Status sind getrennt. Änderung am echten Programm nur über den Programmeditor.",
+      fallback:"Arbeitsstand und Aufgabenstatus sind getrennt. Änderung am echten Programm nur über den Programmeditor.",
       hasForm:true,
       persistServer:true,
       workStatusSet:"reschedule"
@@ -262,7 +262,7 @@
       moduleName:"Kundendaten vervollständigen",
       context:"Fehlende Stammdaten oder Reisedaten im bestehenden Kunden-/Reiseeditor nachtragen.",
       targetActions:["customer_tab","trip_editor","travellers_editor"],
-      fallback:"Arbeitsstand und Task-Status sind getrennt. Echte Kundendaten nur über die bestehenden Editoren ändern.",
+      fallback:"Arbeitsstand und Aufgabenstatus sind getrennt. Echte Kundendaten nur über die bestehenden Editoren ändern.",
       hasForm:true,
       persistServer:true,
       workStatusSet:"customer_data"
@@ -272,7 +272,7 @@
       moduleName:"Dokument hochladen",
       context:"Fehlendes Reisedokument hochladen und zuordnen.",
       targetActions:["entity_open","customer_tab","document_editor"],
-      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      fallback:"Arbeitsstand und Aufgabenstatus sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
       persistServer:true,
       workStatusSet:"document"
@@ -282,9 +282,9 @@
       moduleName:"Buchung bestätigen",
       context:"Offene Buchung prüfen und Bestätigung dokumentieren.",
       targetActions:["entity_open","customer_tab","booking_editor"],
-      fallback:"Arbeitsstand und Task-Status sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
+      fallback:"Arbeitsstand und Aufgabenstatus sind getrennt. „Erledigt“ bleibt eine bewusste Aktion.",
       hasForm:true,
-      persistServer:false,
+      persistServer:true,
       workStatusSet:"booking"
     },
     other:{
@@ -343,6 +343,14 @@
 
   function isCustomerDataWorkspaceModule(moduleId=""){
     return cleanValue(moduleId)==="complete_customer_data";
+  }
+
+  function isTransferWorkspaceModule(moduleId=""){
+    return cleanValue(moduleId)==="confirm_transfer";
+  }
+
+  function isBookingWorkspaceModule(moduleId=""){
+    return cleanValue(moduleId)==="confirm_booking";
   }
 
   function workStatusesFor(moduleId){
@@ -673,10 +681,15 @@
     const research=actionWorkspace.research&&typeof actionWorkspace.research==="object"
       ?actionWorkspace.research
       :{};
+    const mappedWorkStatus=isTransferWorkspaceModule(moduleId)
+      ?(actionWorkspace.transferWorkStatus||base.workStatus)
+      :(isBookingWorkspaceModule(moduleId)
+        ?(actionWorkspace.bookingWorkStatus||base.workStatus)
+        :(actionWorkspace.workStatus||base.workStatus));
     return normalizeDraft({
       ...base,
       open,
-      workStatus:actionWorkspace.workStatus||base.workStatus,
+      workStatus:mappedWorkStatus,
       restaurantName:research.name||actionWorkspace.restaurantName||actionWorkspace.name||base.restaurantName,
       place:research.place||actionWorkspace.place||base.place,
       phone:research.phone||actionWorkspace.phone||base.phone,
@@ -706,6 +719,17 @@
       customerDataWorkStatus:actionWorkspace.customerDataWorkStatus||base.customerDataWorkStatus,
       customerDataNote:actionWorkspace.customerDataNote??base.customerDataNote,
       missingDataItems:actionWorkspace.missingDataItems??base.missingDataItems,
+      transferType:actionWorkspace.transferType||base.transferType,
+      transferCompany:actionWorkspace.transferCompany||research.name||base.transferCompany,
+      contactPerson:actionWorkspace.contactPerson??base.contactPerson,
+      email:actionWorkspace.email??base.email,
+      pickupPlace:actionWorkspace.pickupPlace||research.place||base.pickupPlace,
+      dropoffPlace:actionWorkspace.dropoffPlace??base.dropoffPlace,
+      transferDate:actionWorkspace.transferDate??base.transferDate,
+      transferTime:actionWorkspace.transferTime??base.transferTime,
+      flightNumber:actionWorkspace.flightNumber??base.flightNumber,
+      bookingKind:actionWorkspace.bookingKind||base.bookingKind,
+      bookingReference:actionWorkspace.bookingReference??base.bookingReference,
       note:isCustomerDataWorkspaceModule(moduleId)
         ?(actionWorkspace.customerDataNote??actionWorkspace.note??base.customerDataNote??base.note)
         :(actionWorkspace.note??base.note),
@@ -762,11 +786,44 @@
       payload.customerDataNote=note;
       payload.missingDataItems=normalizeMissingDataItems(d.missingDataItems);
       payload.note=note;
-      // Keep restaurant-compatible server workStatus; ops progress in customerDataWorkStatus.
       payload.workStatus="todo";
-      // Never copy live PII into the workspace payload.
-      payload.research={name:"",place:"",phone:"",website:"",mapsQuery:""};
-      payload.linkedBookingId="";
+      // Do not clear research / linkedBookingId — server preserves other module families.
+      delete payload.research;
+      delete payload.linkedBookingId;
+    }
+    if(isTransferWorkspaceModule(module)){
+      payload.transferType=d.transferType;
+      payload.transferCompany=d.transferCompany;
+      payload.contactPerson=d.contactPerson;
+      payload.email=d.email;
+      payload.pickupPlace=d.pickupPlace;
+      payload.dropoffPlace=d.dropoffPlace;
+      payload.transferDate=d.transferDate;
+      payload.transferTime=d.transferTime;
+      payload.flightNumber=d.flightNumber;
+      payload.transferWorkStatus=TRANSFER_WORK_STATUSES.includes(d.workStatus)?d.workStatus:"todo";
+      payload.research={
+        name:d.transferCompany,
+        place:d.pickupPlace,
+        phone:d.phone,
+        website:d.website,
+        mapsQuery:""
+      };
+      payload.workStatus="todo";
+    }
+    if(isBookingWorkspaceModule(module)){
+      payload.bookingKind=d.bookingKind;
+      payload.provider=d.provider;
+      payload.bookingReference=d.bookingReference;
+      payload.bookingWorkStatus=BOOKING_WORK_STATUSES.includes(d.workStatus)?d.workStatus:"todo";
+      payload.research={
+        name:d.provider,
+        place:"",
+        phone:d.phone,
+        website:d.website,
+        mapsQuery:""
+      };
+      payload.workStatus="todo";
     }
     return payload;
   }
@@ -1638,6 +1695,8 @@
     seedDocumentDraftFromTask,
     isProgramWorkspaceModule,
     isCustomerDataWorkspaceModule,
+    isTransferWorkspaceModule,
+    isBookingWorkspaceModule,
     customerDataTripSnapshot,
     assessCustomerDataStand,
     deriveMissingDataItems,

@@ -122,7 +122,7 @@ describe("AI task action workspace polish (Ops Ready 6.6)",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     const html=readProjectFile("customer-portal/admin-v2.html");
     assert.match(html,/admin-v2\.css\?v=75/);
-    assert.match(html,/admin-v2\.js\?v=96/);
+    assert.match(html,/admin-v2\.js\?v=97/);
     assert.match(css,/\.ai-task-detail-panel\{[\s\S]*max-height:min\(90dvh/);
     assert.match(css,/\.ai-task-detail-body\{[\s\S]*overflow-y:auto/);
     assert.match(css,/\.ai-task-detail-body\{[\s\S]*overflow-x:hidden/);
@@ -141,8 +141,8 @@ describe("AI task action workspace polish (Ops Ready 6.6)",()=>{
     assert.match(statusFn,/Erledigt/);
     assert.match(statusFn,/Verworfen/);
     assert.match(statusFn,/Offen/);
-    assert.match(js,/Task-Status/);
-    assert.match(js,/nicht Task-Status/);
+    assert.match(js,/Aufgabenstatus/);
+    assert.match(js,/nicht Aufgabenstatus/);
     assert.match(js,/Reserviert/);
     assert.match(js,/„Bestätigt“ erledigt die AI-Aufgabe nicht automatisch/);
     assert.match(js,/„Bestätigt“ oder „Storniert“/);
@@ -178,8 +178,8 @@ describe("AI task action workspace polish (Ops Ready 6.6)",()=>{
   it("keeps restaurant / transfer / booking regressions and 6.1–6.5 wiring",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/ai-task-action-workspace\.js\?v=9/);
-    assert.match(html,/admin-v2\.js\?v=96/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=10/);
+    assert.match(html,/admin-v2\.js\?v=97/);
     assert.match(html,/admin-v2\.css\?v=75/);
     assert.match(js,/function aiTaskRestaurantModuleMarkup\(/);
     assert.match(js,/function aiTaskTransferModuleMarkup\(/);
@@ -187,11 +187,11 @@ describe("AI task action workspace polish (Ops Ready 6.6)",()=>{
     assert.match(js,/function openAiTaskWorkspaceBooking\(/);
     assert.match(js,/moduleSupportsServerPersist/);
     assert.equal(lib.moduleSupportsServerPersist("reserve_restaurant"),true);
-    assert.equal(lib.moduleSupportsServerPersist("confirm_transfer"),false);
-    assert.equal(lib.moduleSupportsServerPersist("confirm_booking"),false);
+    assert.equal(lib.moduleSupportsServerPersist("confirm_transfer"),true);
+    assert.equal(lib.moduleSupportsServerPersist("confirm_booking"),true);
     assert.match(readProjectFile("functions/AI-CONCIERGE.md"),/Deep-Link/);
     assert.match(readProjectFile("functions/AI-CONCIERGE.md"),/sessionStorage/);
     assert.match(readProjectFile("functions/AI-CONCIERGE.md"),/Status vs workStatus/);
-    assert.match(readProjectFile("functions/AI-CONCIERGE.md"),/Transfer\/Booking may open/);
+    assert.match(readProjectFile("functions/AI-CONCIERGE.md"),/Transfer\/Booking may still open/);
   });
 });

@@ -28,10 +28,11 @@ describe("AI task action workspace transfer and booking modules",()=>{
     const booking=lib.resolveModule("confirm_booking");
     assert.equal(transfer.hasForm,true);
     assert.equal(booking.hasForm,true);
-    assert.equal(transfer.persistServer,false);
-    assert.equal(booking.persistServer,false);
+    assert.equal(transfer.persistServer,true);
+    assert.equal(booking.persistServer,true);
     assert.equal(lib.moduleSupportsServerPersist("reserve_restaurant"),true);
-    assert.equal(lib.moduleSupportsServerPersist("confirm_transfer"),false);
+    assert.equal(lib.moduleSupportsServerPersist("confirm_transfer"),true);
+    assert.equal(lib.moduleSupportsServerPersist("confirm_booking"),true);
     assert.deepEqual(lib.workStatusesFor("confirm_transfer"),["todo","researched","requested","confirmed","blocked"]);
     assert.deepEqual(lib.workStatusesFor("confirm_booking"),["todo","requested","confirmed","cancelled","blocked"]);
     assert.equal(lib.normalizeWorkStatus("confirmed","confirm_transfer"),"confirmed");
@@ -162,8 +163,8 @@ describe("AI task action workspace transfer and booking modules",()=>{
     const bookingFn=js.match(/function aiTaskBookingModuleMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
     const openFn=js.match(/function openAiTaskWorkspaceBooking[\s\S]*?(?=\n  function )/)?.[0]||"";
 
-    assert.match(html,/ai-task-action-workspace\.js\?v=9/);
-    assert.match(html,/admin-v2\.js\?v=96/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=10/);
+    assert.match(html,/admin-v2\.js\?v=97/);
     assert.match(html,/admin-v2\.css\?v=75/);
     assert.match(js,/function aiTaskTransferModuleMarkup\(/);
     assert.match(js,/function aiTaskBookingModuleMarkup\(/);

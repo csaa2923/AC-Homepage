@@ -1,4 +1,4 @@
-# AI Concierge Advisor (Ops Ready 6.9)
+# AI Concierge Advisor (Ops Ready 6.10)
 
 `analyzeConciergeTrip` is an authenticated Firebase Callable Function for Admin V2.
 It loads the customer record server-side and only sends a minimized allowlist to
@@ -49,8 +49,8 @@ Task detail dialog
 | taskType | moduleId | Form | Server persist |
 | --- | --- | --- | --- |
 | `reserve_restaurant` | `reserve_restaurant` | yes | yes (`updateConciergeAnalysisTaskAction`) |
-| `confirm_transfer` | `confirm_transfer` | yes | no (session draft only) |
-| `confirm_booking` | `confirm_booking` | yes | no (session draft only) |
+| `confirm_transfer` | `confirm_transfer` | yes | yes (`updateConciergeAnalysisTaskAction`, Ops Ready 6.10) |
+| `confirm_booking` | `confirm_booking` | yes | yes (`updateConciergeAnalysisTaskAction`, Ops Ready 6.10) |
 | `upload_document` | `upload_document` | yes | yes (`updateConciergeAnalysisTaskAction`) |
 | `upload_ticket` | `upload_ticket` | yes | yes (`updateConciergeAnalysisTaskAction`) |
 | `check_voucher` | `check_voucher` | yes | yes (`updateConciergeAnalysisTaskAction`) |
@@ -93,9 +93,9 @@ Behaviour:
 - No cross-task leak: switching tasks reads that task’s draft only
 - Reload restores draft + open flag when the same task is opened again
 
-Load priority when opening a task:
+Load priority when opening a task (all server-persisted modules):
 
-1. Server `actionWorkspace` (restaurant / document / ticket / voucher)
+1. Server `actionWorkspace`
 2. Local `sessionStorage` draft only when newer than `lastActionAt` and content differs
 3. Defaults
 
@@ -104,18 +104,19 @@ truth until „Arbeitsstand speichern“. After a successful save the local draf
 updated from the server response. No silent overwrite of newer server data.
 No autosave-to-server on every keystroke.
 
-### Status vs workStatus
+### Status vs workStatus (Ops Ready 6.10)
 
 | Field | UI label | Meaning | Values |
 | --- | --- | --- | --- |
-| `status` | Task-Status | Inbox lifecycle | Offen / Erledigt / Verworfen (`open` \| `completed` \| `dismissed`) |
-| `actionWorkspace.workStatus` | Arbeitsstand | Module work progress | see below |
+| `status` | **Aufgabenstatus** | Inbox lifecycle | Offen / Erledigt / Verworfen (`open` \| `completed` \| `dismissed`) |
+| Module work fields | **Arbeitsstand** | Fachliche Bearbeitung | see below |
+| `actionWorkspace.workStatus` | Restaurant-kompatibel | Shared server whitelist | `todo` \| `researched` \| `requested` \| `reserved` \| `blocked` |
 
-Work-status labels (never mixed with Task-Status):
+Dedicated Arbeitsstand fields (never auto-map to Aufgabenstatus):
 
-- Restaurant: Offen / Recherchiert / Angefragt / **Reserviert** / Blockiert
-- Transfer: Offen / Recherchiert / Angefragt / **Bestätigt** / Blockiert
-- Booking: Offen / Angefragt / **Bestätigt** / **Storniert** / Blockiert
+- Restaurant (`workStatus`): Offen / Recherchiert / Angefragt / **Reserviert** / Blockiert
+- Transfer (`transferWorkStatus`): Offen / Recherchiert / Angefragt / **Bestätigt** / Blockiert
+- Booking (`bookingWorkStatus`): Offen / Angefragt / **Bestätigt** / **Storniert** / Blockiert
 - Document / Ticket (`documentWorkStatus`): Fehlt / Angefragt / Erhalten / **Geprüft** / Blockiert
 - Voucher (`voucherStatus`): Ausstehend / **Gültig** / Unvollständig / Ungültig / Blockiert
 - Navigation (`programWorkStatus`): Offen / Recherchiert / **Vorbereitet** / **Geprüft** / Blockiert
@@ -123,23 +124,30 @@ Work-status labels (never mixed with Task-Status):
 - Verschieben (`programWorkStatus`): Offen / Geprüft / Vorbereitet / **Bestätigt** / Blockiert
 - Kundendaten (`customerDataWorkStatus`): Offen / Kontaktiert / Wartet / Erhalten / Geprüft / **Vollständig** / Blockiert
 
-Operational document/voucher/program/customer-data statuses must **not** be written into server
-`actionWorkspace.workStatus` (restaurant whitelist). Completing remains an explicit
-`updateConciergeAnalysisItemStatus` action.
+`reserved` / `confirmed` / `checked` / `complete` / `valid` never set
+`task.status=completed`. `blocked` never sets `dismissed`. Completing remains an
+explicit `updateConciergeAnalysisItemStatus` action.
 
 ### Module persistence summary
 
 | Module | Persist |
 | --- | --- |
 | Restaurant | Local draft + server via `updateConciergeAnalysisTaskAction` |
-| Transfer | Local session draft only (Ops Ready 6.5/6.6) |
-| Booking | Local session draft only (Ops Ready 6.5/6.6) |
+| Transfer | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.10) |
+| Booking | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.10) |
 | Document / Ticket / Voucher | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.7b) |
 | Navigation / Wetter-Alternative / Verschieben | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.8b) |
 | Kundendaten (`complete_customer_data`) | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.9) |
 
-Transfer/Booking may open/create a booking through the existing booking editor;
-that does not persist Action Workspace fields to the backend.
+Transfer/Booking may still open/create a booking through the existing booking editor;
+creating a booking does not auto-complete the AI task.
+
+### Cross-module merge (Ops Ready 6.10)
+
+`normalizeActionWorkspace` receives the previous `actionWorkspace` and **preserves
+fields owned by other module families** when the current module does not own them.
+A Transfer/Booking/Restaurant save must not wipe document, program, or customer-data
+workspace fields. Unknown keys and PII copies remain stripped.
 
 Document / Ticket / Voucher reuse existing Admin V2 document open/upload
 (`ACTFirebaseStorage.uploadCustomerDocument` + `saveDraftCustomer`). On successful
@@ -203,6 +211,24 @@ Reuse:
 - Open-Target: `resolveProgramItemTarget` / program editor focus
 - Travel: `ACTTravelActionsLibrary.programItemActions` (Maps, Navigation, GPX, KML)
 - Program editor: `startProgramEdit`, seeded alternative create, no auto publish
+
+### Transfer / Booking fields (additive, server + local — Ops Ready 6.10)
+
+```text
+transferType, transferCompany, contactPerson, email, pickupPlace, dropoffPlace,
+transferDate, transferTime, flightNumber, transferWorkStatus,
+bookingKind, bookingReference, bookingWorkStatus, provider, note,
+research.phone / research.website (shared contact helpers)
+```
+
+`transferType` whitelist: `taxi` | `shuttle` | `private` | `rental` | `train` | `other`
+`bookingKind` whitelist: `hotel` | `restaurant` | `activity` | `spa` | `ticket` | `other`
+`transferWorkStatus`: `todo` | `researched` | `requested` | `confirmed` | `blocked`
+`bookingWorkStatus`: `todo` | `requested` | `confirmed` | `cancelled` | `blocked`
+
+Server `workStatus` stays restaurant-compatible (`todo` for these modules).
+Phone/email/website are validated; `javascript:` / `data:` rejected. Date `YYYY-MM-DD`,
+time `HH:MM`. `linkedBookingId` only for a real booking of the same customer.
 
 ### Customer data fields (additive, server + local — Ops Ready 6.9)
 
@@ -282,6 +308,19 @@ actionWorkspace: {
   customerDataWorkStatus: "todo" | "contacted" | "waiting" | "received" | "reviewed" | "complete" | "blocked" | "",
   customerDataNote: string,
   missingDataItems: string[],  // known keys only
+  transferType: string,
+  transferCompany: string,
+  contactPerson: string,
+  email: string,
+  pickupPlace: string,
+  dropoffPlace: string,
+  transferDate: string,
+  transferTime: string,
+  flightNumber: string,
+  transferWorkStatus: "todo" | "researched" | "requested" | "confirmed" | "blocked" | "",
+  bookingKind: string,
+  bookingReference: string,
+  bookingWorkStatus: "todo" | "requested" | "confirmed" | "cancelled" | "blocked" | "",
   lastActionAt: timestamp,
   lastActionBy: string
 }
@@ -293,8 +332,8 @@ Top-level companion fields written by the action callable:
 - `lastActionAt` / `lastActionBy`
 
 Server `workStatus` whitelist remains restaurant-compatible (`reserved`). Transfer
-`confirmed` / booking `cancelled` are client draft values until a future backend
-extension; they must not be sent through `updateConciergeAnalysisTaskAction` today.
+`confirmed` and booking `cancelled`/`confirmed` persist in dedicated fields
+`transferWorkStatus` / `bookingWorkStatus` (never auto-map to task lifecycle).
 
 Older restaurant-/document-only `actionWorkspace` records remain valid (additive fields).
 
@@ -319,12 +358,16 @@ Server checks:
 - Task exists under `customers/{customerId}/aiTasks/{taskId}`
 - Rejects cross-customer task ownership mismatches
 - `workStatus` whitelist (restaurant-compatible)
-- `documentWorkStatus` / `voucherStatus` / `programWorkStatus` whitelists when set
+- Module work-status whitelists when set (`documentWorkStatus`, `voucherStatus`,
+  `programWorkStatus`, `customerDataWorkStatus`, `transferWorkStatus`,
+  `bookingWorkStatus`)
+- Transfer/booking type/kind whitelists; phone/email/date/time normalization
 - String length limits; website only `http`/`https` (`javascript:` / `data:` blocked)
 - Navigation/program text fields strip dangerous schemes
 - `linkedBookingId` accepted only if `bookings/{id}` exists and `customerId` matches
 - `linkedDocumentId` accepted only if document exists on the same customer
 - `linkedAlternativeProgramItemId` accepted only if program item exists on the same customer
+- Cross-module merge: non-owned family fields preserved from previous workspace
 - Unknown fields are not copied through (allowlisted normalize); no tokens /
   storage paths / share URLs
 - Never mutates program `date`/`time` or task `status`/`lifecycle`
@@ -355,9 +398,22 @@ firebase functions:secrets:set OPENAI_API_KEY
 Optionally set `OPENAI_MODEL` server-side (default `gpt-4o-mini`).
 Do not deploy analyze before the secret is configured.
 
-## Deploy order
+## Deploy order (Ops Ready 6.10)
 
-1. Cloud Functions (`updateConciergeAnalysisTaskAction` + existing AI callables)
-2. Frontend (Admin V2: `firebase-service.js`, `ai-task-action-workspace.js`, `admin-v2.*`)
+1. Cloud Functions first: `updateConciergeAnalysisTaskAction` (merge + transfer/booking fields)
+2. Frontend / Vercel pins:
+   - `ai-task-action-workspace.js?v=10`
+   - `admin-v2.js?v=97`
+   - `admin-v2.css?v=75` (unchanged)
+   - `ai-task-open-target-library.js?v=4` (unchanged)
 
 No Firestore rules change required while AI task writes remain Callable-only.
+
+## Known limits (Ops Ready 6.10)
+
+- No new taskTypes; unknown types use generic fallback (no server persist)
+- No external Maps/Booking/Restaurant APIs; Maps/GPX remain travel-helper links
+- Booking create/open reuses existing Admin booking editor (no auto-create on save)
+- Workspace never auto-completes or dismisses the AI task
+- Soft open-targets (customer/trip/concierge/tab) are navigation only
+- Prod smoke of Admin UI still needs interactive admin login

@@ -730,8 +730,10 @@ describe("AI task action workspace persistence (backend)",()=>{
     assert.equal(ok.actionWorkspace.customerDataNote,"Alles da");
     assert.deepEqual(ok.actionWorkspace.missingDataItems,["arrival"]);
     assert.equal(ok.actionWorkspace.phone,undefined);
-    assert.equal(ok.actionWorkspace.email,undefined);
+    assert.equal(ok.actionWorkspace.email,"");
     assert.equal(ok.actionWorkspace.storagePath,undefined);
+    assert.equal(ok.actionWorkspace.research.phone,"");
+    assert.equal(ok.actionWorkspace.research.name,"");
     assert.equal(ok.status,"open");
     assert.equal(ok.lifecycle,"active");
     assert.equal(db._docs.get("customers/cust-a/aiTasks/task-cust").status,"open");
@@ -1003,8 +1005,8 @@ describe("AI task action workspace persistence (frontend)",()=>{
     const restaurantFn=js.match(/function aiTaskRestaurantModuleMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
 
     assert.match(html,/firebase-service\.js\?v=33/);
-    assert.match(html,/ai-task-action-workspace\.js\?v=9/);
-    assert.match(html,/admin-v2\.js\?v=96/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=10/);
+    assert.match(html,/admin-v2\.js\?v=97/);
     assert.match(html,/admin-v2\.css\?v=75/);
     assert.match(service,/httpsCallable\(functions,"updateConciergeAnalysisTaskAction"/);
     assert.match(service,/async function updateConciergeAnalysisTaskAction/);

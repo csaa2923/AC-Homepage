@@ -5615,7 +5615,7 @@
       <div class="ai-task-restaurant" data-ai-restaurant-module>
         <input type="hidden" data-ai-restaurant-linked-booking value="${escapeHtml(linkedBookingId||(bookingOk?bookingId:""))}">
         <div class="ai-task-workspace__block">
-          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Reservierungsarbeit</span>
             <select data-ai-restaurant-work-status aria-label="Arbeitsstand Restaurant">
@@ -5702,7 +5702,7 @@
       <div class="ai-task-transfer" data-ai-transfer-module>
         <input type="hidden" data-ai-transfer-linked-booking value="${escapeHtml(linkedBookingId||(bookingOk?bookingId:""))}">
         <div class="ai-task-workspace__block">
-          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Transferarbeit</span>
             <select data-ai-transfer-work-status aria-label="Arbeitsstand Transfer">${statusOptions}</select>
@@ -5810,7 +5810,7 @@
       <div class="ai-task-booking" data-ai-booking-module>
         <input type="hidden" data-ai-booking-linked-booking value="${escapeHtml(linkedBookingId||(bookingOk?bookingId:""))}">
         <div class="ai-task-workspace__block">
-          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Buchungsarbeit</span>
             <select data-ai-booking-work-status aria-label="Arbeitsstand Buchung">${statusOptions}</select>
@@ -5918,7 +5918,7 @@
       <div class="ai-task-document" data-ai-document-module>
         <input type="hidden" data-ai-document-linked-document value="${escapeHtml(actions.linkedDocumentId)}">
         <div class="ai-task-workspace__block">
-          <h4>Dokumentstatus <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Dokumentstatus <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Dokumentarbeit</span>
             <select data-ai-document-work-status aria-label="Dokumentstatus">${statusOptions}</select>
@@ -5963,7 +5963,7 @@
       <div class="ai-task-ticket" data-ai-ticket-module>
         <input type="hidden" data-ai-document-linked-document value="${escapeHtml(actions.linkedDocumentId)}">
         <div class="ai-task-workspace__block">
-          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Ticketarbeit</span>
             <select data-ai-document-work-status aria-label="Ticket-Arbeitsstand">${statusOptions}</select>
@@ -6013,7 +6013,7 @@
       <div class="ai-task-voucher" data-ai-voucher-module>
         <input type="hidden" data-ai-document-linked-document value="${escapeHtml(actions.linkedDocumentId)}">
         <div class="ai-task-workspace__block">
-          <h4>Prüfstatus <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Prüfstatus <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Voucherprüfung</span>
             <select data-ai-voucher-status aria-label="Voucher-Prüfstatus">${statusOptions}</select>
@@ -6131,7 +6131,7 @@
           </div>
         </div>
         <div class="ai-task-workspace__block">
-          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Navigationsarbeit</span>
             <select data-ai-program-work-status aria-label="Navigations-Arbeitsstand">${statusOptions}</select>
@@ -6213,7 +6213,7 @@
           ${weatherContext?`<p class="ai-task-workspace__hint" role="status">${escapeHtml(weatherContext)}</p>`:""}
         </div>
         <div class="ai-task-workspace__block">
-          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Alternativarbeit</span>
             <select data-ai-program-work-status aria-label="Wetter-Alternative Arbeitsstand">${statusOptions}</select>
@@ -6290,7 +6290,7 @@
           </div>
         </div>
         <div class="ai-task-workspace__block">
-          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Verschiebung</span>
             <select data-ai-program-work-status aria-label="Verschiebungs-Arbeitsstand">${statusOptions}</select>
@@ -6427,7 +6427,7 @@
             :`<p class="ai-task-workspace__hint warning">Abreise: keine Angaben vorhanden</p>`}
         </div>
         <div class="ai-task-workspace__block">
-          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Aufgabenstatus)</span></h4>
           <label class="ai-task-workspace__field">
             <span>Status der Kundendatenarbeit</span>
             <select data-ai-customer-data-work-status aria-label="Kundendaten-Arbeitsstand">${statusOptions}</select>
@@ -6876,7 +6876,7 @@
       setProgramEditMessage("Ungespeicherte Aenderungen — Alternativpunkt vorbereitet","dirty");
       renderCustomerDetail();
       applyAiEntityFocus();
-      state.aiTasksMessage="Alternativ-Programmpunkt im Editor vorbereitet. Bitte bewusst speichern. Task-Status bleibt unverändert.";
+      state.aiTasksMessage="Alternativ-Programmpunkt im Editor vorbereitet. Bitte bewusst speichern. Aufgabenstatus bleibt unverändert.";
       state.aiTasksMessageKind="success";
       return true;
     }
@@ -7055,7 +7055,7 @@
       };
       writeAiTaskWorkspaceDraft(task,aiActionWorkspaceLib?.touchDraft?aiActionWorkspaceLib.touchDraft(nextDraft):nextDraft);
       upsertAiTaskLocal({...task,status:priorStatus});
-      state.aiTasksMessage="Dokument hochgeladen. Arbeitsstand lokal aktualisiert — Task-Status unverändert.";
+      state.aiTasksMessage="Dokument hochgeladen. Arbeitsstand lokal aktualisiert — Aufgabenstatus unverändert.";
       state.aiTasksMessageKind="success";
       renderAiTaskDetail();
       return true;
@@ -7221,7 +7221,7 @@
               <div><dt>Kunde</dt><dd>${escapeHtml(customerName)}</dd></div>
               <div><dt>Priorität</dt><dd>${escapeHtml(String(task.priority??"—"))}</dd></div>
               <div><dt>Phase</dt><dd>${escapeHtml(aiTaskPhaseLabel(task))}</dd></div>
-              <div><dt>Task-Status</dt><dd>${escapeHtml(aiTaskStatusLabel(status))}</dd></div>
+              <div><dt>Aufgabenstatus</dt><dd>${escapeHtml(aiTaskStatusLabel(status))}</dd></div>
             </dl>
             ${aiTaskActionWorkspaceMarkup(task)}
             ${aiTaskDetailTechnicalMarkup(task,refs)}

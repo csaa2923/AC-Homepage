@@ -9,9 +9,17 @@ const DOCUMENT_WORK_STATUSES=new Set(["missing","requested","received","checked"
 const VOUCHER_STATUSES=new Set(["pending","valid","incomplete","invalid","blocked"]);
 const PROGRAM_WORK_STATUSES=new Set(["todo","researched","prepared","reviewed","confirmed","checked","blocked"]);
 const CUSTOMER_DATA_WORK_STATUSES=new Set(["todo","contacted","waiting","received","reviewed","complete","blocked"]);
+const TRANSFER_WORK_STATUSES=new Set(["todo","researched","requested","confirmed","blocked"]);
+const BOOKING_WORK_STATUSES=new Set(["todo","requested","confirmed","cancelled","blocked"]);
 const DOCUMENT_MODULES=new Set(["upload_document","upload_ticket","check_voucher"]);
 const PROGRAM_MODULES=new Set(["add_navigation","prepare_weather_alternative","reschedule_program"]);
 const CUSTOMER_DATA_MODULES=new Set(["complete_customer_data"]);
+const TRANSFER_MODULES=new Set(["confirm_transfer"]);
+const BOOKING_MODULES=new Set(["confirm_booking"]);
+const BOOKING_LINK_MODULES=new Set(["reserve_restaurant","confirm_transfer","confirm_booking"]);
+const RESEARCH_MODULES=new Set(["reserve_restaurant","confirm_transfer","confirm_booking"]);
+const TRANSFER_TYPES=new Set(["taxi","shuttle","private","rental","train","other"]);
+const BOOKING_KINDS=new Set(["hotel","restaurant","activity","spa","ticket","other"]);
 const MISSING_DATA_ITEM_KEYS=new Set([
   "contact",
   "phone",
@@ -263,33 +271,113 @@ function safePlainWorkspaceText(value,max=200){
   return cleaned;
 }
 
+function normalizeWorkspaceEmail(value,max=160){
+  const email=text(value,max);
+  if(!email)return "";
+  if(/^(javascript|data|vbscript):/i.test(email)){
+    const error=new Error("E-Mail ist ungültig.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    const error=new Error("E-Mail ist ungültig.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  return email;
+}
+
+function normalizeWorkspacePhone(value,max=40){
+  const phone=text(value,max);
+  if(!phone)return "";
+  if(/^(javascript|data|vbscript):/i.test(phone))return "";
+  const compact=phone.replace(/[^\d+]/g,"");
+  if(!compact)return "";
+  if(compact.startsWith("+")){
+    const digits=compact.slice(1).replace(/\D/g,"");
+    if(digits.length<6||digits.length>15)return "";
+    return `+${digits}`.slice(0,max);
+  }
+  const digits=compact.replace(/\D/g,"");
+  if(digits.length<6||digits.length>15)return "";
+  return digits.slice(0,max);
+}
+
+function normalizeWorkspaceDate(value){
+  const raw=text(value,40);
+  if(!raw)return "";
+  if(/^\d{4}-\d{2}-\d{2}$/.test(raw))return raw;
+  return "";
+}
+
+function normalizeWorkspaceTime(value){
+  const raw=text(value,40);
+  if(!raw)return "";
+  if(/^\d{2}:\d{2}$/.test(raw))return raw;
+  if(/^\d{2}:\d{2}:\d{2}$/.test(raw))return raw.slice(0,5);
+  return "";
+}
+
+function preserveField(owns,inbound,previousValue,max=200){
+  if(owns)return inbound;
+  return text(previousValue,max);
+}
+
+function preserveMissingItems(owns,inbound,previousValue){
+  if(owns)return inbound;
+  return normalizeMissingDataItems(previousValue);
+}
+
 function normalizeActionWorkspace(raw,{
   validBookingIds=null,
   validDocumentIds=null,
   validProgramItemIds=null,
   moduleHint="",
   actorUid="",
-  now=""
+  now="",
+  previous=null
 }={}){
   if(!raw||typeof raw!=="object"||Array.isArray(raw)){
     const error=new Error("actionWorkspace ist ungültig.");
     error.code="invalid-argument";
     throw error;
   }
+  const prev=previous&&typeof previous==="object"&&!Array.isArray(previous)?previous:{};
+  const prevResearch=prev.research&&typeof prev.research==="object"&&!Array.isArray(prev.research)?prev.research:{};
   const workStatus=text(raw.workStatus,20);
   if(!WORK_STATUSES.has(workStatus)){
     const error=new Error("Arbeitsstand ist ungültig.");
     error.code="invalid-argument";
     throw error;
   }
+  const moduleName=text(raw.module||moduleHint,40)||"other";
+  const ownsDocument=DOCUMENT_MODULES.has(moduleName);
+  const ownsProgram=PROGRAM_MODULES.has(moduleName);
+  const ownsCustomer=CUSTOMER_DATA_MODULES.has(moduleName);
+  const ownsTransfer=TRANSFER_MODULES.has(moduleName);
+  const ownsBooking=BOOKING_MODULES.has(moduleName);
+  const ownsResearch=RESEARCH_MODULES.has(moduleName);
+  const ownsBookingLink=BOOKING_LINK_MODULES.has(moduleName);
+  const ownsProvider=ownsDocument||ownsBooking;
+
   const researchRaw=raw.research&&typeof raw.research==="object"&&!Array.isArray(raw.research)?raw.research:{};
-  const research={
-    name:text(researchRaw.name??raw.restaurantName??raw.name,160),
-    place:text(researchRaw.place??raw.place,160),
-    phone:text(researchRaw.phone??raw.phone,40),
+  const inboundResearch={
+    name:text(researchRaw.name??raw.restaurantName??raw.name??raw.transferCompany,160),
+    place:text(researchRaw.place??raw.place??raw.pickupPlace,160),
+    phone:normalizeWorkspacePhone(researchRaw.phone??raw.phone,40),
     website:normalizeHttpUrl(researchRaw.website??raw.website,300),
     mapsQuery:text(researchRaw.mapsQuery??raw.mapsQuery,200)
   };
+  const research=ownsResearch
+    ?inboundResearch
+    :{
+      name:text(prevResearch.name,160),
+      place:text(prevResearch.place,160),
+      phone:text(prevResearch.phone,40),
+      website:text(prevResearch.website,300),
+      mapsQuery:text(prevResearch.mapsQuery,200)
+    };
+
   let linkedBookingId=text(raw.linkedBookingId,120);
   if(linkedBookingId){
     if(!(validBookingIds instanceof Set)||!validBookingIds.has(linkedBookingId)){
@@ -297,14 +385,15 @@ function normalizeActionWorkspace(raw,{
       error.code="invalid-argument";
       throw error;
     }
-  }else{
+  }else if(ownsBookingLink){
     linkedBookingId="";
+  }else{
+    linkedBookingId=text(prev.linkedBookingId,120);
   }
 
-  const moduleName=text(raw.module||moduleHint,40)||"other";
   const documentTitle=text(raw.documentTitle,160);
   const documentKind=text(raw.documentKind,40);
-  const provider=text(raw.provider,160);
+  const provider=text(raw.provider??(ownsBooking?raw.provider:""),160);
   const referenceNumber=text(raw.referenceNumber,120);
   const documentDate=text(raw.documentDate,40);
   const documentWorkStatus=text(raw.documentWorkStatus,20);
@@ -326,8 +415,10 @@ function normalizeActionWorkspace(raw,{
       error.code="invalid-argument";
       throw error;
     }
-  }else{
+  }else if(ownsDocument){
     linkedDocumentId="";
+  }else{
+    linkedDocumentId=text(prev.linkedDocumentId,120);
   }
 
   const programWorkStatus=text(raw.programWorkStatus,20);
@@ -353,8 +444,10 @@ function normalizeActionWorkspace(raw,{
       error.code="invalid-argument";
       throw error;
     }
-  }else{
+  }else if(ownsProgram){
     linkedAlternativeProgramItemId="";
+  }else{
+    linkedAlternativeProgramItemId=text(prev.linkedAlternativeProgramItemId,120);
   }
 
   const customerDataWorkStatus=text(raw.customerDataWorkStatus,20);
@@ -363,43 +456,110 @@ function normalizeActionWorkspace(raw,{
     error.code="invalid-argument";
     throw error;
   }
-  const customerDataNote=safePlainWorkspaceText(raw.customerDataNote??raw.note,2000);
+  const customerDataNote=safePlainWorkspaceText(raw.customerDataNote??(ownsCustomer?raw.note:""),2000);
   const missingDataItems=normalizeMissingDataItems(raw.missingDataItems);
+
+  // Validate transfer/booking fields only when that module owns the save — other modules
+  // must not fail or wipe foreign fields because of stray inbound keys.
+  let transferType="";
+  let transferWorkStatus="";
+  let transferCompany="";
+  let contactPerson="";
+  let email="";
+  let pickupPlace="";
+  let dropoffPlace="";
+  let transferDate="";
+  let transferTime="";
+  let flightNumber="";
+  if(ownsTransfer){
+    transferType=text(raw.transferType,40);
+    if(transferType&&!TRANSFER_TYPES.has(transferType)){
+      const error=new Error("Transfer-Typ ist ungültig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    if(!transferType)transferType="taxi";
+    transferWorkStatus=text(raw.transferWorkStatus,20);
+    if(transferWorkStatus&&!TRANSFER_WORK_STATUSES.has(transferWorkStatus)){
+      const error=new Error("Transfer-Arbeitsstand ist ungültig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    transferCompany=safePlainWorkspaceText(raw.transferCompany,160);
+    contactPerson=safePlainWorkspaceText(raw.contactPerson,160);
+    email=normalizeWorkspaceEmail(raw.email??researchRaw.email,160);
+    pickupPlace=safePlainWorkspaceText(raw.pickupPlace,200);
+    dropoffPlace=safePlainWorkspaceText(raw.dropoffPlace,200);
+    transferDate=normalizeWorkspaceDate(raw.transferDate);
+    transferTime=normalizeWorkspaceTime(raw.transferTime);
+    flightNumber=safePlainWorkspaceText(raw.flightNumber,40);
+  }
+
+  let bookingKind="";
+  let bookingWorkStatus="";
+  let bookingReference="";
+  if(ownsBooking){
+    bookingKind=text(raw.bookingKind,40);
+    if(bookingKind&&!BOOKING_KINDS.has(bookingKind)){
+      const error=new Error("Buchungsart ist ungültig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    if(!bookingKind)bookingKind="hotel";
+    bookingWorkStatus=text(raw.bookingWorkStatus,20);
+    if(bookingWorkStatus&&!BOOKING_WORK_STATUSES.has(bookingWorkStatus)){
+      const error=new Error("Buchungs-Arbeitsstand ist ungültig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    bookingReference=safePlainWorkspaceText(raw.bookingReference??raw.referenceNumber,120);
+  }
 
   const stamp=text(now,40)||new Date().toISOString();
   const actor=text(actorUid,128);
-  const keepProgram=PROGRAM_MODULES.has(moduleName);
-  const keepCustomer=CUSTOMER_DATA_MODULES.has(moduleName);
-  // Always return allowlisted keys only (unknown fields stripped).
+  // Allowlisted keys only. Module-owned fields update from inbound; other families preserve previous.
   return {
     module:moduleName,
     workStatus,
     note:text(raw.note,2000),
     research,
     linkedBookingId,
-    documentTitle:DOCUMENT_MODULES.has(moduleName)||documentTitle?documentTitle:"",
-    documentKind:DOCUMENT_MODULES.has(moduleName)||documentKind?documentKind:"",
-    provider:DOCUMENT_MODULES.has(moduleName)||provider?provider:"",
-    referenceNumber:DOCUMENT_MODULES.has(moduleName)||referenceNumber?referenceNumber:"",
-    documentDate:DOCUMENT_MODULES.has(moduleName)||documentDate?documentDate:"",
-    documentWorkStatus:DOCUMENT_MODULES.has(moduleName)||documentWorkStatus?documentWorkStatus:"",
-    voucherStatus:DOCUMENT_MODULES.has(moduleName)||voucherStatus?voucherStatus:"",
+    documentTitle:preserveField(ownsDocument,documentTitle,prev.documentTitle,160),
+    documentKind:preserveField(ownsDocument,documentKind,prev.documentKind,40),
+    provider:preserveField(ownsProvider,provider,prev.provider,160),
+    referenceNumber:preserveField(ownsDocument,referenceNumber,prev.referenceNumber,120),
+    documentDate:preserveField(ownsDocument,documentDate,prev.documentDate,40),
+    documentWorkStatus:preserveField(ownsDocument,documentWorkStatus,prev.documentWorkStatus,20),
+    voucherStatus:preserveField(ownsDocument,voucherStatus,prev.voucherStatus,20),
     linkedDocumentId,
-    navigationStart:keepProgram||navigationStart?navigationStart:"",
-    navigationDestination:keepProgram||navigationDestination?navigationDestination:"",
-    navigationQuery:keepProgram||navigationQuery?navigationQuery:"",
-    navigationNote:keepProgram||navigationNote?navigationNote:"",
-    alternativeTitle:keepProgram||alternativeTitle?alternativeTitle:"",
-    alternativePlace:keepProgram||alternativePlace?alternativePlace:"",
-    alternativeTime:keepProgram||alternativeTime?alternativeTime:"",
+    navigationStart:preserveField(ownsProgram,navigationStart,prev.navigationStart,200),
+    navigationDestination:preserveField(ownsProgram,navigationDestination,prev.navigationDestination,200),
+    navigationQuery:preserveField(ownsProgram,navigationQuery,prev.navigationQuery,200),
+    navigationNote:preserveField(ownsProgram,navigationNote,prev.navigationNote,2000),
+    alternativeTitle:preserveField(ownsProgram,alternativeTitle,prev.alternativeTitle,160),
+    alternativePlace:preserveField(ownsProgram,alternativePlace,prev.alternativePlace,200),
+    alternativeTime:preserveField(ownsProgram,alternativeTime,prev.alternativeTime,40),
     linkedAlternativeProgramItemId,
-    proposedDate:keepProgram||proposedDate?proposedDate:"",
-    proposedTime:keepProgram||proposedTime?proposedTime:"",
-    rescheduleReason:keepProgram||rescheduleReason?rescheduleReason:"",
-    programWorkStatus:keepProgram||programWorkStatus?programWorkStatus:"",
-    customerDataWorkStatus:keepCustomer||customerDataWorkStatus?customerDataWorkStatus:"",
-    customerDataNote:keepCustomer||customerDataNote?customerDataNote:"",
-    missingDataItems:keepCustomer?missingDataItems:[],
+    proposedDate:preserveField(ownsProgram,proposedDate,prev.proposedDate,40),
+    proposedTime:preserveField(ownsProgram,proposedTime,prev.proposedTime,40),
+    rescheduleReason:preserveField(ownsProgram,rescheduleReason,prev.rescheduleReason,2000),
+    programWorkStatus:preserveField(ownsProgram,programWorkStatus,prev.programWorkStatus,20),
+    customerDataWorkStatus:preserveField(ownsCustomer,customerDataWorkStatus,prev.customerDataWorkStatus,20),
+    customerDataNote:preserveField(ownsCustomer,customerDataNote,prev.customerDataNote,2000),
+    missingDataItems:preserveMissingItems(ownsCustomer,missingDataItems,prev.missingDataItems),
+    transferType:preserveField(ownsTransfer,transferType,prev.transferType,40),
+    transferCompany:preserveField(ownsTransfer,transferCompany,prev.transferCompany,160),
+    contactPerson:preserveField(ownsTransfer,contactPerson,prev.contactPerson,160),
+    email:preserveField(ownsTransfer,email,prev.email,160),
+    pickupPlace:preserveField(ownsTransfer,pickupPlace,prev.pickupPlace,200),
+    dropoffPlace:preserveField(ownsTransfer,dropoffPlace,prev.dropoffPlace,200),
+    transferDate:preserveField(ownsTransfer,transferDate,prev.transferDate,40),
+    transferTime:preserveField(ownsTransfer,transferTime,prev.transferTime,40),
+    flightNumber:preserveField(ownsTransfer,flightNumber,prev.flightNumber,40),
+    transferWorkStatus:preserveField(ownsTransfer,transferWorkStatus,prev.transferWorkStatus,20),
+    bookingKind:preserveField(ownsBooking,bookingKind,prev.bookingKind,40),
+    bookingReference:preserveField(ownsBooking,bookingReference,prev.bookingReference,120),
+    bookingWorkStatus:preserveField(ownsBooking,bookingWorkStatus,prev.bookingWorkStatus,20),
     lastActionAt:stamp,
     lastActionBy:actor
   };
@@ -531,9 +691,17 @@ module.exports={
   VOUCHER_STATUSES,
   PROGRAM_WORK_STATUSES,
   CUSTOMER_DATA_WORK_STATUSES,
+  TRANSFER_WORK_STATUSES,
+  BOOKING_WORK_STATUSES,
   DOCUMENT_MODULES,
   PROGRAM_MODULES,
   CUSTOMER_DATA_MODULES,
+  TRANSFER_MODULES,
+  BOOKING_MODULES,
+  BOOKING_LINK_MODULES,
+  RESEARCH_MODULES,
+  TRANSFER_TYPES,
+  BOOKING_KINDS,
   MISSING_DATA_ITEM_KEYS,
   normalizeMissingDataItems,
   canTransitionStatus,

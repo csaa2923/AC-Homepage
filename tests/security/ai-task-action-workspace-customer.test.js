@@ -163,8 +163,8 @@ describe("AI task action workspace customer data module (Ops Ready 6.9)",()=>{
       assert.equal(payload.customerDataWorkStatus,"complete");
       assert.equal(payload.customerDataNote,"Alles geprüft");
       assert.deepEqual(payload.missingDataItems,["arrival","email"]);
-      assert.equal(payload.research.phone,"");
-      assert.equal(payload.research.name,"");
+      assert.equal(payload.research,undefined);
+      assert.equal(payload.linkedBookingId,undefined);
       assert.doesNotMatch(JSON.stringify(payload),/"status":"completed"/);
       assert.doesNotMatch(JSON.stringify(payload),/\+43664|x@y\.z/);
 
@@ -260,7 +260,7 @@ describe("AI task action workspace customer data module (Ops Ready 6.9)",()=>{
     assert.equal(stripped.customerDataNote,"ok");
     assert.deepEqual(stripped.missingDataItems,["contact"]);
     assert.equal(stripped.phone,undefined);
-    assert.equal(stripped.email,undefined);
+    assert.equal(stripped.email,"");
     assert.equal(stripped.customerObject,undefined);
     assert.equal(stripped.storagePath,undefined);
     assert.equal(stripped.shareToken,undefined);
@@ -284,8 +284,8 @@ describe("AI task action workspace customer data module (Ops Ready 6.9)",()=>{
     const openFn=js.match(/function openAiTaskWorkspaceCustomerEditor[\s\S]*?(?=\n  function aiTaskActionWorkspaceMarkup|\n  function )/)?.[0]||"";
     const saveFn=js.match(/async function saveAiTaskWorkspaceAction[\s\S]*?(?=\n  function )/)?.[0]||"";
 
-    assert.match(html,/ai-task-action-workspace\.js\?v=9/);
-    assert.match(html,/admin-v2\.js\?v=96/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=10/);
+    assert.match(html,/admin-v2\.js\?v=97/);
     assert.match(html,/admin-v2\.css\?v=75/);
     assert.match(html,/ai-task-open-target-library\.js\?v=4/);
     assert.match(js,/function aiTaskCustomerDataModuleMarkup\(/);

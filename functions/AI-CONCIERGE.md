@@ -1,4 +1,4 @@
-# AI Concierge Advisor (Ops Ready 6.8b)
+# AI Concierge Advisor (Ops Ready 6.9)
 
 `analyzeConciergeTrip` is an authenticated Firebase Callable Function for Admin V2.
 It loads the customer record server-side and only sends a minimized allowlist to
@@ -57,6 +57,7 @@ Task detail dialog
 | `add_navigation` | `add_navigation` | yes | yes (`updateConciergeAnalysisTaskAction`, Ops Ready 6.8b) |
 | `prepare_weather_alternative` | `prepare_weather_alternative` | yes | yes (`updateConciergeAnalysisTaskAction`, Ops Ready 6.8b) |
 | `reschedule_program` | `reschedule_program` | yes | yes (`updateConciergeAnalysisTaskAction`, Ops Ready 6.8b) |
+| `complete_customer_data` | `complete_customer_data` | yes | yes (`updateConciergeAnalysisTaskAction`, Ops Ready 6.9) |
 | other / unknown | `unknown` / generic | no | no |
 
 Unknown `taskType` never fails silently: generic fallback lists target actions and
@@ -120,8 +121,9 @@ Work-status labels (never mixed with Task-Status):
 - Navigation (`programWorkStatus`): Offen / Recherchiert / **Vorbereitet** / **Geprüft** / Blockiert
 - Wetter-Alternative (`programWorkStatus`): Offen / Recherchiert / Vorbereitet / **Bestätigt** / Blockiert
 - Verschieben (`programWorkStatus`): Offen / Geprüft / Vorbereitet / **Bestätigt** / Blockiert
+- Kundendaten (`customerDataWorkStatus`): Offen / Kontaktiert / Wartet / Erhalten / Geprüft / **Vollständig** / Blockiert
 
-Operational document/voucher/program statuses must **not** be written into server
+Operational document/voucher/program/customer-data statuses must **not** be written into server
 `actionWorkspace.workStatus` (restaurant whitelist). Completing remains an explicit
 `updateConciergeAnalysisItemStatus` action.
 
@@ -134,6 +136,7 @@ Operational document/voucher/program statuses must **not** be written into serve
 | Booking | Local session draft only (Ops Ready 6.5/6.6) |
 | Document / Ticket / Voucher | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.7b) |
 | Navigation / Wetter-Alternative / Verschieben | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.8b) |
+| Kundendaten (`complete_customer_data`) | Local draft + server via `updateConciergeAnalysisTaskAction` (Ops Ready 6.9) |
 
 Transfer/Booking may open/create a booking through the existing booking editor;
 that does not persist Action Workspace fields to the backend.
@@ -201,6 +204,44 @@ Reuse:
 - Travel: `ACTTravelActionsLibrary.programItemActions` (Maps, Navigation, GPX, KML)
 - Program editor: `startProgramEdit`, seeded alternative create, no auto publish
 
+### Customer data fields (additive, server + local — Ops Ready 6.9)
+
+```text
+customerDataWorkStatus, customerDataNote, missingDataItems, note
+```
+
+`customerDataWorkStatus` whitelist:
+
+`todo` | `contacted` | `waiting` | `received` | `reviewed` | `complete` | `blocked`
+
+Server `workStatus` stays restaurant-compatible (`todo` for this module).
+`complete` / `blocked` never auto-set task `status` to `completed` / `dismissed`.
+
+`missingDataItems` is an optional list of known keys only:
+
+`contact` | `phone` | `email` | `arrival` | `departure` | `travellers` |
+`children` | `trip_dates` | `trip_name` | `region` | `requirements`
+
+Keys are derived from real customer/trip emptiness (and known insight ids such as
+`arrival-details-missing`). Free-form AI object graphs are never persisted.
+
+**AI task ≠ workspace work status ≠ real customer data.**
+
+The workspace stores operational progress only. It must **not** copy:
+
+- full customer objects
+- phone / email / address / traveller lists as workspace copies
+- tokens, share links, storage paths
+
+Live contact display and call/mail/WhatsApp actions read the current customer
+record at render time. WhatsApp uses the existing
+`ACTAdminV2Communication` helpers only when a valid number exists.
+
+Real customer/trip/traveller edits go exclusively through existing Admin V2
+editors (`startCustomerEdit`, `startTripEdit`, optionally `startConciergeEdit`)
+after the workspace draft is saved locally. Soft open-targets
+(customer / trip / concierge) remain tab navigation and are not worsened.
+
 ## Action Workspace schema (server)
 
 Optional object on AI tasks (`customers/{customerId}/aiTasks/{taskId}` and inbox mirror):
@@ -238,6 +279,9 @@ actionWorkspace: {
   proposedTime: string,   // suggestion only — does not mutate program
   rescheduleReason: string,
   programWorkStatus: "todo" | "researched" | "prepared" | "reviewed" | "confirmed" | "checked" | "blocked" | "",
+  customerDataWorkStatus: "todo" | "contacted" | "waiting" | "received" | "reviewed" | "complete" | "blocked" | "",
+  customerDataNote: string,
+  missingDataItems: string[],  // known keys only
   lastActionAt: timestamp,
   lastActionBy: string
 }

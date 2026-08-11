@@ -5518,6 +5518,15 @@
         draft.note=valueOf("[data-ai-task-workspace-note]")||draft.rescheduleReason||draft.note;
       }
     }
+    if(root.querySelector("[data-ai-customer-data-module]")){
+      draft.customerDataWorkStatus=valueOf("[data-ai-customer-data-work-status]")||draft.customerDataWorkStatus||"todo";
+      draft.customerDataNote=valueOf("[data-ai-customer-data-note]")||draft.customerDataNote||"";
+      draft.note=draft.customerDataNote;
+      const missingRaw=valueOf("[data-ai-customer-data-missing]");
+      if(missingRaw){
+        draft.missingDataItems=missingRaw.split(",").map(item=>cleanValue(item)).filter(Boolean);
+      }
+    }
     return aiActionWorkspaceLib?.normalizeDraft?aiActionWorkspaceLib.normalizeDraft(draft):draft;
   }
 
@@ -6315,6 +6324,175 @@
     `;
   }
 
+  function aiTaskCustomerDataStandRow(item){
+    const stateLabel=item.state==="present"?"vorhanden":"prüfen";
+    const tone=item.state==="present"?"ok":"warn";
+    return `<div class="ai-task-customer-data__stand-row" data-stand="${escapeHtml(tone)}">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(stateLabel)}</strong>
+    </div>`;
+  }
+
+  function aiTaskCustomerDataModuleMarkup(task,draft){
+    const customer=customerById(cleanValue(task.customerId));
+    const trip=customer?buildTripViewModel(customer):{};
+    const assessment=aiActionWorkspaceLib?.assessCustomerDataStand
+      ?aiActionWorkspaceLib.assessCustomerDataStand(customer||{},trip)
+      :null;
+    const snap=assessment?.snapshot||{};
+    const missing=aiActionWorkspaceLib?.deriveMissingDataItems
+      ?aiActionWorkspaceLib.deriveMissingDataItems(customer||{},trip,task)
+      :[];
+    const seeded=aiActionWorkspaceLib?.normalizeDraft
+      ?aiActionWorkspaceLib.normalizeDraft({
+        ...draft,
+        customerDataNote:draft.customerDataNote||draft.note||"",
+        missingDataItems:Array.isArray(draft.missingDataItems)&&draft.missingDataItems.length
+          ?draft.missingDataItems
+          :missing
+      },"complete_customer_data")
+      :draft;
+    const needHint=aiActionWorkspaceLib?.customerDataNeedHint
+      ?aiActionWorkspaceLib.customerDataNeedHint(task)
+      :"Vom AI Concierge als zu vervollständigen erkannt";
+    const missingLabels=aiActionWorkspaceLib?.missingDataItemLabels
+      ?aiActionWorkspaceLib.missingDataItemLabels(seeded.missingDataItems||missing)
+      :[];
+    const comm=window.ACTAdminV2Communication||null;
+    const links=aiActionWorkspaceLib?.customerDataContactLinks
+      ?aiActionWorkspaceLib.customerDataContactLinks(customer||{},{
+        analyzeWhatsappNumber:comm?.analyzeWhatsappNumber,
+        buildWhatsappUrl:comm?.buildWhatsappUrl
+      })
+      :{canCall:false,canMail:false,canWhatsapp:false};
+    const statusOptions=(aiActionWorkspaceLib?.customerDataWorkStatusOptions?.()||[]).map(item=>
+      `<option value="${escapeHtml(item.value)}" ${seeded.customerDataWorkStatus===item.value?"selected":""}>${escapeHtml(item.label)}</option>`
+    ).join("");
+    const busy=Boolean(state.aiTasksBusy||state.aiTaskWorkspaceSaving);
+    const disabled=busy?' disabled aria-busy="true"':"";
+    const travellersText=[
+      snap.adults!==""&&snap.adults!=null?`${snap.adults} Erwachsene`:"",
+      snap.children!==""&&snap.children!=null?`${snap.children} Kinder`:"",
+      Array.isArray(snap.childAges)&&snap.childAges.length?`Alter: ${snap.childAges.join(", ")}`:""
+    ].filter(Boolean).join(" · ")||(snap.companions||"");
+    const contactBits=[
+      links.phone?`Tel. ${links.phone}`:"",
+      links.email?links.email:""
+    ].filter(Boolean).join(" · ");
+    const callBtn=links.canCall
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.phoneHref)}" data-ai-customer-data-call>Anrufen</a>`
+      :"";
+    const mailBtn=links.canMail
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.mailHref)}" data-ai-customer-data-mail>E-Mail</a>`
+      :"";
+    const waBtn=links.canWhatsapp
+      ?`<a class="v2-button soft small ai-task-workspace__action-btn" href="${escapeHtml(links.whatsappHref)}" target="_blank" rel="noopener noreferrer" data-ai-customer-data-whatsapp>WhatsApp</a>`
+      :"";
+    const editCustomer=`<button class="v2-button small primary ai-task-workspace__action-btn" type="button" data-ai-workspace-edit-customer${disabled}>Kundendaten bearbeiten</button>`;
+    const editTrip=`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" data-ai-workspace-edit-trip${disabled}>Reisedaten bearbeiten</button>`;
+    const editTravellers=`<button class="v2-button soft small ai-task-workspace__action-btn" type="button" data-ai-workspace-edit-travellers${disabled}>Reisende bearbeiten</button>`;
+    const standRows=assessment
+      ?[assessment.contact,assessment.trip,assessment.travellers,assessment.arrival,assessment.departure]
+        .map(aiTaskCustomerDataStandRow).join("")
+      :"";
+    const missingMarkup=missingLabels.length
+      ?`<ul class="ai-task-customer-data__missing">${missingLabels.map(item=>`<li>${escapeHtml(item.label)}</li>`).join("")}</ul>`
+      :`<p class="ai-task-workspace__hint" role="status">Keine einzelnen fehlenden Felder sicher ableitbar — bitte Hinweis und Editor prüfen.</p>`;
+    return `
+      <div class="ai-task-customer-data" data-ai-customer-data-module>
+        <input type="hidden" data-ai-customer-data-missing value="${escapeHtml((seeded.missingDataItems||missing).join(","))}">
+        <div class="ai-task-workspace__block">
+          <h4>Erkannter Bedarf</h4>
+          <p class="ai-task-workspace__hint" role="status">${escapeHtml(needHint)}</p>
+          ${missingMarkup}
+        </div>
+        <div class="ai-task-workspace__block">
+          <h4>Kundenkontext</h4>
+          <div class="ai-task-customer-data__context">
+            <p><span>Kunde</span><strong>${escapeHtml(snap.customerName||cleanValue(task.customerId)||"—")}</strong></p>
+            ${snap.period?`<p><span>Reisezeitraum</span><strong>${escapeHtml(snap.period)}</strong></p>`:""}
+            ${travellersText?`<p><span>Reisende</span><strong>${escapeHtml(travellersText)}</strong></p>`:""}
+            ${contactBits?`<p><span>Kontakt</span><strong>${escapeHtml(contactBits)}</strong></p>`:""}
+            ${snap.occasion?`<p><span>Anlass</span><strong>${escapeHtml(snap.occasion)}</strong></p>`:""}
+          </div>
+        </div>
+        <div class="ai-task-workspace__block">
+          <h4>Aktueller Stand</h4>
+          <div class="ai-task-customer-data__stand">${standRows}</div>
+          ${(snap.arrivalType||snap.arrivalText||snap.arrivalTime||snap.flight||snap.train)
+            ?`<p class="ai-task-workspace__hint">Anreise: ${escapeHtml([snap.arrivalType,snap.arrivalText,snap.arrivalTime,snap.flight,snap.train].filter(Boolean).join(" · "))}</p>`
+            :`<p class="ai-task-workspace__hint warning">Anreise: keine Angaben vorhanden</p>`}
+          ${(snap.departureType||snap.departureTime)
+            ?`<p class="ai-task-workspace__hint">Abreise: ${escapeHtml([snap.departureType,snap.departureTime].filter(Boolean).join(" · "))}</p>`
+            :`<p class="ai-task-workspace__hint warning">Abreise: keine Angaben vorhanden</p>`}
+        </div>
+        <div class="ai-task-workspace__block">
+          <h4>Arbeitsstand <span class="ai-task-workspace__sep">(nicht Task-Status)</span></h4>
+          <label class="ai-task-workspace__field">
+            <span>Status der Kundendatenarbeit</span>
+            <select data-ai-customer-data-work-status aria-label="Kundendaten-Arbeitsstand">${statusOptions}</select>
+          </label>
+          <p class="ai-task-workspace__hint">„Vollständig“ erledigt die AI-Aufgabe nicht automatisch.</p>
+        </div>
+        <label class="ai-task-workspace__note">
+          <span>Notiz</span>
+          <textarea data-ai-customer-data-note rows="3" maxlength="2000" placeholder="Was fehlt noch, wen kontaktiert, was geprüft…" aria-label="Kundendaten-Notiz">${escapeHtml(seeded.customerDataNote||"")}</textarea>
+        </label>
+        <label class="ai-task-workspace__note" hidden>
+          <span>Notiz</span>
+          <textarea data-ai-task-workspace-note rows="1" maxlength="2000">${escapeHtml(seeded.customerDataNote||seeded.note||"")}</textarea>
+        </label>
+        <div class="ai-task-workspace__block">
+          <h4>Aktionen</h4>
+          <div class="ai-task-workspace__action-row">${editCustomer}${editTrip}${editTravellers}${callBtn}${mailBtn}${waBtn}</div>
+          <p class="ai-task-workspace__hint warning" role="status">Echte Kunden-/Reisedaten ändern Sie nur bewusst in den bestehenden Editoren — nicht über diesen Workspace.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function openAiTaskWorkspaceCustomerEditor(mode="customer"){
+    const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
+    if(!task){
+      state.aiTasksMessage="Aufgabe nicht geladen.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    const customerId=cleanValue(task.customerId);
+    const customer=customerById(customerId);
+    if(!customerId||!customer){
+      state.aiTasksMessage="Kunde für den Editor wurde nicht gefunden.";
+      state.aiTasksMessageKind="error";
+      renderAiTaskDetail();
+      return false;
+    }
+    const customerFresh=customerById(customerId)||customer;
+    const trip=buildTripViewModel(customerFresh);
+    const missing=aiActionWorkspaceLib?.deriveMissingDataItems
+      ?aiActionWorkspaceLib.deriveMissingDataItems(customerFresh,trip,task)
+      :[];
+    writeAiTaskWorkspaceDraft(task,{
+      ...draft,
+      open:true,
+      missingDataItems:missing,
+      customerDataNote:draft.customerDataNote||draft.note||""
+    });
+    const tab=mode==="trip"||mode==="travellers"?"reise":(mode==="concierge"?"concierge":"kunde");
+    closeAiTaskDetail();
+    if(routeTo(`customers/${encodeURIComponent(customerId)}/${tab}`)===false){
+      state.aiTasksMessage="Kundenbereich konnte nicht geöffnet werden.";
+      state.aiTasksMessageKind="error";
+      return false;
+    }
+    const live=customerById(customerId)||customerFresh;
+    if(mode==="trip"||mode==="travellers")startTripEdit(live);
+    else if(mode==="concierge")startConciergeEdit(live);
+    else startCustomerEdit(live);
+    return true;
+  }
+
   function aiTaskActionWorkspaceMarkup(task){
     const module=resolveAiTaskActionModule(task);
     const view=currentAiTaskWorkspaceView(task);
@@ -6332,6 +6510,7 @@
     else if(module.moduleId==="add_navigation")body=aiTaskNavigationModuleMarkup(task,draft);
     else if(module.moduleId==="prepare_weather_alternative")body=aiTaskWeatherAltModuleMarkup(task,draft);
     else if(module.moduleId==="reschedule_program")body=aiTaskRescheduleModuleMarkup(task,draft);
+    else if(module.moduleId==="complete_customer_data")body=aiTaskCustomerDataModuleMarkup(task,draft);
     const canServerPersist=aiActionWorkspaceLib?.moduleSupportsServerPersist
       ?aiActionWorkspaceLib.moduleSupportsServerPersist(module.moduleId)
       :module.moduleId==="reserve_restaurant";
@@ -6387,7 +6566,21 @@
       renderAiTaskDetail();
       return false;
     }
-    const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    let draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
+    if(module.moduleId==="complete_customer_data"){
+      const customer=customerById(cleanValue(task.customerId));
+      const trip=customer?buildTripViewModel(customer):{};
+      const missing=aiActionWorkspaceLib?.deriveMissingDataItems
+        ?aiActionWorkspaceLib.deriveMissingDataItems(customer||{},trip,task)
+        :[];
+      draft={
+        ...draft,
+        customerDataNote:draft.customerDataNote||draft.note||"",
+        note:draft.customerDataNote||draft.note||"",
+        missingDataItems:missing
+      };
+      writeAiTaskWorkspaceDraft(task,{...draft,open:Boolean(state.aiTaskWorkspaceOpen)});
+    }
     const actionWorkspace=aiActionWorkspaceLib?.draftToActionWorkspace
       ?aiActionWorkspaceLib.draftToActionWorkspace(draft,module.moduleId)
       :{
@@ -10900,6 +11093,24 @@
         event.preventDefault();
         if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
         openAiTaskWorkspaceProgram({prepareReschedule:true});
+        return;
+      }
+      if(event.target.closest("[data-ai-workspace-edit-customer]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        openAiTaskWorkspaceCustomerEditor("customer");
+        return;
+      }
+      if(event.target.closest("[data-ai-workspace-edit-trip]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        openAiTaskWorkspaceCustomerEditor("trip");
+        return;
+      }
+      if(event.target.closest("[data-ai-workspace-edit-travellers]")){
+        event.preventDefault();
+        if(state.aiTasksBusy||state.aiTaskWorkspaceSaving)return;
+        openAiTaskWorkspaceCustomerEditor("travellers");
         return;
       }
       const aiTaskDetailGoto=event.target.closest("[data-ai-task-detail-goto]");

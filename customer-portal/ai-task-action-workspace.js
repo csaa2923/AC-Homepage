@@ -82,6 +82,45 @@
     blocked:"Blockiert"
   };
 
+  /** Customer-data operational status (Ops Ready 6.9) — not Task-Status. */
+  const CUSTOMER_DATA_WORK_STATUSES=["todo","contacted","waiting","received","reviewed","complete","blocked"];
+  const CUSTOMER_DATA_WORK_STATUS_LABELS={
+    todo:"Offen",
+    contacted:"Kontaktiert",
+    waiting:"Wartet auf Rückmeldung",
+    received:"Angaben erhalten",
+    reviewed:"Geprüft",
+    complete:"Vollständig",
+    blocked:"Blockiert"
+  };
+
+  const MISSING_DATA_ITEM_KEYS=[
+    "contact",
+    "phone",
+    "email",
+    "arrival",
+    "departure",
+    "travellers",
+    "children",
+    "trip_dates",
+    "trip_name",
+    "region",
+    "requirements"
+  ];
+  const MISSING_DATA_ITEM_LABELS={
+    contact:"Kontakt",
+    phone:"Telefon",
+    email:"E-Mail",
+    arrival:"Anreise",
+    departure:"Abreise",
+    travellers:"Reisende",
+    children:"Kinder / Alter",
+    trip_dates:"Reisezeitraum",
+    trip_name:"Reisename",
+    region:"Region",
+    requirements:"Besondere Anforderungen"
+  };
+
   const ALL_WORK_STATUSES=Array.from(new Set([
     ...WORK_STATUSES,
     ...TRANSFER_WORK_STATUSES,
@@ -221,9 +260,12 @@
     complete_customer_data:{
       moduleId:"complete_customer_data",
       moduleName:"Kundendaten vervollständigen",
-      context:"Fehlende Stammdaten oder Reisedaten im Kundenbereich nachtragen.",
-      targetActions:["customer_tab"],
-      fallback:"Nutzen Sie „Zum Kunden“, um Stammdaten oder Reise zu bearbeiten."
+      context:"Fehlende Stammdaten oder Reisedaten im bestehenden Kunden-/Reiseeditor nachtragen.",
+      targetActions:["customer_tab","trip_editor","travellers_editor"],
+      fallback:"Arbeitsstand und Task-Status sind getrennt. Echte Kundendaten nur über die bestehenden Editoren ändern.",
+      hasForm:true,
+      persistServer:true,
+      workStatusSet:"customer_data"
     },
     upload_document:{
       moduleId:"upload_document",
@@ -267,7 +309,9 @@
     customer_tab:"Zum Kundenbereich wechseln",
     booking_editor:"Buchungseditor öffnen",
     document_editor:"Dokumenteneditor öffnen",
-    program_focus:"Programmpunkt / Tag fokussieren"
+    program_focus:"Programmpunkt / Tag fokussieren",
+    trip_editor:"Reisedaten bearbeiten",
+    travellers_editor:"Reisende bearbeiten"
   };
 
   function cleanValue(value){
@@ -288,12 +332,17 @@
     if(id==="add_navigation")return "navigation";
     if(id==="prepare_weather_alternative")return "weather_alternative";
     if(id==="reschedule_program")return "reschedule";
+    if(id==="complete_customer_data")return "customer_data";
     return "restaurant";
   }
 
   function isProgramWorkspaceModule(moduleId=""){
     const id=cleanValue(moduleId);
     return id==="add_navigation"||id==="prepare_weather_alternative"||id==="reschedule_program";
+  }
+
+  function isCustomerDataWorkspaceModule(moduleId=""){
+    return cleanValue(moduleId)==="complete_customer_data";
   }
 
   function workStatusesFor(moduleId){
@@ -305,19 +354,39 @@
     if(set==="navigation")return NAVIGATION_WORK_STATUSES.slice();
     if(set==="weather_alternative")return WEATHER_ALT_WORK_STATUSES.slice();
     if(set==="reschedule")return RESCHEDULE_WORK_STATUSES.slice();
+    if(set==="customer_data")return CUSTOMER_DATA_WORK_STATUSES.slice();
     return WORK_STATUSES.slice();
   }
 
   function normalizeWorkStatus(value,moduleId=""){
     const status=cleanValue(value);
     const set=workStatusSetFor(moduleId);
-    // Document/voucher/program modules keep restaurant-compatible workStatus default;
+    // Document/voucher/program/customer-data modules keep restaurant-compatible workStatus default;
     // operational progress lives in dedicated fields.
-    if(set==="document"||set==="voucher"||set==="navigation"||set==="weather_alternative"||set==="reschedule"){
+    if(set==="document"||set==="voucher"||set==="navigation"||set==="weather_alternative"||set==="reschedule"||set==="customer_data"){
       return WORK_STATUSES.includes(status)?status:"todo";
     }
     const allowed=moduleId?workStatusesFor(moduleId):ALL_WORK_STATUSES;
     return allowed.includes(status)?status:"todo";
+  }
+
+  function normalizeCustomerDataWorkStatus(value){
+    const status=cleanValue(value);
+    return CUSTOMER_DATA_WORK_STATUSES.includes(status)?status:"todo";
+  }
+
+  function normalizeMissingDataItems(raw){
+    if(!Array.isArray(raw))return [];
+    const seen=new Set();
+    const out=[];
+    for(const item of raw){
+      const key=cleanValue(item);
+      if(!MISSING_DATA_ITEM_KEYS.includes(key)||seen.has(key))continue;
+      seen.add(key);
+      out.push(key);
+      if(out.length>=20)break;
+    }
+    return out;
   }
 
   function normalizeProgramWorkStatus(value,moduleId=""){
@@ -410,7 +479,10 @@
       programWorkStatus:"todo",
       programItemTitle:"",
       programItemDate:"",
-      programItemTime:""
+      programItemTime:"",
+      customerDataWorkStatus:"todo",
+      customerDataNote:"",
+      missingDataItems:[]
     };
   }
 
@@ -472,7 +544,12 @@
       ),
       programItemTitle:cleanValue(raw.programItemTitle),
       programItemDate:cleanValue(raw.programItemDate),
-      programItemTime:cleanValue(raw.programItemTime)
+      programItemTime:cleanValue(raw.programItemTime),
+      customerDataWorkStatus:normalizeCustomerDataWorkStatus(
+        raw.customerDataWorkStatus||(isCustomerDataWorkspaceModule(module)?raw.workStatus:"")
+      ),
+      customerDataNote:cleanValue(raw.customerDataNote||(isCustomerDataWorkspaceModule(module)?raw.note:"")),
+      missingDataItems:normalizeMissingDataItems(raw.missingDataItems)
     };
   }
 
@@ -520,7 +597,10 @@
       &&d.programWorkStatus==="todo"
       &&!d.programItemTitle
       &&!d.programItemDate
-      &&!d.programItemTime;
+      &&!d.programItemTime
+      &&d.customerDataWorkStatus==="todo"
+      &&!d.customerDataNote
+      &&!(Array.isArray(d.missingDataItems)&&d.missingDataItems.length);
   }
 
   function draftContentKey(draft){
@@ -567,7 +647,10 @@
       programWorkStatus:d.programWorkStatus,
       programItemTitle:d.programItemTitle,
       programItemDate:d.programItemDate,
-      programItemTime:d.programItemTime
+      programItemTime:d.programItemTime,
+      customerDataWorkStatus:d.customerDataWorkStatus,
+      customerDataNote:d.customerDataNote,
+      missingDataItems:d.missingDataItems
     });
   }
 
@@ -593,7 +676,6 @@
     return normalizeDraft({
       ...base,
       open,
-      note:actionWorkspace.note??base.note,
       workStatus:actionWorkspace.workStatus||base.workStatus,
       restaurantName:research.name||actionWorkspace.restaurantName||actionWorkspace.name||base.restaurantName,
       place:research.place||actionWorkspace.place||base.place,
@@ -621,6 +703,12 @@
       proposedTime:actionWorkspace.proposedTime??base.proposedTime,
       rescheduleReason:actionWorkspace.rescheduleReason??base.rescheduleReason,
       programWorkStatus:actionWorkspace.programWorkStatus||base.programWorkStatus,
+      customerDataWorkStatus:actionWorkspace.customerDataWorkStatus||base.customerDataWorkStatus,
+      customerDataNote:actionWorkspace.customerDataNote??base.customerDataNote,
+      missingDataItems:actionWorkspace.missingDataItems??base.missingDataItems,
+      note:isCustomerDataWorkspaceModule(moduleId)
+        ?(actionWorkspace.customerDataNote??actionWorkspace.note??base.customerDataNote??base.note)
+        :(actionWorkspace.note??base.note),
       updatedAt:actionWorkspace.lastActionAt||actionWorkspace.updatedAt||base.updatedAt
     },moduleId);
   }
@@ -667,6 +755,18 @@
       payload.programWorkStatus=d.programWorkStatus;
       // Keep restaurant-compatible server workStatus; ops progress in programWorkStatus.
       payload.workStatus="todo";
+    }
+    if(isCustomerDataWorkspaceModule(module)){
+      const note=d.customerDataNote||d.note;
+      payload.customerDataWorkStatus=d.customerDataWorkStatus;
+      payload.customerDataNote=note;
+      payload.missingDataItems=normalizeMissingDataItems(d.missingDataItems);
+      payload.note=note;
+      // Keep restaurant-compatible server workStatus; ops progress in customerDataWorkStatus.
+      payload.workStatus="todo";
+      // Never copy live PII into the workspace payload.
+      payload.research={name:"",place:"",phone:"",website:"",mapsQuery:""};
+      payload.linkedBookingId="";
     }
     return payload;
   }
@@ -1193,6 +1293,197 @@
     };
   }
 
+  function firstNonEmpty(...values){
+    for(const value of values){
+      const text=cleanValue(value);
+      if(text)return text;
+    }
+    return "";
+  }
+
+  function hasText(...values){
+    return Boolean(firstNonEmpty(...values));
+  }
+
+  function numericOrEmpty(...values){
+    for(const value of values){
+      if(value===0||value==="0")return "0";
+      const text=cleanValue(value);
+      if(text&&/^\d+$/.test(text))return text;
+      if(typeof value==="number"&&Number.isFinite(value))return String(value);
+    }
+    return "";
+  }
+
+  function customerDataTripSnapshot(customer={},trip={}){
+    const travel=customer.travel&&typeof customer.travel==="object"?customer.travel:{};
+    const contact=customer.contact&&typeof customer.contact==="object"?customer.contact:{};
+    const start=firstNonEmpty(
+      trip.start,customer.startDatePlain,customer.startDate,customer.dateFrom,
+      travel.startDate,travel.arrival,customer.arrival
+    );
+    const end=firstNonEmpty(
+      trip.end,customer.endDatePlain,customer.endDate,customer.dateTo,
+      travel.endDate,travel.departure,customer.departure
+    );
+    const adults=numericOrEmpty(trip.adults,customer.adults,customer.guests?.adults,travel.adults);
+    const children=numericOrEmpty(trip.children,customer.children,customer.guests?.children,travel.children);
+    const childAges=Array.isArray(trip.childAges)
+      ?trip.childAges.map(item=>cleanValue(item)).filter(Boolean)
+      :(Array.isArray(customer.childAges)?customer.childAges.map(item=>cleanValue(item)).filter(Boolean)
+        :(Array.isArray(customer.childrenAges)?customer.childrenAges.map(item=>cleanValue(item)).filter(Boolean):[]));
+    const phone=firstNonEmpty(customer.phone,contact.phone);
+    const email=firstNonEmpty(customer.email,contact.email);
+    const whatsapp=firstNonEmpty(customer.whatsapp,contact.whatsapp,customer.whatsappLink);
+    return {
+      customerName:firstNonEmpty(customer.customerName,customer.name),
+      phone,
+      email,
+      whatsapp,
+      tripTitle:firstNonEmpty(trip.title,customer.tripName,customer.tripTitle,travel.title),
+      period:firstNonEmpty(trip.period,(start&&end?`${start} – ${end}`:start||end)),
+      start,
+      end,
+      region:firstNonEmpty(trip.region,customer.region,travel.region),
+      adults,
+      children,
+      childAges,
+      companions:firstNonEmpty(customer.companions,trip.companions),
+      arrivalType:firstNonEmpty(trip.arrivalType,customer.arrivalType,travel.arrivalType,customer.transport),
+      arrivalText:firstNonEmpty(trip.arrivalText,customer.arrivalDetails,customer.arrivalInfo,travel.arrivalDetails),
+      arrivalTime:firstNonEmpty(trip.arrivalTime,customer.arrivalTime,travel.arrivalTime),
+      departureType:firstNonEmpty(trip.departureType,customer.departureType,travel.departureType),
+      departureTime:firstNonEmpty(trip.departureTime,customer.departureTime,travel.departureTime),
+      flight:firstNonEmpty(trip.flight,customer.flightNumber,travel.flightNumber),
+      train:firstNonEmpty(trip.train,customer.trainNumber,travel.trainNumber),
+      requirements:firstNonEmpty(customer.requirements,trip.wishes),
+      occasion:firstNonEmpty(trip.occasion,customer.occasion,travel.occasion)
+    };
+  }
+
+  function standState(present){
+    return present?"present":"check";
+  }
+
+  function assessCustomerDataStand(customer={},trip={}){
+    const snap=customerDataTripSnapshot(customer,trip);
+    const contactPresent=hasText(snap.phone,snap.email);
+    const tripPresent=hasText(snap.tripTitle)&&hasText(snap.start)&&hasText(snap.end);
+    const travellersPresent=hasText(snap.adults,snap.children,snap.companions);
+    const arrivalPresent=hasText(snap.arrivalType,snap.arrivalText,snap.arrivalTime,snap.flight,snap.train);
+    const departurePresent=hasText(snap.departureType,snap.departureTime);
+    return {
+      contact:{key:"contact",label:"Kontakt",state:standState(contactPresent)},
+      trip:{key:"trip",label:"Reise",state:standState(tripPresent)},
+      travellers:{key:"travellers",label:"Reisende",state:standState(travellersPresent)},
+      arrival:{key:"arrival",label:"Anreise",state:standState(arrivalPresent)},
+      departure:{key:"departure",label:"Abreise",state:standState(departurePresent)},
+      snapshot:snap
+    };
+  }
+
+  function taskInsightIds(task={}){
+    const ids=[];
+    const push=value=>{
+      const id=cleanValue(value);
+      if(id&&!ids.includes(id))ids.push(id);
+    };
+    push(task.sourceInsightId);
+    push(task.sourceFindingId);
+    if(Array.isArray(task.sourceInsightIds))task.sourceInsightIds.forEach(push);
+    if(Array.isArray(task.refs)){
+      task.refs.forEach(ref=>push(ref?.sourceInsightId||ref?.id));
+    }
+    return ids;
+  }
+
+  function deriveMissingDataItems(customer={},trip={},task={}){
+    const snap=customerDataTripSnapshot(customer,trip);
+    const insights=taskInsightIds(task);
+    const missing=[];
+    const add=key=>{
+      if(MISSING_DATA_ITEM_KEYS.includes(key)&&!missing.includes(key))missing.push(key);
+    };
+    if(!hasText(snap.phone,snap.email))add("contact");
+    if(!hasText(snap.phone))add("phone");
+    if(!hasText(snap.email))add("email");
+    if(!hasText(snap.tripTitle))add("trip_name");
+    if(!hasText(snap.start)||!hasText(snap.end))add("trip_dates");
+    if(!hasText(snap.region))add("region");
+    if(!hasText(snap.adults,snap.children,snap.companions))add("travellers");
+    const childCount=Number(snap.children||0);
+    if(Number.isFinite(childCount)&&childCount>0&&snap.childAges.length<childCount)add("children");
+    if(!hasText(snap.arrivalType,snap.arrivalText,snap.arrivalTime,snap.flight,snap.train)
+      ||insights.includes("arrival-details-missing")){
+      if(!hasText(snap.arrivalType,snap.arrivalText,snap.arrivalTime,snap.flight,snap.train))add("arrival");
+    }
+    if(!hasText(snap.departureType,snap.departureTime)
+      ||insights.includes("departure-details-missing")){
+      if(!hasText(snap.departureType,snap.departureTime))add("departure");
+    }
+    if(!hasText(snap.requirements)&&insights.some(id=>/requirement|special|wunsch|wish/i.test(id))){
+      add("requirements");
+    }
+    return normalizeMissingDataItems(missing);
+  }
+
+  function customerDataNeedHint(task={}){
+    const title=cleanValue(task.title);
+    const description=cleanValue(task.description);
+    const insights=taskInsightIds(task);
+    if(insights.includes("arrival-details-missing")){
+      return description||title||"Anreisedetails fehlen oder sind unvollständig.";
+    }
+    if(insights.includes("departure-details-missing")){
+      return description||title||"Abreisedetails fehlen oder sind unvollständig.";
+    }
+    if(insights.includes("required-data-before-arrival")){
+      return description||title||"Pflichtangaben vor Anreise prüfen und vervollständigen.";
+    }
+    if(description||title)return description||title;
+    return "Vom AI Concierge als zu vervollständigen erkannt";
+  }
+
+  function customerDataContactLinks(customer={},helpers={}){
+    const snap=customerDataTripSnapshot(customer);
+    const phoneHref=normalizePhoneHref(snap.phone);
+    const mailHref=normalizeMailtoHref(snap.email);
+    let whatsappHref="";
+    const analyze=helpers.analyzeWhatsappNumber;
+    const build=helpers.buildWhatsappUrl;
+    if(typeof analyze==="function"&&typeof build==="function"){
+      const wa=analyze(snap.whatsapp||snap.phone);
+      if(wa&&wa.valid&&wa.digits){
+        const href=cleanValue(build(wa.digits,""));
+        if(/^https:\/\/(api\.whatsapp\.com|wa\.me)\//i.test(href))whatsappHref=href;
+      }
+    }
+    return {
+      phone:snap.phone,
+      email:snap.email,
+      canCall:Boolean(phoneHref),
+      canMail:Boolean(mailHref),
+      canWhatsapp:Boolean(whatsappHref),
+      phoneHref,
+      mailHref,
+      whatsappHref
+    };
+  }
+
+  function customerDataWorkStatusOptions(){
+    return CUSTOMER_DATA_WORK_STATUSES.map(value=>({
+      value,
+      label:CUSTOMER_DATA_WORK_STATUS_LABELS[value]||value
+    }));
+  }
+
+  function missingDataItemLabels(items){
+    return normalizeMissingDataItems(items).map(key=>({
+      key,
+      label:MISSING_DATA_ITEM_LABELS[key]||key
+    }));
+  }
+
   function resolveModule(taskType){
     const type=cleanValue(taskType);
     if(type&&MODULE_REGISTRY[type]){
@@ -1236,6 +1527,9 @@
     }
     if(set==="reschedule"){
       return RESCHEDULE_WORK_STATUSES.map(value=>({value,label:RESCHEDULE_WORK_STATUS_LABELS[value]||value}));
+    }
+    if(set==="customer_data"){
+      return customerDataWorkStatusOptions();
     }
     return WORK_STATUSES.map(value=>({value,label:WORK_STATUS_LABELS[value]||value}));
   }
@@ -1291,6 +1585,10 @@
     WEATHER_ALT_WORK_STATUS_LABELS,
     RESCHEDULE_WORK_STATUSES,
     RESCHEDULE_WORK_STATUS_LABELS,
+    CUSTOMER_DATA_WORK_STATUSES,
+    CUSTOMER_DATA_WORK_STATUS_LABELS,
+    MISSING_DATA_ITEM_KEYS,
+    MISSING_DATA_ITEM_LABELS,
     ALL_WORK_STATUSES,
     TRANSFER_TYPES,
     BOOKING_KINDS,
@@ -1316,6 +1614,8 @@
     normalizeDocumentWorkStatus,
     normalizeVoucherStatus,
     normalizeProgramWorkStatus,
+    normalizeCustomerDataWorkStatus,
+    normalizeMissingDataItems,
     normalizeTransferType,
     normalizeBookingKind,
     normalizeDocumentKind,
@@ -1337,6 +1637,14 @@
     findCustomerDocument,
     seedDocumentDraftFromTask,
     isProgramWorkspaceModule,
+    isCustomerDataWorkspaceModule,
+    customerDataTripSnapshot,
+    assessCustomerDataStand,
+    deriveMissingDataItems,
+    customerDataNeedHint,
+    customerDataContactLinks,
+    customerDataWorkStatusOptions,
+    missingDataItemLabels,
     resolveTaskProgramItemId,
     resolveTaskDayId,
     listCustomerProgramItems,

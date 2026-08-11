@@ -664,6 +664,82 @@ describe("AI task action workspace persistence (backend)",()=>{
     );
   });
 
+  it("accepts customerDataWorkStatus whitelist and rejects invalid values",()=>{
+    for(const status of ["todo","contacted","waiting","received","reviewed","complete","blocked"]){
+      const ok=store.normalizeActionWorkspace({
+        module:"complete_customer_data",
+        workStatus:"todo",
+        note:"",
+        research:{},
+        customerDataWorkStatus:status,
+        customerDataNote:"Notiz",
+        missingDataItems:["arrival","travellers"]
+      },{actorUid:"a1",now:"2026-08-11T15:00:00.000Z"});
+      assert.equal(ok.customerDataWorkStatus,status);
+      assert.equal(ok.customerDataNote,"Notiz");
+      assert.deepEqual(ok.missingDataItems,["arrival","travellers"]);
+      assert.equal(ok.workStatus,"todo");
+    }
+    for(const bad of ["completed","dismissed","open","done"]){
+      assert.throws(
+        ()=>store.normalizeActionWorkspace({
+          module:"complete_customer_data",
+          workStatus:"todo",
+          note:"",
+          research:{},
+          customerDataWorkStatus:bad
+        },{actorUid:"a1"}),
+        error=>error.code==="invalid-argument"
+      );
+    }
+  });
+
+  it("round-trips customer data workspace without copying PII or mutating task lifecycle",async()=>{
+    const db=createMemoryDb({
+      "customers/cust-a":{customerId:"cust-a",customerName:"A"},
+      "customers/cust-a/aiTasks/task-cust":{
+        customerId:"cust-a",
+        status:"open",
+        lifecycle:"active",
+        stableKey:"task-cust",
+        title:"Kundendaten",
+        completedAt:null,
+        dismissedAt:null
+      }
+    });
+    const ok=await actionUpdate.persistConciergeAnalysisTaskAction({
+      db,
+      customerId:"cust-a",
+      taskId:"task-cust",
+      actorUid:"admin1",
+      now:"2026-08-11T15:10:00.000Z",
+      actionWorkspace:{
+        module:"complete_customer_data",
+        workStatus:"todo",
+        note:"Alles da",
+        research:{phone:"+43",email:"x@y.z",name:"copy"},
+        customerDataWorkStatus:"complete",
+        customerDataNote:"Alles da",
+        missingDataItems:["arrival"],
+        phone:"+43664",
+        email:"secret@example.com",
+        storagePath:"customers/x"
+      }
+    });
+    assert.equal(ok.actionWorkspace.customerDataWorkStatus,"complete");
+    assert.equal(ok.actionWorkspace.customerDataNote,"Alles da");
+    assert.deepEqual(ok.actionWorkspace.missingDataItems,["arrival"]);
+    assert.equal(ok.actionWorkspace.phone,undefined);
+    assert.equal(ok.actionWorkspace.email,undefined);
+    assert.equal(ok.actionWorkspace.storagePath,undefined);
+    assert.equal(ok.status,"open");
+    assert.equal(ok.lifecycle,"active");
+    assert.equal(db._docs.get("customers/cust-a/aiTasks/task-cust").status,"open");
+    assert.equal(db._docs.get("customers/cust-a/aiTasks/task-cust").completedAt,null);
+    assert.equal(db._docs.get("aiTaskInbox/cust-a__task-cust").actionWorkspace.customerDataWorkStatus,"complete");
+    assert.equal(db._docs.get("aiTaskInbox/cust-a__task-cust").status,"open");
+  });
+
   it("round-trips navigation and reschedule suggestion fields without mutating program data",()=>{
     const nav=store.normalizeActionWorkspace({
       module:"add_navigation",
@@ -927,9 +1003,9 @@ describe("AI task action workspace persistence (frontend)",()=>{
     const restaurantFn=js.match(/function aiTaskRestaurantModuleMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
 
     assert.match(html,/firebase-service\.js\?v=33/);
-    assert.match(html,/ai-task-action-workspace\.js\?v=8/);
-    assert.match(html,/admin-v2\.js\?v=95/);
-    assert.match(html,/admin-v2\.css\?v=74/);
+    assert.match(html,/ai-task-action-workspace\.js\?v=9/);
+    assert.match(html,/admin-v2\.js\?v=96/);
+    assert.match(html,/admin-v2\.css\?v=75/);
     assert.match(service,/httpsCallable\(functions,"updateConciergeAnalysisTaskAction"/);
     assert.match(service,/async function updateConciergeAnalysisTaskAction/);
     assert.match(service,/await callableUserContext\(auth,authModule\);[\s\S]*updateConciergeAnalysisTaskAction/);

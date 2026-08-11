@@ -8,8 +8,23 @@ const WORK_STATUSES=new Set(["todo","researched","requested","reserved","blocked
 const DOCUMENT_WORK_STATUSES=new Set(["missing","requested","received","checked","blocked"]);
 const VOUCHER_STATUSES=new Set(["pending","valid","incomplete","invalid","blocked"]);
 const PROGRAM_WORK_STATUSES=new Set(["todo","researched","prepared","reviewed","confirmed","checked","blocked"]);
+const CUSTOMER_DATA_WORK_STATUSES=new Set(["todo","contacted","waiting","received","reviewed","complete","blocked"]);
 const DOCUMENT_MODULES=new Set(["upload_document","upload_ticket","check_voucher"]);
 const PROGRAM_MODULES=new Set(["add_navigation","prepare_weather_alternative","reschedule_program"]);
+const CUSTOMER_DATA_MODULES=new Set(["complete_customer_data"]);
+const MISSING_DATA_ITEM_KEYS=new Set([
+  "contact",
+  "phone",
+  "email",
+  "arrival",
+  "departure",
+  "travellers",
+  "children",
+  "trip_dates",
+  "trip_name",
+  "region",
+  "requirements"
+]);
 const MANUAL_STATUS_TRANSITIONS={
   open:new Set(["open","completed","dismissed"]),
   completed:new Set(["completed","open"]),
@@ -342,9 +357,19 @@ function normalizeActionWorkspace(raw,{
     linkedAlternativeProgramItemId="";
   }
 
+  const customerDataWorkStatus=text(raw.customerDataWorkStatus,20);
+  if(customerDataWorkStatus&&!CUSTOMER_DATA_WORK_STATUSES.has(customerDataWorkStatus)){
+    const error=new Error("Kundendaten-Arbeitsstand ist ungültig.");
+    error.code="invalid-argument";
+    throw error;
+  }
+  const customerDataNote=safePlainWorkspaceText(raw.customerDataNote??raw.note,2000);
+  const missingDataItems=normalizeMissingDataItems(raw.missingDataItems);
+
   const stamp=text(now,40)||new Date().toISOString();
   const actor=text(actorUid,128);
   const keepProgram=PROGRAM_MODULES.has(moduleName);
+  const keepCustomer=CUSTOMER_DATA_MODULES.has(moduleName);
   // Always return allowlisted keys only (unknown fields stripped).
   return {
     module:moduleName,
@@ -372,9 +397,26 @@ function normalizeActionWorkspace(raw,{
     proposedTime:keepProgram||proposedTime?proposedTime:"",
     rescheduleReason:keepProgram||rescheduleReason?rescheduleReason:"",
     programWorkStatus:keepProgram||programWorkStatus?programWorkStatus:"",
+    customerDataWorkStatus:keepCustomer||customerDataWorkStatus?customerDataWorkStatus:"",
+    customerDataNote:keepCustomer||customerDataNote?customerDataNote:"",
+    missingDataItems:keepCustomer?missingDataItems:[],
     lastActionAt:stamp,
     lastActionBy:actor
   };
+}
+
+function normalizeMissingDataItems(raw){
+  if(!Array.isArray(raw))return [];
+  const seen=new Set();
+  const out=[];
+  for(const item of raw){
+    const key=text(item,40);
+    if(!MISSING_DATA_ITEM_KEYS.has(key)||seen.has(key))continue;
+    seen.add(key);
+    out.push(key);
+    if(out.length>=20)break;
+  }
+  return out;
 }
 
 function taskInboxRecord(task){
@@ -488,8 +530,12 @@ module.exports={
   DOCUMENT_WORK_STATUSES,
   VOUCHER_STATUSES,
   PROGRAM_WORK_STATUSES,
+  CUSTOMER_DATA_WORK_STATUSES,
   DOCUMENT_MODULES,
   PROGRAM_MODULES,
+  CUSTOMER_DATA_MODULES,
+  MISSING_DATA_ITEM_KEYS,
+  normalizeMissingDataItems,
   canTransitionStatus,
   canonicalAnalysisHash,
   inboxDocId,

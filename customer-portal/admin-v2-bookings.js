@@ -168,6 +168,43 @@
     `;
   }
 
+  function bookingResultsMarkup(list,dash){
+    const s=state();
+    return {
+      summary:`${list.length} angezeigt · ${dash.openRequests.length} angefragt · ${dash.paymentOpen.length} Zahlung offen · ${dash.dueToday.length} heute`,
+      metrics:`
+          <button class="v2-summary-item" type="button" data-booking-metric="open">${dash.openRequests.length}<span>Angefragt</span></button>
+          <button class="v2-summary-item" type="button" data-booking-metric="payment">${dash.paymentOpen.length}<span>Zahlung offen</span></button>
+          <button class="v2-summary-item" type="button" data-booking-metric="today">${dash.dueToday.length}<span>Heute</span></button>
+          <button class="v2-summary-item" type="button" data-booking-metric="waitlist">${dash.waitlist.length}<span>Warteliste</span></button>`,
+      message:`<p class="v2-edit-status ${escapeHtml(s.bookingMessageKind||"")}" id="bookingListMessage" aria-live="polite">${escapeHtml(s.bookingMessage||"")}</p>`,
+      grid:list.length
+        ?list.map(booking=>bookingCardMarkup(booking)).join("")
+        :`<article class="v2-empty"><h3>Keine Buchungen gefunden</h3><p>Legen Sie eine Buchung an oder passen Sie die Filter an.</p><button class="v2-button primary" type="button" data-booking-action="create">Neue Buchung</button></article>`
+    };
+  }
+
+  function refreshBookingsResults(){
+    const root=h().byId("bookingsRoot");
+    const library=lib();
+    if(!root||!library||!root.querySelector("#bookingSearchInput"))return false;
+    const list=filteredBookings();
+    const dash=library.buildBookingDashboard(allBookings().filter(item=>!item.archived));
+    const parts=bookingResultsMarkup(list,dash);
+    const summary=root.querySelector(".v2-section-toolbar p");
+    if(summary)summary.textContent=parts.summary;
+    const metrics=root.querySelector(".v2-document-quality-grid");
+    if(metrics)metrics.innerHTML=parts.metrics;
+    const message=root.querySelector("#bookingListMessage");
+    if(message){
+      message.className=`v2-edit-status ${String(state().bookingMessageKind||"").replace(/[^\w-]/g,"")}`;
+      message.textContent=state().bookingMessage||"";
+    }
+    const grid=root.querySelector(".v2-booking-grid");
+    if(grid)grid.innerHTML=parts.grid;
+    return true;
+  }
+
   function renderBookings(){
     const root=h().byId("bookingsRoot");
     if(!root)return;
@@ -179,6 +216,12 @@
     const s=state();
     const list=filteredBookings();
     const dash=library.buildBookingDashboard(allBookings().filter(item=>!item.archived));
+    const parts=bookingResultsMarkup(list,dash);
+    const activeSearch=document.activeElement&&document.activeElement.id==="bookingSearchInput";
+    if(activeSearch&&refreshBookingsResults()){
+      renderBookingEditor();
+      return;
+    }
     const providers=[...new Set(allBookings().map(item=>item.provider).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"de"));
     const customers=Object.values(customersMap()).sort((a,b)=>String(a.customerName||"").localeCompare(String(b.customerName||""),"de"));
     root.innerHTML=`
@@ -187,7 +230,7 @@
           <div>
             <p class="v2-eyebrow">Buchungen</p>
             <h2>Buchungsmanagement</h2>
-            <p>${list.length} angezeigt · ${dash.openRequests.length} angefragt · ${dash.paymentOpen.length} Zahlung offen · ${dash.dueToday.length} heute</p>
+            <p>${escapeHtml(parts.summary)}</p>
           </div>
           <div class="v2-document-actions">
             <button class="v2-button primary" type="button" data-booking-action="create">Neue Buchung</button>
@@ -195,10 +238,7 @@
           </div>
         </div>
         <div class="v2-document-quality-grid">
-          <button class="v2-summary-item" type="button" data-booking-metric="open">${dash.openRequests.length}<span>Angefragt</span></button>
-          <button class="v2-summary-item" type="button" data-booking-metric="payment">${dash.paymentOpen.length}<span>Zahlung offen</span></button>
-          <button class="v2-summary-item" type="button" data-booking-metric="today">${dash.dueToday.length}<span>Heute</span></button>
-          <button class="v2-summary-item" type="button" data-booking-metric="waitlist">${dash.waitlist.length}<span>Warteliste</span></button>
+          ${parts.metrics}
         </div>
         <div class="v2-document-controls">
           <label class="v2-filter-search">Suche
@@ -239,9 +279,9 @@
           </label>
           <label class="v2-edit-check"><input id="bookingIncludeArchived" type="checkbox" ${s.bookingIncludeArchived?"checked":""}><span>Archivierte anzeigen</span></label>
         </div>
-        <p class="v2-edit-status ${escapeHtml(s.bookingMessageKind||"")}" id="bookingListMessage" aria-live="polite">${escapeHtml(s.bookingMessage||"")}</p>
+        ${parts.message}
         <div class="v2-booking-grid">
-          ${list.length?list.map(booking=>bookingCardMarkup(booking)).join(""):`<article class="v2-empty"><h3>Keine Buchungen gefunden</h3><p>Legen Sie eine Buchung an oder passen Sie die Filter an.</p><button class="v2-button primary" type="button" data-booking-action="create">Neue Buchung</button></article>`}
+          ${parts.grid}
         </div>
       </section>
     `;
@@ -489,17 +529,37 @@
     h().patchState({bookingMessage:message||"",bookingMessageKind:kind||""});
   }
 
-  function openEditor(booking,customerId){
+  function applyCreateSeed(draft,seed){
+    if(!seed||typeof seed!=="object"||Array.isArray(seed))return draft;
+    const next={...draft};
+    const skip=new Set(["bookingId","id","documents","createdAt","updatedAt","archived"]);
+    Object.keys(seed).forEach(key=>{
+      if(skip.has(key))return;
+      const value=seed[key];
+      if(value===undefined||value===null)return;
+      if(typeof value==="string"&&!String(value).trim()&&String(next[key]||"").trim())return;
+      next[key]=value;
+    });
+    return next;
+  }
+
+  function openEditor(booking,customerId,options={}){
     const library=lib();
-    if(!library)return;
-    const customer=h().customerById(customerId||booking?.customerId)||null;
-    const draft=library.normalizeBooking(booking||library.defaultBooking(customer),customer||{customerId:customerId||""});
-    if(!booking&&customerId)draft.customerId=customerId;
+    if(!library)return false;
+    const createSeed=options&&typeof options==="object"?options.createSeed:null;
+    // Native create uses booking=null; never treat a seed object as an existing booking.
+    const existing=booking&&typeof booking==="object"&&String(booking.bookingId||"").trim()
+      ?booking
+      :null;
+    const customer=h().customerById(customerId||existing?.customerId||createSeed?.customerId)||null;
+    let draft=library.normalizeBooking(existing||library.defaultBooking(customer),customer||{customerId:customerId||""});
+    if(!existing&&customerId)draft.customerId=customerId;
+    if(!existing&&createSeed)draft=applyCreateSeed(draft,createSeed);
     draft.documents=Array.isArray(draft.documents)?draft.documents.map(item=>({...item})):[];
     h().patchState({
       bookingEditOpen:true,
       bookingEditDraft:draft,
-      bookingEditOriginalId:booking?.bookingId||"",
+      bookingEditOriginalId:existing?.bookingId||"",
       bookingEditErrors:{},
       bookingEditSaving:false,
       bookingDocUploading:false,
@@ -507,9 +567,11 @@
       bookingMessageKind:""
     });
     h().render();
+    return true;
   }
 
   function closeEditor(){
+    if(typeof h().clearAiTaskPendingBookingLink==="function")h().clearAiTaskPendingBookingLink();
     h().patchState({
       bookingEditOpen:false,
       bookingEditDraft:null,
@@ -671,6 +733,11 @@
         }
       }
       h().updateLocalCustomer(h().compactObject?h().compactObject(next):next);
+      if(typeof h().linkAiTaskWorkspaceBookingAfterSave==="function"){
+        h().linkAiTaskWorkspaceBookingAfterSave(merged);
+      }else if(typeof h().clearAiTaskPendingBookingLink==="function"){
+        h().clearAiTaskPendingBookingLink();
+      }
       h().patchState({
         bookingEditOpen:false,
         bookingEditDraft:null,
@@ -811,7 +878,11 @@
       if(file)uploadBookingDocument(file);
       return true;
     }
-    if(id==="bookingSearchInput"){h().patchState({bookingQuery:event.target.value});h().render();return true;}
+    if(id==="bookingSearchInput"){
+      h().patchState({bookingQuery:event.target.value});
+      if(!refreshBookingsResults())h().render();
+      return true;
+    }
     if(id==="bookingCustomerFilter"){h().patchState({bookingCustomerFilter:event.target.value});h().render();return true;}
     if(id==="bookingStatusFilter"){h().patchState({bookingStatusFilter:event.target.value});h().render();return true;}
     if(id==="bookingTypeFilter"){h().patchState({bookingTypeFilter:event.target.value});h().render();return true;}
@@ -831,7 +902,8 @@
   function handleInput(event){
     if(event.target.id==="bookingSearchInput"){
       h().patchState({bookingQuery:event.target.value});
-      h().render();
+      // Keep the search input mounted — only refresh KPIs/results.
+      if(!refreshBookingsResults())h().render();
       return true;
     }
     if(event.target.closest("#bookingEditForm")&&(event.target.name==="internalPrice"||event.target.name==="customerPrice")){
@@ -848,6 +920,7 @@
   window.ACTAdminV2Bookings={
     bind(api){host=api;},
     renderBookings,
+    refreshBookingsResults,
     renderBookingEditor,
     bookingsTabMarkup,
     isDirty,

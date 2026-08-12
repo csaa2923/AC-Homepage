@@ -43,6 +43,7 @@
     aiTaskWorkspaceSaving:false,
     aiTaskWorkspaceUnsavedLocal:false,
     aiTaskPendingDeepLink:null,
+    aiTaskPendingBookingLink:null,
     aiTaskDetailReturnFocus:null,
     aiEntityFocus:null,
     communicationMessage:"",
@@ -3742,9 +3743,36 @@
     return true;
   }
 
+  function refreshDocumentsResults(){
+    const root=byId("documentsRoot");
+    if(!root||!root.querySelector("#documentSearchInput"))return false;
+    const records=filteredDocumentRecords();
+    const summary=allDocumentQualitySummary();
+    const toolbarP=root.querySelector(".v2-section-toolbar p");
+    if(toolbarP)toolbarP.textContent=`${summary.total} Gesamt · ${summary.complete} vollstaendig · ${summary.issues} Hinweise · ${summary.critical} kritisch`;
+    const metrics=root.querySelector(".v2-document-quality-grid");
+    if(metrics){
+      metrics.innerHTML=`
+          ${documentMetricButton("Vollstaendig",String(summary.complete),"")}
+          ${documentMetricButton("Hinweise",String(summary.issues),"missing")}
+          ${documentMetricButton("Nicht zugeordnet",String(summary.unassigned||0),"unassigned")}
+          ${documentMetricButton("Abgelaufen",String(summary.expired||0),"expired")}
+          ${documentMetricButton("Kundenportal sichtbar",String(summary.visible||0),"visible")}
+          ${documentMetricButton("Nur intern",String(summary.internal||0),"internal")}`;
+    }
+    const grid=root.querySelector(".v2-document-grid");
+    if(grid){
+      grid.innerHTML=records.length
+        ?records.map(({customer,doc,quality,index})=>documentCardMarkup(doc,{customer,quality,index})).join("")
+        :`<article class="v2-empty"><h3>Keine Dokumente gefunden</h3><p>Die aktuelle Suche liefert kein Ergebnis.</p></article>`;
+    }
+    return true;
+  }
+
   function renderDocuments(){
     const root=byId("documentsRoot");
     if(!root)return;
+    if(document.activeElement&&document.activeElement.id==="documentSearchInput"&&refreshDocumentsResults())return;
     const records=filteredDocumentRecords();
     const categories=[["","Alle Kategorien"],...DOCUMENT_CATEGORIES.map(value=>[value,value])];
     const assignments=[["","Alle Zuordnungen"],...DOCUMENT_ASSIGNMENTS.map(value=>[value,value])];
@@ -4411,9 +4439,28 @@
     renderSelect("statusFilter",statusOptions,state.status);
     renderSelect("publicationFilter",publicationOptions,state.publication);
     renderSelect("regionFilter",regionOptions,state.region);
-    byId("customerSearchInput").value=state.query;
-    byId("globalSearchInput").value=state.query;
-    byId("sortSelect").value=state.sort;
+    syncTextInputValue("customerSearchInput",state.query);
+    syncTextInputValue("globalSearchInput",state.query);
+    const sort=byId("sortSelect");
+    if(sort&&document.activeElement!==sort)sort.value=state.sort;
+  }
+
+  function syncTextInputValue(id,value){
+    const el=byId(id);
+    if(!el)return;
+    const next=String(value??"");
+    if(document.activeElement===el){
+      if(el.value===next)return;
+      const start=el.selectionStart;
+      const end=el.selectionEnd;
+      el.value=next;
+      try{
+        const pos=Number.isFinite(start)?start:next.length;
+        el.setSelectionRange(pos,Number.isFinite(end)?end:pos);
+      }catch(_){/* ignore */}
+      return;
+    }
+    if(el.value!==next)el.value=next;
   }
 
   function renderSelect(id,options,current){
@@ -6648,6 +6695,32 @@
     return next;
   }
 
+  function clearAiTaskPendingBookingLink(){
+    state.aiTaskPendingBookingLink=null;
+  }
+
+  function linkAiTaskWorkspaceBookingAfterSave(booking){
+    const pending=state.aiTaskPendingBookingLink;
+    const bookingId=cleanValue(booking?.bookingId||booking?.id);
+    const customerId=cleanValue(booking?.customerId);
+    if(!pending||!bookingId||!customerId)return false;
+    if(cleanValue(pending.customerId)!==customerId)return false;
+    const task=findAiTaskByIds(pending.customerId,pending.taskId);
+    if(!task||!aiActionWorkspaceLib?.writeDraft){
+      clearAiTaskPendingBookingLink();
+      return false;
+    }
+    const draft=readAiTaskWorkspaceDraft(task);
+    writeAiTaskWorkspaceDraft(task,{
+      ...draft,
+      open:true,
+      linkedBookingId:bookingId,
+      updatedAt:new Date().toISOString()
+    });
+    clearAiTaskPendingBookingLink();
+    return true;
+  }
+
   function openAiTaskWorkspaceBooking({create=false}={}){
     const task=findAiTaskByIds(state.aiTaskDetailCustomerId,state.aiTaskDetailItemId);
     if(!task){
@@ -6660,6 +6733,7 @@
     const draft=persistAiTaskWorkspaceDraftFromDom()||readAiTaskWorkspaceDraft(task);
     const customerId=cleanValue(task.customerId);
     const customer=customerById(customerId);
+    const taskId=aiTaskWorkspaceDraftId(task)||cleanValue(task.itemId||task.stableKey||task.id);
     if(!customerId||!customer){
       state.aiTasksMessage="Kunde für die Buchung wurde nicht gefunden.";
       state.aiTasksMessageKind="error";
@@ -6673,7 +6747,8 @@
       return false;
     }
     const bookingTarget=resolveAiTaskBookingTarget(task,{linkedBookingId:draft.linkedBookingId||""});
-    if(bookingTarget?.status==="blocked"){
+    // Open existing booking only — create must not be blocked by entityMissing/blocked targets.
+    if(!create&&bookingTarget?.status==="blocked"){
       state.aiTasksMessage=bookingTarget.message||"Buchungsziel fehlt.";
       state.aiTasksMessageKind="warning";
       renderAiTaskDetail();
@@ -6687,6 +6762,7 @@
         renderAiTaskDetail();
         return false;
       }
+      clearAiTaskPendingBookingLink();
       writeAiTaskWorkspaceDraft(task,{...draft,open:true,linkedBookingId:bookingTarget.bookingId});
       closeAiTaskDetail();
       if(routeTo(`customers/${encodeURIComponent(customerId)}/buchungen`)===false){
@@ -6699,10 +6775,15 @@
       });
       return true;
     }
+    // Create: keep draft, clear linkedBookingId until a real booking is saved.
     writeAiTaskWorkspaceDraft(task,{...draft,open:true,linkedBookingId:""});
+    state.aiTaskPendingBookingLink={
+      customerId,
+      taskId,
+      moduleId:module.moduleId||""
+    };
     const moduleSeed=aiActionWorkspaceLib?.bookingSeedFromDraft?.(module.moduleId,draft,customerId)||{};
     const seed={
-      ...(window.ACTBookingLibrary?.defaultBooking?.(customer)||{}),
       ...moduleSeed,
       customerId,
       website:aiActionWorkspaceLib?.normalizeWebsiteHref?.(moduleSeed.website||draft.website)||safeWebUrl(moduleSeed.website||draft.website)||"",
@@ -6718,9 +6799,12 @@
       seed.phone=draft.phone||"";
       seed.internalNote=draft.note||"";
     }
+    // Never seed temporary/fictional booking IDs into the create flow.
     delete seed.bookingId;
+    delete seed.id;
     closeAiTaskDetail();
     if(routeTo(`customers/${encodeURIComponent(customerId)}/buchungen`)===false){
+      clearAiTaskPendingBookingLink();
       state.aiTasksMessage="Buchungsbereich konnte nicht geöffnet werden.";
       state.aiTasksMessageKind="error";
       return false;
@@ -6730,7 +6814,9 @@
       state.aiTasksMessageKind="warning";
     }
     window.requestAnimationFrame(()=>{
-      window.ACTAdminV2Bookings.openEditor(seed,customerId);
+      // Exact native create path: openEditor(null, customerId), then apply workspace seed.
+      const ok=window.ACTAdminV2Bookings.openEditor(null,customerId,{createSeed:seed});
+      if(ok===false)clearAiTaskPendingBookingLink();
     });
     return true;
   }
@@ -10693,7 +10779,9 @@
       AUTH_TIMEOUT_MS,
       routeTo,
       render,
-      flattenProgramItems
+      flattenProgramItems,
+      clearAiTaskPendingBookingLink,
+      linkAiTaskWorkspaceBookingAfterSave
     });
     window.ACTAdminV2Communication?.bind?.({
       getState:()=>state,
@@ -11209,7 +11297,10 @@
       handleConciergeEditInput(event);
       handleProgramEditInput(event);
       handleDocumentEditInput(event);
-      if(event.target.id==="documentSearchInput"){state.documentQuery=event.target.value;renderDocuments();}
+      if(event.target.id==="documentSearchInput"){
+        state.documentQuery=event.target.value;
+        if(!refreshDocumentsResults())renderDocuments();
+      }
     });
     document.addEventListener("change",event=>{
       if(window.ACTAdminV2Bookings?.handleChange?.(event))return;

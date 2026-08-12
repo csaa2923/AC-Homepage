@@ -1006,7 +1006,7 @@ describe("AI task action workspace persistence (frontend)",()=>{
 
     assert.match(html,/firebase-service\.js\?v=33/);
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
-    assert.match(html,/admin-v2\.js\?v=97/);
+    assert.match(html,/admin-v2\.js\?v=98/);
     assert.match(html,/admin-v2\.css\?v=75/);
     assert.match(service,/httpsCallable\(functions,"updateConciergeAnalysisTaskAction"/);
     assert.match(service,/async function updateConciergeAnalysisTaskAction/);

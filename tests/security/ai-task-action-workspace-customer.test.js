@@ -285,7 +285,7 @@ describe("AI task action workspace customer data module (Ops Ready 6.9)",()=>{
     const saveFn=js.match(/async function saveAiTaskWorkspaceAction[\s\S]*?(?=\n  function )/)?.[0]||"";
 
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
-    assert.match(html,/admin-v2\.js\?v=97/);
+    assert.match(html,/admin-v2\.js\?v=98/);
     assert.match(html,/admin-v2\.css\?v=75/);
     assert.match(html,/ai-task-open-target-library\.js\?v=4/);
     assert.match(js,/function aiTaskCustomerDataModuleMarkup\(/);

@@ -122,7 +122,7 @@ describe("AI task action workspace polish (Ops Ready 6.6)",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     const html=readProjectFile("customer-portal/admin-v2.html");
     assert.match(html,/admin-v2\.css\?v=75/);
-    assert.match(html,/admin-v2\.js\?v=97/);
+    assert.match(html,/admin-v2\.js\?v=98/);
     assert.match(css,/\.ai-task-detail-panel\{[\s\S]*max-height:min\(90dvh/);
     assert.match(css,/\.ai-task-detail-body\{[\s\S]*overflow-y:auto/);
     assert.match(css,/\.ai-task-detail-body\{[\s\S]*overflow-x:hidden/);
@@ -179,7 +179,7 @@ describe("AI task action workspace polish (Ops Ready 6.6)",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
-    assert.match(html,/admin-v2\.js\?v=97/);
+    assert.match(html,/admin-v2\.js\?v=98/);
     assert.match(html,/admin-v2\.css\?v=75/);
     assert.match(js,/function aiTaskRestaurantModuleMarkup\(/);
     assert.match(js,/function aiTaskTransferModuleMarkup\(/);

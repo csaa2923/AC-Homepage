@@ -105,7 +105,7 @@ describe("Admin V2 booking create + search focus fixes",()=>{
 
   it("bumps production pins for booking-create/search fix",()=>{
     const html=read("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2-bookings\.js\?v=4/);
+    assert.match(html,/admin-v2-bookings\.js\?v=5/);
     assert.match(html,/admin-v2\.js\?v=98/);
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
     assert.match(html,/admin-v2\.css\?v=75/);

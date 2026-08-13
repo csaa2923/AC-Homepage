@@ -125,9 +125,18 @@
   }
 
   function programOptions(customer,selected){
-    const items=h().flattenProgramItems?h().flattenProgramItems(customer):[];
+    // Create without a selected customer must still open the editor — never call
+    // flattenProgramItems(null) (programSource/buildTripViewModel crash on null).
     const opts=[`<option value="">Kein Programmpunkt</option>`];
-    items.forEach(item=>{
+    if(!customer||typeof customer!=="object")return opts.join("");
+    let items=[];
+    try{
+      items=h().flattenProgramItems?h().flattenProgramItems(customer):[];
+    }catch(error){
+      console.error("[ACT Admin V2] Programmpunkte:",error&&error.message?error.message:"Fehler");
+      items=[];
+    }
+    (Array.isArray(items)?items:[]).forEach(item=>{
       const id=item.id||"";
       if(!id)return;
       const label=[item.dateValue||item.date,item.title].filter(Boolean).join(" · ");
@@ -307,7 +316,20 @@
 
   function renderBookingEditor(){
     const root=h().byId("bookingEditorHost");
-    if(root)root.innerHTML=bookingEditorMarkup();
+    if(!root)return;
+    try{
+      root.innerHTML=bookingEditorMarkup();
+    }catch(error){
+      const message=error&&error.message?error.message:"Buchungseditor konnte nicht gerendert werden.";
+      console.error("[ACT Admin V2] Booking editor render:",message);
+      root.innerHTML=`<div class="v2-wizard-overlay" id="bookingEditorOverlay" data-booking-editor>
+        <div class="v2-wizard-dialog v2-booking-dialog" role="dialog" aria-modal="true">
+          <header class="v2-wizard-header"><div><p class="v2-eyebrow">Buchung</p><h2>Editor-Fehler</h2></div>
+            <button class="v2-button soft" type="button" data-booking-action="cancel-edit">Schliessen</button></header>
+          <div class="v2-wizard-body"><p class="v2-edit-status error" aria-live="assertive">${escapeHtml(message)}</p>
+            <p class="v2-muted">Diagnose: booking-editor-render-failed (ohne PII).</p></div>
+        </div></div>`;
+    }
   }
 
   function bookingEditorMarkup(){
@@ -545,29 +567,61 @@
 
   function openEditor(booking,customerId,options={}){
     const library=lib();
-    if(!library)return false;
-    const createSeed=options&&typeof options==="object"?options.createSeed:null;
-    // Native create uses booking=null; never treat a seed object as an existing booking.
-    const existing=booking&&typeof booking==="object"&&String(booking.bookingId||"").trim()
-      ?booking
-      :null;
-    const customer=h().customerById(customerId||existing?.customerId||createSeed?.customerId)||null;
-    let draft=library.normalizeBooking(existing||library.defaultBooking(customer),customer||{customerId:customerId||""});
-    if(!existing&&customerId)draft.customerId=customerId;
-    if(!existing&&createSeed)draft=applyCreateSeed(draft,createSeed);
-    draft.documents=Array.isArray(draft.documents)?draft.documents.map(item=>({...item})):[];
-    h().patchState({
-      bookingEditOpen:true,
-      bookingEditDraft:draft,
-      bookingEditOriginalId:existing?.bookingId||"",
-      bookingEditErrors:{},
-      bookingEditSaving:false,
-      bookingDocUploading:false,
-      bookingMessage:"",
-      bookingMessageKind:""
-    });
-    h().render();
-    return true;
+    if(!library){
+      setBookingMessage("Buchungsbibliothek fehlt. booking-library.js konnte nicht geladen werden.","error");
+      try{h().render();}catch(_){ /* keep visible list message */ }
+      return false;
+    }
+    try{
+      const createSeed=options&&typeof options==="object"?options.createSeed:null;
+      // Native create uses booking=null; never treat a seed object as an existing booking.
+      const existing=booking&&typeof booking==="object"&&String(booking.bookingId||"").trim()
+        ?booking
+        :null;
+      const requestedCustomerId=String(customerId||existing?.customerId||createSeed?.customerId||"").trim();
+      const customer=requestedCustomerId?h().customerById(requestedCustomerId)||null:null;
+      // Global „Neue Buchung“ may have no customer yet — editor opens with required customer select.
+      let draft=library.normalizeBooking(
+        existing||library.defaultBooking(customer),
+        customer||{customerId:requestedCustomerId||""}
+      );
+      if(!existing&&requestedCustomerId)draft.customerId=requestedCustomerId;
+      if(!existing&&createSeed)draft=applyCreateSeed(draft,createSeed);
+      draft.documents=Array.isArray(draft.documents)?draft.documents.map(item=>({...item})):[];
+      const createHint=!existing&&!draft.customerId
+        ?"Bitte Kunden im Editor waehlen (Pflichtfeld)."
+        :"";
+      h().patchState({
+        bookingEditOpen:true,
+        bookingEditDraft:draft,
+        bookingEditOriginalId:existing?.bookingId||"",
+        bookingEditErrors:{},
+        bookingEditSaving:false,
+        bookingDocUploading:false,
+        bookingMessage:createHint,
+        bookingMessageKind:createHint?"warning":""
+      });
+      h().render();
+      const hostEl=h().byId("bookingEditorHost");
+      if(!hostEl||!hostEl.querySelector("[data-booking-editor]")){
+        setBookingMessage("Buchungseditor konnte nicht geoeffnet werden.","error");
+        console.error("[ACT Admin V2] Booking create: editor host empty after openEditor");
+        return false;
+      }
+      return true;
+    }catch(error){
+      const message=error&&error.message?error.message:"Buchungseditor konnte nicht geoeffnet werden.";
+      console.error("[ACT Admin V2] Booking openEditor:",message);
+      h().patchState({
+        bookingEditOpen:false,
+        bookingEditDraft:null,
+        bookingEditOriginalId:"",
+        bookingMessage:message,
+        bookingMessageKind:"error"
+      });
+      try{h().render();}catch(_){ /* avoid secondary throw */ }
+      return false;
+    }
   }
 
   function closeEditor(){
@@ -842,11 +896,25 @@
     const bookingId=action.dataset.bookingId||"";
     const customerId=action.dataset.bookingCustomer||"";
     if(type==="create"){
-      openEditor(null,customerId||state().selectedCustomerId||"");
+      const ok=openEditor(null,customerId||state().selectedCustomerId||"");
+      if(!ok&&!state().bookingMessage){
+        setBookingMessage("Neue Buchung konnte nicht geoeffnet werden.","error");
+        h().render();
+      }
       return true;
     }
     if(type==="edit"){
-      openEditor(findBooking(customerId,bookingId),customerId);
+      const existing=findBooking(customerId,bookingId);
+      if(!existing){
+        setBookingMessage("Buchung wurde nicht gefunden.","error");
+        h().render();
+        return true;
+      }
+      const ok=openEditor(existing,customerId||existing.customerId||"");
+      if(!ok&&!state().bookingMessage){
+        setBookingMessage("Buchung konnte nicht geoeffnet werden.","error");
+        h().render();
+      }
       return true;
     }
     if(type==="open-customer"&&customerId){

@@ -187,6 +187,14 @@ function buildAuthorizedPortalCustomerView(customer,customerId){
   return pickKnownFields(view,new Set(PORTAL_CUSTOMER_VIEW_FIELDS));
 }
 
+function buildAuthorizedPublishedSnapshot(customer,customerId){
+  const published=customer&&typeof customer.publishedData==="object"&&customer.publishedData?customer.publishedData:{};
+  const redacted=redactPublicSnapshot(published,{customerId:sanitizeCustomerId(customerId)});
+  if(!redacted||typeof redacted!=="object")return {};
+  if(!redacted.customerId)redacted.customerId=sanitizeCustomerId(customerId);
+  return redacted;
+}
+
 function buildAccessRecord(input,now){
   const extras=unknownFields(input,ACCESS_FIELDS);
   if(extras.length)throw validationError("invalid-argument","Unbekannte Access-Felder.");
@@ -630,6 +638,7 @@ module.exports={
   portalAccessDenyMessage,
   isPortalAccessDeny,
   buildAuthorizedPortalCustomerView,
+  buildAuthorizedPublishedSnapshot,
   normalizePortalEmail,
   sanitizeCustomerId,
   sanitizePublicPortalId,

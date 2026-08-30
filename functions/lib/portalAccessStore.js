@@ -3,6 +3,7 @@ const {
   ID_CREATE_RETRIES,
   buildAccessRecord,
   buildAuthorizedPortalCustomerView,
+  buildAuthorizedPublishedSnapshot,
   buildGrantRecord,
   buildMemberRecord,
   generateAccessId,
@@ -378,7 +379,8 @@ async function runGetAuthorizedPortalContext(store,auth,query,loadCustomer){
   if(typeof loadCustomer==="function")customerDoc=await loadCustomer(context.customerId);
   return {
     ...context,
-    customer:buildAuthorizedPortalCustomerView(customerDoc,context.customerId)
+    customer:buildAuthorizedPortalCustomerView(customerDoc,context.customerId),
+    publishedData:buildAuthorizedPublishedSnapshot(customerDoc,context.customerId)
   };
 }
 
@@ -422,7 +424,8 @@ async function runGetAuthorizedPortalContextAsync(store,auth,query,loadCustomer)
     customerId:evaluated.customerId,
     publicPortalId:evaluated.publicPortalId,
     accessStatus:evaluated.accessStatus,
-    customer:buildAuthorizedPortalCustomerView(customerDoc,evaluated.customerId)
+    customer:buildAuthorizedPortalCustomerView(customerDoc,evaluated.customerId),
+    publishedData:buildAuthorizedPublishedSnapshot(customerDoc,evaluated.customerId)
   };
 }
 

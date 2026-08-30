@@ -32,6 +32,7 @@
       retry:"Try again",
       notAvailable:"Not available",
       secureNote:"This page is only accessible via your personal link.",
+      logout:"Sign out",
       brand:"Alpine Concierge Tirol",
       guest:"Guest",
       whatsappOpen:"Open WhatsApp",
@@ -889,6 +890,18 @@
       shareUnavailable:{
         title:"Portal unavailable",
         copy:"This portal link is invalid or no longer available."
+      },
+      invalidLink:{
+        title:"Link not valid",
+        copy:"This access link is not valid. Please use your personal portal link."
+      },
+      accessDisabled:{
+        title:"Access unavailable",
+        copy:"This portal access is currently unavailable. Please contact Alpine Concierge Tirol."
+      },
+      sessionExpired:{
+        title:"Session expired",
+        copy:"Your session has expired. Please sign in again."
       },
       temporarilyUnavailable:"Portal access is temporarily unavailable.",
       documentUnavailable:"Document not available"

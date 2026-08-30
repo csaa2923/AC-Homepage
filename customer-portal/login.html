@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kundenportal Anmeldung | Alpine Concierge Tirol</title>
+<meta name="description" content="Persönlicher Zugang zum Kundenportal von Alpine Concierge Tirol.">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<meta name="theme-color" content="#001a14">
+<link rel="icon" href="../favicon.ico">
+<link rel="apple-touch-icon" href="../images/logo/logo.png">
+<link rel="stylesheet" href="portal-login.css?v=1">
+</head>
+<body class="portal-login-body">
+<header class="portal-login-header">
+  <a class="portal-login-brand" href="../index.html" aria-label="Alpine Concierge Tirol">
+    <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol Logo" width="96" height="72" decoding="async">
+  </a>
+</header>
+
+<main id="portalLoginRoot" class="portal-login-main" aria-busy="true">
+  <section class="portal-login-card" id="loginCard" hidden>
+    <p class="portal-login-eyebrow">Alpine Concierge Tirol</p>
+    <h1>Ihr persönlicher Tirol-Begleiter</h1>
+    <p class="portal-login-lead">Geben Sie Ihre E-Mail-Adresse ein. Wir senden Ihnen einen einmaligen Zugangscode.</p>
+    <p class="portal-login-status" id="loginStatus" role="status" aria-live="polite"></p>
+
+    <form id="emailStep" class="portal-login-form" novalidate>
+      <div class="portal-login-field">
+        <label for="portalEmail">E-Mail-Adresse</label>
+        <input id="portalEmail" name="email" type="email" inputmode="email" autocomplete="username email" autocapitalize="none" spellcheck="false" required>
+      </div>
+      <div class="portal-login-actions">
+        <button type="submit" class="portal-login-button" id="sendCodeButton">Zugangscode senden</button>
+      </div>
+    </form>
+
+    <form id="otpStep" class="portal-login-form" hidden novalidate>
+      <p class="portal-login-copy">Wir haben Ihnen einen 6-stelligen Zugangscode gesendet.</p>
+      <div class="portal-login-field portal-login-code">
+        <label for="portalOtp">Zugangscode</label>
+        <input id="portalOtp" name="otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" autocapitalize="none" spellcheck="false" required>
+      </div>
+      <div class="portal-login-actions">
+        <button type="submit" class="portal-login-button" id="signInButton">Anmelden</button>
+        <button type="button" class="portal-login-resend" id="resendButton">Code erneut senden</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="portal-login-card portal-login-error" id="loginError" hidden>
+    <p class="portal-login-eyebrow">Alpine Concierge Tirol</p>
+    <h1 id="loginErrorTitle">Zugang nicht verfügbar</h1>
+    <p class="portal-login-copy" id="loginErrorCopy">Dieser Zugangslink ist nicht gültig.</p>
+    <p class="portal-login-status" id="loginErrorStatus" role="status" aria-live="polite"></p>
+    <a class="portal-login-contact" href="https://wa.me/4367761410679" target="_blank" rel="noopener">Alpine Concierge Tirol kontaktieren</a>
+  </section>
+</main>
+
+<script src="portal-login-library.js?v=2"></script>
+<script src="portal-share-library.js?v=5"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-service.js?v=26"></script>
+<script src="portal-customer-auth.js?v=2"></script>
+<script src="portal-login.js?v=1"></script>
+</body>
+</html>

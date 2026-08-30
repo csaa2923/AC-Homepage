@@ -1,0 +1,179 @@
+:root{
+  --act-forest:#001a14;
+  --act-forest-mid:#0b342a;
+  --act-paper:#fffdf7;
+  --act-cream:#fffaf0;
+  --act-card:#fffef9;
+  --act-gold:#d8b76a;
+  --act-gold-bright:#f3dea0;
+  --act-ink:#102820;
+  --act-muted:#5f716b;
+  --act-on-dark:#f8f1dd;
+  --act-line:rgba(16,40,32,.12);
+  --act-alert:#8b3a2f;
+  --act-btn-min:44px;
+  --act-font-serif:Georgia,"Times New Roman",serif;
+  --act-font-sans:"Segoe UI",system-ui,-apple-system,sans-serif;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;}
+body.portal-login-body{
+  background:
+    radial-gradient(1200px 420px at 50% -10%,rgba(216,183,106,.18),transparent 55%),
+    linear-gradient(180deg,var(--act-forest) 0 168px,var(--act-cream) 168px);
+  color:var(--act-ink);
+  font-family:var(--act-font-sans);
+  font-size:16px;
+  line-height:1.55;
+  overflow-x:hidden;
+}
+
+.portal-login-header{
+  display:flex;
+  justify-content:center;
+  padding:calc(18px + env(safe-area-inset-top,0px)) 20px 8px;
+}
+.portal-login-header img{
+  display:block;
+  width:96px;
+  height:72px;
+  object-fit:contain;
+}
+
+.portal-login-main{
+  width:min(430px,calc(100% - 32px));
+  margin:0 auto;
+  padding:8px 0 calc(28px + env(safe-area-inset-bottom,0px));
+}
+
+.portal-login-card{
+  background:var(--act-card);
+  border:1px solid var(--act-line);
+  border-radius:18px;
+  box-shadow:0 18px 40px rgba(5,24,19,.12);
+  padding:28px 22px 24px;
+}
+
+.portal-login-eyebrow{
+  margin:0 0 8px;
+  color:#b9913e;
+  text-transform:uppercase;
+  letter-spacing:.16em;
+  font-size:11px;
+  font-weight:700;
+}
+.portal-login-card h1{
+  margin:0 0 8px;
+  font-family:var(--act-font-serif);
+  font-size:clamp(28px,8vw,34px);
+  line-height:1.15;
+  font-weight:600;
+}
+.portal-login-lead,
+.portal-login-copy{
+  margin:0 0 20px;
+  color:var(--act-muted);
+}
+.portal-login-copy{margin-bottom:18px;}
+
+.portal-login-field{display:grid;gap:8px;margin-bottom:16px;}
+.portal-login-field label{
+  font-size:14px;
+  font-weight:700;
+}
+.portal-login-field input{
+  width:100%;
+  min-height:var(--act-btn-min);
+  border:1px solid rgba(16,40,32,.18);
+  border-radius:12px;
+  background:#fff;
+  color:var(--act-ink);
+  padding:12px 14px;
+  font:inherit;
+}
+.portal-login-field input:focus{
+  outline:2px solid var(--act-gold);
+  outline-offset:2px;
+  border-color:transparent;
+}
+.portal-login-code input{
+  letter-spacing:.36em;
+  font-size:28px;
+  font-weight:700;
+  text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+
+.portal-login-actions{display:grid;gap:12px;}
+.portal-login-button{
+  min-height:var(--act-btn-min);
+  border:0;
+  border-radius:12px;
+  padding:12px 16px;
+  font:inherit;
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+  background:linear-gradient(135deg,var(--act-gold-bright),var(--act-gold));
+  color:var(--act-ink);
+}
+.portal-login-button:focus-visible{
+  outline:2px solid var(--act-gold);
+  outline-offset:3px;
+}
+.portal-login-button:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+.portal-login-resend{
+  min-height:var(--act-btn-min);
+  border:0;
+  background:transparent;
+  color:var(--act-forest-mid);
+  text-decoration:underline;
+  font:inherit;
+  cursor:pointer;
+  padding:8px;
+}
+.portal-login-resend:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+  text-decoration:none;
+}
+
+.portal-login-status{
+  min-height:1.4em;
+  margin:0 0 14px;
+  color:var(--act-muted);
+  font-size:14px;
+}
+.portal-login-status[data-tone="error"]{color:var(--act-alert);}
+.portal-login-status[data-tone="busy"]{color:var(--act-forest-mid);}
+
+.portal-login-error h1{font-size:clamp(26px,7vw,32px);}
+.portal-login-contact{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:var(--act-btn-min);
+  padding:12px 16px;
+  border-radius:12px;
+  background:linear-gradient(135deg,var(--act-gold-bright),var(--act-gold));
+  color:var(--act-ink);
+  text-decoration:none;
+  font-weight:800;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  font-size:13px;
+}
+
+[hidden]{display:none !important}
+
+@media (max-width:360px){
+  .portal-login-main{width:calc(100% - 20px);}
+  .portal-login-card{padding:24px 16px 20px;}
+  .portal-login-code input{font-size:24px;letter-spacing:.24em;}
+}

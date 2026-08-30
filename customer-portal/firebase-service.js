@@ -14,6 +14,16 @@
     bucket:"",
     initPromise:null
   };
+  const CUSTOMER_PORTAL_APP_NAME="customerPortal";
+  const portalCustomer={
+    app:null,
+    auth:null,
+    functions:null,
+    user:null,
+    persistenceReady:false,
+    authEmulatorReady:false,
+    functionsEmulatorReady:false
+  };
   const MAX_UPLOAD_BYTES=24*1024*1024;
   const DOCUMENT_MIME_TYPES=new Set([
     "application/pdf",
@@ -124,7 +134,9 @@
         import(`https://www.gstatic.com/firebasejs/${version}/firebase-storage.js`)
       ]);
       state.modules={appModule,authModule,firestoreModule,storageModule};
-      state.app=appModule.initializeApp(firebaseConfig);
+      const existingApps=typeof appModule.getApps==="function"?appModule.getApps():[];
+      const defaultApp=(existingApps||[]).find(app=>app&&app.name==="[DEFAULT]")||null;
+      state.app=defaultApp||appModule.initializeApp(firebaseConfig);
       state.auth=authModule.getAuth(state.app);
       state.db=firestoreModule.getFirestore(state.app);
       const shareCfg=root.portalShare||{};
@@ -1152,8 +1164,7 @@
     return import(`https://www.gstatic.com/firebasejs/${version}/firebase-functions.js`);
   }
 
-  async function callableFunctionsContext(){
-    const ready=await ensureDb();
+  async function attachFunctions(ready){
     if(!state.functionsModule)state.functionsModule=await importFunctionsModule();
     if(!state.functions){
       state.functions=state.functionsModule.getFunctions(ready.app,portalShareConfig().functionsRegion||"europe-west1");
@@ -1165,6 +1176,11 @@
       }
     }
     return {functions:state.functions,functionsModule:state.functionsModule,auth:ready.auth,authModule:ready.modules.authModule};
+  }
+
+  async function callableFunctionsContext(){
+    const ready=await ensureDb();
+    return attachFunctions(ready);
   }
 
   async function callableUserContext(auth,authModule){
@@ -1214,6 +1230,150 @@
       throw new Error("AI Concierge abgebrochen: Firebase-ID-Token fehlt.");
     }
     return user;
+  }
+
+  function findNamedFirebaseApp(appModule,name){
+    const apps=appModule&&typeof appModule.getApps==="function"?appModule.getApps():[];
+    return (apps||[]).find(app=>app&&app.name===name)||null;
+  }
+
+  async function ensureCustomerPortalRuntime(){
+    const ready=await init({anonymous:false});
+    if(!ready.available||!ready.modules||!ready.modules.appModule||!ready.modules.authModule){
+      const error=new Error(ready.error||"Firebase Auth ist nicht erreichbar.");
+      error.code="unavailable";
+      throw error;
+    }
+    const {appModule,authModule}=ready.modules;
+    const firebaseConfig=configRoot().config||{};
+    let app=findNamedFirebaseApp(appModule,CUSTOMER_PORTAL_APP_NAME);
+    if(!app&&typeof appModule.getApp==="function"){
+      try{app=appModule.getApp(CUSTOMER_PORTAL_APP_NAME);}catch(error){app=null;}
+    }
+    if(!app)app=appModule.initializeApp(firebaseConfig,CUSTOMER_PORTAL_APP_NAME);
+    portalCustomer.app=app;
+    portalCustomer.auth=authModule.getAuth(app);
+    const shareCfg=portalShareConfig();
+    if(shareCfg.useAuthEmulator&&shareCfg.authEmulatorHost&&authModule.connectAuthEmulator&&!portalCustomer.authEmulatorReady){
+      authModule.connectAuthEmulator(portalCustomer.auth,shareCfg.authEmulatorHost,{disableWarnings:true});
+      portalCustomer.authEmulatorReady=true;
+    }
+    if(!state.functionsModule)state.functionsModule=await importFunctionsModule();
+    if(!portalCustomer.functions){
+      portalCustomer.functions=state.functionsModule.getFunctions(app,shareCfg.functionsRegion||"europe-west1");
+      if(shareCfg.useFunctionsEmulator&&state.functionsModule.connectFunctionsEmulator&&!portalCustomer.functionsEmulatorReady){
+        const host=String(shareCfg.functionsEmulatorHost||"").replace(/^https?:\/\//,"").split("/")[0];
+        const [fnHost,fnPort]=host.split(":");
+        state.functionsModule.connectFunctionsEmulator(portalCustomer.functions,fnHost||"127.0.0.1",Number(fnPort||5001));
+        portalCustomer.functionsEmulatorReady=true;
+      }
+    }
+    return {
+      app,
+      auth:portalCustomer.auth,
+      authModule,
+      functions:portalCustomer.functions,
+      functionsModule:state.functionsModule,
+      available:true
+    };
+  }
+
+  async function ensurePortalCustomerAuth(){
+    return ensureCustomerPortalRuntime();
+  }
+
+  function portalCustomerAuthContext(){
+    return {
+      available:Boolean(portalCustomer.auth),
+      app:portalCustomer.app,
+      appName:CUSTOMER_PORTAL_APP_NAME,
+      auth:portalCustomer.auth,
+      authModule:state.modules&&state.modules.authModule,
+      functions:portalCustomer.functions,
+      user:portalCustomer.auth?portalCustomer.auth.currentUser:portalCustomer.user
+    };
+  }
+
+  async function portalCallableFunctionsContext(){
+    const ready=await ensureCustomerPortalRuntime();
+    return {
+      functions:ready.functions,
+      functionsModule:ready.functionsModule,
+      auth:ready.auth,
+      authModule:ready.authModule,
+      app:ready.app
+    };
+  }
+
+  async function callPortalCustomerFunction(name,payload){
+    const {functions,functionsModule}=await portalCallableFunctionsContext();
+    const callable=functionsModule.httpsCallable(functions,name);
+    const result=await callable(payload||{});
+    return result&&result.data?result.data:{};
+  }
+
+  async function setPortalAuthPersistence(){
+    const ready=await ensureCustomerPortalRuntime();
+    if(ready.authModule.setPersistence&&ready.authModule.browserLocalPersistence&&!portalCustomer.persistenceReady){
+      await ready.authModule.setPersistence(ready.auth,ready.authModule.browserLocalPersistence);
+      portalCustomer.persistenceReady=true;
+    }
+    return ready;
+  }
+
+  function waitForPortalAuthUser(auth,authModule,timeoutMs){
+    const limit=Number(timeoutMs)||15000;
+    if(auth&&auth.currentUser&&!auth.currentUser.isAnonymous)return Promise.resolve(auth.currentUser);
+    if(!auth||!authModule||typeof authModule.onAuthStateChanged!=="function")return Promise.resolve(null);
+    return new Promise(resolve=>{
+      let settled=false;
+      let timer=0;
+      let unsubscribe=null;
+      const finish=user=>{
+        if(settled)return;
+        settled=true;
+        if(unsubscribe)unsubscribe();
+        if(timer)clearTimeout(timer);
+        resolve(user&&!user.isAnonymous?user:null);
+      };
+      unsubscribe=authModule.onAuthStateChanged(auth,user=>finish(user&&!user.isAnonymous?user:null),()=>finish(null));
+      timer=setTimeout(()=>finish(auth.currentUser&&!auth.currentUser.isAnonymous?auth.currentUser:null),limit);
+    });
+  }
+
+  async function signInPortalWithCustomToken(customToken){
+    const token=String(customToken||"").trim();
+    if(!token){
+      const error=new Error("Anmeldung nicht möglich.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    const ready=await setPortalAuthPersistence();
+    await ready.authModule.signInWithCustomToken(ready.auth,token);
+    const user=await waitForPortalAuthUser(ready.auth,ready.authModule);
+    portalCustomer.user=user;
+    return user;
+  }
+
+  async function signOutPortal(){
+    const ready=await ensureCustomerPortalRuntime();
+    if(ready.auth&&ready.authModule&&typeof ready.authModule.signOut==="function"){
+      await ready.authModule.signOut(ready.auth);
+    }
+    portalCustomer.user=null;
+    return true;
+  }
+
+  async function requestCustomerPortalOtp(publicPortalId,email){
+    return callPortalCustomerFunction("requestCustomerPortalOtp",{publicPortalId,email});
+  }
+
+  async function exchangePortalOtpForCustomToken(challengeId,code){
+    return callPortalCustomerFunction("exchangePortalOtpForCustomToken",{challengeId,code});
+  }
+
+  async function getCustomerPortalContext(publicPortalId){
+    return callPortalCustomerFunction("getCustomerPortalContext",{publicPortalId});
   }
 
   function portalSharesCollectionRef(ready){
@@ -1441,6 +1601,17 @@
     revokePortalShare,
     fetchPortalShareData,
     fetchPortalDocumentUrl,
+    CUSTOMER_PORTAL_APP_NAME,
+    ensurePortalCustomerAuth,
+    portalCustomerAuthContext,
+    portalCustomerState:()=>({...portalCustomer}),
+    setPortalAuthPersistence,
+    waitForPortalAuthUser,
+    signInPortalWithCustomToken,
+    signOutPortal,
+    requestCustomerPortalOtp,
+    exchangePortalOtpForCustomToken,
+    getCustomerPortalContext,
     saveConciergeAnalysis,
     listConciergeAnalyses,
     updateConciergeAnalysisItemStatus,

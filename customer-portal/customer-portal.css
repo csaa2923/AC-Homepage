@@ -191,10 +191,27 @@ button{font:inherit}
   color:var(--gold-2);
 }
 .app-lang-btn:focus-visible,
-.app-nav-item:focus-visible{
+.app-nav-item:focus-visible,
+.app-logout-btn:focus-visible{
   outline:2px solid var(--gold);
   outline-offset:3px;
 }
+.app-logout-btn{
+  justify-self:end;
+  min-width:44px;
+  min-height:44px;
+  padding:0 14px;
+  border:1px solid rgba(216,183,106,.4);
+  border-radius:10px;
+  background:rgba(255,250,240,.08);
+  color:#f5ecd4;
+  font-family:var(--act-font-sans);
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.06em;
+  cursor:pointer;
+}
+.app-logout-btn[hidden]{display:none !important}
 
 .app-bottom-nav{
   position:fixed;

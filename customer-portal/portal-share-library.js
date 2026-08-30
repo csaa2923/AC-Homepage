@@ -32,7 +32,26 @@
   function portalIndexPath(){
     const href=window.location.href.split("#")[0].split("?")[0];
     if(/admin(?:-v2)?\.html$/i.test(href))return href.replace(/admin(?:-v2)?\.html$/i,"index.html");
+    if(/\/login\/index\.html$/i.test(href))return href.replace(/\/login\/index\.html$/i,"/index.html");
+    if(/\/login\.html$/i.test(href))return href.replace(/\/login\.html$/i,"/index.html");
+    if(/\/login\/?$/i.test(href))return href.replace(/\/login\/?$/i,"/index.html");
     return href.includes("/customer-portal/")?href.replace(/[^/]*$/,"index.html"):"customer-portal/index.html";
+  }
+
+  function parsePublicPortalId(value){
+    const loginLib=window.ACTPortalLoginLibrary;
+    if(loginLib&&typeof loginLib.parsePublicPortalId==="function")return loginLib.parsePublicPortalId(value);
+    const id=String(value||"").trim();
+    return /^pp_[A-Za-z0-9_-]{16,43}$/.test(id)?id:"";
+  }
+
+  function parsePortalLoginParams(search){
+    const loginLib=window.ACTPortalLoginLibrary;
+    if(loginLib&&typeof loginLib.parsePortalLoginParams==="function")return loginLib.parsePortalLoginParams(search);
+    const params=new URLSearchParams(search||window.location.search);
+    const raw=String(params.get("p")||"").trim();
+    const publicPortalId=parsePublicPortalId(raw);
+    return {publicPortalId,rawPublicPortalId:raw,hasQueryKey:params.has("p")};
   }
 
   function buildShareUrl(shareId,rawToken){
@@ -259,8 +278,11 @@
     buildShareUrl,
     isSecureShareUrl,
     parseShareParams,
+    parsePublicPortalId,
+    parsePortalLoginParams,
     portalShareFunctionUrl,
     portalDocumentFunctionUrl,
+    portalIndexPath,
     isProductionHost,
     isLocalDevHost,
     isTrustedAdminPreview,

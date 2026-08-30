@@ -2,15 +2,21 @@
   const dataRoot=window.CustomerPortalData||{customers:{}};
   const STORAGE_KEY="act_customer_portal_customers";
   const shareLib=window.ACTPortalShareLibrary||null;
+  const loginLib=window.ACTPortalLoginLibrary||null;
+  const portalAuth=window.ACTPortalCustomerAuth||null;
   const portalParams=shareLib?shareLib.parseShareParams(window.location.search):{
     shareId:String(new URLSearchParams(window.location.search).get("share")||"").trim(),
     rawToken:String(new URLSearchParams(window.location.search).get("token")||"").trim(),
     customerId:String(new URLSearchParams(window.location.search).get("customer")||"").trim(),
     isAdminPreview:new URLSearchParams(window.location.search).get("admin")==="1"
   };
+  const loginParams=loginLib?loginLib.parsePortalLoginParams(window.location.search):{publicPortalId:"",rawPublicPortalId:"",hasQueryKey:false};
+  const publicPortalId=loginParams.publicPortalId||"";
   const customerId=portalParams.customerId||dataRoot.defaultCustomerId;
   const isAdminPreview=portalParams.isAdminPreview;
   const isShareAccess=Boolean(portalParams.shareId&&portalParams.rawToken);
+  const isSessionAccess=Boolean(publicPortalId)&&!isShareAccess;
+  let sessionRedirecting=false;
   let customer=null;
   let portalGreetingName="";
   let dataSource="demo";
@@ -391,6 +397,34 @@
     root.replaceChildren(document.getElementById("notFoundTemplate").content.cloneNode(true));
   }
 
+  function redirectToPortalLogin(){
+    if(!loginLib||!publicPortalId)return false;
+    sessionRedirecting=true;
+    window.location.replace(loginLib.buildPortalLoginUrl(publicPortalId));
+    return true;
+  }
+
+  function syncLogoutButton(){
+    const button=document.getElementById("portalLogoutButton");
+    if(!button)return;
+    button.hidden=!isSessionAccess;
+  }
+
+  async function handlePortalLogout(){
+    if(!portalAuth||!publicPortalId)return;
+    const target=await portalAuth.signOutToLogin(publicPortalId);
+    window.location.replace(target);
+  }
+
+  async function loadSessionCustomerData(){
+    if(!portalAuth||!loginLib){
+      throw new Error(t("errors.temporarilyUnavailable"));
+    }
+    const context=await portalAuth.loadAuthorizedPortalData(publicPortalId);
+    dataSource="session";
+    return context.publishedData||null;
+  }
+
   async function loadShareCustomerData(){
     const db=window.ACTFirebaseDatabase;
     if(!db||!db.fetchPortalShareData){
@@ -412,6 +446,33 @@
       }catch(error){
         console.warn("Share-Link konnte nicht geladen werden.");
         showShareError(t("errors.shareUnavailable.copy"));
+        return null;
+      }
+    }
+
+    if(loginParams.hasQueryKey&&!publicPortalId){
+      showShareError(t("errors.invalidLink.copy"));
+      return null;
+    }
+
+    if(isSessionAccess){
+      try{
+        return await loadSessionCustomerData();
+      }catch(error){
+        const code=String(error&&error.code||"").replace(/^functions\//,"");
+        if(code==="unauthenticated"||code.includes("expired")){
+          if(redirectToPortalLogin())return null;
+        }
+        if(code==="permission-denied"||code==="access-disabled"){
+          showShareError(t("errors.accessDisabled.copy"));
+          return null;
+        }
+        if(code==="invalid-argument"){
+          showShareError(t("errors.invalidLink.copy"));
+          return null;
+        }
+        console.warn("Portal-Sitzung konnte nicht geladen werden.");
+        showShareError(t("errors.temporarilyUnavailable"));
         return null;
       }
     }
@@ -3747,6 +3808,7 @@
     initAppViewState();
     const loaded=await loadCustomerData();
     if(!loaded){
+      if(sessionRedirecting)return;
       if(!root.querySelector(".not-found")){
         root.removeAttribute("aria-busy");
         root.replaceChildren(document.getElementById("notFoundTemplate").content.cloneNode(true));
@@ -3755,8 +3817,14 @@
       return;
     }
     portalGreetingName=resolvePortalGreetingName(loaded);
-    customer=normalizeCustomerData(loaded,isShareAccess?loaded.customerId||"":customerId);
+    customer=normalizeCustomerData(loaded,isShareAccess||isSessionAccess?loaded.customerId||"":customerId);
     syncPortalLanguageUI(resolvePortalLanguageFromContext());
+    syncLogoutButton();
+    const logoutButton=document.getElementById("portalLogoutButton");
+    if(logoutButton&&!logoutButton.dataset.bound){
+      logoutButton.dataset.bound="1";
+      logoutButton.addEventListener("click",handlePortalLogout);
+    }
     renderPortal();
     applyAppViewVisibility();
   }

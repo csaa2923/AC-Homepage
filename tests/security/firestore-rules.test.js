@@ -190,3 +190,25 @@ describe("firestore rules — customer portal access",()=>{
     await assertFails(adminDb.doc("portalShares/ps_test").set({status:"active"}));
   });
 });
+
+describe("firestore rules — portal OTP challenges",()=>{
+  const challengePath="customerPortalOtpChallenges/oc_test";
+  const limitPath="customerPortalOtpLimits/pa_test_pm_test";
+
+  it("S) denies all client reads on OTP challenges and limits",async()=>{
+    const unauthedDb=testEnv.unauthenticatedContext().firestore();
+    const customerDb=testEnv.authenticatedContext("otp-customer-read",{role:"customer"}).firestore();
+    const adminDb=testEnv.authenticatedContext("otp-admin-read",{role:"admin",orgId:"act"}).firestore();
+    await assertFails(unauthedDb.doc(challengePath).get());
+    await assertFails(customerDb.doc(challengePath).get());
+    await assertFails(adminDb.doc(challengePath).get());
+    await assertFails(adminDb.doc(limitPath).get());
+  });
+
+  it("T) denies all client writes on OTP challenges and limits",async()=>{
+    const adminDb=testEnv.authenticatedContext("otp-admin-write",{role:"admin"}).firestore();
+    const ownerDb=testEnv.authenticatedContext("otp-owner-write",{role:"owner"}).firestore();
+    await assertFails(adminDb.doc(challengePath).set({otpHash:"x",status:"pending"}));
+    await assertFails(ownerDb.doc(limitPath).set({requestCount:1}));
+  });
+});

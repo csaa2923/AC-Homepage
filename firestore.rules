@@ -196,6 +196,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /*
+     * Portal OTP challenges (Ops Ready 7.3).
+     * Functions/Admin SDK only. Clients never read hashes or write codes.
+     */
+    match /customerPortalOtpChallenges/{challengeId} {
+      allow read, write: if false;
+    }
+
+    match /customerPortalOtpLimits/{limitId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

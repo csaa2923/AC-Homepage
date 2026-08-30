@@ -25,8 +25,10 @@ const CHALLENGE_FIELDS=new Set([
   "challengeId","accessId","memberId","publicPortalId","emailNormalized",
   "otpHash","status","createdAt","expiresAt","attempts","maxAttempts",
   "consumedAt","invalidatedAt","activatedAt","updatedAt","version",
-  "exchangeStartedAt","authUid","exchangeVersion"
+  "exchangeStartedAt","authUid","exchangeVersion",
+  "deliveryStatus","sentAt","deliveryFailedAt"
 ]);
+const DELIVERY_STATUSES=new Set(["pending","sent","failed"]);
 const CREATE_FIELDS=new Set(["publicPortalId","email"]);
 const VERIFY_FIELDS=new Set(["challengeId","code","publicPortalId","email"]);
 const ACTIVATE_FIELDS=new Set(["challengeId","authUid"]);
@@ -214,6 +216,7 @@ function buildChallengeRecord({access,member,secret,now,defaults}){
     expiresAt:nowIso(stamp+defaults.ttlMs),
     attempts:0,
     maxAttempts:defaults.maxAttempts,
+    deliveryStatus:"pending",
     version:1
   });
   if(challengeContainsPlainOtp(record,otp)){
@@ -229,6 +232,7 @@ async function createPortalOtpChallenge({
   secret,
   now,
   exposeOtpForTest=false,
+  retainOtp,
   defaults=OTP_DEFAULTS
 }={}){
   if(unknownFields(input,CREATE_FIELDS).length){
@@ -270,6 +274,7 @@ async function createPortalOtpChallenge({
       openChallengeId:built.record.challengeId,
       updatedAt:nowIso(now)
     });
+    if(typeof retainOtp==="function")retainOtp(built.otp);
     return createResult("created",{
       challengeId:built.record.challengeId,
       challenge:built.record,
@@ -298,6 +303,7 @@ async function verifyPortalOtpChallenge({
   return otpStore.runChallengeTransaction(async tx=>{
     const challenge=await tx.getChallenge(input.challengeId);
     if(!challenge)return denyVerify("not-found");
+    if(challenge.deliveryStatus==="failed")return denyVerify("delivery-failed",challenge);
     if(challenge.status==="consumed")return denyVerify("consumed",challenge);
     if(challenge.status==="locked")return denyVerify("locked",challenge);
     if(challenge.status==="invalidated")return denyVerify("invalidated",challenge);
@@ -403,6 +409,34 @@ async function activateVerifiedPortalMember({
   });
 }
 
+async function markChallengeDelivery(otpStore,challengeId,deliveryStatus,now){
+  const status=DELIVERY_STATUSES.has(deliveryStatus)?deliveryStatus:"";
+  if(!status)throw validationError("invalid-argument","deliveryStatus ist ungueltig.");
+  const id=sanitizeChallengeId(challengeId);
+  if(!id)throw validationError("invalid-argument","challengeId ist ungueltig.");
+  return otpStore.runChallengeTransaction(async tx=>{
+    const challenge=await tx.getChallenge(id);
+    if(!challenge)return null;
+    const stamp=nowIso(now);
+    const failed=status==="failed";
+    const next=sanitizeChallengeRecord({
+      ...challenge,
+      deliveryStatus:status,
+      sentAt:status==="sent"?stamp:challenge.sentAt,
+      deliveryFailedAt:failed?stamp:challenge.deliveryFailedAt,
+      status:failed?"invalidated":challenge.status,
+      invalidatedAt:failed?stamp:challenge.invalidatedAt,
+      updatedAt:stamp,
+      version:(challenge.version||1)+1
+    });
+    if(challengeContainsPlainOtp(next)){
+      throw validationError("internal","OTP darf nicht persistiert werden.");
+    }
+    await tx.putChallenge(next);
+    return next;
+  });
+}
+
 function incrementAttempts(challenge,now){
   const attempts=Number(challenge.attempts||0)+1;
   const locked=attempts>=Number(challenge.maxAttempts||OTP_DEFAULTS.maxAttempts);
@@ -429,6 +463,7 @@ async function reservePortalOtpExchange({
   return otpStore.runChallengeTransaction(async tx=>{
     const challenge=await tx.getChallenge(challengeId);
     if(!challenge)return denyVerify("not-found");
+    if(challenge.deliveryStatus==="failed")return denyVerify("delivery-failed",challenge);
     if(challenge.status==="locked")return denyVerify("locked",challenge);
     if(challenge.status==="invalidated")return denyVerify("invalidated",challenge);
     if(challenge.status==="expired"||isExpired(challenge,now)){
@@ -493,6 +528,7 @@ module.exports={
   OTP_DEFAULTS,
   OTP_HMAC_PREFIX,
   CHALLENGE_FIELDS,
+  DELIVERY_STATUSES,
   EXCHANGE_FIELDS,
   generatePortalOtp,
   generateChallengeId,
@@ -506,5 +542,6 @@ module.exports={
   createPortalOtpChallenge,
   verifyPortalOtpChallenge,
   reservePortalOtpExchange,
+  markChallengeDelivery,
   activateVerifiedPortalMember
 };

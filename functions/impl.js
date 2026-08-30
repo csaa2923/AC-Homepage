@@ -115,12 +115,15 @@ const {
   runGetAuthorizedPortalContextAsync
 }=require("./lib/portalAccessStore");
 const {createFirestorePortalOtpStore}=require("./lib/portalOtpStore");
-const {createPortalOtpChallenge}=require("./lib/portalOtp");
 const {
   createPortalAuthAdapter,
   exchangePortalOtpForCustomToken,
   publicRequestOtpResult
 }=require("./lib/portalAuth");
+const {
+  createPortalMailAdapter,
+  requestPortalOtpWithMail
+}=require("./lib/portalMail");
 
 const SIGNED_URL_TTL_MS=5*60*1000;
 const AI_ANALYSIS_HISTORY_PAGE_SIZE=5;
@@ -781,16 +784,23 @@ function defaultPortalAuthAdapter(){
   return createPortalAuthAdapter(getAdmin().auth(getAdminApp()));
 }
 
+function defaultPortalMailAdapter(){
+  return createPortalMailAdapter();
+}
+
 async function requestCustomerPortalOtp(request,deps={}){
   try{
     assertKnownRequestFields(request.data,new Set(["publicPortalId","email"]));
-    const created=await createPortalOtpChallenge({
+    const created=await requestPortalOtpWithMail({
       accessStore:deps.store||portalAccessStore(),
       otpStore:deps.otpStore||portalOtpStore(),
+      mailAdapter:deps.mailAdapter||defaultPortalMailAdapter(),
       input:request.data||{},
       secret:deps.secret||getSecret(),
       now:deps.now,
-      exposeOtpForTest:false
+      log:deps.log,
+      exposeOtpForTest:false,
+      defaults:deps.defaults
     });
     return publicRequestOtpResult(created);
   }catch(error){

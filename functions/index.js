@@ -1,5 +1,5 @@
 const {onRequest,onCall}=require("firebase-functions/v2/https");
-const {functionSecrets,aiFunctionSecrets}=require("./secrets");
+const {functionSecrets,aiFunctionSecrets,portalOtpMailSecrets}=require("./secrets");
 
 let impl;
 function loadImpl(){
@@ -55,7 +55,7 @@ exports.requestCustomerPortalOtp=onCall({
   region:"europe-west1",
   cors:true,
   invoker:"public",
-  secrets:functionSecrets()
+  secrets:portalOtpMailSecrets()
 },(request)=>loadImpl().requestCustomerPortalOtp(request));
 
 exports.exchangePortalOtpForCustomToken=onCall({

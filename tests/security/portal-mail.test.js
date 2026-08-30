@@ -282,14 +282,16 @@ describe("portal OTP mail delivery",()=>{
   });
 
   it("Q/R) fake adapter is test-only and no provider secret is serialized",()=>{
-    assert.match(implSource,/createPortalMailAdapter\(\)/);
+    assert.match(implSource,/createPortalMailAdapter\(\{/);
     assert.doesNotMatch(implSource,/createMemoryPortalMailAdapter\(\)/);
     assert.doesNotMatch(implSource,/exposeOtpForTest:!0|exposeOtpForTest:true/);
     const adapter=portalMail.createPortalMailAdapter();
     assert.equal(adapter.providerCategory,"unconfigured");
     assert.doesNotMatch(JSON.stringify(adapter),/apiKey|secret|Bearer|sk_/);
-    assert.doesNotMatch(mailSource,/resend|sendgrid|mailgun|postmark|smtp/i);
-    assert.doesNotMatch(implSource,/RESEND_|SENDGRID_|MAILGUN_|POSTMARK_/);
+    assert.doesNotMatch(mailSource,/sendgrid|mailgun|postmark|nodemailer|smtp/i);
+    assert.match(mailSource,/createResendPortalMailAdapter/);
+    assert.doesNotMatch(implSource,/re_[A-Za-z0-9]{8,}/);
+    assert.doesNotMatch(mailSource,/re_[A-Za-z0-9]{8,}/);
   });
 
   it("S/X/Y) enumeration, malformed input and email normalization stay unchanged",async()=>{

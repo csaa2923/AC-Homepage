@@ -1,12 +1,13 @@
 /**
- * Customer portal OTP mail delivery (Ops Ready 7.5a).
+ * Customer portal OTP mail delivery (Ops Ready 7.5a / 7.5a.1).
  *
- * No production mail provider is configured in this repository. This module
- * provides a provider-independent adapter, a memory/fake adapter for tests,
- * and an unconfigured production adapter that refuses to send.
+ * Provider-independent adapter plus:
+ * - memory/fake adapter for tests
+ * - unconfigured adapter when no API key is bound
+ * - Resend HTTPS adapter (no SDK). The API key is read from Secret Manager
+ *   by the caller and kept in a closure, never on the adapter object.
  *
- * For productive OTP delivery a mail provider must still be chosen and
- * configured (API key only via Secret Manager, From-Adresse explizit).
+ * From: Alpine Concierge Tirol <portal@alpineconcierge.info>
  *
  * The plaintext OTP exists only for the send call. It is not stored, logged,
  * or returned on the public request path.
@@ -20,10 +21,14 @@ const {
 
 const SENSITIVE_LOG_KEYS=new Set([
   "code","otp","testOtp","deliveryOtp","customToken","token","idToken",
-  "otpHash","secret","password","to","email","html","text"
+  "otpHash","secret","password","to","email","html","text",
+  "apiKey","authorization","Authorization","bearer","Bearer"
 ]);
 const MESSAGE_KIND="portal-otp";
 const DEFAULT_EXPIRES_MINUTES=Math.round(OTP_DEFAULTS.ttlMs/60000);
+const PORTAL_OTP_FROM="Alpine Concierge Tirol <portal@alpineconcierge.info>";
+const RESEND_EMAILS_URL="https://api.resend.com/emails";
+const RESEND_TIMEOUT_MS=10000;
 
 function nowIso(now){
   if(now instanceof Date)return now.toISOString();
@@ -56,7 +61,9 @@ function createPortalMailLogger(write){
 function mailFailureCategory(error){
   const code=String(error&&(error.category||error.code)||"");
   if(code.includes("unconfigured"))return "provider-unconfigured";
-  if(code.includes("timeout"))return "timeout";
+  if(code.includes("timeout")||code.includes("AbortError"))return "timeout";
+  if(code.includes("rejected"))return "provider-rejected";
+  if(code.includes("unavailable"))return "provider-unavailable";
   return "send-failed";
 }
 
@@ -134,8 +141,71 @@ function createUnconfiguredPortalMailAdapter(){
   };
 }
 
+function providerError(code,category){
+  const error=new Error("mail-delivery-failed");
+  error.code=code;
+  error.category=category||code;
+  return error;
+}
+
+function createResendPortalMailAdapter({
+  apiKey="",
+  fetchImpl,
+  from=PORTAL_OTP_FROM,
+  timeoutMs=RESEND_TIMEOUT_MS
+}={}){
+  const key=String(apiKey||"").trim();
+  const fetchFn=typeof fetchImpl==="function"?fetchImpl:globalThis.fetch;
+  return {
+    providerCategory:"resend",
+    async sendPortalOtp({to,code,expiresInMinutes}={}){
+      if(!key)throw providerError("provider-unconfigured","provider-unconfigured");
+      if(typeof fetchFn!=="function")throw providerError("provider-unconfigured","provider-unconfigured");
+      const email=normalizePortalEmail(to);
+      if(!email)throw providerError("send-failed","send-failed");
+      const mail=buildPortalOtpMail({code,expiresInMinutes});
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),Number(timeoutMs)||RESEND_TIMEOUT_MS);
+      let response;
+      try{
+        response=await fetchFn(RESEND_EMAILS_URL,{
+          method:"POST",
+          headers:{
+            Authorization:`Bearer ${key}`,
+            "Content-Type":"application/json"
+          },
+          body:JSON.stringify({
+            from,
+            to:[email],
+            subject:mail.subject,
+            html:mail.html,
+            text:mail.text
+          }),
+          signal:controller.signal
+        });
+      }catch(error){
+        const aborted=error&&(error.name==="AbortError"||String(error.code||"").includes("timeout"));
+        throw providerError(aborted?"timeout":"send-failed",aborted?"timeout":"send-failed");
+      }finally{
+        clearTimeout(timer);
+      }
+      try{
+        if(response&&typeof response.text==="function")await response.text();
+      }catch(_error){
+        /* discard provider body */
+      }
+      if(response&&response.ok)return {accepted:true,providerCategory:"resend"};
+      const status=Number(response&&response.status)||0;
+      if(status>=500)throw providerError("provider-unavailable","provider-unavailable");
+      if(status>=400)throw providerError("provider-rejected","provider-rejected");
+      throw providerError("send-failed","send-failed");
+    }
+  };
+}
+
 function createPortalMailAdapter(options={}){
   if(options.adapter)return options.adapter;
+  if(String(options.apiKey||"").trim())return createResendPortalMailAdapter(options);
   return createUnconfiguredPortalMailAdapter();
 }
 
@@ -219,9 +289,12 @@ function isProductionMailAdapter(adapter){
 module.exports={
   MESSAGE_KIND,
   DEFAULT_EXPIRES_MINUTES,
+  PORTAL_OTP_FROM,
+  RESEND_EMAILS_URL,
   createPortalMailAdapter,
   createMemoryPortalMailAdapter,
   createUnconfiguredPortalMailAdapter,
+  createResendPortalMailAdapter,
   createPortalMailLogger,
   redactPortalMailLog,
   buildPortalOtpMail,

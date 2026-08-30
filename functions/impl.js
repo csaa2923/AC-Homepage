@@ -1,7 +1,7 @@
 const fs=require("fs");
 const path=require("path");
 const {HttpsError}=require("firebase-functions/v2/https");
-const {isEmulator,portalShareSecret,openAiApiKey}=require("./secrets");
+const {isEmulator,portalShareSecret,openAiApiKey,resendApiKey}=require("./secrets");
 const {
   buildAiConciergeContext,
   buildIntelligence,
@@ -784,8 +784,22 @@ function defaultPortalAuthAdapter(){
   return createPortalAuthAdapter(getAdmin().auth(getAdminApp()));
 }
 
+function getResendApiKey(){
+  const fromEnv=String(process.env.RESEND_API_KEY||"").trim();
+  if(fromEnv)return fromEnv;
+  try{
+    if(resendApiKey){
+      const fromSecret=String(resendApiKey.value()||"").trim();
+      if(fromSecret)return fromSecret;
+    }
+  }catch(error){
+    /* Secret not bound */
+  }
+  return "";
+}
+
 function defaultPortalMailAdapter(){
-  return createPortalMailAdapter();
+  return createPortalMailAdapter({apiKey:getResendApiKey()});
 }
 
 async function requestCustomerPortalOtp(request,deps={}){

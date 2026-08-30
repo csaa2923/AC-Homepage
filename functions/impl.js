@@ -114,6 +114,13 @@ const {
   runDisableCustomerPortalAccess,
   runGetAuthorizedPortalContextAsync
 }=require("./lib/portalAccessStore");
+const {createFirestorePortalOtpStore}=require("./lib/portalOtpStore");
+const {createPortalOtpChallenge}=require("./lib/portalOtp");
+const {
+  createPortalAuthAdapter,
+  exchangePortalOtpForCustomToken,
+  publicRequestOtpResult
+}=require("./lib/portalAuth");
 
 const SIGNED_URL_TTL_MS=5*60*1000;
 const AI_ANALYSIS_HISTORY_PAGE_SIZE=5;
@@ -766,6 +773,49 @@ async function disableCustomerPortalAccess(request,deps={}){
   }
 }
 
+function portalOtpStore(){
+  return createFirestorePortalOtpStore(getDb());
+}
+
+function defaultPortalAuthAdapter(){
+  return createPortalAuthAdapter(getAdmin().auth(getAdminApp()));
+}
+
+async function requestCustomerPortalOtp(request,deps={}){
+  try{
+    assertKnownRequestFields(request.data,new Set(["publicPortalId","email"]));
+    const created=await createPortalOtpChallenge({
+      accessStore:deps.store||portalAccessStore(),
+      otpStore:deps.otpStore||portalOtpStore(),
+      input:request.data||{},
+      secret:deps.secret||getSecret(),
+      now:deps.now,
+      exposeOtpForTest:false
+    });
+    return publicRequestOtpResult(created);
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
+async function exchangePortalOtpForAuthToken(request,deps={}){
+  try{
+    assertKnownRequestFields(request.data,new Set(["challengeId","code"]));
+    const exchanged=await exchangePortalOtpForCustomToken({
+      accessStore:deps.store||portalAccessStore(),
+      otpStore:deps.otpStore||portalOtpStore(),
+      authAdapter:deps.authAdapter||defaultPortalAuthAdapter(),
+      input:request.data||{},
+      secret:deps.secret||getSecret(),
+      now:deps.now,
+      log:deps.log
+    });
+    return exchanged.publicResult;
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
 async function loadAiTaskContext(db,customerId){
   const customerRef=db.collection("customers").doc(customerId);
   const tasksSnap=await customerRef.collection("aiTasks")
@@ -1176,6 +1226,8 @@ module.exports={
   bindCustomerPortalMemberAuth,
   getCustomerPortalContext,
   disableCustomerPortalAccess,
+  requestCustomerPortalOtp,
+  exchangePortalOtpForAuthToken,
   analyzeConciergeTrip,
   loadAiTaskContext,
   logAiConciergeError,

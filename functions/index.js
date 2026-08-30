@@ -51,6 +51,20 @@ exports.disableCustomerPortalAccess=onCall({
   invoker:"public"
 },(request)=>loadImpl().disableCustomerPortalAccess(request));
 
+exports.requestCustomerPortalOtp=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public",
+  secrets:functionSecrets()
+},(request)=>loadImpl().requestCustomerPortalOtp(request));
+
+exports.exchangePortalOtpForCustomToken=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public",
+  secrets:functionSecrets()
+},(request)=>loadImpl().exchangePortalOtpForAuthToken(request));
+
 exports.analyzeConciergeTrip=onCall({
   region:"europe-west1",
   cors:true,

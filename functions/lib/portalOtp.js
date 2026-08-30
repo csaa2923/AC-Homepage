@@ -24,11 +24,13 @@ const OTP_STATUSES=new Set(["pending","consumed","expired","locked","invalidated
 const CHALLENGE_FIELDS=new Set([
   "challengeId","accessId","memberId","publicPortalId","emailNormalized",
   "otpHash","status","createdAt","expiresAt","attempts","maxAttempts",
-  "consumedAt","invalidatedAt","activatedAt","updatedAt","version"
+  "consumedAt","invalidatedAt","activatedAt","updatedAt","version",
+  "exchangeStartedAt","authUid","exchangeVersion"
 ]);
 const CREATE_FIELDS=new Set(["publicPortalId","email"]);
 const VERIFY_FIELDS=new Set(["challengeId","code","publicPortalId","email"]);
 const ACTIVATE_FIELDS=new Set(["challengeId","authUid"]);
+const EXCHANGE_FIELDS=new Set(["challengeId","code"]);
 const OTP_DEFAULTS={
   digits:6,
   ttlMs:10*60*1000,
@@ -391,6 +393,7 @@ async function activateVerifiedPortalMember({
     });
     const nextChallenge=sanitizeChallengeRecord({
       ...challenge,
+      authUid,
       activatedAt:stamp,
       updatedAt:stamp,
       version:(challenge.version||1)+1
@@ -400,11 +403,97 @@ async function activateVerifiedPortalMember({
   });
 }
 
+function incrementAttempts(challenge,now){
+  const attempts=Number(challenge.attempts||0)+1;
+  const locked=attempts>=Number(challenge.maxAttempts||OTP_DEFAULTS.maxAttempts);
+  return sanitizeChallengeRecord({
+    ...challenge,
+    attempts,
+    status:locked?"locked":"pending",
+    updatedAt:nowIso(now),
+    version:(challenge.version||1)+1
+  });
+}
+
+async function reservePortalOtpExchange({
+  otpStore,
+  input={},
+  secret,
+  now
+}={}){
+  if(unknownFields(input,EXCHANGE_FIELDS).length)return denyVerify("invalid-argument");
+  const code=sanitizeOtpCode(input.code);
+  const challengeId=sanitizeChallengeId(input.challengeId);
+  if(!challengeId||!code)return denyVerify("invalid-argument");
+  if(!String(secret||"").trim())throw validationError("failed-precondition","HMAC-Secret fehlt.");
+  return otpStore.runChallengeTransaction(async tx=>{
+    const challenge=await tx.getChallenge(challengeId);
+    if(!challenge)return denyVerify("not-found");
+    if(challenge.status==="locked")return denyVerify("locked",challenge);
+    if(challenge.status==="invalidated")return denyVerify("invalidated",challenge);
+    if(challenge.status==="expired"||isExpired(challenge,now)){
+      if(challenge.status==="pending"){
+        await tx.putChallenge(sanitizeChallengeRecord({
+          ...challenge,
+          status:"expired",
+          updatedAt:nowIso(now),
+          version:(challenge.version||1)+1
+        }));
+      }
+      return denyVerify("expired",challenge);
+    }
+    if(challenge.status==="consumed"&&challenge.activatedAt){
+      return denyVerify("consumed",challenge);
+    }
+    const match=verifyPortalOtpHash(challenge.challengeId,code,challenge.otpHash,secret);
+    if(!match){
+      if(challenge.status==="consumed")return denyVerify("consumed",challenge);
+      if(challenge.status!=="pending")return denyVerify("invalid-argument",challenge);
+      if(Number(challenge.attempts||0)>=Number(challenge.maxAttempts||OTP_DEFAULTS.maxAttempts)){
+        await tx.putChallenge(sanitizeChallengeRecord({
+          ...challenge,
+          status:"locked",
+          updatedAt:nowIso(now),
+          version:(challenge.version||1)+1
+        }));
+        return denyVerify("locked",challenge);
+      }
+      const next=incrementAttempts(challenge,now);
+      await tx.putChallenge(next);
+      return denyVerify(next.status==="locked"?"locked":"mismatch",next);
+    }
+    if(challenge.status==="pending"){
+      const reserved=sanitizeChallengeRecord({
+        ...challenge,
+        status:"consumed",
+        consumedAt:nowIso(now),
+        exchangeStartedAt:nowIso(now),
+        updatedAt:nowIso(now),
+        version:(challenge.version||1)+1
+      });
+      await tx.putChallenge(reserved);
+      return verifyResult(true,"consumed",{challengeId:reserved.challengeId,challenge:reserved});
+    }
+    if(challenge.status==="consumed"&&!challenge.activatedAt){
+      const reserved=sanitizeChallengeRecord({
+        ...challenge,
+        exchangeStartedAt:challenge.exchangeStartedAt||nowIso(now),
+        updatedAt:nowIso(now),
+        version:(challenge.version||1)+1
+      });
+      await tx.putChallenge(reserved);
+      return verifyResult(true,"recovery",{challengeId:reserved.challengeId,challenge:reserved});
+    }
+    return denyVerify("invalid-argument",challenge);
+  });
+}
+
 module.exports={
   OTP_STATUSES,
   OTP_DEFAULTS,
   OTP_HMAC_PREFIX,
   CHALLENGE_FIELDS,
+  EXCHANGE_FIELDS,
   generatePortalOtp,
   generateChallengeId,
   hashPortalOtp,
@@ -416,5 +505,6 @@ module.exports={
   evaluateRateLimit,
   createPortalOtpChallenge,
   verifyPortalOtpChallenge,
+  reservePortalOtpExchange,
   activateVerifiedPortalMember
 };

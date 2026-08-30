@@ -312,6 +312,10 @@ describe("7.5b customer portal login UI + session",()=>{
       assert.match(html,/Ihr persönlicher Tirol-Begleiter/);
       assert.doesNotMatch(html,/\botp=|\btoken=|\bemail=|\bcustomer=/);
     }
+    assert.match(loginPrettyHtml,/href="\/customer-portal\/portal-login\.css\?v=1"/);
+    assert.match(loginPrettyHtml,/src="\/customer-portal\/portal-login-library\.js\?v=2"/);
+    assert.match(loginPrettyHtml,/src="\/customer-portal\/portal-login\.js\?v=1"/);
+    assert.doesNotMatch(loginPrettyHtml,/href="\.\.\/portal-login|src="\.\.\/portal-login/);
     assert.match(loginCss,/min-height:var\(--act-btn-min\)/);
     assert.match(loginCss,/outline:2px solid var\(--act-gold\)/);
     assert.match(loginCss,/max-width:360px/);

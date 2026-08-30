@@ -33,6 +33,24 @@ exports.revokePortalShare=onCall({
   region:"europe-west1"
 },(request)=>loadImpl().revokePortalShare(request));
 
+exports.createCustomerPortalAccess=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().createCustomerPortalAccess(request));
+
+exports.getCustomerPortalContext=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().getCustomerPortalContext(request));
+
+exports.disableCustomerPortalAccess=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().disableCustomerPortalAccess(request));
+
 exports.analyzeConciergeTrip=onCall({
   region:"europe-west1",
   cors:true,

@@ -105,6 +105,16 @@ const {
   NEUTRAL_INVALID_MESSAGE
 }=require("./lib/httpPolicy");
 
+const portalAccess=require("./lib/portalAccess");
+const {
+  createFirestorePortalAccessStore,
+  resolveCreateOrgId,
+  runBindMemberAuth,
+  runCreateCustomerPortalAccess,
+  runDisableCustomerPortalAccess,
+  runGetAuthorizedPortalContextAsync
+}=require("./lib/portalAccessStore");
+
 const SIGNED_URL_TTL_MS=5*60*1000;
 const AI_ANALYSIS_HISTORY_PAGE_SIZE=5;
 const AI_TASK_LIST_LIMIT=200;
@@ -664,6 +674,98 @@ function requireAdminCallable(request){
   return request.auth.uid;
 }
 
+function portalAccessStore(){
+  return createFirestorePortalAccessStore(getDb());
+}
+
+function throwPortalAccessError(error){
+  if(error instanceof HttpsError)throw error;
+  const code=portalAccess.portalAccessHttpsCode(error&&error.code);
+  const deny=portalAccess.portalAccessDenyMessage(error&&error.code);
+  throw new HttpsError(code,deny||(error&&error.message)||"Anfrage ungueltig.");
+}
+
+async function loadCustomerRecord(customerId){
+  const id=portalAccess.sanitizeCustomerId(customerId);
+  if(!id)return null;
+  const snap=await getDb().collection("customers").doc(id).get();
+  return snap.exists?snap.data():null;
+}
+
+function assertKnownRequestFields(data,allowed){
+  const extras=Object.keys(data||{}).filter(key=>!allowed.has(key));
+  if(extras.length)throw portalAccess.validationError("invalid-argument","Unbekannte Felder.");
+}
+
+async function createCustomerPortalAccess(request,deps={}){
+  requireAdminCallable(request);
+  try{
+    assertKnownRequestFields(request.data,new Set(["customerId","email","orgId"]));
+    const store=deps.store||portalAccessStore();
+    const loadCustomer=deps.loadCustomer||loadCustomerRecord;
+    const customerId=portalAccess.sanitizeCustomerId(request.data?.customerId);
+    if(!customerId)throw portalAccess.validationError("invalid-argument","customerId fehlt oder ist ungueltig.");
+    const customer=await loadCustomer(customerId);
+    if(!customer)throw portalAccess.validationError("not-found","Kunde nicht gefunden.");
+    const created=await runCreateCustomerPortalAccess(store,{
+      customerId,
+      email:request.data?.email,
+      orgId:resolveCreateOrgId(customer,request.data,request.auth)
+    });
+    return {
+      accessId:created.access.accessId,
+      customerId:created.access.customerId,
+      publicPortalId:created.access.publicPortalId,
+      status:created.access.status,
+      memberId:created.member.memberId
+    };
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
+async function bindCustomerPortalMemberAuth(input,deps={}){
+  try{
+    const store=deps.store||portalAccessStore();
+    return await runBindMemberAuth(store,input);
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
+async function getCustomerPortalContext(request,deps={}){
+  if(!request?.auth?.uid){
+    throw new HttpsError("unauthenticated","Portalzugang nicht verfuegbar.");
+  }
+  try{
+    assertKnownRequestFields(request.data,new Set(["publicPortalId","customerId"]));
+    const store=deps.store||portalAccessStore();
+    const loadCustomer=deps.loadCustomer||loadCustomerRecord;
+    return await runGetAuthorizedPortalContextAsync(store,request.auth,request.data||{},loadCustomer);
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
+async function disableCustomerPortalAccess(request,deps={}){
+  requireAdminCallable(request);
+  try{
+    assertKnownRequestFields(request.data,new Set(["accessId","customerId","publicPortalId"]));
+    const store=deps.store||portalAccessStore();
+    const result=await runDisableCustomerPortalAccess(store,request.data||{});
+    return {
+      accessId:result.access.accessId,
+      customerId:result.access.customerId,
+      publicPortalId:result.access.publicPortalId,
+      status:result.access.status,
+      memberCount:result.members.length,
+      grantCount:result.grants.length
+    };
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
 async function loadAiTaskContext(db,customerId){
   const customerRef=db.collection("customers").doc(customerId);
   const tasksSnap=await customerRef.collection("aiTasks")
@@ -1070,6 +1172,10 @@ module.exports={
   createPortalShare,
   refreshPortalShares,
   revokePortalShare,
+  createCustomerPortalAccess,
+  bindCustomerPortalMemberAuth,
+  getCustomerPortalContext,
+  disableCustomerPortalAccess,
   analyzeConciergeTrip,
   loadAiTaskContext,
   logAiConciergeError,

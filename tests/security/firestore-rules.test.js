@@ -93,20 +93,100 @@ describe("firestore rules — share layer",()=>{
     const itemPath=`${analysisPath}/items/task-semantic-trip-check`;
     const taskPath="customers/kunde-test/aiTasks/task-semantic-trip-check";
     const inboxPath="aiTaskInbox/kunde-test__task-semantic-trip-check";
-    const customer=testEnv.authenticatedContext("customer-user",{role:"customer"});
-    const share=testEnv.authenticatedContext("share-user",{});
-    const admin=testEnv.authenticatedContext("admin-user",{role:"admin"});
-    await assertFails(customer.firestore().doc(analysisPath).get());
-    await assertFails(share.firestore().doc(itemPath).get());
-    await assertFails(admin.firestore().doc(analysisPath).set({
+    const customerDb=testEnv.authenticatedContext("customer-user-ai",{role:"customer"}).firestore();
+    const shareDb=testEnv.authenticatedContext("share-user-ai",{}).firestore();
+    const adminDb=testEnv.authenticatedContext("admin-user-ai",{role:"admin"}).firestore();
+    await assertFails(customerDb.doc(analysisPath).get());
+    await assertFails(shareDb.doc(itemPath).get());
+    await assertFails(adminDb.doc(analysisPath).set({
       createdBy:"forged-user",
       summary:"forged"
     }));
-    await assertFails(admin.firestore().doc(itemPath).set({
+    await assertFails(adminDb.doc(itemPath).set({
       completedBy:"forged-user",
       status:"completed"
     }));
-    await assertFails(admin.firestore().doc(taskPath).set({status:"open"}));
-    await assertFails(admin.firestore().doc(inboxPath).set({status:"open"}));
+    await assertFails(adminDb.doc(taskPath).set({status:"open"}));
+    await assertFails(adminDb.doc(inboxPath).set({status:"open"}));
+  });
+});
+
+describe("firestore rules — customer portal access",()=>{
+  const accessPath="customerPortalAccess/pa_test";
+  const memberPath="customerPortalAccess/pa_test/members/pm_test";
+  const grantPath="authPortalIndex/uid-wolfgang/grants/pa_test";
+  const publicIndexPath="publicPortalIndex/pp_test";
+  const customerIndexPath="customerPortalIndex/kunde-holzer";
+
+  it("denies unauthenticated and customer reads on access collections",async()=>{
+    const unauthedDb=testEnv.unauthenticatedContext().firestore();
+    const customerDb=testEnv.authenticatedContext("portal-customer-read",{role:"customer"}).firestore();
+    await assertFails(unauthedDb.doc(accessPath).get());
+    await assertFails(customerDb.doc(memberPath).get());
+    await assertFails(unauthedDb.doc(grantPath).get());
+    await assertFails(customerDb.doc(publicIndexPath).get());
+  });
+
+  it("denies all client writes including admin",async()=>{
+    const adminDb=testEnv.authenticatedContext("portal-admin-write",{role:"admin"}).firestore();
+    const ownerDb=testEnv.authenticatedContext("portal-owner-write",{role:"owner"}).firestore();
+    await assertFails(adminDb.doc(accessPath).set({
+      customerId:"kunde-holzer",
+      publicPortalId:"pp_test",
+      status:"active"
+    }));
+    await assertFails(ownerDb.doc(memberPath).set({
+      emailNormalized:"wolfgang@example.com",
+      status:"active"
+    }));
+    await assertFails(adminDb.doc(grantPath).set({
+      customerId:"kunde-holzer",
+      publicPortalId:"pp_test"
+    }));
+    await assertFails(adminDb.doc(publicIndexPath).set({accessId:"pa_test"}));
+    await assertFails(adminDb.doc(customerIndexPath).set({accessId:"pa_test"}));
+  });
+
+  it("allows admin read on customerPortalAccess but not on auth index",async()=>{
+    await testEnv.withSecurityRulesDisabled(async context=>{
+      const seedDb=context.firestore();
+      await seedDb.doc(accessPath).set({
+        accessId:"pa_test",
+        customerId:"kunde-holzer",
+        publicPortalId:"pp_test",
+        status:"active",
+        orgId:"act"
+      });
+      await seedDb.doc(memberPath).set({
+        memberId:"pm_test",
+        accessId:"pa_test",
+        emailNormalized:"wolfgang@example.com",
+        status:"active"
+      });
+      await seedDb.doc(grantPath).set({
+        accessId:"pa_test",
+        customerId:"kunde-holzer",
+        publicPortalId:"pp_test",
+        accessStatus:"active",
+        memberStatus:"active"
+      });
+    });
+    const adminDb=testEnv.authenticatedContext("portal-admin-read",{role:"admin",orgId:"act"}).firestore();
+    const ownerDb=testEnv.authenticatedContext("portal-owner-read",{role:"owner"}).firestore();
+    const foreignAdminDb=testEnv.authenticatedContext("portal-admin-foreign",{role:"admin",orgId:"other"}).firestore();
+    await assertSucceeds(adminDb.doc(accessPath).get());
+    await assertSucceeds(adminDb.doc(memberPath).get());
+    await assertSucceeds(ownerDb.doc(accessPath).get());
+    await assertFails(foreignAdminDb.doc(accessPath).get());
+    await assertFails(adminDb.doc(grantPath).get());
+    await assertFails(adminDb.doc(publicIndexPath).get());
+  });
+
+  it("does not relax customers or portalShares rules",async()=>{
+    const customerDb=testEnv.authenticatedContext("portal-customer-closed",{role:"customer"}).firestore();
+    const adminDb=testEnv.authenticatedContext("portal-admin-closed",{role:"admin"}).firestore();
+    await assertFails(customerDb.doc("customers/kunde-holzer").get());
+    await assertFails(customerDb.doc("portalShares/ps_test").get());
+    await assertFails(adminDb.doc("portalShares/ps_test").set({status:"active"}));
   });
 });

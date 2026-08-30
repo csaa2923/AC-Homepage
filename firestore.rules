@@ -165,6 +165,37 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    /*
+     * Customer portal access (Ops Ready 7.1).
+     * Clients never write. Customers never read Firestore directly.
+     * Authorization is Functions-only via authPortalIndex grants.
+     */
+    match /customerPortalAccess/{accessId} {
+      allow get, list: if adminRead();
+      allow create, update, delete: if false;
+
+      match /members/{memberId} {
+        allow get, list: if adminRead();
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /authPortalIndex/{authUid} {
+      allow read, write: if false;
+
+      match /grants/{accessId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /publicPortalIndex/{publicPortalId} {
+      allow read, write: if false;
+    }
+
+    match /customerPortalIndex/{customerId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -1388,6 +1388,48 @@
     return result.data||{};
   }
 
+  async function callAdminPortalAccessCallable(name,payload){
+    const {functions,functionsModule}=await callableFunctionsContext();
+    const callable=functionsModule.httpsCallable(functions,name);
+    const result=await callable(payload||{});
+    return result&&result.data?result.data:{};
+  }
+
+  async function createCustomerPortalAccess(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const email=String(input.email||"").trim();
+    if(!customerId){
+      const error=new Error("Kunden-ID fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    if(!email){
+      const error=new Error("E-Mail fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    const payload={customerId,email};
+    const orgId=String(input.orgId||"").trim();
+    if(orgId)payload.orgId=orgId;
+    return callAdminPortalAccessCallable("createCustomerPortalAccess",payload);
+  }
+
+  async function disableCustomerPortalAccess(input={}){
+    const payload={};
+    const accessId=String(input.accessId||"").trim();
+    const customerId=String(input.customerId||"").trim();
+    const publicPortalId=String(input.publicPortalId||"").trim();
+    if(accessId)payload.accessId=accessId;
+    else if(customerId)payload.customerId=customerId;
+    else if(publicPortalId)payload.publicPortalId=publicPortalId;
+    else{
+      const error=new Error("Portalzugang ist nicht angegeben.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminPortalAccessCallable("disableCustomerPortalAccess",payload);
+  }
+
   async function createPortalShare(customer,options={}){
     const customerId=customerIdOf(customer);
     if(!customerId)throw new Error("Kunden-ID fehlt.");
@@ -1595,6 +1637,8 @@
     loadAllBookingsForAdmin,
     deleteBookingRecord,
     createPortalShare,
+    createCustomerPortalAccess,
+    disableCustomerPortalAccess,
     analyzeConciergeTrip,
     refreshPortalShares,
     listPortalSharesForCustomer,

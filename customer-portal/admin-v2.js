@@ -103,6 +103,14 @@
     publicationSaving:false,
     publicationMessage:"",
     publicationMessageKind:"",
+    portalAccess:null,
+    portalAccessCustomerId:"",
+    portalAccessLoading:false,
+    portalAccessBusy:false,
+    portalAccessError:"",
+    portalAccessMessage:"",
+    portalAccessMessageKind:"",
+    portalAccessQrOpen:false,
     bookingQuery:"",
     bookingCustomerFilter:"",
     bookingStatusFilter:"",
@@ -3279,6 +3287,174 @@
     return `<button class="v2-button ${primary?"primary":"soft"}" type="button" data-publication-action="${escapeHtml(action)}" ${disabled||state.publicationSaving?"disabled":""}>${escapeHtml(label)}</button>`;
   }
 
+  function portalAccessLib(){
+    return window.ACTPortalAccessAdminLibrary||null;
+  }
+
+  function portalAccessInviteEmail(customer){
+    return String(customer?.email||customer?.contact?.email||"").trim();
+  }
+
+  function resetPortalAccessState(){
+    state.portalAccess=null;
+    state.portalAccessCustomerId="";
+    state.portalAccessLoading=false;
+    state.portalAccessBusy=false;
+    state.portalAccessError="";
+    state.portalAccessMessage="";
+    state.portalAccessMessageKind="";
+    state.portalAccessQrOpen=false;
+  }
+
+  function setPortalAccessMessage(message,kind){
+    state.portalAccessMessage=message||"";
+    state.portalAccessMessageKind=kind||"";
+  }
+
+  function schedulePortalAccessLoad(customerId){
+    const id=String(customerId||"").trim();
+    if(!id)return;
+    if(state.portalAccessCustomerId===id&&(state.portalAccessLoading||state.portalAccess))return;
+    loadCustomerPortalAccessAdmin(id);
+  }
+
+  async function loadCustomerPortalAccessAdmin(customerId){
+    const id=String(customerId||"").trim();
+    if(!id)return;
+    if(state.portalAccessLoading&&state.portalAccessCustomerId===id)return;
+    const service=window.ACTFirebaseService;
+    if(!service||typeof service.getCustomerPortalAccessAdmin!=="function"){
+      state.portalAccessCustomerId=id;
+      state.portalAccess={exists:false,customerId:id};
+      state.portalAccessError="";
+      return;
+    }
+    state.portalAccessLoading=true;
+    state.portalAccessCustomerId=id;
+    state.portalAccessError="";
+    try{
+      const raw=await service.getCustomerPortalAccessAdmin({customerId:id});
+      if(state.portalAccessCustomerId!==id)return;
+      const lib=portalAccessLib();
+      state.portalAccess=lib&&typeof lib.sanitizeAdminAccessView==="function"
+        ?lib.sanitizeAdminAccessView(raw)
+        :raw;
+    }catch(error){
+      if(state.portalAccessCustomerId!==id)return;
+      const lib=portalAccessLib();
+      state.portalAccessError=lib?lib.mapAdminAccessError(error):"Der Portalzugang konnte nicht geladen werden.";
+      state.portalAccess={exists:false,customerId:id};
+    }finally{
+      if(state.portalAccessCustomerId===id)state.portalAccessLoading=false;
+      if(state.selectedCustomerId===id)renderCustomerDetail();
+    }
+  }
+
+  function portalAccessActionButton(label,action,{primary=false,disabled=false,danger=false}={}){
+    const cls=danger?"v2-button soft v2-portal-access-disable":`v2-button ${primary?"primary":"soft"}`;
+    return `<button class="${cls}" type="button" data-portal-access-action="${escapeHtml(action)}" ${disabled||state.portalAccessBusy?"disabled":""}>${escapeHtml(label)}</button>`;
+  }
+
+  function formatPortalAccessStamp(value){
+    const raw=String(value||"").trim();
+    if(!raw)return "";
+    const date=new Date(raw);
+    if(Number.isNaN(date.getTime()))return raw;
+    try{
+      return new Intl.DateTimeFormat("de-DE",{dateStyle:"medium",timeStyle:"short"}).format(date);
+    }catch(_error){
+      return raw;
+    }
+  }
+
+  function customerPortalAccessCardMarkup(customer){
+    const lib=portalAccessLib();
+    const customerId=String(customer?.customerId||"").trim();
+    schedulePortalAccessLoad(customerId);
+    const access=state.portalAccessCustomerId===customerId?state.portalAccess:null;
+    if(state.portalAccessLoading&&!access){
+      return `
+      <article class="v2-panel v2-portal-access-card" data-portal-access-state="loading">
+        <div class="v2-panel-head">
+          <div>
+            <p class="v2-eyebrow">Kundenportal</p>
+            <h3>Kundenportal</h3>
+          </div>
+          ${badge("Laden")}
+        </div>
+        <p>Zugang wird geladen …</p>
+      </article>`;
+    }
+    const view=lib&&typeof lib.sanitizeAdminAccessView==="function"?lib.sanitizeAdminAccessView(access):access;
+    const card=lib&&typeof lib.cardState==="function"?lib.cardState(view):{key:"missing",label:"Kundenportal-Zugang noch nicht eingerichtet",canCreate:true};
+    const email=view&&view.member&&view.member.emailNormalized?view.member.emailNormalized:portalAccessInviteEmail(customer);
+    const loginUrl=view&&view.publicPortalId&&lib?lib.buildCustomerPortalLoginUrl(view.publicPortalId):"";
+    const busy=state.portalAccessBusy||state.portalAccessLoading;
+    const badgeLabel=card.key==="active"?"Aktiv":card.key==="invited"?"Einladung":card.key==="disabled"?"Deaktiviert":"Nicht eingerichtet";
+    const qrLib=window.ACTQRCodeLibrary;
+    const qrMarkup=(state.portalAccessQrOpen&&card.canQr&&loginUrl&&qrLib&&typeof qrLib.createPortalLoginSvgMarkup==="function")
+      ?qrLib.createPortalLoginSvgMarkup(loginUrl,{cellSize:4,margin:4,alt:"QR-Code zum Kundenportal"})
+      :null;
+    const createdLabel=formatPortalAccessStamp(view&&view.createdAt);
+    const activatedLabel=formatPortalAccessStamp(view&&(view.activatedAt||(view.member&&view.member.activatedAt)));
+    const details=view&&view.exists?`
+          <details class="v2-portal-access-details">
+            <summary>Technische Details</summary>
+            <dl>
+              <div><dt>accessId</dt><dd>${escapeHtml(view.accessId||"—")}</dd></div>
+              <div><dt>publicPortalId</dt><dd>${escapeHtml(view.publicPortalId||"—")}</dd></div>
+            </dl>
+          </details>`:"";
+    const emailField=card.canCreate
+      ? (email
+        ? `<p class="v2-portal-access-email">E-Mail: <strong>${escapeHtml(email)}</strong></p>`
+        : `<label class="v2-portal-access-email-field">E-Mail
+            <input id="portalAccessEmailInput" type="email" autocomplete="email" placeholder="kunde@example.com" ${busy?"disabled":""}>
+          </label>`)
+      : (email?`<p class="v2-portal-access-email">E-Mail: <strong>${escapeHtml(email)}</strong></p>`:"");
+    const linkBlock=card.canCopy&&loginUrl
+      ? `<p class="v2-share-link v2-portal-access-link">${escapeHtml(loginUrl)}</p>`
+      : "";
+    const metaBits=[
+      createdLabel?`<span>Erstellt: ${escapeHtml(createdLabel)}</span>`:"",
+      activatedLabel&&card.key==="active"?`<span>Aktiviert: ${escapeHtml(activatedLabel)}</span>`:""
+    ].filter(Boolean).join("");
+    const qrBlock=state.portalAccessQrOpen&&card.canQr
+      ? `<div class="v2-portal-access-qr v2-pub-qr-preview">${qrMarkup&&qrMarkup.ok?qrMarkup.markup:'<p class="v2-muted">QR-Code konnte nicht erzeugt werden.</p>'}</div>`
+      : "";
+    const actions=card.canCreate
+      ? portalAccessActionButton("Kundenportal-Zugang erstellen","create",{primary:true,disabled:busy})
+      : `${card.canOpen?portalAccessActionButton("Portal öffnen","open",{primary:true,disabled:busy}):""}
+         ${card.canCopy?portalAccessActionButton("Link kopieren","copy",{disabled:busy}):""}
+         ${card.canQr?portalAccessActionButton(state.portalAccessQrOpen?"QR-Code ausblenden":"QR-Code anzeigen","qr-show",{disabled:busy}):""}
+         ${card.canQr?portalAccessActionButton("QR herunterladen","qr-download",{disabled:busy}):""}
+         ${card.canDisable?portalAccessActionButton("Zugang deaktivieren","disable",{danger:true,disabled:busy}):""}`;
+    const statusCopy=card.key==="missing"
+      ? "Kundenportal-Zugang noch nicht eingerichtet"
+      : card.label;
+    return `
+      <article class="v2-panel v2-portal-access-card" data-portal-access-state="${escapeHtml(card.key)}">
+        <div class="v2-panel-head">
+          <div>
+            <p class="v2-eyebrow">Kundenportal</p>
+            <h3>${escapeHtml(card.key==="missing"?"Kundenportal":card.label)}</h3>
+          </div>
+          ${badge(badgeLabel)}
+        </div>
+        <p>${escapeHtml(statusCopy)}</p>
+        ${emailField}
+        ${metaBits?`<p class="v2-portal-access-meta v2-muted">${metaBits}</p>`:""}
+        ${linkBlock}
+        ${qrBlock}
+        <p class="v2-edit-status ${escapeHtml(state.portalAccessMessageKind||state.portalAccessError&&"error"||"")}" id="portalAccessStatusMessage" aria-live="polite">${escapeHtml(state.portalAccessMessage||state.portalAccessError||(state.portalAccessLoading?"Zugang wird geladen …":""))}</p>
+        <div class="v2-document-actions v2-portal-access-actions">
+          ${actions}
+        </div>
+        ${details}
+      </article>
+    `;
+  }
+
   function publicationTabMarkup(customer){
     const status=publicationStatus(customer);
     const link=resolvePortalLink(customer);
@@ -3319,10 +3495,11 @@
           </div>
           ${publicationChangesMarkup(status)}
         </article>
+        ${customerPortalAccessCardMarkup(customer)}
         <article class="v2-panel">
           <div class="v2-panel-head">
             <div>
-              <p class="v2-eyebrow">Kundenportal</p>
+              <p class="v2-eyebrow">Secure Share</p>
               <h3>Sicherer Zugang</h3>
             </div>
             ${badge(portalLinkBadgeLabel(link.status))}
@@ -3741,6 +3918,130 @@
     }
     setPublicationMessage("Sicherer Link wurde kopiert.","success");
     return true;
+  }
+
+  async function copyTextToClipboard(value){
+    const text=String(value||"");
+    if(!text)return false;
+    try{
+      await navigator.clipboard.writeText(text);
+      return true;
+    }catch(_error){
+      const input=document.createElement("textarea");
+      input.value=text;
+      input.setAttribute("readonly","");
+      input.style.position="fixed";
+      input.style.left="-9999px";
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+      return true;
+    }
+  }
+
+  async function handlePortalAccessAction(action){
+    const lib=portalAccessLib();
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer||!lib)return;
+    const view=lib.sanitizeAdminAccessView(state.portalAccessCustomerId===customer.customerId?state.portalAccess:null);
+    const card=lib.cardState(view);
+    const loginUrl=view.publicPortalId?lib.buildCustomerPortalLoginUrl(view.publicPortalId):"";
+    if(action==="create"){
+      if(state.portalAccessBusy)return;
+      const storedEmail=portalAccessInviteEmail(customer);
+      const input=byId("portalAccessEmailInput");
+      const email=lib.normalizePortalEmail(storedEmail||(input&&input.value)||"");
+      if(!storedEmail&&!(input&&String(input.value||"").trim())){
+        setPortalAccessMessage(lib.MESSAGES.missingEmail,"error");
+        renderCustomerDetail();
+        if(input)input.focus();
+        return;
+      }
+      if(!email){
+        setPortalAccessMessage(lib.MESSAGES.invalidEmail,"error");
+        renderCustomerDetail();
+        return;
+      }
+      const service=window.ACTFirebaseService;
+      if(!service||typeof service.createCustomerPortalAccess!=="function"){
+        setPortalAccessMessage(lib.MESSAGES.generic,"error");
+        renderCustomerDetail();
+        return;
+      }
+      state.portalAccessBusy=true;
+      setPortalAccessMessage("Portalzugang wird erstellt …","busy");
+      renderCustomerDetail();
+      try{
+        await service.createCustomerPortalAccess({customerId:customer.customerId,email});
+        state.portalAccessQrOpen=false;
+        setPortalAccessMessage("Einladung bereit","success");
+        await loadCustomerPortalAccessAdmin(customer.customerId);
+      }catch(error){
+        setPortalAccessMessage(lib.mapAdminAccessError(error),"error");
+      }finally{
+        state.portalAccessBusy=false;
+        if(state.selectedCustomerId===customer.customerId)renderCustomerDetail();
+      }
+      return;
+    }
+    if(action==="open"){
+      if(!card.canOpen||!loginUrl)return;
+      window.open(loginUrl,"_blank","noopener,noreferrer");
+      return;
+    }
+    if(action==="copy"){
+      if(!card.canCopy||!loginUrl)return;
+      await copyTextToClipboard(loginUrl);
+      setPortalAccessMessage(lib.MESSAGES.copied,"success");
+      renderCustomerDetail();
+      return;
+    }
+    if(action==="qr-show"){
+      if(!card.canQr||!loginUrl)return;
+      state.portalAccessQrOpen=!state.portalAccessQrOpen;
+      renderCustomerDetail();
+      return;
+    }
+    if(action==="qr-download"){
+      if(!card.canQr||!loginUrl)return;
+      const qrLib=window.ACTQRCodeLibrary;
+      if(!qrLib||typeof qrLib.downloadPortalLoginPng!=="function"){
+        setPortalAccessMessage("QR-Code konnte nicht erzeugt werden.","error");
+        renderCustomerDetail();
+        return;
+      }
+      const result=qrLib.downloadPortalLoginPng(loginUrl,customer.customerName);
+      if(!result||!result.ok){
+        setPortalAccessMessage("QR-Code konnte nicht erzeugt werden.","error");
+        renderCustomerDetail();
+      }
+      return;
+    }
+    if(action==="disable"){
+      if(!card.canDisable||state.portalAccessBusy)return;
+      if(!window.confirm(lib.MESSAGES.disableConfirm))return;
+      const service=window.ACTFirebaseService;
+      if(!service||typeof service.disableCustomerPortalAccess!=="function"||!view.accessId){
+        setPortalAccessMessage(lib.MESSAGES.generic,"error");
+        renderCustomerDetail();
+        return;
+      }
+      state.portalAccessBusy=true;
+      setPortalAccessMessage("Zugang wird deaktiviert …","busy");
+      renderCustomerDetail();
+      try{
+        await service.disableCustomerPortalAccess({accessId:view.accessId});
+        state.portalAccessQrOpen=false;
+        setPortalAccessMessage("Deaktiviert","success");
+        await loadCustomerPortalAccessAdmin(customer.customerId);
+      }catch(error){
+        setPortalAccessMessage(lib.mapAdminAccessError(error),"error");
+      }finally{
+        state.portalAccessBusy=false;
+        if(state.selectedCustomerId===customer.customerId)renderCustomerDetail();
+      }
+    }
   }
 
   function refreshDocumentsResults(){
@@ -8295,6 +8596,7 @@
       `;
       return;
     }
+    schedulePortalAccessLoad(customer.customerId);
     const tab=detailTabs.some(([key])=>key===state.selectedTab)?state.selectedTab:"kunde";
     const workspace=customerWorkspaceViewModel(customer);
     const flash=state.detailFlashMessage?`<p class="v2-edit-status ${escapeHtml(state.detailFlashKind||"success")}" role="status">${escapeHtml(state.detailFlashMessage)}</p>`:"";
@@ -9594,6 +9896,7 @@
       state.selectedCustomerId=parsed.customerId||"";
       state.selectedTab=parsed.tab||"kunde";
     }
+    if(state.selectedCustomerId!==previousCustomerId)resetPortalAccessState();
     const viewId=parsed.route==="customerDetail"?"customerDetailView":`${parsed.route}View`;
     all(".v2-view").forEach(view=>view.classList.toggle("active",view.id===viewId));
     all("[data-v2-route]").forEach(button=>{
@@ -11021,6 +11324,11 @@
         }
         if(action==="cancel")cancelDocumentEdit();
         if(action==="delete")deleteDocumentEditItem(Number(documentAction.dataset.documentIndex));
+        return;
+      }
+      const portalAccessAction=event.target.closest("[data-portal-access-action]");
+      if(portalAccessAction){
+        handlePortalAccessAction(portalAccessAction.dataset.portalAccessAction);
         return;
       }
       const publicationAction=event.target.closest("[data-publication-action]");

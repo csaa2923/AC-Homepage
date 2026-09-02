@@ -379,7 +379,7 @@ describe("portal OTP input hardening",()=>{
     assert.match(indexSource,/exports\.createPortalShare=onCall/);
     assert.match(indexSource,/exports\.getCustomerPortalContext=onCall/);
     assert.match(html,/admin-v2-bookings\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=98/);
+    assert.match(html,/admin-v2\.js\?v=99/);
     assert.match(rules,/match \/customerPortalOtpChallenges\/\{challengeId\}/);
     assert.match(rules,/match \/customerPortalOtpLimits\/\{limitId\}/);
     const otpBlock=rules.slice(rules.indexOf("match /customerPortalOtpChallenges/{challengeId}"));

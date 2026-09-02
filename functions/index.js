@@ -51,6 +51,12 @@ exports.disableCustomerPortalAccess=onCall({
   invoker:"public"
 },(request)=>loadImpl().disableCustomerPortalAccess(request));
 
+exports.getCustomerPortalAccessAdmin=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().getCustomerPortalAccessAdmin(request));
+
 exports.requestCustomerPortalOtp=onCall({
   region:"europe-west1",
   cors:true,

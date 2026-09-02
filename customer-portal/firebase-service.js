@@ -1430,6 +1430,16 @@
     return callAdminPortalAccessCallable("disableCustomerPortalAccess",payload);
   }
 
+  async function getCustomerPortalAccessAdmin(input={}){
+    const customerId=String(input.customerId||"").trim();
+    if(!customerId){
+      const error=new Error("Kunden-ID fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminPortalAccessCallable("getCustomerPortalAccessAdmin",{customerId});
+  }
+
   async function createPortalShare(customer,options={}){
     const customerId=customerIdOf(customer);
     if(!customerId)throw new Error("Kunden-ID fehlt.");
@@ -1639,6 +1649,7 @@
     createPortalShare,
     createCustomerPortalAccess,
     disableCustomerPortalAccess,
+    getCustomerPortalAccessAdmin,
     analyzeConciergeTrip,
     refreshPortalShares,
     listPortalSharesForCustomer,

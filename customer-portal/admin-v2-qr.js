@@ -1,7 +1,7 @@
 /**
- * Admin V2 QR-Facade — erzeugt QR-Codes nur aus sicheren Share-Links.
+ * Admin V2 QR-Facade — Secure-Share-QR und Kundenportal-Login-QR.
  * Generator: lokal vendored qrcode-generator (MIT), keine CDN-/API-Requests.
- * Anbindung: ACTQRCodeLibrary (global) — Linkquelle immer resolvePortalLink.
+ * Share-QR: nur sichere Share-Links. Login-QR: nur die stabile Login-URL (?p=).
  */
 (function(){
   "use strict";
@@ -215,11 +215,40 @@
       .replace(/<\/description>/gi,"</desc>");
   }
 
-  function createSvgMarkup(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN,alt="QR-Code zum Kundenportal"}={}){
-    const validated=validateSecureQrUrl(safeUrl);
-    if(!validated.ok)return {ok:false,reason:validated.reason,svg:"",markup:""};
+  function accessAdminLibrary(){
+    return (typeof window!=="undefined"&&window.ACTPortalAccessAdminLibrary)||null;
+  }
+
+  function validatePortalLoginQrUrl(url){
+    const raw=text(url);
+    if(!raw)return {ok:false,reason:"missing",safeUrl:""};
+    const lib=accessAdminLibrary();
+    if(lib&&typeof lib.isCustomerPortalLoginUrl==="function"){
+      if(!lib.isCustomerPortalLoginUrl(raw))return {ok:false,reason:"not-portal-login",safeUrl:""};
+      const id=lib.publicPortalIdFromLoginUrl?lib.publicPortalIdFromLoginUrl(raw):"";
+      const rebuilt=id&&lib.buildCustomerPortalLoginUrl?lib.buildCustomerPortalLoginUrl(id):"";
+      if(!rebuilt)return {ok:false,reason:"not-portal-login",safeUrl:""};
+      return {ok:true,reason:"ok",safeUrl:rebuilt};
+    }
     try{
-      const qr=buildQrInstance(validated.safeUrl);
+      const parsed=new URL(raw);
+      if(parsed.protocol!=="https:")return {ok:false,reason:"insecure-http",safeUrl:""};
+      if(!isAllowedHost(parsed.hostname))return {ok:false,reason:"host",safeUrl:""};
+      if(parsed.pathname!=="/customer-portal/login")return {ok:false,reason:"path",safeUrl:""};
+      if(parsed.hash)return {ok:false,reason:"hash",safeUrl:""};
+      const keys=Array.from(parsed.searchParams.keys());
+      if(keys.length!==1||keys[0]!=="p")return {ok:false,reason:"query",safeUrl:""};
+      const id=String(parsed.searchParams.get("p")||"").trim();
+      if(!/^pp_[A-Za-z0-9_-]{16,43}$/.test(id))return {ok:false,reason:"portal-id",safeUrl:""};
+      return {ok:true,reason:"ok",safeUrl:`https://www.alpineconcierge.info/customer-portal/login?p=${encodeURIComponent(id)}`};
+    }catch(_error){
+      return {ok:false,reason:"invalid-url",safeUrl:""};
+    }
+  }
+
+  function renderValidatedQrSvg(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN,alt="QR-Code zum Kundenportal"}={}){
+    try{
+      const qr=buildQrInstance(safeUrl);
       let svg="";
       if(typeof qr.createSvgTag==="function"){
         svg=sanitizeQrSvg(qr.createSvgTag({
@@ -240,6 +269,18 @@
     }catch(_error){
       return {ok:false,reason:"render-failed",svg:"",markup:""};
     }
+  }
+
+  function createSvgMarkup(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN,alt="QR-Code zum Kundenportal"}={}){
+    const validated=validateSecureQrUrl(safeUrl);
+    if(!validated.ok)return {ok:false,reason:validated.reason,svg:"",markup:""};
+    return renderValidatedQrSvg(validated.safeUrl,{cellSize,margin,alt});
+  }
+
+  function createPortalLoginSvgMarkup(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN,alt="QR-Code zum Kundenportal"}={}){
+    const validated=validatePortalLoginQrUrl(safeUrl);
+    if(!validated.ok)return {ok:false,reason:validated.reason,svg:"",markup:""};
+    return renderValidatedQrSvg(validated.safeUrl,{cellSize,margin,alt});
   }
 
   /**
@@ -282,14 +323,12 @@
     }
   }
 
-  function drawQrToCanvas(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN}={}){
-    const validated=validateSecureQrUrl(safeUrl);
-    if(!validated.ok)return {ok:false,reason:validated.reason,canvas:null};
+  function drawValidatedQrToCanvas(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN}={}){
     if(typeof document==="undefined"||typeof document.createElement!=="function"){
       return {ok:false,reason:"no-canvas",canvas:null};
     }
     try{
-      const qr=buildQrInstance(validated.safeUrl);
+      const qr=buildQrInstance(safeUrl);
       const count=qr.getModuleCount();
       const size=count*cellSize+margin*2;
       const canvas=document.createElement("canvas");
@@ -313,8 +352,28 @@
     }
   }
 
+  function drawQrToCanvas(safeUrl,{cellSize=DEFAULT_CELL,margin=DEFAULT_MARGIN}={}){
+    const validated=validateSecureQrUrl(safeUrl);
+    if(!validated.ok)return {ok:false,reason:validated.reason,canvas:null};
+    return drawValidatedQrToCanvas(validated.safeUrl,{cellSize,margin});
+  }
+
   function createPngDataUrl(safeUrl,{cellSize=6,margin=DEFAULT_MARGIN}={}){
     const drawn=drawQrToCanvas(safeUrl,{cellSize,margin});
+    if(!drawn.ok||!drawn.canvas)return {ok:false,reason:drawn.reason||"no-canvas",dataUrl:""};
+    try{
+      const dataUrl=drawn.canvas.toDataURL("image/png");
+      if(!dataUrl||!/^data:image\/png/i.test(dataUrl))return {ok:false,reason:"empty-data-url",dataUrl:""};
+      return {ok:true,reason:"ok",dataUrl};
+    }catch(_error){
+      return {ok:false,reason:"render-failed",dataUrl:""};
+    }
+  }
+
+  function createPortalLoginPngDataUrl(safeUrl,{cellSize=6,margin=DEFAULT_MARGIN}={}){
+    const validated=validatePortalLoginQrUrl(safeUrl);
+    if(!validated.ok)return {ok:false,reason:validated.reason,dataUrl:""};
+    const drawn=drawValidatedQrToCanvas(validated.safeUrl,{cellSize,margin});
     if(!drawn.ok||!drawn.canvas)return {ok:false,reason:drawn.reason||"no-canvas",dataUrl:""};
     try{
       const dataUrl=drawn.canvas.toDataURL("image/png");
@@ -443,11 +502,9 @@
     return {ok:true,filename};
   }
 
-  function downloadPng(safeUrl,customerName){
-    const result=createPngDataUrl(safeUrl,{cellSize:8,margin:4});
-    if(!result.ok)return {ok:false,reason:result.reason};
+  function downloadPngFromDataUrl(result,customerName){
+    if(!result||!result.ok)return {ok:false,reason:result&&result.reason||"render-failed"};
     const filename=buildFilename(customerName,"png");
-    // Prefer Blob download so the file is a real PNG, not a mislabeled GIF data-URL.
     try{
       const raw=result.dataUrl.split(",")[1]||"";
       const binary=atob(raw);
@@ -462,6 +519,14 @@
       triggerDownload(filename,result.dataUrl,"image/png");
       return {ok:true,filename};
     }
+  }
+
+  function downloadPng(safeUrl,customerName){
+    return downloadPngFromDataUrl(createPngDataUrl(safeUrl,{cellSize:8,margin:4}),customerName);
+  }
+
+  function downloadPortalLoginPng(safeUrl,customerName){
+    return downloadPngFromDataUrl(createPortalLoginPngDataUrl(safeUrl,{cellSize:8,margin:4}),customerName);
   }
 
   function openPrintView({customerName,safeUrl,logoUrl}){
@@ -511,10 +576,13 @@
     ECC,
     ALLOWED_HOSTS,
     validateSecureQrUrl,
+    validatePortalLoginQrUrl,
     analyzePortalQr,
     createSvgMarkup,
+    createPortalLoginSvgMarkup,
     createDataUrl,
     createPngDataUrl,
+    createPortalLoginPngDataUrl,
     renderPreviewMarkup,
     accessibleAlt,
     buildFilename,
@@ -522,6 +590,7 @@
     printableQrSheetHtml,
     downloadSvg,
     downloadPng,
+    downloadPortalLoginPng,
     openPrintView,
     pdfQrBlock,
     escapeHtml,

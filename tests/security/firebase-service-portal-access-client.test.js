@@ -37,7 +37,8 @@ describe("firebase service admin portal access callable client",()=>{
     const service=loadService();
     assert.equal(typeof service.createCustomerPortalAccess,"function");
     assert.equal(typeof service.disableCustomerPortalAccess,"function");
-    assert.match(adminHtml,/firebase-service\.js\?v=34/);
+    assert.equal(typeof service.getCustomerPortalAccessAdmin,"function");
+    assert.match(adminHtml,/firebase-service\.js\?v=35/);
   });
 
   it("uses the default app Functions instance in europe-west1",()=>{
@@ -94,5 +95,6 @@ describe("firebase service admin portal access callable client",()=>{
     assert.doesNotMatch(helper,/role==="admin"|permission-denied"\)/);
     assert.match(source,/httpsCallable\(functions,"createCustomerPortalAccess"\)|callAdminPortalAccessCallable\("createCustomerPortalAccess"/);
     assert.match(source,/callAdminPortalAccessCallable\("disableCustomerPortalAccess"/);
+    assert.match(source,/callAdminPortalAccessCallable\("getCustomerPortalAccessAdmin"/);
   });
 });

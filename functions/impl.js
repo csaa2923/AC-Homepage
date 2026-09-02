@@ -776,6 +776,52 @@ async function disableCustomerPortalAccess(request,deps={}){
   }
 }
 
+function pickAdminPortalMember(members){
+  const list=Array.isArray(members)?members.filter(Boolean):[];
+  return list.find(item=>item.status==="active")
+    ||list.find(item=>item.status==="invited")
+    ||list[0]
+    ||null;
+}
+
+function publicAdminPortalAccessView(access,member){
+  if(!access)return {exists:false};
+  const next={
+    exists:true,
+    accessId:access.accessId||"",
+    customerId:access.customerId||"",
+    publicPortalId:access.publicPortalId||"",
+    status:access.status||"",
+    createdAt:access.createdAt||"",
+    activatedAt:access.activatedAt||"",
+    member:null
+  };
+  if(member){
+    next.member={
+      emailNormalized:member.emailNormalized||"",
+      status:member.status||"",
+      activatedAt:member.activatedAt||""
+    };
+  }
+  return next;
+}
+
+async function getCustomerPortalAccessAdmin(request,deps={}){
+  requireAdminCallable(request);
+  try{
+    assertKnownRequestFields(request.data,new Set(["customerId"]));
+    const customerId=portalAccess.sanitizeCustomerId(request.data?.customerId);
+    if(!customerId)throw portalAccess.validationError("invalid-argument","customerId fehlt oder ist ungueltig.");
+    const store=deps.store||portalAccessStore();
+    const access=await store.getAccessByCustomerId(customerId);
+    if(!access)return {exists:false,customerId};
+    const members=await store.listMembers(access.accessId);
+    return publicAdminPortalAccessView(access,pickAdminPortalMember(members));
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
 function portalOtpStore(){
   return createFirestorePortalOtpStore(getDb());
 }
@@ -1249,6 +1295,7 @@ module.exports={
   createCustomerPortalAccess,
   bindCustomerPortalMemberAuth,
   getCustomerPortalContext,
+  getCustomerPortalAccessAdmin,
   disableCustomerPortalAccess,
   requestCustomerPortalOtp,
   exchangePortalOtpForAuthToken,

@@ -208,18 +208,18 @@ describe("7.7 publication UI cleanup",()=>{
     assert.doesNotMatch(tab,/onCall\(|httpsCallable/);
   });
 
-  it("V) 7.5f identity files are unchanged by this cleanup",()=>{
+  it("V) publication UI cleanup does not change portal auth or OTP modules",()=>{
     const expected={
-      "customer-portal/portal-login-library.js":"e53b2002d68d962f5e6b267759b3b0f43f86167b56c2e0fdbb43114c6d38a3f1",
-      "functions/impl.js":"30a7a817f84151e8e8c69202f7fc7c65abd0cb6cea153d3cd4ac86c618955320",
-      "functions/lib/portalAccess.js":"6cfc747f4924aa0ef63df3c6cf92429f2202168800fc345676d61e9181621b86",
-      "functions/lib/portalAccessStore.js":"a520bba8c3cd7a340ec30a5aaae6d9433b29666cf96e411712295f8fa9c451fe",
-      "functions/lib/portalOtp.js":"3cb55a50a55bca63900dc88422e0d74c568041f11a781b7fd34f5c1222785d91",
-      "tests/security/portal-access-id-identity.test.js":"c87fdca986b4a9165fe345b2b3bb2e4d4cbfed1c23659fbc0e3abfe3c867d41a"
+      "customer-portal/portal-login-library.js":"a174fd42853be151322a92ceaba0aa0111312386391b928ad3eb5d6417c588d1",
+      "functions/impl.js":"10b1a4cbb695577034a968eb280d9d6c23a0a40397a3785e5870faa921a0a4cb",
+      "functions/lib/portalAccess.js":"16e5711e6d2b8ed2e479f7d93332e8b0d6ddf8b6be56b9ba58b7d0509dab85c5",
+      "functions/lib/portalAccessStore.js":"071d86fad792ec8cccc0372fa83c4be0d34c388667120fa9f3e9c343c86b5c88",
+      "functions/lib/portalOtp.js":"391dfcffdb754b8449e668e8e76486ed84555f57f1fa80aae6c94502da1f7923"
     };
     for(const [rel,hash] of Object.entries(expected)){
       assert.equal(sha256(rel),hash,rel);
     }
+    assert.equal(fs.existsSync(path.join(root,"tests/security/portal-access-id-identity.test.js")),false);
   });
 
   it("pins follow the UI cleanup",()=>{

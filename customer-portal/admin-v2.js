@@ -3397,60 +3397,72 @@
       :null;
     const createdLabel=formatPortalAccessStamp(view&&view.createdAt);
     const activatedLabel=formatPortalAccessStamp(view&&(view.activatedAt||(view.member&&view.member.activatedAt)));
-    const details=view&&view.exists?`
-          <details class="v2-portal-access-details">
-            <summary>Technische Details</summary>
-            <dl>
-              <div><dt>accessId</dt><dd>${escapeHtml(view.accessId||"—")}</dd></div>
-              <div><dt>publicPortalId</dt><dd>${escapeHtml(view.publicPortalId||"—")}</dd></div>
-            </dl>
-          </details>`:"";
     const emailField=card.canCreate
       ? (email
-        ? `<p class="v2-portal-access-email">E-Mail: <strong>${escapeHtml(email)}</strong></p>`
+        ? `<div class="v2-portal-access-field"><span>E-Mail</span><strong class="v2-portal-access-email">${escapeHtml(email)}</strong></div>`
         : `<label class="v2-portal-access-email-field">E-Mail
             <input id="portalAccessEmailInput" type="email" autocomplete="email" placeholder="kunde@example.com" ${busy?"disabled":""}>
           </label>`)
-      : (email?`<p class="v2-portal-access-email">E-Mail: <strong>${escapeHtml(email)}</strong></p>`:"");
-    const linkBlock=card.canCopy&&loginUrl
-      ? `<p class="v2-share-link v2-portal-access-link">${escapeHtml(loginUrl)}</p>`
-      : "";
-    const metaBits=[
-      createdLabel?`<span>Erstellt: ${escapeHtml(createdLabel)}</span>`:"",
-      activatedLabel&&card.key==="active"?`<span>Aktiviert: ${escapeHtml(activatedLabel)}</span>`:""
-    ].filter(Boolean).join("");
+      : (email?`<div class="v2-portal-access-field"><span>E-Mail</span><strong class="v2-portal-access-email">${escapeHtml(email)}</strong></div>`:"");
+    const stampField=card.key==="active"&&activatedLabel
+      ? `<div class="v2-portal-access-field"><span>Aktiviert</span><strong>${escapeHtml(activatedLabel)}</strong></div>`
+      : (createdLabel&&card.key!=="missing"?`<div class="v2-portal-access-field"><span>Erstellt</span><strong>${escapeHtml(createdLabel)}</strong></div>`:"");
     const qrBlock=state.portalAccessQrOpen&&card.canQr
       ? `<div class="v2-portal-access-qr v2-pub-qr-preview">${qrMarkup&&qrMarkup.ok?qrMarkup.markup:'<p class="v2-muted">QR-Code konnte nicht erzeugt werden.</p>'}</div>`
       : "";
-    const actions=card.canCreate
+    const primaryActions=card.canCreate
       ? portalAccessActionButton("Kundenportal-Zugang erstellen","create",{primary:true,disabled:busy})
       : `${card.canOpen?portalAccessActionButton("Portal öffnen","open",{primary:true,disabled:busy}):""}
          ${card.canCopy?portalAccessActionButton("Link kopieren","copy",{disabled:busy}):""}
-         ${card.canQr?portalAccessActionButton(state.portalAccessQrOpen?"QR-Code ausblenden":"QR-Code anzeigen","qr-show",{disabled:busy}):""}
-         ${card.canQr?portalAccessActionButton("QR herunterladen","qr-download",{disabled:busy}):""}
-         ${card.canDisable?portalAccessActionButton("Zugang deaktivieren","disable",{danger:true,disabled:busy}):""}`;
+         ${card.canQr?portalAccessActionButton(state.portalAccessQrOpen?"QR-Code ausblenden":"QR-Code","qr-show",{disabled:busy}):""}`;
+    const moreActions=[
+      card.canQr?portalAccessActionButton("QR herunterladen","qr-download",{disabled:busy}):"",
+      card.canDisable?portalAccessActionButton("Zugang deaktivieren","disable",{danger:true,disabled:busy}):""
+    ].filter(Boolean).join("");
+    const technicalDetails=view&&view.exists?`
+            <details class="v2-portal-access-details">
+              <summary>Technische Details</summary>
+              <dl>
+                <div><dt>accessId</dt><dd>${escapeHtml(view.accessId||"—")}</dd></div>
+                <div><dt>publicPortalId</dt><dd>${escapeHtml(view.publicPortalId||"—")}</dd></div>
+                ${loginUrl?`<div><dt>Login-URL</dt><dd class="v2-portal-access-link">${escapeHtml(loginUrl)}</dd></div>`:""}
+              </dl>
+            </details>`:"";
+    const moreBlock=(moreActions||technicalDetails)?`
+          <details class="v2-portal-access-more">
+            <summary>Weitere Optionen</summary>
+            ${moreActions?`<div class="v2-document-actions v2-portal-access-more-actions">${moreActions}</div>`:""}
+            ${technicalDetails}
+          </details>`:"";
     const statusCopy=card.key==="missing"
       ? "Kundenportal-Zugang noch nicht eingerichtet"
-      : card.label;
+      : card.key==="disabled"
+        ? "Dieser Portalzugang ist deaktiviert."
+        : card.key==="invited"
+          ? "Einladung bereit"
+          : "";
+    const linkLabel=(card.canOpen||card.canCopy)?`<p class="v2-portal-access-link-label">Persönlicher Portal-Link</p>`:"";
     return `
       <article class="v2-panel v2-portal-access-card" data-portal-access-state="${escapeHtml(card.key)}">
         <div class="v2-panel-head">
           <div>
             <p class="v2-eyebrow">Kundenportal</p>
-            <h3>${escapeHtml(card.key==="missing"?"Kundenportal":card.label)}</h3>
+            <h3>Kundenportal</h3>
           </div>
           ${badge(badgeLabel)}
         </div>
-        <p>${escapeHtml(statusCopy)}</p>
-        ${emailField}
-        ${metaBits?`<p class="v2-portal-access-meta v2-muted">${metaBits}</p>`:""}
-        ${linkBlock}
+        ${statusCopy?`<p>${escapeHtml(statusCopy)}</p>`:""}
+        <div class="v2-portal-access-fields">
+          ${emailField}
+          ${stampField}
+        </div>
+        ${linkLabel}
         ${qrBlock}
         <p class="v2-edit-status ${escapeHtml(state.portalAccessMessageKind||state.portalAccessError&&"error"||"")}" id="portalAccessStatusMessage" aria-live="polite">${escapeHtml(state.portalAccessMessage||state.portalAccessError||(state.portalAccessLoading?"Zugang wird geladen …":""))}</p>
         <div class="v2-document-actions v2-portal-access-actions">
-          ${actions}
+          ${primaryActions}
         </div>
-        ${details}
+        ${moreBlock}
       </article>
     `;
   }
@@ -3461,31 +3473,29 @@
     const warnings=publicationWarnings(customer);
     const docs=documentSummary(customer);
     const lastPublished=customer.publishMeta?.lastPublishedAt||customer.publishMeta?.publishedAt;
-    const publisher=customer.publishMeta?.lastPublisher||customer.publishMeta?.publisher||"Nicht hinterlegt";
-    const version=displayValue(customer.publishMeta?.version||customer.version,"1.0");
     const published=isPublished(customer)&&Boolean(customer.publishedSnapshot);
+    const statusNote=status.key==="pending"
+      ?"Es gibt unveroeffentlichte Aenderungen — Details siehe unten."
+      :(status.key==="live"?"Die veroeffentlichte Version ist aktuell.":(status.message||""));
+    const changesCompact=status.key==="live"||!arrayValue(status?.changes).length;
     return `
       <section class="v2-publication-overview">
-        <div class="v2-tab-actions">
-          ${portalButton(published?"Erneut veroeffentlichen":"Jetzt veroeffentlichen","publish",{primary:true})}
-          <a class="v2-button soft" href="admin.html#publish-history">Publish-Historie im Classic Admin oeffnen</a>
-          <span class="v2-edit-status ${escapeHtml(state.publicationMessageKind)}" id="publicationStatusMessage" aria-live="polite">${escapeHtml(state.publicationMessage)}</span>
-        </div>
         <article class="v2-publication-hero">
           <div>
             <p class="v2-eyebrow">Veroeffentlichungsstatus</p>
             <h3>${escapeHtml(status.label||publicationState(customer))}</h3>
-            <p>${escapeHtml(status.key==="pending"?"Es gibt unveroeffentlichte Aenderungen — Details siehe unten.":(status.message||"Status wird aus der bestehenden Publish-Logik berechnet."))}</p>
-            <div class="v2-meta">${badge(published?"Veroeffentlicht":"Nicht veroeffentlicht")}${badge(portalLinkBadgeLabel(link.status))}</div>
+            ${statusNote?`<p>${escapeHtml(statusNote)}</p>`:""}
+            <div class="v2-meta">${badge(published?"Veroeffentlicht":"Nicht veroeffentlicht")}${status.changeCount?badge(`${status.changeCount} Aenderungen`):""}</div>
+            <div class="v2-tab-actions">
+              ${portalButton(published?"Erneut veroeffentlichen":"Jetzt veroeffentlichen","publish",{primary:true})}
+              <span class="v2-edit-status ${escapeHtml(state.publicationMessageKind)}" id="publicationStatusMessage" aria-live="polite">${escapeHtml(state.publicationMessage)}</span>
+            </div>
           </div>
           <div class="v2-publication-facts">
             ${summaryItem("Letzte Veroeffentlichung",formatPublishDateTime(lastPublished))}
-            ${summaryItem("Veroeffentlicht von",displayValue(publisher))}
-            ${summaryItem("Version",version)}
-            ${summaryItem("Sicherer Link",portalLinkBadgeLabel(link.status))}
           </div>
         </article>
-        <article class="v2-panel">
+        <article class="v2-panel v2-publication-changes${changesCompact?" is-compact":""}">
           <div class="v2-panel-head">
             <div>
               <p class="v2-eyebrow">Aenderungen</p>
@@ -3496,35 +3506,7 @@
           ${publicationChangesMarkup(status)}
         </article>
         ${customerPortalAccessCardMarkup(customer)}
-        <article class="v2-panel">
-          <div class="v2-panel-head">
-            <div>
-              <p class="v2-eyebrow">Secure Share</p>
-              <h3>Sicherer Zugang</h3>
-            </div>
-            ${badge(portalLinkBadgeLabel(link.status))}
-          </div>
-          <p>${escapeHtml(link.hint)}</p>
-          ${link.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}
-          <p class="v2-muted">Portal-Vorschau zeigt die Live-Version aus Firestore. Das Kundenportal liest den Share-Snapshot — nach jeder Veroeffentlichung muss dieser aktualisiert werden (automatisch oder per Button).</p>
-          ${link.canCopy?portalQrPreviewBlock(customer,link,{cellSize:4}):""}
-          <div class="v2-document-actions">
-            ${portalButton("Portal-Vorschau oeffnen","preview")}
-            ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
-            ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
-            ${link.canCopy?portalButton("QR anzeigen","qr-show"):""}
-            ${link.canCopy?portalButton("QR als PNG","qr-download-png"):""}
-            ${portalButton("Kundenportal-Inhalt aktualisieren","sync-shares",{disabled:!published||!link.hasActiveShare})}
-            ${link.hasActiveShare
-              ?portalButton(link.status==="session-lost"?"Link ersetzen (macht alten ungueltig)":"Link ersetzen (macht alten ungueltig)","create-share-new",{disabled:!published,primary:false})
-              :portalButton("Sicheren Kundenlink erzeugen","create-share",{primary:true,disabled:!published})}
-            ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
-            ${portalButton("Auth-Diagnose (Storage)","auth-diag")}
-          </div>
-          <pre id="authStorageDiag" class="v2-muted" hidden style="white-space:pre-wrap;margin-top:12px;padding:12px;border:1px solid var(--line,#d7e0d8);border-radius:8px;background:#f7faf6;"></pre>
-        </article>
-        ${publicationQrPanelMarkup(customer,link)}
-        <article class="v2-panel">
+        <article class="v2-panel v2-publication-docs">
           <div class="v2-panel-head">
             <div>
               <p class="v2-eyebrow">Dokumente</p>
@@ -3532,25 +3514,55 @@
             </div>
             ${badge(`${docs.visible} sichtbar · ${docs.internal} intern`)}
           </div>
-          <div class="v2-document-quality-grid">
-            ${summaryItem("Alle Dokumente",String(docs.total))}
-            ${summaryItem("Kundenportal sichtbar",String(docs.visible))}
-            ${summaryItem("Nur intern",String(docs.internal))}
-            ${summaryItem("Abgelaufen",String(docs.expired))}
-            ${summaryItem("Ohne Kategorie",String(docs.missingCategory))}
-            ${summaryItem("Ohne Typ",String(docs.missingType))}
+          <div class="v2-document-quality-grid v2-publication-docs-grid">
+            ${summaryItem("Sichtbar",String(docs.visible))}
+            ${summaryItem("Intern",String(docs.internal))}
+            ${docs.expired?summaryItem("Abgelaufen",String(docs.expired)):""}
           </div>
         </article>
-        <article class="v2-panel">
+        ${warnings.length?`
+        <article class="v2-panel v2-publication-warnings">
           <div class="v2-panel-head">
             <div>
               <p class="v2-eyebrow">Pruefung vor Publish</p>
               <h3>Hinweise</h3>
             </div>
-            ${badge(warnings.length?"Hinweise":"Bereit")}
+            ${badge("Hinweise")}
           </div>
-          ${warnings.length?`<ul class="v2-warning-list">${warnings.map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>`:`<p>Keine Hinweise. Veroeffentlichung kann durchgefuehrt werden.</p>`}
-        </article>
+          <ul class="v2-warning-list">${warnings.map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </article>`:""}
+        <details class="v2-publication-legacy">
+          <summary>Erweiterte technische Verwaltung</summary>
+          <article class="v2-panel">
+            <div class="v2-panel-head">
+              <div>
+                <p class="v2-eyebrow">Secure Share</p>
+                <h3>Sicherer Zugang</h3>
+              </div>
+              ${badge(portalLinkBadgeLabel(link.status))}
+            </div>
+            <p>${escapeHtml(link.hint)}</p>
+            ${link.display?`<p class="v2-share-link">${escapeHtml(link.display)}</p>`:""}
+            <p class="v2-muted">Portal-Vorschau zeigt die Live-Version aus Firestore. Das Kundenportal liest den Share-Snapshot — nach jeder Veroeffentlichung muss dieser aktualisiert werden (automatisch oder per Button).</p>
+            ${link.canCopy?portalQrPreviewBlock(customer,link,{cellSize:4}):""}
+            <div class="v2-document-actions">
+              ${portalButton("Portal-Vorschau oeffnen","preview")}
+              ${portalButton("Kundenportal oeffnen","open",{disabled:!link.canOpen})}
+              ${portalButton("Sicheren Link kopieren","copy",{disabled:!link.canCopy})}
+              ${link.canCopy?portalButton("QR anzeigen","qr-show"):""}
+              ${link.canCopy?portalButton("QR als PNG","qr-download-png"):""}
+              ${portalButton("Kundenportal-Inhalt aktualisieren","sync-shares",{disabled:!published||!link.hasActiveShare})}
+              ${link.hasActiveShare
+                ?portalButton(link.status==="session-lost"?"Link ersetzen (macht alten ungueltig)":"Link ersetzen (macht alten ungueltig)","create-share-new",{disabled:!published,primary:false})
+                :portalButton("Sicheren Kundenlink erzeugen","create-share",{primary:true,disabled:!published})}
+              ${portalButton("Share-Link widerrufen","revoke-share",{disabled:!(activeShareToken(customer.customerId)?.shareId||customerShareMeta(customer)?.shareId)})}
+              ${portalButton("Auth-Diagnose (Storage)","auth-diag")}
+            </div>
+            <pre id="authStorageDiag" class="v2-muted" hidden style="white-space:pre-wrap;margin-top:12px;padding:12px;border:1px solid var(--line,#d7e0d8);border-radius:8px;background:#f7faf6;"></pre>
+          </article>
+          ${publicationQrPanelMarkup(customer,link)}
+          <a class="v2-button soft" href="admin.html#publish-history">Publish-Historie im Classic Admin oeffnen</a>
+        </details>
       </section>
     `;
   }

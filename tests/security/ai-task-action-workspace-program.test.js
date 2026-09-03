@@ -239,8 +239,8 @@ describe("AI task action workspace program modules (Ops Ready 6.8 / 6.8b)",()=>{
 
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
     assert.match(html,/ai-task-open-target-library\.js\?v=4/);
-    assert.match(html,/admin-v2\.js\?v=99/);
-    assert.match(html,/admin-v2\.css\?v=76/);
+    assert.match(html,/admin-v2\.js\?v=100/);
+    assert.match(html,/admin-v2\.css\?v=77/);
     assert.match(html,/travel-actions-library\.js\?v=11/);
     assert.match(js,/function aiTaskNavigationModuleMarkup\(/);
     assert.match(js,/function aiTaskWeatherAltModuleMarkup\(/);

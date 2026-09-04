@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>TEST FIXTURE SYNTHETIC – Tourist Demand 8.1a</title>
+</head>
+<body>
+  <p>TEST / FIXTURE / SYNTHETIC. Keine echten Tirol-Marktdaten. Kein produktives Dashboard.</p>
+  <pre id="out"></pre>
+  <script src="../../../customer-portal/tourist-demand-library.js"></script>
+  <script>
+    const lib=window.ACTTouristDemandLibrary;
+    const result=lib.normalizeDemandObservation({
+      statementType:"observation",
+      season:"summer",
+      region:"seefeld",
+      topic:"hike",
+      signalType:"qualitative",
+      summary:"TEST FIXTURE SYNTHETIC: lokale Fixture, keine Marktdaten.",
+      evidenceLevel:"D",
+      confidence:"low",
+      observedAt:"2026-08-01T00:00:00.000Z",
+      retrievedAt:"2026-08-01T00:00:00.000Z",
+      source:{
+        sourceId:"fixture-only",
+        sourceName:"TEST FIXTURE SYNTHETIC",
+        sourceType:"editorial",
+        observedAt:"2026-08-01T00:00:00.000Z",
+        synthetic:true,
+        fixtureKind:"TEST"
+      },
+      synthetic:true,
+      fixtureKind:"TEST"
+    });
+    document.getElementById("out").textContent=JSON.stringify(result,null,2);
+  </script>
+</body>
+</html>

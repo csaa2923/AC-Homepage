@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wishes Harness</title>
+  <link rel="stylesheet" href="../../../customer-portal/admin-v2.css?v=79">
+  <style>
+    body{margin:0;padding:24px;font-family:Georgia,serif;background:#f0f4ef;color:#14261f}
+    #fixture{max-width:720px;margin:0 auto;display:grid;gap:18px}
+  </style>
+</head>
+<body>
+  <main id="fixture">
+    <h1>8.0b Wünsche & Interessen</h1>
+    <article class="v2-read-card v2-wishes-card" id="read"></article>
+    <section class="v2-wishes-edit" id="edit"></section>
+  </main>
+  <script src="../../../customer-portal/customer-wishes-library.js?v=1"></script>
+  <script>
+    const lib=window.ACTCustomerWishesLibrary;
+    const model=lib.buildCustomerWishesViewModel({
+      wishes:"Wir möchten wenig Stress, schöne Aussicht und gutes Essen.",
+      interests:["nature","culinary"],
+      activityLevel:"easy",
+      wishNotes:"Keine schwierigen Wanderungen"
+    });
+    document.getElementById("read").innerHTML=`
+      <h3>Wünsche & Interessen</h3>
+      <div class="v2-read-fields">
+        <div class="v2-read-field full"><span>Was ist dem Gast besonders wichtig?</span><strong>${model.originalWishText}</strong></div>
+        <div class="v2-read-field full"><span>Interessen</span><div class="v2-read-list">${model.interests.map(item=>`<span class="v2-badge">${item.label}</span>`).join("")}</div></div>
+        <div class="v2-read-field"><span>Aktivitätsniveau</span><strong>${model.activityLabel}</strong></div>
+        <div class="v2-read-field full"><span>Besondere Wünsche / Hinweise</span><strong>${model.specialNotes}</strong></div>
+      </div>`;
+    document.getElementById("edit").innerHTML=`
+      <h3>Wünsche & Interessen</h3>
+      <label class="v2-edit-field full"><span>Was ist dem Gast besonders wichtig?</span><textarea rows="3">${model.originalWishText}</textarea></label>
+      <div class="v2-wish-interests"><span>Interessen</span><div class="v2-wish-pills">${lib.INTERESTS.map(item=>`<label class="v2-wish-pill"><input type="checkbox" ${model.interestIds.includes(item.id)?"checked":""}><span>${item.label}</span></label>`).join("")}</div></div>
+      <div class="v2-wish-levels"><span>Aktivitätsniveau</span><div class="v2-wish-level-row">${lib.ACTIVITY_LEVELS.map(item=>`<label class="v2-wish-level"><input type="radio" name="activityLevel" ${model.activityLevel===item.id?"checked":""}><span>${item.label}</span></label>`).join("")}</div></div>
+    `;
+  </script>
+</body>
+</html>

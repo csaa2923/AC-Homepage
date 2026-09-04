@@ -519,8 +519,8 @@ describe("portal auth hardening",()=>{
     assert.equal(typeof functions.requestCustomerPortalOtp,"function");
     assert.equal(typeof functions.exchangePortalOtpForCustomToken,"function");
     assert.match(html,/admin-v2-bookings\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=101/);
-    assert.match(html,/admin-v2\.css\?v=78/);
+    assert.match(html,/admin-v2\.js\?v=102/);
+    assert.match(html,/admin-v2\.css\?v=79/);
     assert.match(rules,/match \/customerPortalOtpChallenges\/\{challengeId\}[\s\S]*allow read, write: if false;/);
     assert.match(rules,/match \/authPortalIndex\/\{authUid\}[\s\S]*allow read, write: if false;/);
     assert.doesNotMatch(implSource,/createPortalShare[\s\S]{0,80}portalCustomer/);

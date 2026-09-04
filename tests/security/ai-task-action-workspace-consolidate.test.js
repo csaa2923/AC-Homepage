@@ -362,8 +362,8 @@ describe("AI task action workspace consolidation (Ops Ready 6.10)",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     const docs=readProjectFile("functions/AI-CONCIERGE.md");
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
-    assert.match(html,/admin-v2\.js\?v=101/);
-    assert.match(html,/admin-v2\.css\?v=78/);
+    assert.match(html,/admin-v2\.js\?v=102/);
+    assert.match(html,/admin-v2\.css\?v=79/);
     assert.match(html,/ai-task-open-target-library\.js\?v=4/);
     assert.match(js,/Arbeitsstand speichern/);
     assert.match(js,/Ungespeicherte lokale Änderungen/);

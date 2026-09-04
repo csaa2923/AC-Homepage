@@ -260,6 +260,17 @@ p{color:var(--muted);line-height:1.55}
 .v2-customer-journey-next-title{margin:0;color:var(--ink);font-size:15px;font-weight:850;overflow-wrap:anywhere}
 .v2-customer-journey-next-detail{margin:0;color:var(--muted);font-size:13px;font-weight:700;overflow-wrap:anywhere}
 .v2-customer-journey-next .v2-button{flex:0 0 auto}
+.v2-wishes-card .v2-muted{margin:0}
+.v2-wishes-edit{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.72)}
+.v2-wishes-edit h3{margin:0;font-size:18px}
+.v2-wish-interests,.v2-wish-levels{display:grid;gap:7px}
+.v2-wish-interests>span,.v2-wish-levels>span{color:var(--muted);font-size:12px;font-weight:850;text-transform:uppercase}
+.v2-wish-pills,.v2-wish-level-row{display:flex;flex-wrap:wrap;gap:8px}
+.v2-wish-pill,.v2-wish-level{display:inline-flex;align-items:center;gap:0;min-height:40px;margin:0;cursor:pointer}
+.v2-wish-pill input,.v2-wish-level input{position:absolute;opacity:0;pointer-events:none}
+.v2-wish-pill span,.v2-wish-level span{display:inline-flex;align-items:center;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);font-size:13px;font-weight:800}
+.v2-wish-pill input:checked+span,.v2-wish-level input:checked+span{border-color:var(--green);background:var(--mint);color:var(--green)}
+.v2-wish-pill input:focus-visible+span,.v2-wish-level input:focus-visible+span{outline:2px solid var(--green-2);outline-offset:2px}
 .v2-summary-item{padding:14px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.78)}
 .v2-summary-item span,.v2-read-field span{display:block;margin-bottom:5px;color:var(--muted);font-size:12px;font-weight:850;text-transform:uppercase}
 .v2-summary-item strong,.v2-read-field strong{display:block;color:var(--ink);word-break:break-word}
@@ -1076,6 +1087,8 @@ p{color:var(--muted);line-height:1.55}
   .v2-customer-journey-status{grid-template-columns:1fr 1fr}
   .v2-customer-journey-next{align-items:stretch;flex-direction:column}
   .v2-customer-journey-next .v2-button{width:100%}
+  .v2-wish-pills,.v2-wish-level-row{gap:7px}
+  .v2-wish-pill span,.v2-wish-level span{min-height:44px}
   .workspace-status-card{min-height:68px;display:grid;align-content:center;gap:4px;padding:10px;border:1px solid var(--line);border-radius:15px;background:#fff;color:var(--ink);text-align:left}
   .workspace-status-card span{color:var(--muted);font-size:9px;font-weight:900;text-transform:uppercase}
   .workspace-status-card strong{font-size:12px;overflow-wrap:anywhere}

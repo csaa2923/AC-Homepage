@@ -710,7 +710,6 @@
       phone:String(customer?.phone||contact.phone||"").trim(),
       email:String(customer?.email||contact.email||"").trim(),
       whatsapp:String(customer?.whatsapp||customer?.whatsappLink||contact.whatsapp||"").trim(),
-      requirements:Array.isArray(customer?.requirements)?customer.requirements.filter(Boolean).join("\n"):String(customer?.requirements||"").trim(),
       contactInfo:String(contact.name||contact.primary||contact.note||"").trim(),
       imageUrl
     };
@@ -721,10 +720,6 @@
     Object.keys(next).forEach(key=>{
       next[key]=String(next[key]??"").trim();
     });
-    next.requirements=String(next.requirements||"")
-      .split(/\n|,/)
-      .map(item=>item.trim())
-      .filter(Boolean);
     return next;
   }
 
@@ -882,7 +877,6 @@
     next.email=values.email;
     next.whatsapp=values.whatsapp;
     next.whatsappLink=values.whatsapp;
-    next.requirements=values.requirements;
     next.contact={
       ...(next.contact&&typeof next.contact==="object"?next.contact:{}),
       phone:values.phone,
@@ -1096,20 +1090,31 @@
       accommodationCountry:firstValue(hotel.country,stay.country,customer.accommodationCountry),
       arrivalType:firstValue(customer.arrivalType,customer.arrivalMode,travel.arrivalType,travel.transport,customer.transport),
       arrivalText:firstValue(customer.arrivalDetails,customer.arrivalInfo,customer.transferInfo,customer.transfer,travel.arrivalDetails,travel.transferInfo,travel.transfer,customer.flightNumber,customer.trainNumber),
-      notes:compactList(customer.tripNotes,customer.travelNotes,customer.internalTravelNotes,travel.notes,customer.notes).join("\n")
+      notes:compactList(customer.tripNotes,customer.travelNotes,customer.internalTravelNotes,travel.notes,customer.notes).join("\n"),
+      wishStatement:customerWishesViewModel(customer).originalWishText,
+      interests:customerWishesViewModel(customer).interestIds.slice(),
+      activityLevel:customerWishesViewModel(customer).activityLevel,
+      wishNotes:customerWishesViewModel(customer).specialNotes
     };
   }
 
   function normalizedTripDraft(draft){
     const values={...(draft||{})};
     Object.keys(values).forEach(key=>{
-      if(key==="childAges")return;
+      if(key==="childAges"||key==="interests")return;
       values[key]=String(values[key]??"").trim();
     });
     const childCount=wholeNumberValue(values.children)||0;
     const ages=Array.isArray(values.childAges)?values.childAges:ageListFromValue(values.childAges);
     values.childAges=ages.slice(0,childCount).map(item=>cleanValue(item));
     values.notes=String(values.notes||"").split(/\n+/).map(item=>item.trim()).filter(Boolean);
+    const wishesLib=customerWishesLib();
+    values.interests=wishesLib?.sanitizeInterestIds
+      ?wishesLib.sanitizeInterestIds(values.interests)
+      :(Array.isArray(values.interests)?values.interests.filter(Boolean):[]);
+    values.wishStatement=String(values.wishStatement||"").trim();
+    values.wishNotes=String(values.wishNotes||"").trim();
+    values.activityLevel=String(values.activityLevel||"").trim();
     return values;
   }
 
@@ -1254,10 +1259,63 @@
     next.arrivalDetails=values.arrivalText;
     if(values.notes.length||"travelNotes" in next)next.travelNotes=values.notes;
     if("tripNotes" in next)next.tripNotes=values.notes;
+    applyTripWishes(next,values);
     updateTripObjects(next,values);
     next.updatedAt=new Date().toLocaleDateString("de-DE");
     next._lastSavedAt=new Date().toISOString();
     return compactObject(next);
+  }
+
+  function customerWishesLib(){
+    return window.ACTCustomerWishesLibrary||null;
+  }
+
+  function customerWishesViewModel(customer){
+    const lib=customerWishesLib();
+    if(lib?.buildCustomerWishesViewModel)return lib.buildCustomerWishesViewModel(customer);
+    const items=compactList(customer?.requirements,customer?.wishes,customer?.travel?.wishes,customer?.wishesText);
+    return {originalWishText:items.join("\n"),specialNotes:"",interests:[],interestIds:[],activityLevel:"",activityLabel:"",preview:items.slice(0,4),hasContent:Boolean(items.length),sources:[]};
+  }
+
+  function tripWishesInputFromDraft(values){
+    return {
+      originalWishText:values?.wishStatement,
+      specialNotes:values?.wishNotes,
+      interests:values?.interests,
+      activityLevel:values?.activityLevel
+    };
+  }
+
+  function previousTripWishesInput(){
+    if(!state.tripEditOriginal)return null;
+    try{
+      const original=JSON.parse(state.tripEditOriginal);
+      return tripWishesInputFromDraft(original);
+    }catch(_){
+      return null;
+    }
+  }
+
+  function applyTripWishes(customer,values){
+    const lib=customerWishesLib();
+    const nextInput=tripWishesInputFromDraft(values);
+    const previousInput=previousTripWishesInput();
+    if(lib?.applyCustomerWishesIfChanged){
+      lib.applyCustomerWishesIfChanged(customer,nextInput,previousInput);
+      return customer;
+    }
+    if(previousInput==null)return customer;
+    const nextFingerprint=JSON.stringify(nextInput);
+    const previousFingerprint=JSON.stringify(previousInput);
+    if(nextFingerprint===previousFingerprint)return customer;
+    customer.wishStatement=cleanValue(values.wishStatement);
+    customer.wishes=cleanValue(values.wishStatement)?[cleanValue(values.wishStatement)]:[];
+    customer.interests=Array.isArray(values.interests)?values.interests:[];
+    customer.wishNotes=cleanValue(values.wishNotes);
+    customer.requirements=cleanValue(values.wishNotes)?cleanValue(values.wishNotes).split(/\n+/).map(item=>item.trim()).filter(Boolean):[];
+    if(cleanValue(values.activityLevel))customer.activityLevel=cleanValue(values.activityLevel);
+    else delete customer.activityLevel;
+    return customer;
   }
 
   async function saveTripEdit(){
@@ -8430,7 +8488,7 @@
       workspace,
       publication:publicationStatus(customer),
       portal:customerJourneyPortalState(customer),
-      wishes:arrayValue(trip.wishes),
+      wishes:customerWishesViewModel(customer).preview,
       staySummary:customerJourneyStaySummary(trip),
       programCount:programCount(customer),
       openBookings:workspace.openBookings,
@@ -8836,7 +8894,7 @@
         profile.travel?.childAges,
         profile.travel?.childrenAges
       );
-      const wishes=compactList(customer.requirements,customer.wishes,travel.wishes,preferences.wishes,profile.wishes,profile.wishesText,customer.wishesText);
+      const wishes=customerWishesViewModel(customer);
       const internalNotes=compactList(customer.tripNotes,customer.travelNotes,customer.internalTravelNotes,travel.notes,profile.notes);
       return {
         title:firstValue(customer.tripName,customer.tripTitle,travel.title,travel.name,customer.travelTitle),
@@ -8869,7 +8927,7 @@
         room:firstValue(hotel.room,hotel.roomInfo,stay.room,customer.roomInfo),
         weather:firstValue(customer.weatherLocationName,customer.weatherRegion,travel.weatherRegion,travel.weatherLocationName),
         coordinates,
-        wishes,
+        wishes:wishes.hasContent?wishes.preview:[],
         mobility:firstValue(customer.mobility,customer.mobilityRequirements,travel.mobility,preferences.mobility),
         dietary:firstValue(customer.dietary,customer.dietaryRequirements,customer.foodPreferences,travel.dietary,preferences.food),
         internalNotes
@@ -9251,8 +9309,8 @@
         tripField("Wetterregion",trip.weather),
         tripField("Koordinaten",trip.coordinates)
       ]),
-      tripReadCard("Wuensche und Hinweise",[
-        tripListField("Reisewuensche",trip.wishes),
+      tripWishesReadCard(customer),
+      tripReadCard("Hinweise",[
         tripField("Mobilitaet",trip.mobility,{full:true}),
         tripField("Ernaehrung",trip.dietary,{full:true}),
         tripListField("Interne Reisehinweise",trip.internalNotes,{internal:true})
@@ -9323,6 +9381,7 @@
           ${tripInputField("accommodationCountry","Land",draft.accommodationCountry)}
           ${tripSelectField("arrivalType","Anreise",draft.arrivalType,["","Auto","Bahn","Flug","Bus","Sonstiges"])}
           ${tripTextareaField("arrivalText","Anreise Freitext",draft.arrivalText)}
+          ${tripWishesEditMarkup(draft)}
           ${tripTextareaField("notes","Hinweise",Array.isArray(draft.notes)?draft.notes.join("\n"):draft.notes)}
         </div>
         <div class="v2-edit-actions">
@@ -9387,6 +9446,64 @@
     `;
   }
 
+  function tripWishesReadCard(customer){
+    const wishes=customerWishesViewModel(customer);
+    const interestMarkup=wishes.interests.length
+      ?`<div class="v2-read-field full"><span>Interessen</span><div class="v2-read-list">${wishes.interests.map(item=>badge(item.label)).join("")}</div></div>`
+      :"";
+    const empty=!wishes.hasContent;
+    return `<article class="v2-read-card v2-wishes-card">
+      <h3>Wünsche & Interessen</h3>
+      <div class="v2-read-fields">
+        ${empty?`<p class="v2-muted">Noch nicht erfasst</p>`:""}
+        ${tripField("Was ist dem Gast besonders wichtig?",wishes.originalWishText,{full:true})}
+        ${interestMarkup}
+        ${tripField("Aktivitätsniveau",wishes.activityLabel)}
+        ${tripField("Besondere Wünsche / Hinweise",wishes.specialNotes,{full:true})}
+      </div>
+    </article>`;
+  }
+
+  function tripWishesEditMarkup(draft){
+    const lib=customerWishesLib();
+    const interests=lib?.INTERESTS||[];
+    const levels=lib?.ACTIVITY_LEVELS||[];
+    const selected=new Set(Array.isArray(draft.interests)?draft.interests:[]);
+    const pills=interests.map(item=>`
+      <label class="v2-wish-pill">
+        <input type="checkbox" data-wish-interest="${escapeHtml(item.id)}" ${selected.has(item.id)?"checked":""}>
+        <span>${escapeHtml(item.label)}</span>
+      </label>
+    `).join("");
+    const levelOptions=levels.map(item=>`
+      <label class="v2-wish-level">
+        <input type="radio" name="activityLevel" value="${escapeHtml(item.id)}" ${draft.activityLevel===item.id?"checked":""}>
+        <span>${escapeHtml(item.label)}</span>
+      </label>
+    `).join("");
+    return `
+      <section class="v2-edit-field full v2-wishes-edit" aria-labelledby="tripWishesTitle">
+        <h3 id="tripWishesTitle">Wünsche & Interessen</h3>
+        ${tripTextareaField("wishStatement","Was ist dem Gast besonders wichtig?",draft.wishStatement,{hint:"Originalwunsch des Gastes. Wird nicht automatisch klassifiziert."})}
+        <div class="v2-wish-interests">
+          <span>Interessen</span>
+          <div class="v2-wish-pills">${pills}</div>
+        </div>
+        <div class="v2-wish-levels">
+          <span>Aktivitätsniveau</span>
+          <div class="v2-wish-level-row">
+            <label class="v2-wish-level">
+              <input type="radio" name="activityLevel" value="" ${draft.activityLevel?"":"checked"}>
+              <span>Nicht festgelegt</span>
+            </label>
+            ${levelOptions}
+          </div>
+        </div>
+        ${tripTextareaField("wishNotes","Besondere Wünsche / Hinweise",draft.wishNotes,{hint:"Einschränkungen, Ernährung oder interne Hinweise zu Wünschen."})}
+      </section>
+    `;
+  }
+
   function customerTabMarkup(customer){
     const contact=customer.contact&&typeof customer.contact==="object"?customer.contact:{};
     if(state.customerEditMode)return customerEditFormMarkup(customer);
@@ -9403,7 +9520,6 @@
             ${fieldItem("Begleitpersonen",customer.companions)}
             ${fieldItem("Sprache",customer.language)}
             ${fieldItem("Concierge",customer.concierge||customer.conciergeName)}
-            ${listFieldItem("Anforderungen / Wuensche",customer.requirements)}
             ${fieldItem("Interne Kunden-ID",customer.customerId,{full:true,technical:true})}
           </div>
         </article>
@@ -9444,7 +9560,6 @@
           ${inputField("phone","Telefonnummer",draft.phone,{type:"tel",autocomplete:"tel"})}
           ${inputField("email","E-Mail",draft.email,{type:"email",error:errors.email,autocomplete:"email"})}
           ${inputField("whatsapp","WhatsApp",draft.whatsapp,{type:"tel"})}
-          ${textareaField("requirements","Anforderungen / besondere Wuensche",draft.requirements,{hint:"Eine Anforderung pro Zeile oder kommagetrennt."})}
           ${textareaField("contactInfo","Kontaktinformationen",draft.contactInfo)}
         </div>
         <div class="v2-edit-actions">
@@ -10889,6 +11004,16 @@
   }
 
   function handleTripEditInput(event){
+    const interest=event.target.closest("[data-wish-interest]");
+    if(interest&&state.tripEditDraft){
+      const id=interest.getAttribute("data-wish-interest");
+      const current=Array.isArray(state.tripEditDraft.interests)?state.tripEditDraft.interests.slice():[];
+      const next=interest.checked?Array.from(new Set([...current,id])):current.filter(item=>item!==id);
+      state.tripEditDraft.interests=customerWishesLib()?.sanitizeInterestIds(next)||next;
+      const dirty=hasDirtyTripEdit();
+      setTripEditMessage(dirty?"Ungespeicherte Aenderungen":"",dirty?"dirty":"");
+      return;
+    }
     const field=event.target.closest("#tripEditForm input,#tripEditForm textarea,#tripEditForm select");
     if(!field||!state.tripEditDraft)return;
     if(field.name.startsWith("childAge-")){

@@ -8401,6 +8401,72 @@
     }
   }
 
+  function customerJourneyPortalState(customer){
+    const customerId=cleanValue(customer?.customerId);
+    if(!customerId)return {known:false,key:"unknown"};
+    if(state.portalAccessCustomerId!==customerId){
+      return {known:false,key:state.portalAccessLoading?"loading":"unknown"};
+    }
+    if(state.portalAccessLoading&&!state.portalAccess)return {known:false,key:"loading"};
+    const lib=portalAccessLib();
+    const view=lib?.sanitizeAdminAccessView?lib.sanitizeAdminAccessView(state.portalAccess):state.portalAccess;
+    const card=lib?.cardState?lib.cardState(view):{key:view?.exists?"invited":"missing"};
+    return {known:true,key:card.key||"missing"};
+  }
+
+  function customerJourneyStaySummary(trip){
+    const period=cleanValue(trip?.period)||formatTripPeriod(trip?.start,trip?.end);
+    const region=cleanValue(trip?.region);
+    if(period&&region)return `${period} · ${region}`;
+    return period||region;
+  }
+
+  function customerJourneyViewModel(customer,workspace){
+    const lib=window.ACTCustomerJourneyLibrary;
+    if(!lib?.buildCustomerJourney)return null;
+    const trip=buildTripViewModel(customer);
+    const readiness=customerConciergeReadiness(customer,workspace);
+    return lib.buildCustomerJourney({
+      workspace,
+      publication:publicationStatus(customer),
+      portal:customerJourneyPortalState(customer),
+      wishes:arrayValue(trip.wishes),
+      staySummary:customerJourneyStaySummary(trip),
+      programCount:programCount(customer),
+      openBookings:workspace.openBookings,
+      insights:arrayValue(readiness?.insights)
+    });
+  }
+
+  function customerJourneyMarkup(journey){
+    if(!journey?.rows?.length)return "";
+    const next=journey.nextAction||{};
+    const rows=journey.rows.map(row=>`
+      <li class="v2-customer-journey-item is-${escapeHtml(row.tone||"count")}">
+        <span class="v2-customer-journey-label">${escapeHtml(row.label)}</span>
+        <span class="v2-customer-journey-value">${row.mark?`<span class="v2-customer-journey-mark" aria-hidden="true">${escapeHtml(row.mark)}</span>`:""}<span>${escapeHtml(row.value)}</span></span>
+      </li>
+    `).join("");
+    const button=(!next.idle&&next.buttonLabel&&next.targetTab)
+      ?`<button class="v2-button primary" type="button" data-detail-tab="${escapeHtml(next.targetTab)}">${escapeHtml(next.buttonLabel)}</button>`
+      :"";
+    const detail=next.description?`<p class="v2-customer-journey-next-detail">${escapeHtml(next.description)}</p>`:"";
+    return `
+      <section class="v2-customer-journey" aria-label="Customer Journey">
+        <p class="v2-eyebrow">Customer Journey</p>
+        <ul class="v2-customer-journey-status">${rows}</ul>
+        <div class="v2-customer-journey-next">
+          <div>
+            <p class="v2-eyebrow">Nächste Aktion</p>
+            <p class="v2-customer-journey-next-title">${escapeHtml(next.title||"Aktuell kein Handlungsbedarf.")}</p>
+            ${detail}
+          </div>
+          ${button}
+        </div>
+      </section>
+    `;
+  }
+
   function workspaceStatusCard(label,value,tone,tab){
     return `<button class="workspace-status-card ${escapeHtml(tone)}" type="button" data-detail-tab="${escapeHtml(tab)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></button>`;
   }
@@ -8611,6 +8677,7 @@
     schedulePortalAccessLoad(customer.customerId);
     const tab=detailTabs.some(([key])=>key===state.selectedTab)?state.selectedTab:"kunde";
     const workspace=customerWorkspaceViewModel(customer);
+    const journey=customerJourneyViewModel(customer,workspace);
     const flash=state.detailFlashMessage?`<p class="v2-edit-status ${escapeHtml(state.detailFlashKind||"success")}" role="status">${escapeHtml(state.detailFlashMessage)}</p>`:"";
     root.innerHTML=`
       <header class="v2-detail-head v2-workspace-head">
@@ -8659,6 +8726,7 @@
             `:""}
           </div>
         </div>
+        ${customerJourneyMarkup(journey)}
         <div class="v2-detail-summary" aria-label="Kundenzusammenfassung">
           ${summaryItem("Reise",workspace.tripTiming)}
           ${summaryItem("Reisezeitraum",displayValue(formatPeriod(customer),"Kein Reisezeitraum"))}

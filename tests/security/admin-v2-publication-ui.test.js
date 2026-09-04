@@ -223,8 +223,8 @@ describe("7.7 publication UI cleanup",()=>{
   });
 
   it("pins follow the UI cleanup",()=>{
-    assert.match(html,/admin-v2\.js\?v=100/);
-    assert.match(html,/admin-v2\.css\?v=77/);
+    assert.match(html,/admin-v2\.js\?v=101/);
+    assert.match(html,/admin-v2\.css\?v=78/);
     assert.match(html,/portal-access-admin-library\.js\?v=1/);
   });
 });

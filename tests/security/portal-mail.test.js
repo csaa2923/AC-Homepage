@@ -318,7 +318,7 @@ describe("portal OTP mail delivery",()=>{
     assert.match(indexSource,/exports\.requestCustomerPortalOtp=onCall/);
     assert.doesNotMatch(indexSource,/exports\.verifyPortalOtp=/);
     assert.match(html,/admin-v2-bookings\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=100/);
+    assert.match(html,/admin-v2\.js\?v=101/);
     assert.match(rules,/match \/customerPortalOtpChallenges\/\{challengeId\}[\s\S]*allow read, write: if false;/);
   });
 

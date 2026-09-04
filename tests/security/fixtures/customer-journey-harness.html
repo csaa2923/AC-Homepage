@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Customer Journey Harness</title>
+  <link rel="stylesheet" href="../../../customer-portal/admin-v2.css?v=78">
+  <style>
+    body{margin:0;padding:24px;font-family:Georgia,serif;background:#f0f4ef;color:#14261f}
+    #fixture{max-width:1100px;margin:0 auto;display:grid;gap:18px}
+    h1{margin:0;font-size:22px}
+  </style>
+</head>
+<body>
+  <main id="fixture">
+    <h1>8.0a Customer Journey – lokale Sichtprüfung</h1>
+    <header class="v2-detail-head v2-workspace-head" id="desktopJourney"></header>
+  </main>
+  <script src="../../../customer-portal/customer-journey-library.js?v=1"></script>
+  <script>
+    const lib=window.ACTCustomerJourneyLibrary;
+    const journey=lib.buildCustomerJourney({
+      workspace:{missingRequired:[],openBookings:1},
+      publication:{key:"pending",changeCount:2},
+      portal:{known:true,key:"active"},
+      wishes:["Natur","Kulinarik"],
+      staySummary:"12. bis 16. September 2026 · Seefeld",
+      programCount:3,
+      openBookings:1,
+      insights:[{
+        id:"published-trip-has-pending-changes",
+        severity:"critical",
+        title:"Veröffentlichte Reise mit offenen Änderungen",
+        description:"2 Änderungen warten auf Veröffentlichung.",
+        reason:"publishedTripHasPendingChanges",
+        targetTab:"veroeffentlichung",
+        actionLabel:"Änderungen veröffentlichen"
+      }]
+    });
+    const rows=journey.rows.map(row=>`
+      <li class="v2-customer-journey-item is-${row.tone}">
+        <span class="v2-customer-journey-label">${row.label}</span>
+        <span class="v2-customer-journey-value">${row.mark?`<span class="v2-customer-journey-mark" aria-hidden="true">${row.mark}</span>`:""}<span>${row.value}</span></span>
+      </li>
+    `).join("");
+    const next=journey.nextAction;
+    document.getElementById("desktopJourney").innerHTML=`
+      <section class="v2-customer-journey" aria-label="Customer Journey">
+        <p class="v2-eyebrow">Customer Journey</p>
+        <ul class="v2-customer-journey-status">${rows}</ul>
+        <div class="v2-customer-journey-next">
+          <div>
+            <p class="v2-eyebrow">Nächste Aktion</p>
+            <p class="v2-customer-journey-next-title">${next.title}</p>
+            <p class="v2-customer-journey-next-detail">${next.description||""}</p>
+          </div>
+          <button class="v2-button primary" type="button" data-detail-tab="${next.targetTab}">${next.buttonLabel}</button>
+        </div>
+      </section>
+    `;
+  </script>
+</body>
+</html>

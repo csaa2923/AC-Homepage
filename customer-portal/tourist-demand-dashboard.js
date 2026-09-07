@@ -106,7 +106,18 @@
 
   function confirmedObservations(items){
     const lib=demandLibrary();
-    return (Array.isArray(items)?items:[]).map(item=>lib.validateDemandObservation(item)).filter(item=>item.ok&&item.value).map(item=>item.value);
+    return (Array.isArray(items)?items:[]).map(item=>{
+      const status=text(item&&item.reviewStatus);
+      if(status&&status!=="accepted")return null;
+      const result=lib.validateDemandObservation(item);
+      if(!result.ok||!result.value)return null;
+      return {
+        ...result.value,
+        originMarket:text(item.originMarket),
+        reviewStatus:status,
+        demandScope:result.value.demandScope||text(item.demandScope)
+      };
+    }).filter(Boolean);
   }
 
   function baseViewModel(filters,overrides){
@@ -166,9 +177,13 @@
         seasonLabel:lookupLabel(lib.SEASONS,item.season),
         audienceIds:item.audiences||[],
         audienceLabels:(item.audiences||[]).map(id=>lookupLabel(lib.AUDIENCES,id)),
-        topicId:item.topic,
-        topicLabel:lookupLabel(lib.TOPICS,item.topic),
+        demandScope:item.demandScope||(item.topic?"topic":"general"),
+        topicId:item.topic||"",
+        topicLabel:item.demandScope==="general"||!item.topic?"Gesamttourismus":lookupLabel(lib.TOPICS,item.topic),
         subtopics:item.subtopics||[],
+        signalType:item.signalType||"",
+        signalTypeLabel:lookupLabel(lib.SIGNAL_TYPES,item.signalType),
+        originMarket:text(item.originMarket),
         intentIds:item.intents||[],
         intentLabels:(item.intents||[]).map(id=>lookupLabel(lib.INTENTS,id)),
         statementType:item.statementType,
@@ -197,16 +212,17 @@
     });
     const observationCount=signals.filter(item=>item.statementType==="observation").length;
     const recentCount=signals.filter(item=>item.freshness==="current"||item.freshness==="recent").length;
-    const confirmedTopics=new Set(observations.map(item=>item.topic));
+    const topicObservations=observations.filter(item=>(item.demandScope==="topic"||(!item.demandScope&&item.topic))&&item.topic);
+    const confirmedTopics=new Set(topicObservations.map(item=>item.topic));
     let topicRows=Array.isArray(snapshot.topTopics)?snapshot.topTopics:[];
     if(!topicRows.length){
       const counts=new Map();
-      observations.filter(item=>item.statementType==="observation").forEach(item=>{
+      topicObservations.filter(item=>item.statementType==="observation").forEach(item=>{
         counts.set(item.topic,(counts.get(item.topic)||0)+1);
       });
       topicRows=Array.from(counts.entries()).map(([topic,observationCount])=>({topic,observationCount}));
     }
-    const topTopics=topicRows.filter(item=>confirmedTopics.has(item.topic)).map(item=>{
+    const topTopics=topicRows.filter(item=>item.topic&&confirmedTopics.has(item.topic)).map(item=>{
       const trend=trends.find(entry=>entry.topic===item.topic)||null;
       return {
         topicId:item.topic,
@@ -279,6 +295,8 @@
       ["Quelle",source.sourceName],
       ["Herausgeber",source.publisher],
       ["Quellentyp",source.sourceTypeLabel||source.sourceType],
+      ["Signalart",signal.signalTypeLabel||signal.signalType],
+      ["Herkunftsmarkt",signal.originMarket],
       ["Veröffentlicht",formatDate(source.publishedAt)],
       ["Beobachtet",formatDate(source.observedAt)],
       ["Abgerufen",formatDate(source.retrievedAt)]
@@ -306,7 +324,7 @@
     const audiences=signal.audienceLabels.length?signal.audienceLabels.join(", "):"–";
     const subtopics=signal.subtopics.length?` / ${escapeHtml(signal.subtopics.join(", "))}`:"";
     const intents=signal.intentLabels.length?signal.intentLabels.join(", "):"–";
-    return `<article class="v2-card v2-demand-signal" data-demand-signal="${escapeHtml(signal.id)}" data-statement-type="${escapeHtml(signal.statementType)}" data-evidence="${escapeHtml(signal.evidenceLevel)}" data-confidence="${escapeHtml(signal.confidence)}" data-freshness="${escapeHtml(signal.freshness)}" data-trend="${escapeHtml(signal.trendDirection)}">
+    return `<article class="v2-card v2-demand-signal" data-demand-signal="${escapeHtml(signal.id)}" data-statement-type="${escapeHtml(signal.statementType)}" data-demand-scope="${escapeHtml(signal.demandScope||"")}" data-evidence="${escapeHtml(signal.evidenceLevel)}" data-confidence="${escapeHtml(signal.confidence)}" data-freshness="${escapeHtml(signal.freshness)}" data-trend="${escapeHtml(signal.trendDirection)}">
       <header class="v2-demand-signal-head">
         <p class="v2-eyebrow">${escapeHtml(signal.statementLabel)}</p>
         <h3>${escapeHtml(signal.summary)}</h3>
@@ -316,6 +334,7 @@
         <span>${escapeHtml(signal.seasonLabel)}</span>
         <span>${escapeHtml(audiences)}</span>
         <span>${escapeHtml(signal.topicLabel)}${subtopics}</span>
+        <span>${escapeHtml(signal.signalTypeLabel||signal.signalType||"–")}</span>
         <span>${escapeHtml(intents)}</span>
       </p>
       <div class="v2-demand-signal-flags">

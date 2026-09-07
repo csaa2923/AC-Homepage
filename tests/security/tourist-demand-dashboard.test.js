@@ -402,16 +402,20 @@ describe("8.1b tourist demand dashboard",()=>{
   });
 
   it("U) empty state is not 0% demand",()=>{
-    const markup=dashboard.renderDemandDashboardMarkup(dashboard.buildDemandDashboardViewModel(provider.loadDemandSnapshot({}),{}));
+    const markup=dashboard.renderDemandDashboardMarkup(dashboard.buildDemandDashboardViewModel(provider.loadDemandSnapshot({region:"wilder-kaiser"}),{region:"wilder-kaiser"}));
     assert.doesNotMatch(markup,/0 % Nachfrage|keine Nachfrage|uninteressant/i);
     assert.match(markup,/Für diese Auswahl liegen noch keine bestätigten Nachfragesignale vor\./);
   });
 
   it("V) synthetic fixtures are not loaded in production",()=>{
     const production=provider.loadDemandSnapshot({});
-    assert.equal(production.empty,true);
-    assert.equal(production.value.observationCount,0);
-    assert.deepEqual(provider.getProductionObservations(),[]);
+    assert.equal(production.ok,true);
+    const observations=provider.getProductionObservations();
+    assert.ok(observations.length>0);
+    assert.ok(observations.every(item=>item.synthetic!==true));
+    assert.ok(observations.every(item=>!/^(TEST|FIXTURE|SYNTHETIC)$/i.test(item.fixtureKind||"")));
+    assert.ok(observations.every(item=>item.reviewStatus==="accepted"));
+    assert.ok((production.value.observations||[]).every(item=>!/TEST FIXTURE SYNTHETIC/.test(item.summary||"")));
     assert.deepEqual(provider.selectProductionObservations(snapshotObservations()),[]);
     const rejected=provider.loadDemandSnapshotForTests([{summary:"not marked"}],{});
     assert.equal(rejected.ok,false);
@@ -481,9 +485,11 @@ describe("8.1b tourist demand dashboard",()=>{
   it("AE) admin v2 pins and demand assets are wired",()=>{
     assert.match(adminHtml,/admin-v2\.js\?v=104/);
     assert.match(adminHtml,/admin-v2\.css\?v=81/);
-    assert.match(adminHtml,/tourist-demand-library\.js\?v=1/);
-    assert.match(adminHtml,/tourist-demand-data-provider\.js\?v=2/);
-    assert.match(adminHtml,/tourist-demand-dashboard\.js\?v=2/);
+    assert.match(adminHtml,/tourist-demand-library\.js\?v=2/);
+    assert.match(adminHtml,/tourist-demand-ingestion\.js\?v=2/);
+    assert.match(adminHtml,/tourist-demand-catalog\.js\?v=2/);
+    assert.match(adminHtml,/tourist-demand-data-provider\.js\?v=3/);
+    assert.match(adminHtml,/tourist-demand-dashboard\.js\?v=4/);
     assert.match(adminJs,/function renderDemandDashboard\(\)/);
     assert.doesNotMatch(adminJs,/\["demand","Nachfrage/);
     assert.doesNotMatch(functionsIndex,/ACTTouristDemand|loadDemandSnapshot/);
@@ -515,8 +521,9 @@ describe("8.1b tourist demand dashboard",()=>{
     assert.equal(result.empty,true);
     assert.equal(result.value.observationCount,0);
     const extra=provider.loadDemandSnapshot({},sneaked);
-    assert.equal(extra.empty,true);
-    assert.equal(extra.value.observationCount,0);
+    assert.equal(extra.ok,true);
+    assert.ok((extra.value.observations||[]).every(item=>item.synthetic!==true));
+    assert.equal((extra.value.observations||[]).some(item=>/TEST FIXTURE SYNTHETIC/.test(item.summary||"")),false);
   });
 
   it("B2) productive provider rejects fixtureKind TEST",()=>{

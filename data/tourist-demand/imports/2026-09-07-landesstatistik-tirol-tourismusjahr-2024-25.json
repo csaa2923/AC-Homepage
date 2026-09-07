@@ -1,0 +1,82 @@
+{
+  "importId": "2026-09-07-landesstatistik-tirol-tourismusjahr-2024-25",
+  "adapterId": "landesstatistik-tirol",
+  "retrievedAt": "2026-09-07T12:00:00.000Z",
+  "accessMethod": "controlled_manual_import",
+  "synthetic": false,
+  "fixtureKind": "",
+  "sourceName": "Landesstatistik Tirol – Tourismusjahr 2024/25",
+  "publisher": "Landesstatistik Tirol",
+  "reference": "https://www.fact.tirol/statistik/statistik-tirol/tourismusjahr-2024/25/",
+  "notes": "Manuell transkribierte, öffentlich veröffentlichte Kennzahlen. Sommer-Nächtigungen 23,2 vs. 23,3 Mio. bewusst nicht importiert.",
+  "records": [
+    {
+      "sourceRecordId": "winter-2024-25-overnight-stays",
+      "rawTitle": "Wintersaison 2024/25 Nächtigungen",
+      "rawSummary": "Wintersaison 2024/25: 26,4 Millionen Nächtigungen in Tirol (Landesstatistik Tirol).",
+      "rawRegion": "Tirol",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://www.fact.tirol/statistik/statistik-tirol/tourismusjahr-2024/25/",
+      "rawMetric": {
+        "metricName": "overnight_stays",
+        "metricValue": 26400000,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "winter-2024-25-arrivals",
+      "rawTitle": "Wintersaison 2024/25 Ankünfte",
+      "rawSummary": "Wintersaison 2024/25: 6,1 Millionen Ankünfte in Tirol (Landesstatistik Tirol).",
+      "rawRegion": "Tirol",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://www.fact.tirol/statistik/statistik-tirol/tourismusjahr-2024/25/",
+      "rawMetric": {
+        "metricName": "arrivals",
+        "metricValue": 6100000,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "tourism-year-2024-25-overnight-stays",
+      "rawTitle": "Tourismusjahr 2024/25 Nächtigungen",
+      "rawSummary": "Tourismusjahr 2024/25: 49,6 Millionen Nächtigungen in Tirol (Landesstatistik Tirol).",
+      "rawRegion": "Tirol",
+      "rawSeason": "Tourismusjahr 2024/25",
+      "observedAt": "2025-10-31T00:00:00.000Z",
+      "reference": "https://www.fact.tirol/statistik/statistik-tirol/tourismusjahr-2024/25/",
+      "rawMetric": {
+        "metricName": "overnight_stays",
+        "metricValue": 49600000,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "tourism-year-2024-25-origin-market-de",
+      "rawTitle": "Herkunftsmarkt Deutschland Tourismusjahr 2024/25",
+      "rawSummary": "Deutschland bleibt laut Landesstatistik Tirol der stärkste Herkunftsmarkt bei den Nächtigungen im Tourismusjahr 2024/25.",
+      "rawRegion": "Tirol",
+      "rawSeason": "Tourismusjahr 2024/25",
+      "observedAt": "2025-10-31T00:00:00.000Z",
+      "reference": "https://www.fact.tirol/statistik/statistik-tirol/tourismusjahr-2024/25/",
+      "originMarket": "DE",
+      "rawMetric": {
+        "metricName": "origin_market_share",
+        "metricValue": 54,
+        "metricUnit": "percent"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    }
+  ]
+}

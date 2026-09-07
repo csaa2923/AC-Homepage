@@ -1,0 +1,26 @@
+{
+  "importId": "2026-09-07-tirol-werbung-wintersaison-2024-25",
+  "adapterId": "tirol-werbung-presse",
+  "retrievedAt": "2026-09-07T12:00:00.000Z",
+  "accessMethod": "controlled_manual_import",
+  "synthetic": false,
+  "fixtureKind": "",
+  "sourceName": "Tirol Werbung – Wintersaison 2024/25 Abschluss",
+  "publisher": "Tirol Werbung",
+  "reference": "https://presse.tirol.at/tirols-tourismus-beschliesst-wintersaison-mit-positivem-ergebnis/262512/",
+  "notes": "Qualitative Marktkommentierung. Die in der Meldung genannten 26,4 Mio. Nächtigungen werden hier nicht als eigene quantitative Observation übernommen; die Primärzahl bleibt bei der Landesstatistik.",
+  "records": [
+    {
+      "sourceRecordId": "winter-2024-25-season-close",
+      "rawTitle": "Tirols Tourismus beschließt Wintersaison mit positivem Ergebnis",
+      "rawSummary": "Tirol Werbung berichtet zum Abschluss der Wintersaison 2024/25 von einem versöhnlichen Saisonende nach einer guten ersten Hälfte, fehlendem Naturschnee in der zweiten Hälfte und einem Nachfrageschub um Ostern. Skifahren bleibt laut Quelle das Kernprodukt des Tiroler Wintertourismus.",
+      "rawRegion": "Tirol",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "publishedAt": "2025-05-21T00:00:00.000Z",
+      "reference": "https://presse.tirol.at/tirols-tourismus-beschliesst-wintersaison-mit-positivem-ergebnis/262512/",
+      "synthetic": false,
+      "fixtureKind": ""
+    }
+  ]
+}

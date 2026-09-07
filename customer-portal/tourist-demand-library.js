@@ -95,6 +95,10 @@
     {id:"quantitative",label:"quantitativ"},
     {id:"qualitative",label:"qualitativ"}
   ];
+  const DEMAND_SCOPES=[
+    {id:"general",label:"Gesamttourismus"},
+    {id:"topic",label:"Themennachfrage"}
+  ];
   const SOURCE_TYPES=[
     {id:"official_statistics",label:"offizielle Statistik"},
     {id:"tourism_board",label:"Tourismusverband / TVB"},
@@ -183,6 +187,35 @@
   function normalizeTopic(value){
     const match=lookup(TOPICS,value);
     return match?ok(match.id):fail([value?"Unbekanntes Topic.":"Topic fehlt."]);
+  }
+
+  function normalizeDemandScope(value){
+    if(value===undefined||value===null||text(value)==="")return fail(["demandScope fehlt."]);
+    const match=lookup(DEMAND_SCOPES,value);
+    return match?ok(match.id):fail(["Unbekannter demandScope."]);
+  }
+
+  function isTopicDemandObservation(item){
+    return Boolean(item&&item.demandScope==="topic"&&text(item.topic));
+  }
+
+  function normalizeScopeAndTopic(source){
+    const rawScope=text(source.demandScope);
+    const hasTopic=text(source.topic)!=="";
+    if(!rawScope){
+      if(!hasTopic)return fail(["demandScope fehlt. Ohne Topic ist nur demandScope: general zulässig."]);
+      const topic=normalizeTopic(source.topic);
+      return topic.ok?ok({demandScope:"topic",topic:topic.value}):fail(topic.errors);
+    }
+    const scope=normalizeDemandScope(rawScope);
+    if(!scope.ok)return scope;
+    if(scope.value==="general"){
+      if(hasTopic)return fail(["General-Tourism-Observation darf kein Interessen-Topic tragen."]);
+      return ok({demandScope:"general",topic:""});
+    }
+    if(!hasTopic)return fail(["Topic fehlt."]);
+    const topic=normalizeTopic(source.topic);
+    return topic.ok?ok({demandScope:"topic",topic:topic.value}):fail(topic.errors);
   }
 
   function normalizeAudience(value){
@@ -410,7 +443,7 @@
     const season=normalizeSeason(source.season);
     const seasonPhase=normalizeSeasonPhase(source.seasonPhase);
     const region=normalizeRegion(source.region||source.source?.geographicScope);
-    const topic=normalizeTopic(source.topic);
+    const scopeAndTopic=normalizeScopeAndTopic(source);
     const audiences=normalizeAudiences(source.audiences);
     const intents=normalizeIntents(source.intents);
     const signalType=normalizeSignalType(source.signalType);
@@ -418,7 +451,7 @@
     const summary=text(source.summary);
     const observedAt=parseDateValue(source.observedAt)||(sourceResult.ok?sourceResult.value.observedAt:"");
     const retrievedAt=parseDateValue(source.retrievedAt)||(sourceResult.ok?sourceResult.value.retrievedAt:observedAt);
-    errors.push(...sourceResult.errors,...statementType.errors,...season.errors,...seasonPhase.errors,...region.errors,...topic.errors,...audiences.errors,...intents.errors,...signalType.errors,...evidence.errors);
+    errors.push(...sourceResult.errors,...statementType.errors,...season.errors,...seasonPhase.errors,...region.errors,...scopeAndTopic.errors,...audiences.errors,...intents.errors,...signalType.errors,...evidence.errors);
     if(!summary)errors.push("summary fehlt.");
     if(!observedAt)errors.push("observedAt fehlt.");
     if(!retrievedAt)errors.push("retrievedAt fehlt.");
@@ -448,10 +481,11 @@
       metric=metricResult.value;
     }
     if(errors.length)return fail(uniqueIds(errors));
-    const subtopics=normalizeSubtopics(topic.value,source.subtopics);
+    const topicId=scopeAndTopic.value.topic;
+    const subtopics=normalizeSubtopics(topicId,source.subtopics);
     if(!subtopics.ok)return fail(subtopics.errors);
     return ok({
-      id:observationIdFrom(source),
+      id:observationIdFrom({...source,topic:topicId||"general"}),
       sourceId:sourceResult.value.sourceId,
       source:sourceResult.value,
       supportingSources:supporting,
@@ -461,7 +495,8 @@
       seasonPhase:seasonPhase.value,
       region:region.value,
       audiences:audiences.value,
-      topic:topic.value,
+      demandScope:scopeAndTopic.value.demandScope,
+      topic:topicId,
       subtopics:subtopics.value,
       intents:intents.value,
       signalType:signalType.value,
@@ -520,7 +555,9 @@
     const filtered=normalized.value.filter(item=>{
       if(region.value&&item.region!==region.value)return false;
       if(season.value&&item.season!==season.value)return false;
-      if(topic.value&&item.topic!==topic.value)return false;
+      if(topic.value){
+        if(!isTopicDemandObservation(item)||item.topic!==topic.value)return false;
+      }
       return item.statementType==="observation";
     });
     if(!filtered.length)return fail(["Keine Observations für diesen Trend."]);
@@ -572,8 +609,10 @@
       if(season.value&&item.season!==season.value)return false;
       return true;
     });
+    const topicObservations=filtered.filter(item=>item.statementType==="observation"&&isTopicDemandObservation(item));
+    const generalObservations=filtered.filter(item=>item.statementType==="observation"&&item.demandScope==="general");
     const groups=new Map();
-    filtered.filter(item=>item.statementType==="observation").forEach(item=>{
+    topicObservations.forEach(item=>{
       const key=`${item.topic}|${item.region}|${item.season}`;
       if(!groups.has(key))groups.set(key,[]);
       groups.get(key).push(item);
@@ -585,7 +624,7 @@
       if(trend.ok)trends.push(trend.value);
     });
     const topicCounts=new Map();
-    filtered.forEach(item=>{
+    filtered.filter(isTopicDemandObservation).forEach(item=>{
       const current=topicCounts.get(item.topic)||{topic:item.topic,observationCount:0,independentSourceIds:new Set()};
       current.observationCount+=1;
       current.independentSourceIds.add(sourceIndependenceKey(item.source));
@@ -611,6 +650,7 @@
       topTopics,
       sources,
       observationCount:filtered.length,
+      generalObservationCount:generalObservations.length,
       independentSourceCount:countIndependentSources(filtered),
       synthetic:filtered.every(item=>item.synthetic),
       fixtureKind:"TEST"
@@ -638,12 +678,15 @@
     EVIDENCE_LEVELS,
     CONFIDENCE_LEVELS,
     SIGNAL_TYPES,
+    DEMAND_SCOPES,
     SOURCE_TYPES,
     FRESHNESS_WINDOWS,
     normalizeSeason,
     normalizeSeasonPhase,
     normalizeRegion,
     normalizeTopic,
+    normalizeDemandScope,
+    isTopicDemandObservation,
     normalizeAudience,
     normalizeIntent,
     normalizeStatementType,

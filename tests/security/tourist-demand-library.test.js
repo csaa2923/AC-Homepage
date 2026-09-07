@@ -302,7 +302,7 @@ describe("8.1a tourist demand library",()=>{
     assert.doesNotMatch(adminJs,/customer\.touristDemand|customer\.demandSnapshot|travel\.demand/);
     assert.doesNotMatch(allowlist,/touristDemand|demandObservation/);
     assert.doesNotMatch(wishesSource,/touristDemand|DemandObservation/);
-    assert.match(adminHtml,/tourist-demand-library\.js\?v=1/);
+    assert.match(adminHtml,/tourist-demand-library\.js\?v=2/);
     const wishes=loadWishes().buildCustomerWishesViewModel({wishes:["Natur"]});
     assert.equal(wishes.originalWishText,"Natur");
     assert.equal(wishes.interestIds[0],"nature");

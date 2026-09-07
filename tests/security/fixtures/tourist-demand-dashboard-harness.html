@@ -17,15 +17,17 @@
     <section id="empty"></section>
     <section id="filled"></section>
   </main>
-  <script src="../../../customer-portal/tourist-demand-library.js?v=1"></script>
-  <script src="../../../customer-portal/tourist-demand-data-provider.js?v=2"></script>
-  <script src="../../../customer-portal/tourist-demand-dashboard.js?v=2"></script>
+  <script src="../../../customer-portal/tourist-demand-library.js?v=2"></script>
+  <script src="../../../customer-portal/tourist-demand-ingestion.js?v=2"></script>
+  <script src="../../../customer-portal/tourist-demand-catalog.js?v=2"></script>
+  <script src="../../../customer-portal/tourist-demand-data-provider.js?v=3"></script>
+  <script src="../../../customer-portal/tourist-demand-dashboard.js?v=4"></script>
   <script>
     const provider=window.ACTTouristDemandProvider;
     const dashboard=window.ACTTouristDemandDashboard;
-    const empty=provider.loadDemandSnapshot({});
+    const empty=provider.loadDemandSnapshot({region:"wilder-kaiser"});
     document.getElementById("empty").innerHTML=dashboard.renderDemandDashboardMarkup(
-      dashboard.buildDemandDashboardViewModel(empty,{})
+      dashboard.buildDemandDashboardViewModel(empty,{region:"wilder-kaiser"})
     );
     const fixtures=[{
       id:"obs-a-up",

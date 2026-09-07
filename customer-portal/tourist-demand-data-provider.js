@@ -1,9 +1,8 @@
 /**
- * Ops Ready 8.1b – controlled Tourist Demand snapshot provider.
+ * Ops Ready 8.1b/c – controlled Tourist Demand snapshot provider.
  *
- * Production returns only production-safe Demand records.
- * Synthetic / TEST fixtures never enter the productive path,
- * regardless of where a record technically came from.
+ * Production returns only accepted, production-safe Demand records
+ * from the 8.1c official catalog. Synthetic fixtures never enter production.
  */
 (function(){
   "use strict";
@@ -11,12 +10,17 @@
   const SYNTHETIC_KINDS={TEST:true,FIXTURE:true,SYNTHETIC:true};
   const EMPTY_MESSAGE="Für diese Auswahl liegen noch keine bestätigten Nachfragesignale vor.";
   const LOAD_ERROR_MESSAGE="Die Nachfragesignale konnten nicht geladen werden.";
-  const PRODUCTION_OBSERVATIONS=[];
 
   function demandLibrary(){
     if(typeof window!=="undefined"&&window.ACTTouristDemandLibrary)return window.ACTTouristDemandLibrary;
     if(typeof require==="function")return require("./tourist-demand-library.js");
     throw new Error("ACTTouristDemandLibrary fehlt.");
+  }
+
+  function demandCatalog(){
+    if(typeof window!=="undefined"&&window.ACTTouristDemandCatalog)return window.ACTTouristDemandCatalog;
+    if(typeof require==="function")return require("./tourist-demand-catalog.js");
+    return null;
   }
 
   function text(value){
@@ -30,7 +34,10 @@
   }
 
   function isProductionDemandRecord(record){
-    return Boolean(record&&typeof record==="object"&&!isSyntheticRecord(record));
+    if(!record||typeof record!=="object"||isSyntheticRecord(record))return false;
+    const status=text(record.reviewStatus);
+    if(status&&status!=="accepted")return false;
+    return true;
   }
 
   function isMarkedTestFixture(item){
@@ -56,7 +63,13 @@
   }
 
   function getProductionObservations(){
-    return selectProductionObservations(PRODUCTION_OBSERVATIONS);
+    const catalog=demandCatalog();
+    if(!catalog||typeof catalog.getAcceptedProductionObservations!=="function")return [];
+    try{
+      return selectProductionObservations(catalog.getAcceptedProductionObservations());
+    }catch(_error){
+      return [];
+    }
   }
 
   function applyDemandFilters(observations,filters){
@@ -115,8 +128,14 @@
     eligible.forEach(item=>{
       const result=lib.normalizeDemandObservation(item);
       if(!result.ok||!result.value)return;
-      if(!allowSynthetic&&!isProductionDemandRecord(result.value))return;
-      normalized.push(result.value);
+      const merged={
+        ...result.value,
+        reviewStatus:text(item.reviewStatus)||"accepted",
+        originMarket:text(item.originMarket)||undefined,
+        importKey:text(item.importKey)||undefined
+      };
+      if(!allowSynthetic&&!isProductionDemandRecord(merged))return;
+      normalized.push(merged);
     });
     if(!normalized.length){
       return {ok:true,error:false,errors:[],empty:true,value:emptySnapshot(next)};
@@ -154,7 +173,7 @@
   }
 
   function loadDemandSnapshot(filters){
-    return loadProductionSnapshot(PRODUCTION_OBSERVATIONS,filters);
+    return loadProductionSnapshot(getProductionObservations(),filters);
   }
 
   function loadDemandSnapshotForTests(observations,filters){
@@ -174,6 +193,7 @@
     LOAD_ERROR_MESSAGE,
     isSyntheticRecord,
     isProductionDemandRecord,
+    isAcceptedProductionRecord:isProductionDemandRecord,
     isMarkedTestFixture,
     selectProductionObservations,
     getProductionObservations,

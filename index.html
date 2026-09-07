@@ -131,7 +131,7 @@
   ]
 }
 </script>
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=5">
 <link rel="stylesheet" href="css/faq.css">
 </head>
 <body>
@@ -166,6 +166,7 @@
       <a class="btn primary" href="https://wa.me/4367761410679" target="_blank" data-i18n="ctaWhatsapp">Jetzt per WhatsApp anfragen</a>
       <a class="btn ghost" href="#services" data-i18n="ctaServices">Unsere Leistungen</a>
     </div>
+    <p class="hero-note" data-i18n="enquiryNote">Ihre Anfrage ist unverbindlich. Eine Beauftragung erfolgt erst mit der Annahme eines individuellen Angebots.</p>
   </div>
 </section>
 
@@ -316,12 +317,14 @@
       <div><h3>WhatsApp / Kontakt</h3><p data-i18n="contactWa">Wir sind f&uuml;r Sie da.</p><span data-i18n="writeNow">Jetzt schreiben</span></div>
     </a>
   </div>
+  <p class="contact-note" data-i18n="enquiryNote">Ihre Anfrage ist unverbindlich. Eine Beauftragung erfolgt erst mit der Annahme eines individuellen Angebots.</p>
 </section>
 
 <section class="request" id="request">
   <div class="section-head dark">
     <div class="section-label" data-i18n="requestLabel">Anfrage</div>
     <h2 data-i18n="requestTitle">Womit d&uuml;rfen wir helfen?</h2>
+    <p data-i18n="enquiryNote">Ihre Anfrage ist unverbindlich. Eine Beauftragung erfolgt erst mit der Annahme eines individuellen Angebots.</p>
   </div>
   <div class="request-panel">
     <div class="form-error" id="formError" role="alert" aria-live="polite" hidden></div>
@@ -364,6 +367,9 @@
         </div>
       </details>
       <label class="full"><span data-i18n="fieldMessage">Wunsch / Nachricht</span><textarea id="message" data-placeholder="messagePlaceholder" placeholder="Beschreiben Sie kurz, was organisiert werden soll."></textarea></label>
+    </div>
+    <div class="form-consent" id="requestConsent">
+      <p class="privacy-note" id="privacyNote">Hinweise zur Verarbeitung Ihrer Angaben finden Sie in unserer <a href="datenschutz.html" target="_blank" rel="noopener noreferrer">Datenschutzerklärung</a>.</p>
     </div>
     <button class="btn primary fullbtn" id="sendWhatsappButton" type="button" data-i18n="sendWa">WhatsApp-Nachricht erstellen</button>
   </div>
@@ -428,7 +434,7 @@
   <a href="tel:+4367761410679">Anrufen</a>
 </div>
 
-<script src="js/script.js?v=3"></script>
+<script src="js/script.js?v=5"></script>
 <script src="js/faq.js"></script>
 </body>
 </html>

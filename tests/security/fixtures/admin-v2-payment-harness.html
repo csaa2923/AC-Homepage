@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Payment harness</title>
+  <link rel="stylesheet" href="../../../customer-portal/admin-v2.css?v=81">
+  <link rel="stylesheet" href="../../../customer-portal/admin-v2-legal-comms.css?v=1">
+  <link rel="stylesheet" href="../../../customer-portal/admin-v2-payment.css?v=1">
+</head>
+<body>
+  <div id="paymentRoot"></div>
+  <div id="legalCommsRoot"></div>
+  <script src="../../../customer-portal/admin-v2-legal-comms.js?v=1"></script>
+  <script src="../../../customer-portal/admin-v2-payment.js?v=1"></script>
+  <script>
+    const customer={
+      customerId:"demo-1",
+      customerName:"Familie Beispiel",
+      legalComms:{offerAccepted:true,offerSent:true,termsSent:true},
+      payment:{
+        offerNumber:"ACT-2026-014",
+        conciergeFee:290,
+        thirdPartyAct:460,
+        thirdPartyDirect:180,
+        paidAmount:0,
+        status:"requested",
+        dueDate:"2026-09-10",
+        items:[
+          {id:"a1",kind:"act",title:"Concierge-Service",amount:290},
+          {id:"t1",kind:"third",title:"Guide",provider:"Alpen Guide",amount:460,payee:"act",cancellation:"24 Stunden",paymentStatus:"requested"},
+          {id:"t2",kind:"third",title:"Ticket",provider:"Bergbahn",amount:180,payee:"direct",paymentStatus:"not_requested"}
+        ]
+      }
+    };
+    const state={selectedCustomerId:"demo-1",paymentMessage:"",legalCommsMessage:""};
+    const api={
+      getState:()=>state,
+      patchState:patch=>Object.assign(state,patch||{}),
+      escapeHtml:value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char])),
+      badge:value=>`<span class="v2-badge">${value||""}</span>`,
+      byId:id=>document.getElementById(id),
+      customerById:()=>customer,
+      summaryItem:(label,value)=>`<div class="v2-summary-item"><span>${label}</span><strong>${value}</strong></div>`,
+      normalizedDocuments:()=>[],
+      copyTextToClipboard:async()=>true,
+      saveLegalComms:async()=>customer,
+      savePayment:async(_id,payment)=>{customer.payment=payment;return customer;},
+      detailHash:()=>"#zahlung",
+      routeTo:()=>{},
+      render:()=>{window.ACTAdminV2Payment.renderView();window.ACTAdminV2LegalComms.renderView();}
+    };
+    window.ACTAdminV2Payment.bind(api);
+    window.ACTAdminV2LegalComms.bind(api);
+    window.ACTAdminV2Payment.renderView();
+    window.ACTAdminV2LegalComms.renderView();
+  </script>
+</body>
+</html>

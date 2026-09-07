@@ -171,6 +171,8 @@
     ["buchungen","Buchungen"],
     ["dokumente","Dokumente"],
     ["kommunikation","Kommunikation"],
+    ["legalcomms","Kommunikation & Dokumente"],
+    ["zahlung","Zahlung"],
     ["veroeffentlichung","Veröffentlichung"]
   ];
   let activeLoginAttempt=0;
@@ -648,7 +650,7 @@
         workspaceOpen
       };
     }
-    if(["dashboard","customers","bookings","calendar","documents","settings","communication","demand"].includes(main)&&parts.length===1){
+    if((["dashboard","customers","bookings","calendar","documents","settings","communication","demand"].includes(main)||main==="legalcomms"||main==="zahlung")&&parts.length===1){
       return {route:main==="calendar"?"bookings":main,customerId:"",tab:"",taskCustomerId:"",taskCustomerFromQuery:false,taskId:"",workspaceOpen:false};
     }
     if(main==="customers"&&parts[1]){
@@ -905,6 +907,46 @@
     const index=state.customers.findIndex(customer=>String(customer.customerId||"")===String(savedCustomer.customerId||""));
     if(index>=0)state.customers.splice(index,1,savedCustomer);
     else state.customers.push(savedCustomer);
+  }
+
+  async function saveLegalComms(customerId,process){
+    const customer=customerById(customerId);
+    if(!customer)return null;
+    const next=clone(customer);
+    next.legalComms=window.ACTAdminV2LegalComms?.normalizeLegalComms?.(process)||process||{};
+    next.updatedAt=new Date().toLocaleDateString("de-DE");
+    next._lastSavedAt=new Date().toISOString();
+    const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+    if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+    await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(compactObject(next)),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+    updateLocalCustomer(compactObject(next));
+    return next;
+  }
+
+  async function savePayment(customerId,payment){
+    const customer=customerById(customerId);
+    if(!customer)return null;
+    const next=clone(customer);
+    const normalized=window.ACTAdminV2Payment?.normalizePayment?.(payment)||payment||{};
+    next.payment=normalized;
+    if(next.offer&&typeof next.offer==="object"){
+      const totals=window.ACTAdminV2Payment?.computeTotals?.(normalized)||{};
+      next.offer.conciergeFee=totals.conciergeFee;
+      next.offer.thirdPartyAct=totals.thirdPartyAct;
+      next.offer.thirdPartyDirect=totals.thirdPartyDirect;
+      next.offer.amountDueToAct=totals.amountDueToAct;
+      next.offer.dueDate=normalized.dueDate||next.offer.dueDate;
+      next.offer.paymentMethod=normalized.paymentMethod||next.offer.paymentMethod;
+      next.offer.paymentLink=normalized.paymentLink||next.offer.paymentLink;
+      if(normalized.offerVersion)next.offer.offerVersion=normalized.offerVersion;
+    }
+    next.updatedAt=new Date().toLocaleDateString("de-DE");
+    next._lastSavedAt=new Date().toISOString();
+    const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+    if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+    await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(compactObject(next)),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+    updateLocalCustomer(compactObject(next));
+    return next;
   }
 
   async function saveCustomerEdit(){
@@ -4743,6 +4785,7 @@
       normalizedDocuments(customer).forEach(doc=>add(doc.uploadedAt||doc.uploadDate,"Dokument hochgeladen",row,"dokumente"));
       arrayValue(customer.bookings).forEach(booking=>add(booking.updatedAt||booking.modifiedAt,"Buchung geändert",row,"buchungen"));
       [...arrayValue(customer.communications),...arrayValue(customer.communicationHistory),...arrayValue(customer.crm?.communications)].forEach(item=>add(item.createdAt||item.date||item.timestamp,"Kommunikation vorbereitet",row,"kommunikation"));
+      arrayValue(customer.payment?.history).forEach(item=>add(item.at,item.label||"Zahlung aktualisiert",row,"zahlung"));
     });
     return entries.sort((a,b)=>b.date-a.date).slice(0,6);
   }
@@ -4960,8 +5003,9 @@
       activities:[
         ...(timestampValue(customer)?[{label:"Kundendaten aktualisiert",value:formatDate(new Date(timestampValue(customer)).toISOString())}]:[]),
         ...(customer.publishMeta?.lastPublishedAt?[{label:"Zuletzt veröffentlicht",value:formatDate(customer.publishMeta.lastPublishedAt)}]:[]),
-        ...(lastCommunication?[{label:"Letzte Kommunikation",value:lastCommunication}]:[])
-      ].slice(0,3),
+        ...(lastCommunication?[{label:"Letzte Kommunikation",value:lastCommunication}]:[]),
+        ...arrayValue(customer.payment?.history).slice(0,2).map(item=>({label:item.label||"Zahlung",value:item.at?formatDate(item.at):""}))
+      ].slice(0,5),
       statuses:[
         {label:customer.status||"Status offen",tone:isArchivedCustomer(customer)?"muted":"info"},
         {label:published?"Veröffentlichung aktiv":publicationState(customer),tone:published?"success":"warning"},
@@ -7970,6 +8014,8 @@
           ${workspaceFact(workspace.documents.missing?`${workspace.documents.missing} fehlen`:`${workspace.documents.total} vorhanden`,"Dokumente")}
           ${workspaceFact(workspace.weatherLabel,"Wetter")}
           ${workspaceFact(workspace.lastCommunication||"Nicht dokumentiert","Letzte Kommunikation")}
+          ${workspaceFact(window.ACTAdminV2Payment?.dashboardFacts?.(customer)?.paymentLabel||"offen","Zahlung")}
+          ${workspaceFact(window.ACTAdminV2Payment?.dashboardFacts?.(customer)?.releaseLabel||"noch nicht freigegeben","Freigabe")}
         </div>
         <div class="v2-workspace-alerts" aria-label="Warnungen">${warningMarkup}</div>
         ${intelligence?`
@@ -8807,6 +8853,8 @@
             ${workspaceQuickAction("Buchungen","buchungen",workspace.tabCounts.buchungen,"B")}
             ${workspaceQuickAction("Dokumente","dokumente",workspace.tabCounts.dokumente,"D")}
             ${workspaceQuickAction("Kommunikation","kommunikation",workspace.tabCounts.kommunikation==="–"?0:workspace.tabCounts.kommunikation,"K")}
+            ${workspaceQuickAction("Kommunikation & Dokumente","legalcomms",0,"A")}
+            ${workspaceQuickAction("Zahlung","zahlung",0,"Z")}
             ${workspaceQuickAction("Veröffentlichung","veroeffentlichung",0,"V")}
           </div>
         </section>
@@ -8832,7 +8880,7 @@
         </div>
         <div class="v2-workspace-overview-slot">${customerWorkspaceOverviewMarkup(customer,workspace)}</div>
         <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-          ${tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
+          ${tab==="zahlung"?(window.ACTAdminV2Payment?.tabMarkup?.(customer)||placeholderTabMarkup()):tab==="legalcomms"?(window.ACTAdminV2LegalComms?.tabMarkup?.(customer)||placeholderTabMarkup()):tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
         </section>
       </div>
     `;
@@ -10074,6 +10122,10 @@
     if(state.route==="demand")renderDemandDashboard();
     if(window.ACTAdminV2Bookings?.renderBookings)window.ACTAdminV2Bookings.renderBookings();
     if(window.ACTAdminV2Communication?.renderCommunicationView)window.ACTAdminV2Communication.renderCommunicationView();
+    if(window.ACTAdminV2LegalComms?.renderView)window.ACTAdminV2LegalComms.renderView();
+    if(window.ACTAdminV2Payment?.renderView)window.ACTAdminV2Payment.renderView();
+    if(window.ACTAdminV2Payment?.renderDashboard)window.ACTAdminV2Payment.renderDashboard();
+    if(window.ACTAdminV2Payment?.renderSettings)window.ACTAdminV2Payment.renderSettings();
     renderCustomerDetail();
     window.ACTAdminV2Bookings?.renderBookingEditor?.();
     renderNewCustomerWizard();
@@ -10123,7 +10175,7 @@
     const previousCustomerId=state.selectedCustomerId;
     state.route=parsed.route;
     // Kommunikationszentrale behält den zuletzt geoeffneten Kunden.
-    if(parsed.route==="communication"){
+    if(parsed.route==="communication"||parsed.route==="legalcomms"||parsed.route==="zahlung"){
       state.selectedCustomerId=previousCustomerId||"";
       state.selectedTab="";
     }else if(parsed.route==="tasks"){
@@ -11357,6 +11409,35 @@
       routeTo,
       render
     });
+    window.ACTAdminV2LegalComms?.bind?.({
+      getState:()=>state,
+      patchState:patch=>Object.assign(state,patch||{}),
+      escapeHtml,
+      badge,
+      byId,
+      customerById,
+      summaryItem,
+      normalizedDocuments,
+      copyTextToClipboard,
+      saveLegalComms,
+      routeTo,
+      render
+    });
+    window.ACTAdminV2Payment?.bind?.({
+      getState:()=>state,
+      patchState:patch=>Object.assign(state,patch||{}),
+      escapeHtml,
+      badge,
+      byId,
+      customerById,
+      getCustomers:()=>state.customers,
+      summaryItem,
+      detailHash,
+      copyTextToClipboard,
+      savePayment,
+      routeTo,
+      render
+    });
     window.ACTAdminV2Pdf?.bind?.({
       getState:()=>state,
       escapeHtml,
@@ -11431,6 +11512,8 @@
       }
       if(window.ACTAdminV2Bookings?.handleClick?.(event))return;
       if(window.ACTAdminV2Communication?.handleClick?.(event))return;
+      if(window.ACTAdminV2LegalComms?.handleClick?.(event))return;
+      if(window.ACTAdminV2Payment?.handleClick?.(event))return;
       const wizardAction=event.target.closest("[data-wizard-action]");
       if(wizardAction){
         handleWizardAction(wizardAction.dataset.wizardAction);
@@ -11864,6 +11947,8 @@
     document.addEventListener("change",event=>{
       if(window.ACTAdminV2Bookings?.handleChange?.(event))return;
       if(window.ACTAdminV2Communication?.handleChange?.(event))return;
+      if(window.ACTAdminV2LegalComms?.handleChange?.(event))return;
+      if(window.ACTAdminV2Payment?.handleChange?.(event))return;
       if(event.target.closest("[data-ai-restaurant-module], [data-ai-transfer-module], [data-ai-booking-module]")){
         persistAiTaskWorkspaceDraftFromDom();
         if(event.target.matches([

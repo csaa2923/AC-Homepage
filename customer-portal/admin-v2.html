@@ -9,6 +9,8 @@
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
 <link rel="stylesheet" href="admin-v2.css?v=81">
+<link rel="stylesheet" href="admin-v2-legal-comms.css?v=1">
+<link rel="stylesheet" href="admin-v2-payment.css?v=1">
 </head>
 <body>
 <main>
@@ -54,6 +56,14 @@
         <button class="v2-nav-item" type="button" data-v2-route="communication">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v10H8l-4 3V6z"/><path d="M8 10h8M8 13h5"/></svg>
           <span>Kommunikation</span>
+        </button>
+        <button class="v2-nav-item" type="button" data-v2-route="legalcomms">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h7l4 4v12H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M14 4v5h5M8 13h8M8 17h6"/></svg>
+          <span>Kommunikation &amp; Dokumente</span>
+        </button>
+        <button class="v2-nav-item" type="button" data-v2-route="zahlung">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v10H4z"/><path d="M4 11h16M8 15h3"/></svg>
+          <span>Zahlung</span>
         </button>
         <button class="v2-nav-item" type="button" data-v2-route="documents">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v6h5M9 14h6M9 18h6"/></svg>
@@ -126,6 +136,10 @@
             <section class="v2-panel v2-dashboard-attention" aria-labelledby="dashboardAttentionTitle">
               <div class="v2-panel-head"><div><p class="v2-eyebrow">Kunden</p><h3 id="dashboardAttentionTitle">Mit Handlungsbedarf</h3></div><button class="v2-button soft" type="button" data-filter-preset="attention">Alle anzeigen</button></div>
               <div class="v2-dashboard-customer-list" id="attentionCustomerList"></div>
+            </section>
+            <section class="v2-panel" aria-labelledby="dashboardPaymentTitle">
+              <div class="v2-panel-head"><div><p class="v2-eyebrow">Zahlung</p><h3 id="dashboardPaymentTitle">Zahlungsstand der Aufträge</h3></div></div>
+              <div class="v2-pay-dash-list" id="paymentOverviewList"></div>
             </section>
           </main>
           <aside class="v2-operations-side" aria-label="Status und Aktivität">
@@ -200,6 +214,14 @@
         <div id="communicationRoot"></div>
       </section>
 
+      <section class="v2-view" id="legalcommsView" data-title="Kommunikation & Dokumente">
+        <div id="legalCommsRoot"></div>
+      </section>
+
+      <section class="v2-view" id="zahlungView" data-title="Zahlung">
+        <div id="paymentRoot"></div>
+      </section>
+
       <section class="v2-view" id="documentsView" data-title="Dokumente">
         <div id="documentsRoot"></div>
       </section>
@@ -222,6 +244,7 @@
             <a class="v2-button soft" href="admin.html#templates">Vorlagen im Classic Admin oeffnen</a>
           </div>
         </div>
+        <div id="paymentSettingsRoot"></div>
       </section>
     </section>
   </section>
@@ -275,6 +298,8 @@
     <div class="admin-mobile-sheet-actions">
       <button type="button" data-mobile-route="bookings"><strong>Buchungen</strong><span>Alle Buchungen verwalten</span></button>
       <button type="button" data-mobile-route="communication"><strong>Kommunikation</strong><span>Nachrichten und Vorlagen</span></button>
+      <button type="button" data-mobile-route="legalcomms"><strong>Kommunikation &amp; Dokumente</strong><span>Angebotstexte und Kundendokumente</span></button>
+      <button type="button" data-mobile-route="zahlung"><strong>Zahlung</strong><span>Zahlungsstatus und Freigabe</span></button>
       <button type="button" data-mobile-route="documents"><strong>Dokumente</strong><span>Zentrale Dokumentenansicht</span></button>
       <button type="button" data-mobile-route="demand"><strong>Nachfrage Tirol</strong><span>Tourist Demand Intelligence</span></button>
       <button type="button" data-mobile-route="settings"><strong>Einstellungen</strong><span>System und Stammdaten</span></button>
@@ -335,6 +360,8 @@
 <script src="admin-v2-qr.js?v=4"></script>
 <script src="admin-v2-pdf.js?v=2"></script>
 <script src="admin-v2-communication.js?v=7"></script>
+<script src="admin-v2-legal-comms.js?v=1"></script>
+<script src="admin-v2-payment.js?v=1"></script>
 <script src="ai-task-open-target-library.js?v=4"></script>
 <script src="ai-task-action-workspace.js?v=10"></script>
 <script src="admin-v2.js?v=104"></script>

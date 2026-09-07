@@ -442,8 +442,8 @@ describe("Admin V2 native booking create DOM harness",()=>{
   it("bumps bookings pin for native create fix",()=>{
     const html=read("customer-portal/admin-v2.html");
     assert.match(html,/admin-v2-bookings\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=102/);
-    assert.match(html,/admin-v2\.css\?v=79/);
+    assert.match(html,/admin-v2\.js\?v=104/);
+    assert.match(html,/admin-v2\.css\?v=81/);
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
   });
 });

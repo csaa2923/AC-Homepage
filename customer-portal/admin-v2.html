@@ -8,7 +8,7 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=79">
+<link rel="stylesheet" href="admin-v2.css?v=81">
 </head>
 <body>
 <main>
@@ -58,6 +58,10 @@
         <button class="v2-nav-item" type="button" data-v2-route="documents">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v6h5M9 14h6M9 18h6"/></svg>
           <span>Dokumente</span>
+        </button>
+        <button class="v2-nav-item" type="button" data-v2-route="demand">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16l3.5-4.5 3 2.5L18 8"/><path d="M16 8h3v3"/></svg>
+          <span>Nachfrage Tirol</span>
         </button>
         <button class="v2-nav-item" type="button" data-v2-route="settings">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a8 8 0 0 0 .1-2l2-1.5-2-3.5-2.4 1a8 8 0 0 0-1.7-1L15 5.5h-6L8.6 8a8 8 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a8 8 0 0 0 .1 2l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 1.7 1l.4 2.5h6l.4-2.5a8 8 0 0 0 1.7-1l2.4 1 2-3.5z"/></svg>
@@ -200,6 +204,10 @@
         <div id="documentsRoot"></div>
       </section>
 
+      <section class="v2-view" id="demandView" data-title="Nachfrage Tirol">
+        <div id="demandRoot"></div>
+      </section>
+
       <section class="v2-view" id="tasksView" data-title="Aufgaben">
         <div id="tasksRoot"></div>
       </section>
@@ -268,6 +276,7 @@
       <button type="button" data-mobile-route="bookings"><strong>Buchungen</strong><span>Alle Buchungen verwalten</span></button>
       <button type="button" data-mobile-route="communication"><strong>Kommunikation</strong><span>Nachrichten und Vorlagen</span></button>
       <button type="button" data-mobile-route="documents"><strong>Dokumente</strong><span>Zentrale Dokumentenansicht</span></button>
+      <button type="button" data-mobile-route="demand"><strong>Nachfrage Tirol</strong><span>Tourist Demand Intelligence</span></button>
       <button type="button" data-mobile-route="settings"><strong>Einstellungen</strong><span>System und Stammdaten</span></button>
     </div>
   </section>
@@ -314,6 +323,9 @@
 <script src="concierge-intelligence-library.js?v=1"></script>
 <script src="customer-journey-library.js?v=1"></script>
 <script src="customer-wishes-library.js?v=1"></script>
+<script src="tourist-demand-library.js?v=1"></script>
+<script src="tourist-demand-data-provider.js?v=2"></script>
+<script src="tourist-demand-dashboard.js?v=2"></script>
 <script src="admin-v2-bookings.js?v=5"></script>
 <script src="vendor/qrcode-generator/qrcode.js?v=1.4.4"></script>
 <script src="portal-access-admin-library.js?v=1"></script>
@@ -322,6 +334,6 @@
 <script src="admin-v2-communication.js?v=7"></script>
 <script src="ai-task-open-target-library.js?v=4"></script>
 <script src="ai-task-action-workspace.js?v=10"></script>
-<script src="admin-v2.js?v=102"></script>
+<script src="admin-v2.js?v=104"></script>
 </body>
 </html>

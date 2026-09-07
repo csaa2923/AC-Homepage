@@ -104,14 +104,85 @@ Zwei C-Signale unabhängiger Publisher können auf Trend-Ebene Evidence B ergebe
 - Library enthält keine produktiven Demand-Datensätze.
 - Fixtures müssen als TEST/FIXTURE/SYNTHETIC markiert sein.
 
-## 11. Geplante Quellen für 8.1b / 8.1c
+## 11. Geplante Quellen (noch nicht anbinden)
 
 Noch nicht anbinden:
 
 Google Trends, Search, Social, Foren, Wetter-API, Event-API, Tirol Werbung, TVB, Statistik Tirol, automatische AI-Auswertung.
 
-8.1b: Demand-Dashboard (lesen/anzeigen). 8.1c: erste echte Imports mit Source- und Evidence-Pflicht.
-
 ## 12. Spätere Customer × Demand Integration
 
 Matching über gemeinsame IDs: Topic (8.0b interests), Region (Demand-ID vs. späteres Region-Mapping), Saison, Audience vs. `inferTravelProfile`, plus Wetter/Mobilität. Customer-Dokument bleibt frei von Demand-Feldern.
+
+## 13. Dashboard Architecture (8.1b)
+
+Admin V2 erhält eine eigene Hauptansicht `demand` (`#demand`), nicht als Kunden-Tab.
+
+Schichten:
+
+1. Model – `tourist-demand-library.js` (8.1a)
+2. Provider – `tourist-demand-data-provider.js`
+3. View – `tourist-demand-dashboard.js` plus Admin-V2-Route `Nachfrage Tirol`
+
+Die Ansicht sitzt neben Dokumente/Einstellungen. Keine Kundendomain, keine Journey-/Wishes-Änderung.
+
+## 14. Filter
+
+Stabile 8.1a-IDs, kein Freitext-Matching:
+
+- Saison: `winter|spring|summer|autumn` oder leer (alle)
+- Region: `tirol|innsbruck|seefeld|stubaital|oetztal|zillertal|achensee|kitzbuehel|wilder-kaiser` oder leer
+- Zielgruppe: Demand-Audiences oder leer
+
+Optional: Topic, Intent.
+
+`Alle Zielgruppen` ist ein UI-Zustand (`audience=""`). Es wird nicht als Audience `general` gespeichert. `general` bleibt eine echte Demand-Audience („allgemein“).
+
+## 15. Empty State und Ladefehler
+
+Ohne bestätigte Observations (null, leere Liste, nur synthetische oder nur ungültige Records):
+
+„Für diese Auswahl liegen noch keine bestätigten Nachfragesignale vor.“
+
+Keine Formulierung als „0 % Nachfrage“, „keine Nachfrage“ oder „uninteressant“. Fehlende Daten ≠ fehlende Nachfrage.
+
+Technischer Provider-/Ladefehler ist ein eigener Zustand:
+
+„Die Nachfragesignale konnten nicht geladen werden.“
+
+Keine Stacktraces in der Admin-UI.
+
+## 16. Provider Contract
+
+```
+loadDemandSnapshot(filters) → { ok, empty, errors, value }
+```
+
+`value` enthält den 8.1a-Snapshot plus `observations` (nach Filter). Produktion lädt `getProductionObservations()` – in 8.1b eine leere Liste.
+
+Testdaten nur über `loadDemandSnapshotForTests(observations, filters)`. Jede Observation muss `synthetic: true` und `fixtureKind: TEST|FIXTURE|SYNTHETIC` tragen.
+
+Der produktive Pfad (`loadDemandSnapshot` / `loadProductionSnapshot`) lässt nur `isProductionDemandRecord` durch. Records mit `synthetic: true` oder `fixtureKind: TEST|FIXTURE|SYNTHETIC` erscheinen nie im Admin-V2-Dashboard, unabhängig davon, woher sie technisch kommen.
+
+Keine Firebase-Persistenz, keine HTTP-Requests.
+
+## 17. Data provenance in UI
+
+Jedes Signal zeigt Evidence (A–D mit Textlabel), Confidence (hoch/mittel/niedrig), Freshness (aktuell/kürzlich/veraltet/historisch) und Quelle (`sourceName`, Publisher, Typ, Daten, Referenz-URL). Observation / Ableitung / Empfehlung sind getrennte Labels. Recommendations erscheinen nicht als externe Quelle.
+
+Trend `steigend|stabil|sinkend|unklar` nur, wenn Metrics/Aggregation eine Richtung tragen. Keine erfundenen Marktanteile oder Prozentwerte.
+
+## 18. Production vs synthetic data
+
+| Kontext | Daten |
+| --- | --- |
+| Produktion / Admin V2 | nur Provider-Produktion, aktuell leer |
+| Tests / Harness | explizit markierte Fixtures, nicht von Admin V2 geladen |
+
+## 19. Scope 8.1b
+
+Kontrollierte Anzeige. Keine Live-Websuche, kein Scraping, keine Trends-/TVB-/Statistik-/Wetter-/Event-API, keine AI, kein Customer × Demand Matching, keine automatische Erfassung.
+
+## 20. Übergang 8.1c
+
+8.1c darf echte, evidenzenpflichtige Imports einführen. Der Provider bleibt die einzige Stelle, die Observations an das Dashboard liefert. Dashboard-Copy und Evidence-Regeln bleiben verbindlich.

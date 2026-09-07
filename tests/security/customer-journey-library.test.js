@@ -307,8 +307,8 @@ describe("8.0a customer journey library",()=>{
 
   it("P) Admin V2 wires the library into the existing customer detail page",()=>{
     assert.match(adminHtml,/customer-wishes-library\.js\?v=1/);
-    assert.match(adminHtml,/admin-v2\.js\?v=102/);
-    assert.match(adminHtml,/admin-v2\.css\?v=79/);
+    assert.match(adminHtml,/admin-v2\.js\?v=104/);
+    assert.match(adminHtml,/admin-v2\.css\?v=81/);
     assert.match(adminJs,/function customerJourneyPortalState\(customer\)/);
     assert.match(adminJs,/function customerJourneyStaySummary\(trip\)/);
     assert.match(adminJs,/ACTCustomerJourneyLibrary/);

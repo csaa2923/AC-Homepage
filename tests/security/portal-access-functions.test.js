@@ -359,8 +359,8 @@ describe("7.2 portal access functions",()=>{
 
   it("R) admin-v2 booking pins and create helper remain unchanged",()=>{
     assert.match(html,/admin-v2-bookings\.js\?v=5/);
-    assert.match(html,/admin-v2\.js\?v=102/);
-    assert.match(html,/admin-v2\.css\?v=79/);
+    assert.match(html,/admin-v2\.js\?v=104/);
+    assert.match(html,/admin-v2\.css\?v=81/);
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
     assert.equal(typeof functions.createCustomerPortalAccess,"function");
     assert.equal(typeof functions.getCustomerPortalContext,"function");

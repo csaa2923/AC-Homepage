@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TEST FIXTURE SYNTHETIC – Tourist Demand Dashboard 8.1b</title>
+  <link rel="stylesheet" href="../../../customer-portal/admin-v2.css?v=81">
+  <style>
+    body{margin:0;padding:24px;background:#f6f8f5;color:#17231f}
+    .harness{display:grid;gap:28px;max-width:1100px;margin:0 auto}
+    .harness-note{padding:12px 14px;border:1px dashed #dfe7df;border-radius:16px;background:#fff}
+  </style>
+</head>
+<body>
+  <main class="harness">
+    <p class="harness-note">TEST / FIXTURE / SYNTHETIC. Keine produktiven Marktdaten. Die produktive Admin-V2-Ansicht lädt diese Fixture nicht.</p>
+    <section id="empty"></section>
+    <section id="filled"></section>
+  </main>
+  <script src="../../../customer-portal/tourist-demand-library.js?v=1"></script>
+  <script src="../../../customer-portal/tourist-demand-data-provider.js?v=2"></script>
+  <script src="../../../customer-portal/tourist-demand-dashboard.js?v=2"></script>
+  <script>
+    const provider=window.ACTTouristDemandProvider;
+    const dashboard=window.ACTTouristDemandDashboard;
+    const empty=provider.loadDemandSnapshot({});
+    document.getElementById("empty").innerHTML=dashboard.renderDemandDashboardMarkup(
+      dashboard.buildDemandDashboardViewModel(empty,{})
+    );
+    const fixtures=[{
+      id:"obs-a-up",
+      statementType:"observation",
+      season:"summer",
+      region:"seefeld",
+      topic:"hike",
+      audiences:["family","sport"],
+      intents:["planning"],
+      signalType:"quantitative",
+      summary:"TEST FIXTURE SYNTHETIC: quantitatives Suchinteresse Wandern.",
+      evidenceLevel:"A",
+      confidence:"high",
+      metricName:"relative_search_interest",
+      metricValue:72,
+      metricUnit:"index",
+      changeDirection:"up",
+      observedAt:"2026-08-10T00:00:00.000Z",
+      retrievedAt:"2026-08-12T00:00:00.000Z",
+      source:{
+        sourceId:"src-trend-a",
+        sourceName:"TEST FIXTURE SYNTHETIC Search",
+        sourceType:"search_trend",
+        publisher:"Search Fixture",
+        publisherId:"search-fixture",
+        observedAt:"2026-08-10T00:00:00.000Z",
+        publishedAt:"2026-08-09T00:00:00.000Z",
+        retrievedAt:"2026-08-12T00:00:00.000Z",
+        url:"https://example.test/search-hike",
+        synthetic:true,
+        fixtureKind:"TEST"
+      },
+      synthetic:true,
+      fixtureKind:"TEST"
+    },{
+      id:"obs-c-recent",
+      statementType:"observation",
+      season:"summer",
+      region:"innsbruck",
+      topic:"culture",
+      audiences:["couple"],
+      intents:["discovery"],
+      signalType:"qualitative",
+      summary:"TEST FIXTURE SYNTHETIC: einzelnes TVB-Signal Museen.",
+      evidenceLevel:"C",
+      confidence:"medium",
+      observedAt:"2026-07-20T00:00:00.000Z",
+      retrievedAt:"2026-07-21T00:00:00.000Z",
+      source:{
+        sourceId:"src-tvb-c",
+        sourceName:"TEST FIXTURE SYNTHETIC TVB Innsbruck",
+        sourceType:"tourism_board",
+        publisher:"TVB Innsbruck",
+        publisherId:"tvb-innsbruck",
+        observedAt:"2026-07-20T00:00:00.000Z",
+        retrievedAt:"2026-07-21T00:00:00.000Z",
+        geographicScope:"innsbruck",
+        synthetic:true,
+        fixtureKind:"TEST"
+      },
+      synthetic:true,
+      fixtureKind:"TEST"
+    },{
+      id:"rec-1",
+      statementType:"recommendation",
+      season:"summer",
+      region:"seefeld",
+      topic:"hike",
+      audiences:["family"],
+      intents:["planning"],
+      signalType:"qualitative",
+      summary:"TEST FIXTURE SYNTHETIC: Empfehlung Wanderangebote prüfen.",
+      evidenceLevel:"D",
+      confidence:"low",
+      observedAt:"2026-08-01T00:00:00.000Z",
+      retrievedAt:"2026-08-01T00:00:00.000Z",
+      source:{
+        sourceId:"src-rec",
+        sourceName:"TEST FIXTURE SYNTHETIC ACT Empfehlung",
+        sourceType:"editorial",
+        publisher:"Alpine Concierge Tirol",
+        publisherId:"act-ops",
+        observedAt:"2026-08-01T00:00:00.000Z",
+        retrievedAt:"2026-08-01T00:00:00.000Z",
+        synthetic:true,
+        fixtureKind:"TEST"
+      },
+      synthetic:true,
+      fixtureKind:"TEST"
+    }];
+    const filled=provider.loadDemandSnapshotForTests(fixtures,{generatedAt:"2026-08-15T00:00:00.000Z"});
+    document.getElementById("filled").innerHTML=dashboard.renderDemandDashboardMarkup(
+      dashboard.buildDemandDashboardViewModel(filled,{})
+    );
+  </script>
+</body>
+</html>

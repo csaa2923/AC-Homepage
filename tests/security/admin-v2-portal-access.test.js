@@ -301,8 +301,8 @@ describe("7.6 admin v2 customer portal access",()=>{
   });
 
   it("pins and isolation stay aligned",()=>{
-    assert.match(html,/admin-v2\.js\?v=102/);
-    assert.match(html,/admin-v2\.css\?v=79/);
+    assert.match(html,/admin-v2\.js\?v=104/);
+    assert.match(html,/admin-v2\.css\?v=81/);
     assert.match(html,/firebase-service\.js\?v=35/);
     assert.match(html,/admin-v2-qr\.js\?v=4/);
     assert.match(html,/portal-access-admin-library\.js\?v=1/);

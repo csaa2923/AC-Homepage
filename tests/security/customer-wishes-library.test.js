@@ -281,8 +281,8 @@ describe("8.0b customer wishes library",()=>{
 
   it("V) Admin V2 wires one visible wishes surface on the trip tab",()=>{
     assert.match(adminHtml,/customer-wishes-library\.js\?v=1/);
-    assert.match(adminHtml,/admin-v2\.js\?v=102/);
-    assert.match(adminHtml,/admin-v2\.css\?v=79/);
+    assert.match(adminHtml,/admin-v2\.js\?v=104/);
+    assert.match(adminHtml,/admin-v2\.css\?v=81/);
     assert.match(adminJs,/function tripWishesReadCard\(customer\)/);
     assert.match(adminJs,/function tripWishesEditMarkup\(draft\)/);
     assert.match(adminJs,/Wünsche & Interessen/);

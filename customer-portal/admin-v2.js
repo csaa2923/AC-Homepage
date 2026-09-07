@@ -137,7 +137,8 @@
     wizardSaving:false,
     wizardSavedCustomerId:"",
     detailFlashMessage:"",
-    detailFlashKind:""
+    detailFlashKind:"",
+    demandFilters:{season:"",region:"",audience:"",topic:"",intent:""}
   };
 
   const byId=id=>document.getElementById(id);
@@ -647,7 +648,7 @@
         workspaceOpen
       };
     }
-    if(["dashboard","customers","bookings","calendar","documents","settings","communication"].includes(main)&&parts.length===1){
+    if(["dashboard","customers","bookings","calendar","documents","settings","communication","demand"].includes(main)&&parts.length===1){
       return {route:main==="calendar"?"bookings":main,customerId:"",tab:"",taskCustomerId:"",taskCustomerFromQuery:false,taskId:"",workspaceOpen:false};
     }
     if(main==="customers"&&parts[1]){
@@ -10025,11 +10026,52 @@
     return `<article class="v2-placeholder"><h3>Bereich noch nicht angebunden</h3><p>Dieser Bereich wird in einem folgenden Auftrag angebunden.</p></article>`;
   }
 
+  function currentDemandFilters(){
+    return {
+      season:state.demandFilters.season||"",
+      region:state.demandFilters.region||"",
+      audience:state.demandFilters.audience||"",
+      topic:state.demandFilters.topic||"",
+      intent:state.demandFilters.intent||""
+    };
+  }
+
+  function resetDemandFilters(){
+    state.demandFilters={season:"",region:"",audience:"",topic:"",intent:""};
+    renderDemandDashboard();
+  }
+
+  function renderDemandDashboard(){
+    const root=byId("demandRoot");
+    if(!root)return;
+    const dashboard=window.ACTTouristDemandDashboard;
+    const provider=window.ACTTouristDemandProvider;
+    if(!dashboard||!provider){
+      root.innerHTML=`<div class="v2-empty"><h3>Nachfrageansicht nicht geladen</h3><p>Die Demand-Module fehlen.</p></div>`;
+      return;
+    }
+    try{
+      const result=provider.loadDemandSnapshot(currentDemandFilters());
+      const model=dashboard.buildDemandDashboardViewModel(result,currentDemandFilters());
+      root.innerHTML=dashboard.renderDemandDashboardMarkup(model);
+    }catch(_error){
+      root.innerHTML=dashboard.renderDemandDashboardMarkup({
+        error:true,
+        errorMessage:dashboard.LOAD_ERROR_MESSAGE||"Die Nachfragesignale konnten nicht geladen werden.",
+        title:dashboard.TITLE,
+        subtitle:dashboard.SUBTITLE,
+        filters:currentDemandFilters(),
+        filterOptions:{}
+      });
+    }
+  }
+
   function render(){
     if(state.loading)return renderSkeletons();
     if(state.route==="dashboard")renderOperationsDashboard();
     renderCustomers();
     renderDocuments();
+    if(state.route==="demand")renderDemandDashboard();
     if(window.ACTAdminV2Bookings?.renderBookings)window.ACTAdminV2Bookings.renderBookings();
     if(window.ACTAdminV2Communication?.renderCommunicationView)window.ACTAdminV2Communication.renderCommunicationView();
     renderCustomerDetail();
@@ -11394,6 +11436,10 @@
         handleWizardAction(wizardAction.dataset.wizardAction);
         return;
       }
+      if(event.target.closest("[data-demand-reset]")){
+        resetDemandFilters();
+        return;
+      }
       const route=event.target.closest("[data-v2-route]");
       if(route){routeTo(route.dataset.v2Route);return;}
       const preset=event.target.closest("[data-filter-preset]");
@@ -11851,6 +11897,11 @@
       }
       if(event.target.id==="aiTaskStatusFilter"){state.aiTaskStatusFilter=event.target.value;renderTasks();}
       if(event.target.id==="aiTaskSortSelect"){state.aiTaskSort=event.target.value;renderTasks();}
+      if(event.target.id==="demandSeasonFilter"){state.demandFilters.season=event.target.value;renderDemandDashboard();}
+      if(event.target.id==="demandRegionFilter"){state.demandFilters.region=event.target.value;renderDemandDashboard();}
+      if(event.target.id==="demandAudienceFilter"){state.demandFilters.audience=event.target.value;renderDemandDashboard();}
+      if(event.target.id==="demandTopicFilter"){state.demandFilters.topic=event.target.value;renderDemandDashboard();}
+      if(event.target.id==="demandIntentFilter"){state.demandFilters.intent=event.target.value;renderDemandDashboard();}
       if(event.target.matches("[data-ai-compare-id]")){
         const id=event.target.dataset.aiCompareId;
         const selected=new Set(arrayValue(state.aiCompareIds));

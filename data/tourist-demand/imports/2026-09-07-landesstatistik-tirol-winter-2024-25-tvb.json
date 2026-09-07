@@ -1,0 +1,252 @@
+{
+  "importId": "2026-09-07-landesstatistik-tirol-winter-2024-25-tvb",
+  "adapterId": "landesstatistik-tirol-winter-tvb",
+  "retrievedAt": "2026-09-07T14:00:00.000Z",
+  "accessMethod": "controlled_manual_import",
+  "synthetic": false,
+  "fixtureKind": "",
+  "sourceName": "Landesstatistik Tirol – Winter 2024/25 nach Tourismusverbänden",
+  "publisher": "Landesstatistik Tirol",
+  "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+  "notes": "Tabelle 3, Winter 2024/25 gegenüber Winter 2023/24. Zillertal nicht 1:1 gemappt. Keine comparisonValue aus Prozenten erfunden.",
+  "records": [
+    {
+      "sourceRecordId": "innsbruck-winter-2024-25-overnight-stays",
+      "rawTitle": "Innsbruck und seine Feriendörfer Winter 2024/25 Nächtigungen",
+      "rawSummary": "Wintersaison 2024/25: 1.711.631 Nächtigungen im Tourismusverband Innsbruck und seine Feriendörfer (Landesstatistik Tirol).",
+      "rawRegion": "Innsbruck und seine Feriendörfer",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "overnight_stays",
+        "metricValue": 1711631,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "innsbruck-winter-2024-25-arrivals",
+      "rawTitle": "Innsbruck und seine Feriendörfer Winter 2024/25 Ankünfte",
+      "rawSummary": "Wintersaison 2024/25: 710.231 Ankünfte im Tourismusverband Innsbruck und seine Feriendörfer (Landesstatistik Tirol).",
+      "rawRegion": "Innsbruck und seine Feriendörfer",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "arrivals",
+        "metricValue": 710231,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "seefeld-winter-2024-25-overnight-stays",
+      "rawTitle": "Seefeld – Tirols Hochplateau Winter 2024/25 Nächtigungen",
+      "rawSummary": "Wintersaison 2024/25: 950.219 Nächtigungen in der Region Seefeld – Tirols Hochplateau (Landesstatistik Tirol).",
+      "rawRegion": "Region Seefeld",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "overnight_stays",
+        "metricValue": 950219,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "seefeld-winter-2024-25-arrivals",
+      "rawTitle": "Seefeld – Tirols Hochplateau Winter 2024/25 Ankünfte",
+      "rawSummary": "Wintersaison 2024/25: 238.983 Ankünfte in der Region Seefeld – Tirols Hochplateau (Landesstatistik Tirol).",
+      "rawRegion": "Olympiaregion Seefeld",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "arrivals",
+        "metricValue": 238983,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "stubaital-winter-2024-25-overnight-stays",
+      "rawTitle": "Stubai Tirol Winter 2024/25 Nächtigungen",
+      "rawSummary": "Wintersaison 2024/25: 1.014.073 Nächtigungen im Tourismusverband Stubai Tirol (Landesstatistik Tirol).",
+      "rawRegion": "Stubai Tirol",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "overnight_stays",
+        "metricValue": 1014073,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "stubaital-winter-2024-25-arrivals",
+      "rawTitle": "Stubai Tirol Winter 2024/25 Ankünfte",
+      "rawSummary": "Wintersaison 2024/25: 222.454 Ankünfte im Tourismusverband Stubai Tirol (Landesstatistik Tirol).",
+      "rawRegion": "Stubaital",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "arrivals",
+        "metricValue": 222454,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "oetztal-winter-2024-25-overnight-stays",
+      "rawTitle": "Ötztal Tourismus Winter 2024/25 Nächtigungen",
+      "rawSummary": "Wintersaison 2024/25: 3.033.834 Nächtigungen im Tourismusverband Ötztal Tourismus (Landesstatistik Tirol).",
+      "rawRegion": "Ötztal",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "overnight_stays",
+        "metricValue": 3033834,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "oetztal-winter-2024-25-arrivals",
+      "rawTitle": "Ötztal Tourismus Winter 2024/25 Ankünfte",
+      "rawSummary": "Wintersaison 2024/25: 645.232 Ankünfte im Tourismusverband Ötztal Tourismus (Landesstatistik Tirol).",
+      "rawRegion": "Ötztal Tourismus",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "arrivals",
+        "metricValue": 645232,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "kitzbuehel-winter-2024-25-overnight-stays",
+      "rawTitle": "Kitzbühel Tourismus Winter 2024/25 Nächtigungen",
+      "rawSummary": "Wintersaison 2024/25: 546.727 Nächtigungen im Tourismusverband Kitzbühel Tourismus (Landesstatistik Tirol).",
+      "rawRegion": "Kitzbühel Tourismus",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "overnight_stays",
+        "metricValue": 546727,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "kitzbuehel-winter-2024-25-arrivals",
+      "rawTitle": "Kitzbühel Tourismus Winter 2024/25 Ankünfte",
+      "rawSummary": "Wintersaison 2024/25: 145.454 Ankünfte im Tourismusverband Kitzbühel Tourismus (Landesstatistik Tirol).",
+      "rawRegion": "Kitzbühel",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "arrivals",
+        "metricValue": 145454,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "achensee-winter-2024-25-overnight-stays",
+      "rawTitle": "Achensee Winter 2024/25 Nächtigungen",
+      "rawSummary": "Wintersaison 2024/25: 580.678 Nächtigungen im Tourismusverband Achensee (Landesstatistik Tirol).",
+      "rawRegion": "Achensee",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "overnight_stays",
+        "metricValue": 580678,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "achensee-winter-2024-25-arrivals",
+      "rawTitle": "Achensee Winter 2024/25 Ankünfte",
+      "rawSummary": "Wintersaison 2024/25: 158.597 Ankünfte im Tourismusverband Achensee (Landesstatistik Tirol).",
+      "rawRegion": "Achensee",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "arrivals",
+        "metricValue": 158597,
+        "metricUnit": "count",
+        "changeDirection": "up"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "wilder-kaiser-winter-2024-25-overnight-stays",
+      "rawTitle": "Wilder Kaiser Winter 2024/25 Nächtigungen",
+      "rawSummary": "Wintersaison 2024/25: 878.129 Nächtigungen im Tourismusverband Wilder Kaiser (Landesstatistik Tirol).",
+      "rawRegion": "Wilder Kaiser",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "overnight_stays",
+        "metricValue": 878129,
+        "metricUnit": "count",
+        "changeDirection": "down"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "wilder-kaiser-winter-2024-25-arrivals",
+      "rawTitle": "Wilder Kaiser Winter 2024/25 Ankünfte",
+      "rawSummary": "Wintersaison 2024/25: 183.739 Ankünfte im Tourismusverband Wilder Kaiser (Landesstatistik Tirol).",
+      "rawRegion": "Wilder Kaiser",
+      "rawSeason": "Wintersaison 2024/25",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "reference": "https://statistik.tirol.gv.at/tourismus_winter_2025_tabellen/index.html",
+      "rawMetric": {
+        "metricName": "arrivals",
+        "metricValue": 183739,
+        "metricUnit": "count",
+        "changeDirection": "stable"
+      },
+      "synthetic": false,
+      "fixtureKind": ""
+    }
+  ]
+}

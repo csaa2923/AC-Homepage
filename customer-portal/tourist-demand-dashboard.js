@@ -115,7 +115,13 @@
         ...result.value,
         originMarket:text(item.originMarket),
         reviewStatus:status,
-        demandScope:result.value.demandScope||text(item.demandScope)
+        demandScope:result.value.demandScope||text(item.demandScope),
+        sourceSignalType:result.value.sourceSignalType||text(item.sourceSignalType),
+        event:result.value.event||item.event||null,
+        eventName:text(result.value.eventName||item.eventName),
+        startDate:text(result.value.startDate||item.startDate),
+        endDate:text(result.value.endDate||item.endDate),
+        venue:text(result.value.venue||item.venue)
       };
     }).filter(Boolean);
   }
@@ -192,9 +198,15 @@
         evidenceLabel:evidenceLabel(item.evidenceLevel),
         confidence:item.confidence,
         confidenceLabel:confidenceLabel(item.confidence),
+        sourceSignalType:item.sourceSignalType||"",
+        eventName:text(item.eventName||item.event&&item.event.eventName),
+        eventStartDate:text(item.startDate||item.event&&item.event.startDate),
+        eventEndDate:text(item.endDate||item.event&&item.event.endDate),
+        eventVenue:text(item.venue||item.event&&item.event.venue),
+        isCurrentDemandDriver:typeof lib.isCurrentDemandDriver==="function"?lib.isCurrentDemandDriver(item,generatedAt):freshness==="current"||freshness==="recent",
         freshness,
         freshnessLabel:freshnessLabel(freshness),
-        freshnessCaution:freshness==="stale"||freshness==="historical",
+        freshnessCaution:freshness==="stale"||freshness==="historical"||(typeof lib.isCurrentDemandDriver==="function"&&lib.isEventObservation(item)&&!lib.isCurrentDemandDriver(item,generatedAt)),
         trendDirection:direction,
         trendLabel:trendLabel(direction),
         metric:item.metric||null,
@@ -211,8 +223,12 @@
       };
     });
     const observationCount=signals.filter(item=>item.statementType==="observation").length;
-    const recentCount=signals.filter(item=>item.freshness==="current"||item.freshness==="recent").length;
-    const topicObservations=observations.filter(item=>(item.demandScope==="topic"||(!item.demandScope&&item.topic))&&item.topic);
+    const recentCount=signals.filter(item=>item.isCurrentDemandDriver).length;
+    const coveredRegions=new Set(signals.map(item=>item.regionId).filter(Boolean)).size;
+    const topicObservations=observations.filter(item=>{
+      const isEvent=typeof lib.isEventObservation==="function"&&lib.isEventObservation(item);
+      return !isEvent&&(item.demandScope==="topic"||(!item.demandScope&&item.topic))&&item.topic;
+    });
     const confirmedTopics=new Set(topicObservations.map(item=>item.topic));
     let topicRows=Array.isArray(snapshot.topTopics)?snapshot.topTopics:[];
     if(!topicRows.length){
@@ -242,7 +258,9 @@
           activeSignals:observationCount,
           independentSources:snapshot.independentSourceCount||0,
           recentSignals:recentCount,
-          topicsWithEvidence:topTopics.length
+          topicsWithEvidence:topTopics.length,
+          coveredRegions:snapshot.coveredRegionCount||coveredRegions,
+          coveredTopics:snapshot.coveredTopicCount||topTopics.length
         },
         topTopics,
         signals
@@ -299,7 +317,10 @@
       ["Herkunftsmarkt",signal.originMarket],
       ["Veröffentlicht",formatDate(source.publishedAt)],
       ["Beobachtet",formatDate(source.observedAt)],
-      ["Abgerufen",formatDate(source.retrievedAt)]
+      ["Abgerufen",formatDate(source.retrievedAt)],
+      ["Event",signal.eventName],
+      ["Eventdatum", [formatDate(signal.eventStartDate),formatDate(signal.eventEndDate)].filter(Boolean).join(" – ")],
+      ["Ort",signal.eventVenue]
     ].filter(entry=>text(entry[1]));
     const reference=text(source.url)
       ? `<p class="v2-demand-source-link"><a href="${escapeHtml(source.url)}" rel="noopener noreferrer" target="_blank">Referenz öffnen</a></p>`
@@ -324,7 +345,11 @@
     const audiences=signal.audienceLabels.length?signal.audienceLabels.join(", "):"–";
     const subtopics=signal.subtopics.length?` / ${escapeHtml(signal.subtopics.join(", "))}`:"";
     const intents=signal.intentLabels.length?signal.intentLabels.join(", "):"–";
-    return `<article class="v2-card v2-demand-signal" data-demand-signal="${escapeHtml(signal.id)}" data-statement-type="${escapeHtml(signal.statementType)}" data-demand-scope="${escapeHtml(signal.demandScope||"")}" data-evidence="${escapeHtml(signal.evidenceLevel)}" data-confidence="${escapeHtml(signal.confidence)}" data-freshness="${escapeHtml(signal.freshness)}" data-trend="${escapeHtml(signal.trendDirection)}">
+    const eventDates=[formatDate(signal.eventStartDate),formatDate(signal.eventEndDate)].filter(Boolean).join(" – ");
+    const eventNote=signal.eventName
+      ? `<p class="v2-demand-trend-note">Event: ${escapeHtml(signal.eventName)}${eventDates?` · ${escapeHtml(eventDates)}`:""}</p>`
+      : "";
+    return `<article class="v2-card v2-demand-signal" data-demand-signal="${escapeHtml(signal.id)}" data-statement-type="${escapeHtml(signal.statementType)}" data-demand-scope="${escapeHtml(signal.demandScope||"")}" data-source-signal-type="${escapeHtml(signal.sourceSignalType||"")}" data-current-demand-driver="${signal.isCurrentDemandDriver?"true":"false"}" data-evidence="${escapeHtml(signal.evidenceLevel)}" data-confidence="${escapeHtml(signal.confidence)}" data-freshness="${escapeHtml(signal.freshness)}" data-trend="${escapeHtml(signal.trendDirection)}">
       <header class="v2-demand-signal-head">
         <p class="v2-eyebrow">${escapeHtml(signal.statementLabel)}</p>
         <h3>${escapeHtml(signal.summary)}</h3>
@@ -343,6 +368,7 @@
         <span class="v2-badge ${signal.freshnessCaution?"amber":"gray"}" title="Freshness ${escapeHtml(signal.freshnessLabel)}">Aktualität: ${escapeHtml(signal.freshnessLabel)}</span>
         <span class="v2-badge gray" title="Trend ${escapeHtml(signal.trendLabel)}">Trend: ${escapeHtml(signal.trendLabel)}</span>
       </div>
+      ${eventNote}
       ${metricFact(signal.metric)}
       ${trendNote}
       ${caution}
@@ -359,6 +385,8 @@
         <article class="v2-metric v2-card"><div class="v2-metric-copy"><span>Unabhängige Quellen</span><strong>${escapeHtml(overview.independentSources)}</strong></div></article>
         <article class="v2-metric v2-card"><div class="v2-metric-copy"><span>Aktuelle / kürzliche Signale</span><strong>${escapeHtml(overview.recentSignals)}</strong></div></article>
         <article class="v2-metric v2-card"><div class="v2-metric-copy"><span>Topics mit Evidenz</span><strong>${escapeHtml(overview.topicsWithEvidence)}</strong></div></article>
+        <article class="v2-metric v2-card"><div class="v2-metric-copy"><span>Abgedeckte Regionen</span><strong>${escapeHtml(overview.coveredRegions)}</strong></div></article>
+        <article class="v2-metric v2-card"><div class="v2-metric-copy"><span>Abgedeckte Topics</span><strong>${escapeHtml(overview.coveredTopics)}</strong></div></article>
       </div>
     </section>`;
   }

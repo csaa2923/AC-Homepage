@@ -1,0 +1,49 @@
+{
+  "importId": "2026-09-07-kitzbuehel-tourismus-2026",
+  "adapterId": "kitzbuehel-tourismus",
+  "retrievedAt": "2026-09-07T14:00:00.000Z",
+  "accessMethod": "controlled_manual_import",
+  "synthetic": false,
+  "fixtureKind": "",
+  "sourceName": "Kitzbühel Tourismus – Events und Factsheet 2026",
+  "publisher": "Kitzbühel Tourismus",
+  "reference": "https://www.kitzbuehel.com/events/",
+  "notes": "Kontrollierter Manual Import. Die Factsheet-Zahl 544.718 Winternächtigungen wird nicht als zweite quantitative Observation übernommen; Primärzahl bleibt die Landesstatistik (546.727).",
+  "records": [
+    {
+      "sourceRecordId": "kitzbuehel-radmarathon-2026",
+      "rawTitle": "6. Kitzbüheler Radmarathon",
+      "rawSummary": "Kitzbühel Tourismus kündigt den 6. Kitzbüheler Radmarathon am 6. September 2026 als offizielles Radsport-Event der Region an.",
+      "rawRegion": "Kitzbühel",
+      "rawSeason": "6. September 2026",
+      "observedAt": "2026-09-06T00:00:00.000Z",
+      "publishedAt": "2026-09-06T00:00:00.000Z",
+      "reference": "https://www.kitzbuehel.com/events/",
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "kitzbuehel-filmfestival-2026",
+      "rawTitle": "Filmfestival Kitzbühel",
+      "rawSummary": "Kitzbühel Tourismus führt das Filmfestival Kitzbühel vom 24. bis 29. November 2026 als kulturelles Eventhighlight der Region.",
+      "rawRegion": "Kitzbühel",
+      "rawSeason": "24. bis 29. November 2026",
+      "observedAt": "2026-11-24T00:00:00.000Z",
+      "reference": "https://www.kitzbuehel.com/events/",
+      "synthetic": false,
+      "fixtureKind": ""
+    },
+    {
+      "sourceRecordId": "kitzbuehel-winter-skitradition",
+      "rawTitle": "Kitzbühel als Wintersport-Destination",
+      "rawSummary": "Kitzbühel Tourismus beschreibt die Region im offiziellen Factsheet als Winterurlaubs-Destination mit 130 Jahren Skitradition.",
+      "rawRegion": "Kitzbühel",
+      "rawSeason": "Winter",
+      "observedAt": "2025-04-30T00:00:00.000Z",
+      "publishedAt": "2026-01-01T00:00:00.000Z",
+      "reference": "https://www.kitzbuehel.com/ueber-kitzbuehel/presse/",
+      "synthetic": false,
+      "fixtureKind": ""
+    }
+  ]
+}

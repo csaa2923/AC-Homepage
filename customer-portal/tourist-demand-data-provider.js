@@ -132,7 +132,13 @@
         ...result.value,
         reviewStatus:text(item.reviewStatus)||"accepted",
         originMarket:text(item.originMarket)||undefined,
-        importKey:text(item.importKey)||undefined
+        importKey:text(item.importKey)||undefined,
+        sourceSignalType:text(item.sourceSignalType||result.value.sourceSignalType),
+        event:result.value.event||item.event||null,
+        eventName:text(result.value.eventName||item.eventName),
+        startDate:text(result.value.startDate||item.startDate),
+        endDate:text(result.value.endDate||item.endDate),
+        venue:text(result.value.venue||item.venue)
       };
       if(!allowSynthetic&&!isProductionDemandRecord(merged))return;
       normalized.push(merged);

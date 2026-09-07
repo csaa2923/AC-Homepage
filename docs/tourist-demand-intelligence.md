@@ -352,16 +352,89 @@ Versionierte lokale JSON-Importe + Catalog + bestehender Provider. Kein Firestor
 
 ## 32. Geplante nächste Sources
 
-Nicht in 8.1c:
+Nicht in 8.1c, teilweise in 8.1d begonnen:
 
+- regionale TVB-Signale und Events über Controlled Manual Import (8.1d)
 - Statistik Austria Open Data (CSV/JSON, nur nach klarer Lizenz- und Mapping-Prüfung)
 - datahub.tirol Monatswerte
 - weitere Tirol-Werbung-Marktberichte
-- regionale TVBs
-- Google Trends / Search / Social / Foren / Wetter-API
 
-Nächste 8.1c-Stufe: unsichere Tourismusjahr-/Herkunfts-Records nach explizitem Mapping reviewen oder verwerfen; Sommer-Nächtigungen erst nach Klärung 23,2 vs. 23,3.
+Nicht in 8.1d und weiterhin nicht anbinden:
+
+Google Trends, Search, Social, Foren, Wetter-API, Event-API, Scraping, pytrends oder inoffizielle Google-Endpunkte. Google Trends bleibt eine spätere Source Layer, sobald Rechte und eine erlaubte Schnittstelle geklärt sind.
 
 ## 33. Scope 8.1c
 
 Keine Customer-Integration, keine Customer-Felder, keine Journey-/Wishes-Änderung, keine AI, kein Google Trends, kein Social-/Forum-Scraping, keine Secrets, keine IAM-Änderung, keine Portal/Auth/OTP-Änderung, keine automatische Veröffentlichung, kein Firebase Deploy.
+
+## 34. Source Expansion (8.1d)
+
+8.1d erweitert die bestehende Pipeline um regionale Signale. Keine zweite Taxonomie. Kein Customer × Demand Matching.
+
+Vorhanden und wiederverwendet: Regionen, Saisons, Audiences, Topics, Intents, demandScope, Evidence, Confidence, Freshness, Source Independence, Import-ID, Review Status.
+
+Minimale Erweiterung:
+
+- Source Registry `tourist-demand-sources.js`
+- Region-Aliase (z. B. Region Seefeld → `seefeld`, Innsbruck und seine Feriendörfer → `innsbruck`)
+- `sourceSignalType`: `statistics | editorial | market | event`
+- Eventfelder: `eventName`, `startDate`, `endDate`, `venue`
+- Catalog-Report: `byRegion`, `bySeason`, `byTopic`, `generalObservationCount`, `topicObservationCount`, `eventCount`
+- Overview: abgedeckte Regionen / Topics als Counts
+
+Unverändert: Evidence A–D, Independence über Publisher/`sourceFamily`, 8.1c.1 General vs Topic, Filter ohne regionale Vererbung, keine Functions, keine Runtime-Fetches.
+
+## 35. Regionale Vererbung
+
+`region: tirol` erscheint nur bei Filter „Tirol gesamt“ oder ohne Regionalfilter. Tirol-Werte werden nicht nach Seefeld, Innsbruck oder andere Regionen kopiert.
+
+## 36. Events
+
+Ein Event ist ein kontextuelles Signal / Demand Driver, keine gemessene Nachfrage.
+
+- qualitativ, keine Metric
+- Saison deterministisch aus dem Eventdatum (`seasonFromDate`)
+- Topic nur bei expliziter Quellenaussage
+- Freshness am Eventdatum (`endDate`, sonst `startDate`)
+- vergangene Events bleiben historisch und sind kein aktueller Demand Driver
+- Events erscheinen in der Signal-Liste, nicht in Top Topics / Topic-Ranking
+
+## 37. Source Registry und Access
+
+| sourceId | Publisher | Region | sourceType | accessMethod | updateCadence |
+| --- | --- | --- | --- | --- | --- |
+| landesstatistik-tirol | Landesstatistik Tirol | tirol | official_statistics | controlled_manual_import | seasonal |
+| landesstatistik-tirol-winter-tvb | Landesstatistik Tirol | 7 TVB-Regionen | official_statistics | controlled_manual_import | seasonal |
+| tirol-werbung-presse | Tirol Werbung | tirol | tourism_board | controlled_manual_import | occasional |
+| innsbruck-tourismus | TVB Innsbruck und seine Feriendörfer | innsbruck | tourism_board | controlled_manual_import | occasional |
+| seefeld-tourismus | TVB Seefeld | seefeld | tourism_board | controlled_manual_import | occasional |
+| stubai-tirol | Stubai Tirol | stubaital | tourism_board | controlled_manual_import | occasional |
+| oetztal-tourismus | Ötztal Tourismus | oetztal | tourism_board | controlled_manual_import | occasional |
+| zillertal-tourismus | Zillertal | zillertal | tourism_board | controlled_manual_import | occasional |
+| achensee-tourismus | Achensee | achensee | tourism_board | controlled_manual_import | occasional |
+| kitzbuehel-tourismus | Kitzbühel Tourismus | kitzbuehel | tourism_board | controlled_manual_import | occasional |
+| wilder-kaiser-tourismus | Wilder Kaiser | wilder-kaiser | tourism_board | controlled_manual_import | occasional |
+
+Alle untersuchten TVB-Seiten sind öffentliche HTML-/Presse-/Eventseiten ohne genutzte API/CSV in 8.1d. Access bleibt Controlled Manual Import. Kein Scraping.
+
+## 38. Regionale Produktionsdaten 8.1d
+
+Offizielle Winter-2024/25-TVB-Werte aus der Landesstatistik (Tabelle 3):
+
+| Region | Quelle | accepted Signals | letzte Beobachtung |
+| --- | --- | --- | --- |
+| Innsbruck | Landesstatistik + 1 Event | 3 | Winter 2024/25 / Event 2026–27 |
+| Seefeld | Landesstatistik | 2 | Winter 2024/25 |
+| Stubaital | Landesstatistik | 2 | Winter 2024/25 |
+| Ötztal | Landesstatistik | 2 | Winter 2024/25 |
+| Kitzbühel | Landesstatistik + TVB Event/Editorial | 5 | Winter 2024/25 / Events 2026 |
+| Achensee | Landesstatistik | 2 | Winter 2024/25 |
+| Wilder Kaiser | Landesstatistik | 2 | Winter 2024/25 |
+| Zillertal | keine 1:1-TVB-Zuordnung | 0 | – |
+| Tirol gesamt | 8.1c Landesstatistik + Tirol Werbung | 3 | Winter 2024/25 |
+
+Diese Matrix ist nicht vollständig. 0 accepted ist korrekt, wenn kein sauberes Mapping vorliegt.
+
+## 39. Scope 8.1d
+
+Keine Customer-Integration, keine Journey-/Wishes-Änderung, keine AI, kein Google Trends, kein Scraping, keine Scheduled Jobs, keine Functions, keine Runtime-Fetches, keine Secrets, kein Firebase Deploy.

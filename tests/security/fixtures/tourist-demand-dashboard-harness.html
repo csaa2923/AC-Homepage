@@ -16,18 +16,20 @@
     <p class="harness-note">TEST / FIXTURE / SYNTHETIC. Keine produktiven Marktdaten. Die produktive Admin-V2-Ansicht lädt diese Fixture nicht.</p>
     <section id="empty"></section>
     <section id="filled"></section>
+    <section id="production"></section>
   </main>
-  <script src="../../../customer-portal/tourist-demand-library.js?v=2"></script>
-  <script src="../../../customer-portal/tourist-demand-ingestion.js?v=2"></script>
-  <script src="../../../customer-portal/tourist-demand-catalog.js?v=2"></script>
-  <script src="../../../customer-portal/tourist-demand-data-provider.js?v=3"></script>
-  <script src="../../../customer-portal/tourist-demand-dashboard.js?v=4"></script>
+  <script src="../../../customer-portal/tourist-demand-library.js?v=3"></script>
+  <script src="../../../customer-portal/tourist-demand-sources.js?v=1"></script>
+  <script src="../../../customer-portal/tourist-demand-ingestion.js?v=3"></script>
+  <script src="../../../customer-portal/tourist-demand-catalog.js?v=3"></script>
+  <script src="../../../customer-portal/tourist-demand-data-provider.js?v=4"></script>
+  <script src="../../../customer-portal/tourist-demand-dashboard.js?v=5"></script>
   <script>
     const provider=window.ACTTouristDemandProvider;
     const dashboard=window.ACTTouristDemandDashboard;
-    const empty=provider.loadDemandSnapshot({region:"wilder-kaiser"});
+    const empty=provider.loadDemandSnapshot({region:"zillertal"});
     document.getElementById("empty").innerHTML=dashboard.renderDemandDashboardMarkup(
-      dashboard.buildDemandDashboardViewModel(empty,{region:"wilder-kaiser"})
+      dashboard.buildDemandDashboardViewModel(empty,{region:"zillertal"})
     );
     const fixtures=[{
       id:"obs-a-up",
@@ -121,6 +123,10 @@
     const filled=provider.loadDemandSnapshotForTests(fixtures,{generatedAt:"2026-08-15T00:00:00.000Z"});
     document.getElementById("filled").innerHTML=dashboard.renderDemandDashboardMarkup(
       dashboard.buildDemandDashboardViewModel(filled,{})
+    );
+    const production=provider.loadDemandSnapshot({generatedAt:"2026-09-07T14:00:00.000Z"});
+    document.getElementById("production").innerHTML=dashboard.renderDemandDashboardMarkup(
+      dashboard.buildDemandDashboardViewModel(production,{})
     );
   </script>
 </body>

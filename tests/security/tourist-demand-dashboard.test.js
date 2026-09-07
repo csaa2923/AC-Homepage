@@ -402,7 +402,7 @@ describe("8.1b tourist demand dashboard",()=>{
   });
 
   it("U) empty state is not 0% demand",()=>{
-    const markup=dashboard.renderDemandDashboardMarkup(dashboard.buildDemandDashboardViewModel(provider.loadDemandSnapshot({region:"wilder-kaiser"}),{region:"wilder-kaiser"}));
+    const markup=dashboard.renderDemandDashboardMarkup(dashboard.buildDemandDashboardViewModel(provider.loadDemandSnapshot({region:"zillertal"}),{region:"zillertal"}));
     assert.doesNotMatch(markup,/0 % Nachfrage|keine Nachfrage|uninteressant/i);
     assert.match(markup,/Für diese Auswahl liegen noch keine bestätigten Nachfragesignale vor\./);
   });
@@ -485,11 +485,11 @@ describe("8.1b tourist demand dashboard",()=>{
   it("AE) admin v2 pins and demand assets are wired",()=>{
     assert.match(adminHtml,/admin-v2\.js\?v=104/);
     assert.match(adminHtml,/admin-v2\.css\?v=81/);
-    assert.match(adminHtml,/tourist-demand-library\.js\?v=2/);
-    assert.match(adminHtml,/tourist-demand-ingestion\.js\?v=2/);
-    assert.match(adminHtml,/tourist-demand-catalog\.js\?v=2/);
-    assert.match(adminHtml,/tourist-demand-data-provider\.js\?v=3/);
-    assert.match(adminHtml,/tourist-demand-dashboard\.js\?v=4/);
+    assert.match(adminHtml,/tourist-demand-library\.js\?v=3/);
+    assert.match(adminHtml,/tourist-demand-ingestion\.js\?v=3/);
+    assert.match(adminHtml,/tourist-demand-catalog\.js\?v=3/);
+    assert.match(adminHtml,/tourist-demand-data-provider\.js\?v=4/);
+    assert.match(adminHtml,/tourist-demand-dashboard\.js\?v=5/);
     assert.match(adminJs,/function renderDemandDashboard\(\)/);
     assert.doesNotMatch(adminJs,/\["demand","Nachfrage/);
     assert.doesNotMatch(functionsIndex,/ACTTouristDemand|loadDemandSnapshot/);

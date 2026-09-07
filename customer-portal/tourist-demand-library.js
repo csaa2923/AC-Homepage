@@ -22,13 +22,13 @@
   ];
   const REGIONS=[
     {id:"tirol",label:"Tirol gesamt",aliases:["tirol","tyrol","tirol gesamt","land tirol"]},
-    {id:"innsbruck",label:"Innsbruck",aliases:["innsbruck","innsbruck stadt","region innsbruck","innsbruck/tirol"]},
-    {id:"seefeld",label:"Seefeld",aliases:["seefeld","seefeld-tirol","olympiaregion seefeld"]},
-    {id:"stubaital",label:"Stubaital",aliases:["stubaital","stubai"]},
-    {id:"oetztal",label:"Ötztal",aliases:["oetztal","ötztal","oetz","oetztaler alpen"]},
+    {id:"innsbruck",label:"Innsbruck",aliases:["innsbruck","innsbruck stadt","region innsbruck","innsbruck/tirol","innsbruck und seine feriendorfer","innsbruck / feriendorfer","innsbruck tourismus"]},
+    {id:"seefeld",label:"Seefeld",aliases:["seefeld","seefeld-tirol","olympiaregion seefeld","region seefeld","seefeld - tirols hochplateau","tirols hochplateau"]},
+    {id:"stubaital",label:"Stubaital",aliases:["stubaital","stubai","stubai tirol"]},
+    {id:"oetztal",label:"Ötztal",aliases:["oetztal","ötztal","otztal","oetz","oetztaler alpen","otztaler alpen","oetztal tourismus","otztal tourismus"]},
     {id:"zillertal",label:"Zillertal",aliases:["zillertal"]},
     {id:"achensee",label:"Achensee",aliases:["achensee"]},
-    {id:"kitzbuehel",label:"Kitzbühel",aliases:["kitzbuehel","kitzbühel","kitzbuhel"]},
+    {id:"kitzbuehel",label:"Kitzbühel",aliases:["kitzbuehel","kitzbühel","kitzbuhel","kitzbuhel tourismus","kitzbühel tourismus"]},
     {id:"wilder-kaiser",label:"Wilder Kaiser",aliases:["wilder kaiser","wilder-kaiser"]}
   ];
   const AUDIENCES=[
@@ -56,11 +56,11 @@
   ];
   const KNOWN_SUBTOPICS={
     hike:[{id:"easy",aliases:["leicht"]},{id:"mountain",aliases:["bergtour"]},{id:"hut",aliases:["huettenwanderung","hüttenwanderung"]},{id:"winter-hike",aliases:["winterwandern"]}],
-    bike:[{id:"gravel",aliases:["gravel"]},{id:"mtb",aliases:["mtb"]},{id:"road",aliases:["rennrad"]},{id:"e-bike",aliases:["ebike","e-bike"]},{id:"leisure",aliases:["genussrad"]}],
+    bike:[{id:"gravel",aliases:["gravel"]},{id:"mtb",aliases:["mtb","mountainbike","mountain-bike"]},{id:"road",aliases:["rennrad"]},{id:"e-bike",aliases:["ebike","e-bike"]},{id:"leisure",aliases:["genussrad"]}],
     winter:[{id:"ski",aliases:["ski"]},{id:"snowboard",aliases:["snowboard"]},{id:"langlauf",aliases:["langlauf"]},{id:"ski-tour",aliases:["skitour"]},{id:"sled",aliases:["rodeln"]}],
     culinary:[{id:"tyrolean",aliases:["tiroler kueche","tiroler küche"]},{id:"fine-dining",aliases:["fine dining"]},{id:"hut",aliases:["huetten","hütten"]},{id:"regional",aliases:["regionale produkte"]}],
     wellness:[{id:"spa",aliases:["spa"]},{id:"thermal",aliases:["therme"]},{id:"sauna",aliases:["sauna"]},{id:"recovery",aliases:["recovery"]}],
-    culture:[{id:"museum",aliases:["museen","museum"]},{id:"architecture",aliases:["architektur"]},{id:"tradition",aliases:["tradition"]},{id:"events",aliases:["veranstaltungen"]}]
+    culture:[{id:"museum",aliases:["museen","museum"]},{id:"architecture",aliases:["architektur"]},{id:"tradition",aliases:["tradition"]},{id:"festival",aliases:["festival","filmfestival"]},{id:"events",aliases:["veranstaltungen"]}]
   };
   const INTENTS=[
     {id:"discovery",label:"Discovery"},
@@ -94,6 +94,12 @@
   const SIGNAL_TYPES=[
     {id:"quantitative",label:"quantitativ"},
     {id:"qualitative",label:"qualitativ"}
+  ];
+  const SOURCE_SIGNAL_TYPES=[
+    {id:"statistics",label:"Statistik"},
+    {id:"editorial",label:"redaktionell"},
+    {id:"market",label:"Markt"},
+    {id:"event",label:"Event"}
   ];
   const DEMAND_SCOPES=[
     {id:"general",label:"Gesamttourismus"},
@@ -252,6 +258,35 @@
   function normalizeSourceType(value){
     const match=lookup(SOURCE_TYPES,value);
     return match?ok(match.id):fail([value?"Unbekannter sourceType.":"sourceType fehlt."]);
+  }
+
+  function normalizeSourceSignalType(value){
+    if(value===undefined||value===null||text(value)==="")return ok("");
+    const match=lookup(SOURCE_SIGNAL_TYPES,value);
+    return match?ok(match.id):fail(["Unbekannter sourceSignalType."]);
+  }
+
+  function normalizeEventFields(source,sourceSignalType){
+    const input=source&&typeof source==="object"?source:{};
+    const nested=input.event&&typeof input.event==="object"?input.event:{};
+    const eventName=text(input.eventName||nested.eventName);
+    const startDate=parseDateValue(input.startDate||nested.startDate);
+    const endDate=parseDateValue(input.endDate||nested.endDate);
+    const venue=text(input.venue||nested.venue);
+    const hasEvent=Boolean(eventName||startDate||endDate||venue);
+    if(sourceSignalType==="event"){
+      const errors=[];
+      if(!eventName)errors.push("eventName fehlt.");
+      if(!startDate&&!endDate)errors.push("Event braucht startDate oder endDate.");
+      if(errors.length)return fail(errors);
+      return ok({eventName,startDate:startDate||endDate,endDate:endDate||startDate,venue});
+    }
+    if(hasEvent)return fail(["Eventfelder sind nur bei sourceSignalType: event zulässig."]);
+    return ok(null);
+  }
+
+  function isEventObservation(item){
+    return Boolean(item&&(item.sourceSignalType==="event"||(item.event&&item.event.eventName)));
   }
 
   function normalizeAudiences(values){
@@ -413,20 +448,41 @@
     return keys.size;
   }
 
+  function eventAnchorDate(observation){
+    const event=observation&&observation.event&&typeof observation.event==="object"?observation.event:{};
+    return parseDateValue(event.endDate||observation?.endDate||event.startDate||observation?.startDate);
+  }
+
   function getDemandFreshness(observation,referenceDate){
     const source=observation&&observation.source?observation.source:observation||{};
-    const observed=parseDateValue(observation?.observedAt||source.observedAt||observation?.retrievedAt||source.retrievedAt);
+    const eventDate=isEventObservation(observation)?eventAnchorDate(observation):"";
+    const observed=eventDate||parseDateValue(observation?.observedAt||source.observedAt||observation?.retrievedAt||source.retrievedAt);
     if(!observed)return {ok:false,errors:["observedAt fehlt für Freshness."],value:null};
     const ref=referenceDate instanceof Date?referenceDate:new Date(referenceDate||Date.now());
     if(Number.isNaN(ref.getTime()))return fail(["Ungültiges Bezugsdatum."]);
     const ageDays=(ref.getTime()-new Date(observed).getTime())/86400000;
     const sourceType=text(observation?.source?.sourceType||source.sourceType);
-    const windows=FRESHNESS_WINDOWS[sourceType]||DEFAULT_FRESHNESS;
+    const windows=isEventObservation(observation)
+      ?(FRESHNESS_WINDOWS.event_calendar||DEFAULT_FRESHNESS)
+      :(FRESHNESS_WINDOWS[sourceType]||DEFAULT_FRESHNESS);
     let freshness="historical";
-    if(ageDays<=windows.current)freshness="current";
+    if(ageDays<0||ageDays<=windows.current)freshness="current";
     else if(ageDays<=windows.recent)freshness="recent";
     else if(ageDays<=windows.stale)freshness="stale";
     return ok({freshness,ageDays,windows,sourceType:sourceType||""});
+  }
+
+  function isCurrentDemandDriver(observation,referenceDate){
+    const ref=referenceDate instanceof Date?referenceDate:new Date(referenceDate||Date.now());
+    if(Number.isNaN(ref.getTime()))return false;
+    if(isEventObservation(observation)){
+      const end=eventAnchorDate(observation);
+      if(!end)return false;
+      return new Date(end).getTime()>=ref.getTime();
+    }
+    const freshness=getDemandFreshness(observation,ref);
+    const level=freshness&&freshness.value&&freshness.value.freshness;
+    return level==="current"||level==="recent";
   }
 
   function observationIdFrom(source){
@@ -447,11 +503,14 @@
     const audiences=normalizeAudiences(source.audiences);
     const intents=normalizeIntents(source.intents);
     const signalType=normalizeSignalType(source.signalType);
+    const sourceSignalType=normalizeSourceSignalType(source.sourceSignalType);
     const evidence=validateEvidenceConfidence(source.evidenceLevel,source.confidence);
     const summary=text(source.summary);
     const observedAt=parseDateValue(source.observedAt)||(sourceResult.ok?sourceResult.value.observedAt:"");
     const retrievedAt=parseDateValue(source.retrievedAt)||(sourceResult.ok?sourceResult.value.retrievedAt:observedAt);
-    errors.push(...sourceResult.errors,...statementType.errors,...season.errors,...seasonPhase.errors,...region.errors,...scopeAndTopic.errors,...audiences.errors,...intents.errors,...signalType.errors,...evidence.errors);
+    errors.push(...sourceResult.errors,...statementType.errors,...season.errors,...seasonPhase.errors,...region.errors,...scopeAndTopic.errors,...audiences.errors,...intents.errors,...signalType.errors,...sourceSignalType.errors,...evidence.errors);
+    const event=sourceSignalType.ok?normalizeEventFields(source,sourceSignalType.value):fail([]);
+    if(event.ok===false)errors.push(...event.errors);
     if(!summary)errors.push("summary fehlt.");
     if(!observedAt)errors.push("observedAt fehlt.");
     if(!retrievedAt)errors.push("retrievedAt fehlt.");
@@ -470,6 +529,9 @@
     }
     if(evidence.ok&&evidence.value.evidenceLevel==="A"&&signalType.ok&&signalType.value!=="quantitative"){
       errors.push("Evidence A erfordert eine quantitative Observation.");
+    }
+    if(sourceSignalType.ok&&sourceSignalType.value==="event"&&signalType.ok&&signalType.value==="quantitative"){
+      errors.push("Ein Event ist kein quantitativer Demand-Wert.");
     }
     if(statementType.ok&&statementType.value!=="observation"&&source.requireObservation===true){
       errors.push("Diese Stelle erwartet eine Observation, keine Inference/Recommendation.");
@@ -500,6 +562,12 @@
       subtopics:subtopics.value,
       intents:intents.value,
       signalType:signalType.value,
+      sourceSignalType:sourceSignalType.value,
+      event:event.value,
+      eventName:event.value?event.value.eventName:"",
+      startDate:event.value?event.value.startDate:"",
+      endDate:event.value?event.value.endDate:"",
+      venue:event.value?event.value.venue:"",
       summary,
       metric,
       evidenceLevel:evidence.value.evidenceLevel,
@@ -609,8 +677,9 @@
       if(season.value&&item.season!==season.value)return false;
       return true;
     });
-    const topicObservations=filtered.filter(item=>item.statementType==="observation"&&isTopicDemandObservation(item));
+    const topicObservations=filtered.filter(item=>item.statementType==="observation"&&isTopicDemandObservation(item)&&!isEventObservation(item));
     const generalObservations=filtered.filter(item=>item.statementType==="observation"&&item.demandScope==="general");
+    const eventObservations=filtered.filter(item=>item.statementType==="observation"&&isEventObservation(item));
     const groups=new Map();
     topicObservations.forEach(item=>{
       const key=`${item.topic}|${item.region}|${item.season}`;
@@ -624,7 +693,7 @@
       if(trend.ok)trends.push(trend.value);
     });
     const topicCounts=new Map();
-    filtered.filter(isTopicDemandObservation).forEach(item=>{
+    filtered.filter(item=>isTopicDemandObservation(item)&&!isEventObservation(item)).forEach(item=>{
       const current=topicCounts.get(item.topic)||{topic:item.topic,observationCount:0,independentSourceIds:new Set()};
       current.observationCount+=1;
       current.independentSourceIds.add(sourceIndependenceKey(item.source));
@@ -651,6 +720,10 @@
       sources,
       observationCount:filtered.length,
       generalObservationCount:generalObservations.length,
+      topicObservationCount:topicObservations.length,
+      eventCount:eventObservations.length,
+      coveredRegionCount:uniqueIds(filtered.map(item=>item.region)).length,
+      coveredTopicCount:topTopics.length,
       independentSourceCount:countIndependentSources(filtered),
       synthetic:filtered.every(item=>item.synthetic),
       fixtureKind:"TEST"
@@ -667,6 +740,40 @@
     return "winter";
   }
 
+  function incrementCount(map,key){
+    const id=text(key);
+    if(!id)return;
+    map[id]=(map[id]||0)+1;
+  }
+
+  function buildCoverageReport(observations){
+    const list=Array.isArray(observations)?observations:[];
+    const byRegion={};
+    const bySeason={};
+    const byTopic={};
+    let generalObservationCount=0;
+    let topicObservationCount=0;
+    let eventCount=0;
+    list.forEach(item=>{
+      incrementCount(byRegion,item.region);
+      incrementCount(bySeason,item.season);
+      if(item.demandScope==="general")generalObservationCount+=1;
+      if(isEventObservation(item))eventCount+=1;
+      else if(isTopicDemandObservation(item)){
+        topicObservationCount+=1;
+        incrementCount(byTopic,item.topic);
+      }
+    });
+    return {
+      byRegion,
+      bySeason,
+      byTopic,
+      generalObservationCount,
+      topicObservationCount,
+      eventCount
+    };
+  }
+
   const api={
     SEASONS,
     SEASON_PHASES,
@@ -678,6 +785,7 @@
     EVIDENCE_LEVELS,
     CONFIDENCE_LEVELS,
     SIGNAL_TYPES,
+    SOURCE_SIGNAL_TYPES,
     DEMAND_SCOPES,
     SOURCE_TYPES,
     FRESHNESS_WINDOWS,
@@ -687,6 +795,10 @@
     normalizeTopic,
     normalizeDemandScope,
     isTopicDemandObservation,
+    isEventObservation,
+    isCurrentDemandDriver,
+    normalizeSourceSignalType,
+    normalizeEventFields,
     normalizeAudience,
     normalizeIntent,
     normalizeStatementType,
@@ -702,6 +814,7 @@
     sourceIndependenceKey,
     buildDemandTrend,
     buildDemandSnapshot,
+    buildCoverageReport,
     seasonFromDate
   };
   if(typeof window!=="undefined")window.ACTTouristDemandLibrary=api;

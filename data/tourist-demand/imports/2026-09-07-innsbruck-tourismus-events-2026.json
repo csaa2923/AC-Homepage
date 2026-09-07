@@ -1,0 +1,25 @@
+{
+  "importId": "2026-09-07-innsbruck-tourismus-events-2026",
+  "adapterId": "innsbruck-tourismus-events",
+  "retrievedAt": "2026-09-07T14:00:00.000Z",
+  "accessMethod": "controlled_manual_import",
+  "synthetic": false,
+  "fixtureKind": "",
+  "sourceName": "Innsbruck Tourismus – Christkindlmarkt Hungerburg 2026/27",
+  "publisher": "Tourismusverband Innsbruck und seine Feriendörfer",
+  "reference": "https://www.innsbruck.info/events/christkindlmaerkte-innsbruck.html",
+  "notes": "Ein datiertes offizielles Event. Keine Nachfrageprozent. Saison kommt deterministisch vom Startdatum.",
+  "records": [
+    {
+      "sourceRecordId": "innsbruck-christkindlmarkt-hungerburg-2026",
+      "rawTitle": "Christkindlmarkt Hungerburg",
+      "rawSummary": "Innsbruck Tourismus führt den Christkindlmarkt auf der Hungerburg vom 20. November 2026 bis 6. Jänner 2027 als Teil der Innsbrucker Bergweihnacht.",
+      "rawRegion": "Innsbruck und seine Feriendörfer",
+      "rawSeason": "20. November 2026",
+      "observedAt": "2026-11-20T00:00:00.000Z",
+      "reference": "https://www.innsbruck.info/events/christkindlmaerkte-innsbruck.html",
+      "synthetic": false,
+      "fixtureKind": ""
+    }
+  ]
+}

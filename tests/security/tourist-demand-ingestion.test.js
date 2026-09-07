@@ -356,8 +356,8 @@ describe("tourist demand 8.1c ingestion",()=>{
   });
 
   it("W) Dashboard Empty State ohne accepted records",()=>{
-    const result=provider.loadDemandSnapshot({region:"wilder-kaiser"});
-    const model=dashboard.buildDemandDashboardViewModel(result,{region:"wilder-kaiser"});
+    const result=provider.loadDemandSnapshot({region:"zillertal"});
+    const model=dashboard.buildDemandDashboardViewModel(result,{region:"zillertal"});
     const markup=dashboard.renderDemandDashboardMarkup(model);
     assert.equal(result.empty,true);
     assert.equal(model.empty,true);
@@ -407,10 +407,10 @@ describe("tourist demand 8.1c ingestion",()=>{
   it("AB) Admin V2 Regression",()=>{
     assert.match(adminHtml,/admin-v2\.js\?v=104/);
     assert.match(adminHtml,/admin-v2\.css\?v=81/);
-    assert.match(adminHtml,/tourist-demand-ingestion\.js\?v=2/);
-    assert.match(adminHtml,/tourist-demand-catalog\.js\?v=2/);
-    assert.match(adminHtml,/tourist-demand-data-provider\.js\?v=3/);
-    assert.match(adminHtml,/tourist-demand-dashboard\.js\?v=4/);
+    assert.match(adminHtml,/tourist-demand-ingestion\.js\?v=3/);
+    assert.match(adminHtml,/tourist-demand-catalog\.js\?v=3/);
+    assert.match(adminHtml,/tourist-demand-data-provider\.js\?v=4/);
+    assert.match(adminHtml,/tourist-demand-dashboard\.js\?v=5/);
     assert.match(adminJs,/withTimeout\(window\.ACTFirebaseAuth\.requireAdmin\(\),AUTH_TIMEOUT_MS,"requireAdmin"\)/);
     assert.doesNotMatch(functionsIndex,/ACTTouristDemand|loadDemandSnapshot/);
   });
@@ -436,13 +436,16 @@ describe("tourist demand 8.1c ingestion",()=>{
   });
 
   it("keeps versioned imports aligned with the catalog embed",()=>{
-    assert.deepEqual(catalog.embeddedOfficialImportBatches(),[statistikImport,werbungImport]);
+    assert.equal(catalog.embeddedOfficialImportBatches()[0].importId,statistikImport.importId);
+    assert.equal(catalog.embeddedOfficialImportBatches()[1].importId,werbungImport.importId);
+    assert.deepEqual(catalog.embeddedOfficialImportBatches().slice(0,2),[statistikImport,werbungImport]);
     assert.equal(statistikImport.synthetic,false);
     assert.equal(werbungImport.synthetic,false);
     assert.equal(statistikImport.fixtureKind,"");
-    assert.equal(catalog.getCatalog().counts.accepted,3);
-    assert.equal(catalog.getCatalog().counts.review_required,2);
+    assert.ok(catalog.getCatalog().counts.accepted>=3);
+    assert.ok(catalog.getCatalog().counts.review_required>=2);
     assert.equal(catalog.getCatalog().counts.rejected,0);
+    assert.ok(catalog.getAcceptedProductionObservations().some(item=>item.source.sourceId==="landesstatistik-tirol"&&item.metric&&item.metric.metricValue===26400000));
   });
 
   it("does not treat official_statistics as Evidence A without a metric",()=>{

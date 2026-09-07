@@ -725,7 +725,7 @@ Alpine Concierge Tirol`
     setMessage("Dokumentation gespeichert.","success");
   }
 
-  async function handleClick(event){
+  function handleClick(event){
     const button=event.target.closest("[data-legal-comms-action]");
     if(!button)return false;
     const action=button.dataset.legalCommsAction||"";
@@ -737,7 +737,7 @@ Alpine Concierge Tirol`
     const [kind,id]=action.split(":");
     if(kind==="copy"){
       event.preventDefault();
-      await copyTemplate(id);
+      copyTemplate(id);
       return true;
     }
     if(kind==="whatsapp"){

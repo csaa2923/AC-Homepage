@@ -43,7 +43,7 @@ describe("admin v2 zahlung und freigabe",()=>{
     assert.match(html,/id="paymentRoot"/);
     assert.match(html,/id="paymentOverviewList"/);
     assert.match(html,/id="paymentSettingsRoot"/);
-    assert.match(html,/admin-v2-payment\.js\?v=1/);
+    assert.match(html,/admin-v2-payment\.js\?v=2/);
     assert.match(html,/admin-v2-payment\.css\?v=1/);
     assert.match(html,/admin-v2\.js\?v=104/);
     assert.match(html,/admin-v2\.css\?v=81/);
@@ -205,5 +205,15 @@ describe("admin v2 zahlung und freigabe",()=>{
     assert.equal(defaults.ANGEBOTSNUMMER,"ACT-2026-014");
     assert.equal(defaults.IBAN,"");
     assert.equal(defaults.KONTOINHABER,"");
+  });
+
+  it("returns a boolean from handleClick so document click delegation is not swallowed",()=>{
+    const payment=loadPaymentModule();
+    const result=payment.handleClick({
+      target:{closest(){return null;}},
+      preventDefault(){}
+    });
+    assert.equal(result,false);
+    assert.equal(typeof result.then,"undefined");
   });
 });

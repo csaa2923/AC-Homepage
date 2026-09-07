@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import {describe,it} from "node:test";
 import {fileURLToPath} from "node:url";
 
@@ -18,14 +19,14 @@ describe("admin v2 kommunikation und dokumente",()=>{
     assert.match(html,/data-v2-route="legalcomms"/);
     assert.match(html,/id="legalcommsView"/);
     assert.match(html,/id="legalCommsRoot"/);
-    assert.match(html,/admin-v2-legal-comms\.js\?v=1/);
+    assert.match(html,/admin-v2-legal-comms\.js\?v=2/);
     assert.match(html,/admin-v2-legal-comms\.css\?v=1/);
     assert.match(html,/data-v2-route="communication"/);
     assert.match(html,/data-v2-route="documents"/);
     assert.match(js,/\["legalcomms","Kommunikation & Dokumente"\]/);
     assert.match(js,/ACTAdminV2LegalComms\?\.bind/);
     assert.match(js,/ACTAdminV2LegalComms\?\.renderView/);
-    assert.match(js,/ACTAdminV2LegalComms\?\.handleClick/);
+    assert.match(js,/ACTAdminV2LegalComms\?\.handleClick\?\.\(event\)===true/);
     assert.match(js,/function saveLegalComms\(/);
     assert.match(module,/Kommunikation & Dokumente/);
     assert.match(module,/Kein automatischer Versand/);
@@ -90,5 +91,16 @@ describe("admin v2 kommunikation und dokumente",()=>{
     assert.match(module,/\[LEISTUNG\]/);
     assert.match(module,/\[ANBIETER\]/);
     assert.match(module,/data-legal-comms-ph/);
+  });
+
+  it("returns a boolean from handleClick so document click delegation is not swallowed",()=>{
+    const sandbox={window:{},document:{querySelectorAll(){return [];}}};
+    vm.runInNewContext(read("customer-portal/admin-v2-legal-comms.js"),sandbox);
+    const result=sandbox.window.ACTAdminV2LegalComms.handleClick({
+      target:{closest(){return null;}},
+      preventDefault(){}
+    });
+    assert.equal(result,false);
+    assert.equal(typeof result.then,"undefined");
   });
 });

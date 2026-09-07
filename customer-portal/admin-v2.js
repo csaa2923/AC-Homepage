@@ -11510,10 +11510,10 @@
         openTravelMapsFromEvent(event);
         return;
       }
-      if(window.ACTAdminV2Bookings?.handleClick?.(event))return;
-      if(window.ACTAdminV2Communication?.handleClick?.(event))return;
-      if(window.ACTAdminV2LegalComms?.handleClick?.(event))return;
-      if(window.ACTAdminV2Payment?.handleClick?.(event))return;
+      if(window.ACTAdminV2Bookings?.handleClick?.(event)===true)return;
+      if(window.ACTAdminV2Communication?.handleClick?.(event)===true)return;
+      if(window.ACTAdminV2LegalComms?.handleClick?.(event)===true)return;
+      if(window.ACTAdminV2Payment?.handleClick?.(event)===true)return;
       const wizardAction=event.target.closest("[data-wizard-action]");
       if(wizardAction){
         handleWizardAction(wizardAction.dataset.wizardAction);

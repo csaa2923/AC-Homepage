@@ -1011,11 +1011,11 @@ Alpine Concierge Tirol`;
     setMessage("Unternehmens-Zahlungsdaten gespeichert.","success");
   }
 
-  async function handleClick(event){
+  function handleClick(event){
     const button=event.target.closest("[data-payment-action]");
     if(!button)return false;
     event.preventDefault();
-    await handleAction(button.dataset.paymentAction||"",await currentCustomer());
+    currentCustomer().then(customer=>handleAction(button.dataset.paymentAction||"",customer));
     return true;
   }
 

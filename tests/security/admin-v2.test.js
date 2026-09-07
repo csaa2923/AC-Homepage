@@ -1563,4 +1563,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.doesNotMatch(comm,/\bTODO\b/);
     assert.doesNotMatch(html,/cdn\.jsdelivr|api\.qrserver/i);
   });
+
+  it("treats module handleClick as handled only when it returns true",()=>{
+    const js=readProjectFile("customer-portal/admin-v2.js");
+    assert.match(js,/ACTAdminV2Bookings\?\.handleClick\?\.\(event\)===true/);
+    assert.match(js,/ACTAdminV2Communication\?\.handleClick\?\.\(event\)===true/);
+    assert.match(js,/ACTAdminV2LegalComms\?\.handleClick\?\.\(event\)===true/);
+    assert.match(js,/ACTAdminV2Payment\?\.handleClick\?\.\(event\)===true/);
+  });
 });

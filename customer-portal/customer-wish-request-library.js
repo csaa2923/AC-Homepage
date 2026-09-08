@@ -72,7 +72,7 @@
     {id:"QUESTIONS_PREPARED",label:"Fragen vorbereitet"},
     {id:"WAITING_FOR_CUSTOMER",label:"Wartet auf Kundenantwort"},
     {id:"CUSTOMER_REPLIED",label:"Kunde hat geantwortet"},
-    {id:"IN_REVIEW",label:"In Prüfung"},
+    {id:"IN_REVIEW",label:"In Bearbeitung"},
     {id:"PROPOSAL_PREPARED",label:"Vorschlag vorbereitet"},
     {id:"PROPOSAL_SENT",label:"Vorschlag gesendet"},
     {id:"CUSTOMER_DECISION",label:"Kundenentscheidung"},
@@ -1349,6 +1349,43 @@
     return match?match.label:id;
   }
 
+  function normalizeStatusHistory(input){
+    return (Array.isArray(input)?input:[]).map(item=>{
+      if(!item||typeof item!=="object"||Array.isArray(item))return null;
+      const status=text(item.status).toUpperCase();
+      if(!STATUSES.some(entry=>entry.id===status))return null;
+      const at=text(item.at);
+      const actor=text(item.actor);
+      if(!at||(actor!=="admin"&&actor!=="customer"))return null;
+      return {status,at,actor};
+    }).filter(Boolean);
+  }
+
+  function appendStatusHistory(history,entry){
+    return normalizeStatusHistory((Array.isArray(history)?history:[]).concat([entry]));
+  }
+
+  function startWishReview(wish,options){
+    const settings=options&&typeof options==="object"?options:{};
+    const current=cloneWish(wish);
+    if(current.origin!=="admin"){
+      return fail(["Nur Concierge-Wünsche können in Bearbeitung genommen werden."],"failed-precondition");
+    }
+    if(current.status!=="CUSTOMER_REPLIED"){
+      return fail(["Dieser Wunsch wartet nicht auf den Start der Bearbeitung."],"failed-precondition");
+    }
+    const now=nowIso(settings.now);
+    current.status="IN_REVIEW";
+    current.statusLabel=statusLabel(current.status);
+    current.updatedAt=now;
+    current.statusHistory=appendStatusHistory(current.statusHistory,{
+      status:"IN_REVIEW",
+      at:now,
+      actor:"admin"
+    });
+    return ok(current);
+  }
+
   function normalizeOriginalRequest(input,options){
     const settings=options&&typeof options==="object"?options:{};
     const source=input&&typeof input==="object"&&!Array.isArray(input)
@@ -1868,6 +1905,8 @@
     reorderFollowUpQuestions,
     setQuestionRequired,
     prepareQuestionsForCustomer,
+    startWishReview,
+    normalizeStatusHistory,
     portalFollowUpQuestions,
     applyFollowUpAnswersToKnownData,
     applyFollowUpAnswerToWish,

@@ -148,6 +148,12 @@
     wizardMessageKind:"",
     wizardSaving:false,
     wizardSavedCustomerId:"",
+    prospectOpen:false,
+    prospectDraft:null,
+    prospectErrors:{},
+    prospectMessage:"",
+    prospectMessageKind:"",
+    prospectSaving:false,
     detailFlashMessage:"",
     detailFlashKind:"",
     demandFilters:{season:"",region:"",audience:"",topic:"",intent:""}
@@ -469,6 +475,7 @@
 
   function badgeClass(value){
     const text=String(value||"");
+    if(/interessent|prospect/i.test(text))return "blue";
     if(/veröffentlicht|published|aktiv|kundenportal|sichtbar|vollstaendig/i.test(text)||normalizeText(text).includes("vollstandig"))return "green";
     if(/entwurf|draft|anfrage|offen|prüfung/i.test(text))return "amber";
     if(/archiviert|archived|intern|widerrufen|nicht sichtbar/i.test(text))return "gray";
@@ -623,6 +630,32 @@
     return state.customers.find(customer=>String(customer.customerId||"")===String(id||""))||null;
   }
 
+  function customerLifecycleLib(){
+    return window.ACTCustomerLifecycleLibrary||null;
+  }
+
+  function isProspectRecord(customer){
+    return customerLifecycleLib()?.isProspectCustomer?.(customer)===true;
+  }
+
+  function primaryWishSummary(customer){
+    const lib=customerLifecycleLib();
+    if(lib?.primaryWishSummary)return lib.primaryWishSummary(customer);
+    const wish=Array.isArray(customer?.wishRequests)?customer.wishRequests[0]:null;
+    return {
+      originalRequest:cleanValue(wish?.originalRequest?.text||wish?.originalRequest),
+      wishStatus:cleanValue(wish?.statusLabel||wish?.status),
+      wishStatusId:cleanValue(wish?.status),
+      wishId:cleanValue(wish?.wishId)
+    };
+  }
+
+  function clipPreview(value,max=160){
+    const raw=cleanValue(value);
+    if(!raw)return "";
+    return raw.length>max?`${raw.slice(0,max-1)}…`:raw;
+  }
+
   function classicEditorUrl(id){
     return `admin.html?editCustomer=${encodeURIComponent(id||"")}#master-data`;
   }
@@ -759,7 +792,7 @@
   }
 
   function hasDirtyEdits(){
-    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit()||hasDirtyConciergeEdit()||hasDirtyDocumentEdit()||state.wizardOpen||Boolean(window.ACTAdminV2Bookings?.isDirty?.());
+    return hasDirtyCustomerEdit()||hasDirtyTripEdit()||hasDirtyProgramEdit()||hasDirtyConciergeEdit()||hasDirtyDocumentEdit()||state.wizardOpen||state.prospectOpen||Boolean(window.ACTAdminV2Bookings?.isDirty?.());
   }
 
   function setCustomerEditMessage(message,kind=""){
@@ -4673,24 +4706,31 @@
         customer.tripTitle,
         customer.region,
         customer.status,
+        customer.phone,
+        customer.whatsapp,
+        customer.language,
+        isProspectRecord(customer)?"interessent prospect":"",
+        primaryWishSummary(customer).originalRequest,
         publicationState(customer),
         formatPeriod(customer),
         customer.customerId
       ].join(" ")).includes(query));
     }
-    if(state.status==="active")list=list.filter(isActiveTrip);
-    else if(state.status==="upcoming")list=list.filter(isUpcomingTrip);
-    else if(state.status==="arrivals")list=list.filter(isArrivalToday);
-    else if(state.status==="departures")list=list.filter(isDepartureToday);
-    else if(state.status==="open-bookings")list=list.filter(customer=>customerWorkspaceViewModel(customer).openBookings>0);
-    else if(state.status==="pending-publication")list=list.filter(customer=>publicationStatus(customer).key==="pending");
+    if(state.status==="prospects")list=list.filter(isProspectRecord);
+    else if(state.status==="active")list=list.filter(customer=>!isProspectRecord(customer)&&isActiveTrip(customer));
+    else if(state.status==="upcoming")list=list.filter(customer=>!isProspectRecord(customer)&&isUpcomingTrip(customer));
+    else if(state.status==="arrivals")list=list.filter(customer=>!isProspectRecord(customer)&&isArrivalToday(customer));
+    else if(state.status==="departures")list=list.filter(customer=>!isProspectRecord(customer)&&isDepartureToday(customer));
+    else if(state.status==="open-bookings")list=list.filter(customer=>!isProspectRecord(customer)&&customerWorkspaceViewModel(customer).openBookings>0);
+    else if(state.status==="pending-publication")list=list.filter(customer=>!isProspectRecord(customer)&&publicationStatus(customer).key==="pending");
     else if(state.status==="attention")list=list.filter(customer=>{
+      if(isProspectRecord(customer))return false;
       const workspace=customerWorkspaceViewModel(customer);
       return workspace.warnings.length>0||publicationStatus(customer).key==="pending"||!workspace.lastCommunication;
     });
-    else if(state.status==="draft")list=list.filter(customer=>!isPublished(customer));
-    else if(state.status==="published")list=list.filter(isPublished);
-    else if(state.status&&state.status!=="archived")list=list.filter(customer=>String(customer.status||"")===state.status);
+    else if(state.status==="draft")list=list.filter(customer=>!isProspectRecord(customer)&&!isPublished(customer));
+    else if(state.status==="published")list=list.filter(customer=>!isProspectRecord(customer)&&isPublished(customer));
+    else if(state.status&&state.status!=="archived")list=list.filter(customer=>!isProspectRecord(customer)&&String(customer.status||"")===state.status);
     if(state.publication)list=list.filter(customer=>publicationState(customer)===state.publication);
     if(state.region)list=list.filter(customer=>String(customer.region||"")===state.region);
     return list.sort(compareCustomers);
@@ -4723,7 +4763,7 @@
   }
 
   function dashboardCustomerRows(){
-    return state.customers.filter(customer=>!isArchivedCustomer(customer)).map(customer=>{
+    return state.customers.filter(customer=>!isArchivedCustomer(customer)&&!isProspectRecord(customer)).map(customer=>{
       const workspace=customerWorkspaceViewModel(customer);
       return {
         customer,
@@ -4854,6 +4894,7 @@
   function renderFilterOptions(){
     const statusOptions=[
       ["","Alle Kunden"],
+      ["prospects","Interessenten"],
       ["draft","Entwürfe"],
       ["published","Veröffentlicht"],
       ["active","Aktiv"],
@@ -4931,7 +4972,31 @@
       byId("customerGrid").innerHTML=`<article class="v2-empty"><h3>Noch keine Kunden vorhanden</h3><p>In Firebase wurden keine Kunden gefunden.</p><button class="v2-button primary" type="button" data-new-customer>Neuen Kunden anlegen</button></article>`;
       return;
     }
-    byId("customerGrid").innerHTML=list.map(customer=>`
+    byId("customerGrid").innerHTML=list.map(customer=>{
+      const prospect=isProspectRecord(customer);
+      const wish=primaryWishSummary(customer);
+      const request=clipPreview(wish.originalRequest,180)||"Keine Originalanfrage hinterlegt.";
+      if(prospect){
+        return `
+      <article class="v2-card v2-customer-card is-prospect" tabindex="0" role="button" data-open-editor="${escapeHtml(customer.customerId)}" aria-label="${escapeHtml((customer.customerName||"Interessent")+" öffnen")}">
+        <img src="${escapeHtml(customerImage(customer))}" alt="">
+        <div class="v2-customer-body">
+          <div class="v2-meta">${badge("Interessent")}${wish.wishStatus?badge(wish.wishStatus):badge("Neu")}</div>
+          <h3>${escapeHtml(customer.customerName||"Unbenannter Interessent")}</h3>
+          <p class="v2-prospect-request">${escapeHtml(request)}</p>
+          <div class="v2-meta">
+            <span>${escapeHtml(customer.phone||customer.whatsapp||customer.contact?.phone||"Keine Mobilnummer")}</span>
+            <span>${escapeHtml(customer.language||"Sprache offen")}</span>
+            <span>Geaendert ${escapeHtml(timestampValue(customer)?formatDate(new Date(timestampValue(customer)).toISOString()):"unbekannt")}</span>
+          </div>
+          <div class="v2-actions">
+            <span class="v2-button soft">Interessent oeffnen</span>
+          </div>
+        </div>
+      </article>
+    `;
+      }
+      return `
       <article class="v2-card v2-customer-card" tabindex="0" role="button" data-open-editor="${escapeHtml(customer.customerId)}" aria-label="${escapeHtml(customer.customerName||"Kunde")} öffnen">
         <img src="${escapeHtml(customerImage(customer))}" alt="">
         <div class="v2-customer-body">
@@ -4950,7 +5015,8 @@
           </div>
         </div>
       </article>
-    `).join("");
+    `;
+    }).join("");
   }
 
   function customerWorkspaceViewModel(customer){
@@ -4974,7 +5040,7 @@
     }));
     const actionableBookings=new Set([...openBookings,...bookingBlockers.map(item=>item.booking)]);
     const documents=documentQualitySummary(customer);
-    const missingRequired=workspaceMissingRequired(customer,trip);
+    const missingRequired=isProspectRecord(customer)?[]:workspaceMissingRequired(customer,trip);
     const weatherAvailable=workspaceWeatherAvailable(customer);
     const lastCommunication=workspaceLastCommunication(customer);
     const published=isPublished(customer);
@@ -4990,7 +5056,7 @@
     const travelers=trip.total
       ?`${trip.total} ${Number(trip.total)===1?"Person":"Personen"}`
       :displayValue(customer.companions,"Nicht hinterlegt");
-    const warnings=[
+    const warnings=isProspectRecord(customer)?[]:[
       ...(missingRequired.length?[{tone:"critical",title:`${missingRequired.length} Pflichtangaben fehlen`,detail:missingRequired.join(", "),tab:"kunde"}]:[]),
       ...(documents.missing?[{tone:"warning",title:`${documents.missing} erwartete Dokumente fehlen`,detail:"Programmpunkte und Dokumentzuordnung prüfen.",tab:"dokumente"}]:[]),
       ...(documents.critical?[{tone:"critical",title:`${documents.critical} kritische Dokumente`,detail:"Ablauf, Datei oder Freigabe prüfen.",tab:"dokumente"}]:[]),
@@ -5018,7 +5084,9 @@
         ...(lastCommunication?[{label:"Letzte Kommunikation",value:lastCommunication}]:[]),
         ...arrayValue(customer.payment?.history).slice(0,2).map(item=>({label:item.label||"Zahlung",value:item.at?formatDate(item.at):""}))
       ].slice(0,5),
-      statuses:[
+      statuses:isProspectRecord(customer)
+        ?[{label:"Interessent",tone:"info"},{label:customer.status||"Anfrage",tone:"info"}]
+        :[
         {label:customer.status||"Status offen",tone:isArchivedCustomer(customer)?"muted":"info"},
         {label:published?"Veröffentlichung aktiv":publicationState(customer),tone:published?"success":"warning"},
         {label:weatherAvailable?"Wetter verfügbar":"Wetter offen",tone:weatherAvailable?"success":"muted"}
@@ -5040,6 +5108,7 @@
   }
 
   function workspaceMissingRequired(customer,trip){
+    if(isProspectRecord(customer))return [];
     return [
       [customer.customerName,"Kundenname"],
       [customer.email||customer.contact?.email,"E-Mail"],
@@ -5084,6 +5153,7 @@
   }
 
   function customerConciergeReadiness(customer,workspace){
+    if(isProspectRecord(customer))return null;
     const library=window.ACTConciergeIntelligenceLibrary;
     if(!library?.analyzeCustomerReadiness)return null;
     const bookingLibrary=window.ACTBookingLibrary;
@@ -8540,6 +8610,7 @@
   }
 
   function customerJourneyViewModel(customer,workspace){
+    if(isProspectRecord(customer))return null;
     const lib=window.ACTCustomerJourneyLibrary;
     if(!lib?.buildCustomerJourney)return null;
     const trip=buildTripViewModel(customer);
@@ -8796,33 +8867,46 @@
     schedulePortalAccessLoad(customer.customerId);
     const tab=detailTabs.some(([key])=>key===state.selectedTab)?state.selectedTab:"kunde";
     const workspace=customerWorkspaceViewModel(customer);
+    const prospect=isProspectRecord(customer);
+    const wishSummary=primaryWishSummary(customer);
     const journey=customerJourneyViewModel(customer,workspace);
     const flash=state.detailFlashMessage?`<p class="v2-edit-status ${escapeHtml(state.detailFlashKind||"success")}" role="status">${escapeHtml(state.detailFlashMessage)}</p>`:"";
+    const prospectPhone=displayValue(customer.phone||customer.whatsapp||customer.contact?.phone||customer.contact?.whatsapp,"Keine Mobilnummer");
+    const prospectRequest=clipPreview(wishSummary.originalRequest,280)||"Keine Originalanfrage hinterlegt.";
     root.innerHTML=`
       <header class="v2-detail-head v2-workspace-head">
         <div class="v2-workspace-breadcrumb">
-          <div><button class="v2-link-button" type="button" data-v2-route="customers">Kunden</button><span aria-hidden="true">›</span><strong>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</strong></div>
+          <div><button class="v2-link-button" type="button" data-v2-route="customers">Kunden</button><span aria-hidden="true">›</span><strong>${escapeHtml(displayValue(customer.customerName,prospect?"Unbenannter Interessent":"Unbenannter Kunde"))}</strong></div>
           <div class="v2-workspace-header-actions">
             ${customerWorkspaceTabAction(tab)}
             <button class="workspace-mobile-more" type="button" aria-label="Weitere Kundenaktionen" aria-controls="workspaceMoreActions" aria-expanded="false" data-workspace-more-toggle>•••</button>
           </div>
         </div>
         ${flash}
+        ${prospect?`<p class="v2-prospect-banner" role="status"><strong>Interessent – noch kein Kunde</strong><span>Kein Auftrag, keine Customer Journey. Der bestehende Wunsch kann im Admin vorbereitet werden.</span></p>`:""}
         <div class="v2-detail-hero">
           <div class="v2-detail-title v2-workspace-identity">
-            <p class="v2-eyebrow">Customer Workspace</p>
+            <p class="v2-eyebrow">${prospect?"Interessent":"Customer Workspace"}</p>
             <div>
-              <h2>${escapeHtml(displayValue(customer.customerName,"Unbenannter Kunde"))}</h2>
-              <p>${escapeHtml(displayValue(customer.tripName||customer.tripTitle,"Kein Reisetitel"))}</p>
+              <h2>${escapeHtml(displayValue(customer.customerName,prospect?"Unbenannter Interessent":"Unbenannter Kunde"))}</h2>
+              <p>${escapeHtml(prospect?`${prospectPhone} · ${displayValue(customer.language,"Sprache offen")}`:displayValue(customer.tripName||customer.tripTitle,"Kein Reisetitel"))}</p>
             </div>
-            <div class="v2-workspace-statusline" aria-label="Kundenstatus">
+            <div class="v2-workspace-statusline" aria-label="${prospect?"Interessentenstatus":"Kundenstatus"}">
               ${workspace.statuses.map(item=>workspaceStatusChip(item)).join("")}
             </div>
+            ${prospect?`
+            <dl class="workspace-customer-summary">
+              <div><dt>WhatsApp / Mobilnummer</dt><dd>${escapeHtml(prospectPhone)}</dd></div>
+              <div><dt>Sprache</dt><dd>${escapeHtml(displayValue(customer.language,"Nicht hinterlegt"))}</dd></div>
+              <div><dt>Wish-Status</dt><dd>${escapeHtml(displayValue(wishSummary.wishStatus,"Neu"))}</dd></div>
+            </dl>
+            `: `
             <dl class="workspace-customer-summary">
               <div><dt>Zeitraum</dt><dd>${escapeHtml(displayValue(formatPeriod(customer),"Noch nicht geplant"))}</dd></div>
               <div><dt>Region</dt><dd>${escapeHtml(displayValue(customer.region,"Nicht hinterlegt"))}</dd></div>
               <div><dt>Reisende</dt><dd>${escapeHtml(`${workspace.adults} Erwachsene · ${workspace.children} Kinder`)}</dd></div>
             </dl>
+            `}
             <div class="v2-workspace-primary-actions" aria-label="Schnellaktionen">
               <button class="v2-button primary" type="button" data-detail-tab="programm">Programm</button>
               <button class="v2-button soft" type="button" data-detail-tab="buchungen">Buchung</button>
@@ -8845,15 +8929,24 @@
             `:""}
           </div>
         </div>
-        ${customerJourneyMarkup(journey)}
-        <div class="v2-detail-summary" aria-label="Kundenzusammenfassung">
+        ${prospect?"":customerJourneyMarkup(journey)}
+        <div class="v2-detail-summary" aria-label="${prospect?"Interessentenzusammenfassung":"Kundenzusammenfassung"}">
+          ${prospect?`
+          ${summaryItem("WhatsApp / Mobilnummer",prospectPhone)}
+          ${summaryItem("Sprache",displayValue(customer.language,"Nicht hinterlegt"))}
+          ${summaryItem("Ursprüngliche Anfrage",prospectRequest)}
+          ${summaryItem("Wish-Status",displayValue(wishSummary.wishStatus,"Neu"))}
+          ${summaryItem("Letzte Aenderung",timestampValue(customer)?formatDate(new Date(timestampValue(customer)).toISOString()):displayValue(customer.updatedAt))}
+          `: `
           ${summaryItem("Reise",workspace.tripTiming)}
           ${summaryItem("Reisezeitraum",displayValue(formatPeriod(customer),"Kein Reisezeitraum"))}
           ${summaryItem("Region",displayValue(customer.region,"Keine Region"))}
           ${summaryItem("Reisende",workspace.travelers)}
           ${summaryItem("Letzte Aenderung",timestampValue(customer)?formatDate(new Date(timestampValue(customer)).toISOString()):displayValue(customer.updatedAt))}
           ${summaryItem("Concierge",displayValue(customer.concierge||customer.conciergeName,"Nicht zugewiesen"))}
+          `}
         </div>
+        ${prospect?"":`
         <section class="workspace-status-grid" aria-label="Workspace Status">
           ${workspaceStatusCard("Reise",workspace.tripTiming,workspace.tripTiming==="Reisestart offen"?"muted":"info","reise")}
           ${workspaceStatusCard("Veröffentlichung",workspace.publicationLabel,workspace.publicationLabel==="Aktiv"?"success":"warning","veroeffentlichung")}
@@ -8872,6 +8965,7 @@
             ${workspaceQuickAction("Veröffentlichung","veroeffentlichung",0,"V")}
           </div>
         </section>
+        `}
         <details class="v2-workspace-more" id="workspaceMoreActions">
           <summary>Weitere Aktionen</summary>
           <div class="v2-detail-actions">
@@ -8892,7 +8986,7 @@
             `).join("")}
           </div>
         </div>
-        <div class="v2-workspace-overview-slot">${customerWorkspaceOverviewMarkup(customer,workspace)}</div>
+        <div class="v2-workspace-overview-slot">${prospect?"":customerWorkspaceOverviewMarkup(customer,workspace)}</div>
         <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
           ${tab==="zahlung"?(window.ACTAdminV2Payment?.tabMarkup?.(customer)||placeholderTabMarkup()):tab==="legalcomms"?(window.ACTAdminV2LegalComms?.tabMarkup?.(customer)||placeholderTabMarkup()):tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
         </section>
@@ -10144,6 +10238,7 @@
     renderCustomerDetail();
     window.ACTAdminV2Bookings?.renderBookingEditor?.();
     renderNewCustomerWizard();
+    renderProspectDialog();
     if(state.route==="tasks")renderTasks();
     renderAiTaskDetail();
     renderMobileNavigation();
@@ -10652,6 +10747,7 @@
       renderNewCustomerWizard();
       return;
     }
+    if(state.prospectOpen&&!closeProspectDialog())return;
     if(!confirmDiscardCustomerEdit())return;
     resetCustomerEditState();
     resetTripEditState();
@@ -10677,6 +10773,69 @@
     }
     resetWizardState();
     const overlay=byId("newCustomerWizard");
+    if(overlay)overlay.hidden=true;
+    return true;
+  }
+
+  function defaultProspectDraft(){
+    return {
+      customerId:generateCustomerId(),
+      customerName:"",
+      phoneCountry:"+43",
+      phoneLocal:"",
+      language:"Deutsch",
+      originalRequest:"",
+      source:"whatsapp"
+    };
+  }
+
+  function resetProspectState(){
+    state.prospectOpen=false;
+    state.prospectDraft=null;
+    state.prospectErrors={};
+    state.prospectMessage="";
+    state.prospectMessageKind="";
+    state.prospectSaving=false;
+  }
+
+  function setProspectMessage(message,kind=""){
+    state.prospectMessage=message||"";
+    state.prospectMessageKind=kind;
+    const el=byId("prospectStatus");
+    if(el){
+      el.textContent=state.prospectMessage;
+      el.dataset.kind=kind;
+    }
+  }
+
+  function openNewProspect(){
+    if(state.prospectOpen){
+      renderProspectDialog();
+      return;
+    }
+    if(state.wizardOpen&&!closeNewCustomerWizard())return;
+    if(!confirmDiscardCustomerEdit())return;
+    resetCustomerEditState();
+    resetTripEditState();
+    resetProgramEditState();
+    resetDocumentEditState();
+    if(!byId("newProspectDialog")){
+      setProspectMessage("Interessenten-Dialog fehlt. Bitte Admin V2 neu laden.","error");
+      return;
+    }
+    state.prospectOpen=true;
+    state.prospectDraft=defaultProspectDraft();
+    state.prospectErrors={};
+    setProspectMessage("","");
+    renderProspectDialog();
+  }
+
+  function closeProspectDialog({force=false}={}){
+    if(!force&&state.prospectOpen&&state.prospectDraft){
+      if(!window.confirm("Interessenten-Anlage abbrechen? Es wird nichts gespeichert."))return false;
+    }
+    resetProspectState();
+    const overlay=byId("newProspectDialog");
     if(overlay)overlay.hidden=true;
     return true;
   }
@@ -10711,6 +10870,163 @@
 
   function wizardPhoneFields(draft,errors){
     return `${wizardSelect("phoneCountry","Vorwahl",draft.phoneCountry||"+43",WIZARD_PHONE_COUNTRIES)}${wizardField("phoneLocal","Telefonnummer",draft.phoneLocal,{type:"tel",required:true,error:errors.phoneLocal||errors.phone})}`;
+  }
+
+  function prospectField(name,label,value,{type="text",required=false,error=""}={}){
+    const id=`prospect-${name}`;
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}${required?" *":""}</span><input id="${id}" name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value||"")}" data-prospect-field="${escapeHtml(name)}" aria-invalid="${error?"true":"false"}">${error?`<small class="v2-field-error" id="${id}-error">${escapeHtml(error)}</small>`:""}</label>`;
+  }
+
+  function prospectSelect(name,label,value,options,{error=""}={}){
+    const id=`prospect-${name}`;
+    const optionList=options.map(option=>{
+      if(option&&typeof option==="object"){
+        const optionValue=option.value??option.code??"";
+        const optionLabel=option.label??optionValue;
+        return `<option value="${escapeHtml(optionValue)}" ${cleanValue(optionValue)===cleanValue(value)?"selected":""}>${escapeHtml(optionLabel)}</option>`;
+      }
+      return `<option value="${escapeHtml(option)}" ${normalizeText(option)===normalizeText(value)?"selected":""}>${escapeHtml(option)}</option>`;
+    }).join("");
+    return `<label class="v2-edit-field" for="${id}"><span>${escapeHtml(label)}</span><select id="${id}" name="${escapeHtml(name)}" data-prospect-field="${escapeHtml(name)}">${optionList}</select>${error?`<small class="v2-field-error">${escapeHtml(error)}</small>`:""}</label>`;
+  }
+
+  function prospectTextarea(name,label,value,{error=""}={}){
+    const id=`prospect-${name}`;
+    return `<label class="v2-edit-field full" for="${id}"><span>${escapeHtml(label)} *</span><textarea id="${id}" name="${escapeHtml(name)}" rows="5" data-prospect-field="${escapeHtml(name)}" aria-invalid="${error?"true":"false"}">${escapeHtml(value||"")}</textarea>${error?`<small class="v2-field-error" id="${id}-error">${escapeHtml(error)}</small>`:""}</label>`;
+  }
+
+  function prospectPhoneFields(draft,errors){
+    return `${prospectSelect("phoneCountry","Vorwahl",draft.phoneCountry||"+43",WIZARD_PHONE_COUNTRIES)}${prospectField("phoneLocal","WhatsApp / Mobilnummer",draft.phoneLocal,{type:"tel",error:errors.phoneLocal||errors.phone})}`;
+  }
+
+  function prospectDialogMarkup(draft,errors){
+    return `<section class="v2-wizard-panel"><h3>Anfrage als Interessent</h3><p>Legen Sie einen Interessenten ohne E-Mail, Reise und Auftrag an. Die ursprüngliche Anfrage wird als bestehender Wunsch gespeichert.</p><div class="v2-edit-grid">${prospectField("customerName","Name",draft.customerName,{required:true,error:errors.customerName})}${prospectPhoneFields(draft,errors)}${prospectSelect("language","Sprache",draft.language||"Deutsch",WIZARD_LANGUAGES)}${prospectTextarea("originalRequest","Ursprüngliche Anfrage",draft.originalRequest,{error:errors.originalRequest})}</div></section>`;
+  }
+
+  function renderProspectDialog(){
+    const overlay=byId("newProspectDialog");
+    if(!overlay)return;
+    if(!state.prospectOpen||!state.prospectDraft){
+      overlay.hidden=true;
+      return;
+    }
+    overlay.hidden=false;
+    const body=byId("prospectBody");
+    if(body)body.innerHTML=prospectDialogMarkup(state.prospectDraft,state.prospectErrors||{});
+    setProspectMessage(state.prospectMessage,state.prospectMessageKind);
+    const save=byId("prospectSaveButton");
+    if(save)save.disabled=state.prospectSaving;
+  }
+
+  function syncProspectFieldsFromDom(){
+    if(!state.prospectDraft)return;
+    all("[data-prospect-field]").forEach(field=>{
+      const name=field.dataset.prospectField;
+      if(!name)return;
+      state.prospectDraft[name]=field.type==="checkbox"?field.checked:field.value;
+    });
+    state.prospectDraft.phone=composeWizardPhone(state.prospectDraft);
+  }
+
+  function validateProspectDraft(draft){
+    const lib=customerLifecycleLib();
+    if(!lib?.validateProspectCreateInput){
+      return {valid:false,errors:{customerName:"Lifecycle-Bibliothek nicht geladen."},values:null};
+    }
+    return lib.validateProspectCreateInput({
+      customerName:draft.customerName,
+      phone:composeWizardPhone(draft)||cleanValue(draft.phone),
+      language:draft.language,
+      originalRequest:draft.originalRequest
+    });
+  }
+
+  function buildProspectCustomer(draft,options={}){
+    const check=validateProspectDraft(draft);
+    if(!check.valid)return {ok:false,errors:check.errors,value:null};
+    const wishApi=window.ACTAdminV2Wishes;
+    if(!wishApi?.createAndAppendWish){
+      return {ok:false,errors:{originalRequest:"Wunsch-Bibliothek nicht geladen."},value:null};
+    }
+    const base=createEmptyCustomer(draft.customerId);
+    base.tripName="";
+    base.tripTitle="";
+    const identified=customerLifecycleLib().applyProspectIdentity(base,check.values);
+    const appended=wishApi.createAndAppendWish(identified,{
+      source:draft.source||"whatsapp",
+      originalText:check.values.originalRequest,
+      knownData:{}
+    },options);
+    if(!appended.ok)return {ok:false,errors:{originalRequest:(appended.errors||[]).join(" ")},value:null};
+    const next=appended.value.customer;
+    const internalNumber=ensureUniqueInternalCustomerNumber(nextInternalCustomerNumber(),next.customerId);
+    next.crm={...(next.crm&&typeof next.crm==="object"?next.crm:{}),internalNumber};
+    next.internalNumber=internalNumber;
+    next.status="Anfrage";
+    next._createdVia="admin-v2-prospect";
+    next.updatedAt=new Date().toLocaleDateString("de-DE");
+    next._lastSavedAt=new Date().toISOString();
+    return {ok:true,value:compactObject(next),wish:appended.value.wish,errors:{}};
+  }
+
+  async function saveProspectCustomer(){
+    if(state.prospectSaving||!state.prospectDraft)return null;
+    syncProspectFieldsFromDom();
+    const check=validateProspectDraft(state.prospectDraft);
+    if(!check.valid){
+      state.prospectErrors=check.errors;
+      setProspectMessage("Bitte Name und ursprüngliche Anfrage prüfen.","error");
+      renderProspectDialog();
+      return null;
+    }
+    state.prospectErrors={};
+    state.prospectSaving=true;
+    setProspectMessage("Interessent wird angelegt ...","saving");
+    renderProspectDialog();
+    try{
+      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      const built=buildProspectCustomer(state.prospectDraft);
+      if(!built.ok){
+        state.prospectErrors=built.errors||{};
+        throw new Error(Object.values(built.errors||{})[0]||"Interessent konnte nicht angelegt werden.");
+      }
+      await withTimeout(window.ACTFirebaseDatabase.saveDraftCustomer(built.value),AUTH_TIMEOUT_MS,"saveDraftCustomer");
+      updateLocalCustomer(built.value);
+      state.prospectSaving=false;
+      state.detailFlashMessage="Interessent wurde angelegt.";
+      state.detailFlashKind="success";
+      closeProspectDialog({force:true});
+      openCustomerDetail(built.value.customerId);
+      return built.value;
+    }catch(error){
+      console.error("[ACT Admin V2] Interessent speichern:",error&&error.message?error.message:"Fehler");
+      state.prospectSaving=false;
+      setProspectMessage(error&&error.message?error.message:"Interessent konnte nicht gespeichert werden.","error");
+      renderProspectDialog();
+      return null;
+    }
+  }
+
+  function handleProspectAction(action){
+    if(action==="cancel"){
+      closeProspectDialog();
+      return;
+    }
+    if(action==="save")saveProspectCustomer();
+  }
+
+  function handleProspectInput(event){
+    const field=event.target.closest("[data-prospect-field]");
+    if(!field||!state.prospectDraft)return;
+    syncProspectFieldsFromDom();
+    const name=field.dataset.prospectField;
+    if(name&&state.prospectErrors[name]){
+      delete state.prospectErrors[name];
+      const error=byId(`prospect-${name}-error`);
+      if(error)error.remove();
+      field.setAttribute("aria-invalid","false");
+    }
   }
 
   function wizardChildAgeFields(draft,errors={}){
@@ -11490,6 +11806,7 @@
     });
     byId("refreshButton").addEventListener("click",()=>{if(confirmDiscardCustomerEdit())loadCustomers();});
     byId("customerNewButton").addEventListener("click",openNewCustomer);
+    byId("customerProspectButton").addEventListener("click",openNewProspect);
     byId("toggleFiltersButton").addEventListener("click",toggleAdvancedFilters);
     byId("resetFiltersButton").addEventListener("click",resetFilters);
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);
@@ -11498,6 +11815,7 @@
       if(sheetOpen){openMobileSheet(sheetOpen.dataset.mobileSheetOpen,sheetOpen);return;}
       if(event.target.closest("[data-mobile-sheet-close]")){closeMobileSheet();return;}
       if(event.target.closest(".admin-mobile-action-sheet [data-new-customer]")){closeMobileSheet(false);openNewCustomer();return;}
+      if(event.target.closest(".admin-mobile-action-sheet [data-new-prospect]")){closeMobileSheet(false);openNewProspect();return;}
       if(event.target.closest('.admin-mobile-action-sheet [data-booking-action="create"]')){
         closeMobileSheet(false);
         window.ACTAdminV2Bookings?.handleClick?.(event);
@@ -11548,6 +11866,12 @@
         handleWizardAction(wizardAction.dataset.wizardAction);
         return;
       }
+      const prospectAction=event.target.closest("[data-prospect-action]");
+      if(prospectAction){
+        handleProspectAction(prospectAction.dataset.prospectAction);
+        return;
+      }
+      if(event.target.closest("[data-new-prospect]")){openNewProspect();return;}
       if(event.target.closest("[data-demand-reset]")){
         resetDemandFilters();
         return;
@@ -11965,6 +12289,7 @@
         return;
       }
       if(event.target.closest("[data-new-customer]"))openNewCustomer();
+      if(event.target.closest("[data-new-prospect]"))openNewProspect();
       if(event.target.id==="retryInlineButton"&&confirmDiscardCustomerEdit())loadCustomers();
       if(event.target.id==="retryDetailButton"&&confirmDiscardCustomerEdit())loadCustomers();
     });
@@ -11976,6 +12301,7 @@
         return;
       }
       handleWizardInput(event);
+      handleProspectInput(event);
       handleCustomerEditInput(event);
       handleTripEditInput(event);
       handleConciergeEditInput(event);
@@ -12161,7 +12487,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,tasksRouteHash,tasksDeepLinkHashOptions,applyAiTaskDeepLink,openAiTaskById,closeAiTaskDetail,toggleAiTaskActionWorkspace,trapAiTaskDetailFocus,rememberAiTaskDetailReturnFocus,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,dashboardDateOffset,dashboardProgramDate,dashboardBookingDueDate,dashboardPriorityEntries,dashboardTodayEntries,dashboardNextSevenEntries,dashboardActivityEntries,renderOperationsDashboard,workspacePanelStartVisible,customerWorkspaceStartVisible,scrollToCustomerWorkspaceStart,scheduleCustomerWorkspaceStartScroll,openCustomerDetail,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail,filteredAiTasks,aiTaskCustomerFilterOptions,aiTaskCustomerDisplayName,normalizeAiTaskCustomerFilter,setAiTaskCustomerFilter,openAiTasksForCustomer};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,tasksRouteHash,tasksDeepLinkHashOptions,applyAiTaskDeepLink,openAiTaskById,closeAiTaskDetail,toggleAiTaskActionWorkspace,trapAiTaskDetailFocus,rememberAiTaskDetailReturnFocus,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,dashboardDateOffset,dashboardProgramDate,dashboardBookingDueDate,dashboardPriorityEntries,dashboardTodayEntries,dashboardNextSevenEntries,dashboardActivityEntries,renderOperationsDashboard,workspacePanelStartVisible,customerWorkspaceStartVisible,scrollToCustomerWorkspaceStart,scheduleCustomerWorkspaceStartScroll,openCustomerDetail,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail,filteredAiTasks,aiTaskCustomerFilterOptions,aiTaskCustomerDisplayName,normalizeAiTaskCustomerFilter,setAiTaskCustomerFilter,openAiTasksForCustomer,isProspectRecord,validateProspectDraft,buildProspectCustomer,workspaceMissingRequired,customerJourneyViewModel,customerConciergeReadiness};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

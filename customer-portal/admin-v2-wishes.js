@@ -47,6 +47,14 @@
     return window.ACTCustomerWishRequestLibrary||null;
   }
 
+  function inquiryLib(){
+    return window.ACTCustomerInquiryAdminLibrary||null;
+  }
+
+  function inquiryService(){
+    return window.ACTFirebaseService||{};
+  }
+
   function state(){
     return h().getState();
   }
@@ -118,6 +126,14 @@
 
   function isAdminCustomerReplied(wish){
     return text(wish&&wish.origin)==="admin"&&text(wish&&wish.status)==="CUSTOMER_REPLIED"&&Boolean(text(wish&&wish.wishId));
+  }
+
+  function isAdminWishInReview(wish){
+    return text(wish&&wish.origin)==="admin"&&text(wish&&wish.status)==="IN_REVIEW"&&Boolean(text(wish&&wish.wishId));
+  }
+
+  function isFollowUpRoundLocked(wish){
+    return isAdminCustomerReplied(wish)||isAdminWishInReview(wish);
   }
 
   function repliedAdminWishes(customer){
@@ -394,6 +410,7 @@
       wishKnownDraft:{},
       wishNotesDraft:"",
       wishCustomDraft:emptyCustomDraft(),
+      wishInquiry:inquiryLib()?inquiryLib().emptyInquirySession():null,
       ...extra
     });
   }
@@ -458,6 +475,10 @@
     const customer=currentCustomer();
     const wish=listWishes(customer).find(item=>item.wishId===text(wishId));
     if(!wish)return false;
+    const previous=state().wishInquiry||(inquiryLib()?inquiryLib().emptyInquirySession():{});
+    const session=text(previous.wishId)===wish.wishId
+      ?previous
+      :Object.assign(inquiryLib()?inquiryLib().emptyInquirySession():{},{wishId:wish.wishId});
     h().patchState({
       wishView:"detail",
       wishSelectedId:wish.wishId,
@@ -467,9 +488,11 @@
       wishKnownDraft:wish.knownData||{},
       wishNotesDraft:wish.internal&&wish.internal.adminNotes||"",
       wishCustomDraft:emptyCustomDraft(),
+      wishInquiry:session,
       wishMessage:"",
       wishMessageKind:""
     });
+    queueInquiryStatus(customer,wish);
     return true;
   }
 
@@ -495,6 +518,12 @@
       },
       knownData:draft.knownData||{}
     },settings);
+  }
+
+  function createAndAppendWish(customer,draft,options){
+    const created=createWishFromDraft(customer,draft,options);
+    if(!created.ok)return created;
+    return wishLibOrThrow().appendCreatedWish(customer,created.value);
   }
 
   function submitCreate(){
@@ -697,6 +726,27 @@
     });
   }
 
+  function startReview(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.startWishReview!=="function")return;
+    const result=api.startWishReview(wish);
+    if(!result.ok){
+      setMessage(result.errors.join(" "),"error");
+      h().render();
+      return;
+    }
+    persistCustomer(
+      replaceWish(customer,result.value),
+      "Bearbeitung des Wunsches wurde gestartet.",
+      "success"
+    ).catch(error=>{
+      setMessage(error&&error.message?error.message:"Bearbeitung konnte nicht gestartet werden.","error");
+      h().render();
+    });
+  }
+
   function previewWish(wish){
     const api=lib();
     if(api&&api.publicPortalWish)return api.publicPortalWish(wish);
@@ -782,12 +832,15 @@
         ${messageMarkup()}
         ${wishes.length?`<div class="v2-wish-list">${wishes.map(wish=>{
           const replied=isAdminCustomerReplied(wish);
+          const inReview=isAdminWishInReview(wish);
+          const openLabel=replied?"Antworten prüfen":inReview?"Bearbeitung fortsetzen":"Wunsch öffnen";
           return `
           <article class="v2-wish-card${replied?" is-replied":""}" data-wish-card="${escapeHtml(wish.wishId)}">
             <div>
               <h4>${escapeHtml(wish.title||"Ohne Titel")}</h4>
               <p class="v2-muted">${escapeHtml(snippet(wish.originalRequest&&wish.originalRequest.text))}</p>
               ${replied?`<p class="v2-wish-reply-hint">Kunde hat geantwortet</p><p class="v2-muted">Antworten prüfen</p>`:""}
+              ${inReview?`<p class="v2-muted">In Bearbeitung</p>`:""}
             </div>
             <dl>
               <div><dt>Quelle</dt><dd>${escapeHtml(sourceLabel(wish.source))}</dd></div>
@@ -795,7 +848,7 @@
               <div><dt>Status</dt><dd>${escapeHtml(wish.statusLabel||statusLabel(wish.status))}</dd></div>
               <div><dt>Offene Rückfragen</dt><dd>${escapeHtml(String(openFollowUpCount(wish)))}</dd></div>
             </dl>
-            <button class="v2-button ${replied?"primary":"soft"}" type="button" data-wish-action="open" data-wish-id="${escapeHtml(wish.wishId)}">${replied?"Antworten prüfen":"Wunsch öffnen"}</button>
+            <button class="v2-button ${replied?"primary":"soft"}" type="button" data-wish-action="open" data-wish-id="${escapeHtml(wish.wishId)}">${openLabel}</button>
           </article>
         `;
         }).join("")}</div>`:`<p class="v2-muted" data-wish-empty>Noch kein Wunsch erfasst.</p>`}
@@ -994,7 +1047,7 @@
 
   function questionsMarkup(wish){
     const items=(wish.followUpQuestions||[]).filter(item=>item.status!=="WITHDRAWN");
-    const locked=isAdminCustomerReplied(wish);
+    const locked=isFollowUpRoundLocked(wish);
     return `
       <section class="v2-wish-panel">
         <div class="v2-workspace-section-head compact">
@@ -1028,6 +1081,279 @@
           </li>
         `).join("")}</ol>`:`<p class="v2-muted">Noch keine Rückfragen ausgewählt.</p>`}
       </section>
+    `;
+  }
+
+  function inquirySession(){
+    const api=inquiryLib();
+    return state().wishInquiry||(api?api.emptyInquirySession():{});
+  }
+
+  function shouldShowInquiryPanel(customer,wish){
+    const api=inquiryLib();
+    if(!api||!customer||!wish)return false;
+    if(!api.isProspectCustomer(customer))return false;
+    if(text(wish.origin)!=="admin")return false;
+    if(api.canOfferInquiryLink(customer,wish,lib()))return true;
+    if(text(wish.status)==="CUSTOMER_REPLIED")return true;
+    const session=inquirySession();
+    return Boolean(session.wishId===wish.wishId&&(session.grantId||session.status));
+  }
+
+  function inquiryDisplayStatus(customer,wish){
+    const api=inquiryLib();
+    if(!api)return "none";
+    const session=inquirySession();
+    if(session.wishId===wish.wishId&&(session.status||session.grantId)){
+      return api.displayInquiryStatus(session);
+    }
+    if(text(wish.status)==="CUSTOMER_REPLIED")return "submitted";
+    return "none";
+  }
+
+  function inquiryLinkFromSession(){
+    const api=inquiryLib();
+    const session=inquirySession();
+    if(!api||!session||!session.rawToken)return "";
+    const link=api.buildInquiryLink(session.rawToken,typeof window!=="undefined"?window.location:null);
+    return api.inquiryLinkIsSafe(link)?link:"";
+  }
+
+  function inquiryErrorMessage(error){
+    const code=text(error&&error.code).replace(/^functions\//,"");
+    if(code==="unauthenticated")return "Bitte zuerst anmelden.";
+    if(code==="permission-denied")return "Keine Berechtigung für den persönlichen Link.";
+    if(code==="failed-precondition")return "Der persönliche Link kann für diesen Wunsch gerade nicht erstellt werden.";
+    if(code==="not-found")return "Der Wunsch oder der persönliche Link wurde nicht gefunden.";
+    return "Der persönliche Link konnte nicht aktualisiert werden.";
+  }
+
+  function queueInquiryStatus(customer,wish){
+    if(!shouldShowInquiryPanel(customer,wish))return;
+    if(!inquiryService().getCustomerInquiryGrantStatus)return;
+    void loadInquiryStatus(customer,wish);
+  }
+
+  async function loadInquiryStatus(customer,wish){
+    const api=inquiryLib();
+    if(!api||!customer||!wish)return;
+    try{
+      const data=await inquiryService().getCustomerInquiryGrantStatus({
+        customerId:customer.customerId,
+        wishId:wish.wishId
+      });
+      if(text(state().wishSelectedId)!==wish.wishId)return;
+      h().patchState({wishInquiry:api.applyStatusResponse(inquirySession(),data,wish.wishId)});
+      h().render();
+    }catch(_error){
+      /* Status bleibt lokal; kein Token und kein technischer Fehlertext. */
+    }
+  }
+
+  async function runInquiryCreate(){
+    const api=inquiryLib();
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    if(!api||!api.canOfferInquiryLink(customer,wish,lib())){
+      setMessage("Bitte zuerst die Rückfragen vorbereiten.","error");
+      h().render();
+      return;
+    }
+    if(!inquiryService().createCustomerInquiryGrant){
+      setMessage("Der persönliche Link kann gerade nicht erstellt werden.","error");
+      h().render();
+      return;
+    }
+    h().patchState({wishSaving:true,wishMessage:"Persönlicher Link wird erstellt ...",wishMessageKind:"saving"});
+    h().render();
+    try{
+      const created=await inquiryService().createCustomerInquiryGrant({
+        customerId:customer.customerId,
+        wishId:wish.wishId
+      });
+      const next=api.applyGrantResponse(inquirySession(),created,wish.wishId);
+      h().patchState({
+        wishInquiry:next,
+        wishSaving:false,
+        wishMessage:next.reusedWithoutToken?"":"Persönlicher Link erstellt.",
+        wishMessageKind:next.reusedWithoutToken?"":"success"
+      });
+      h().render();
+    }catch(error){
+      h().patchState({wishSaving:false});
+      setMessage(inquiryErrorMessage(error),"error");
+      h().render();
+    }
+  }
+
+  async function runInquiryRotate(){
+    const api=inquiryLib();
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const session=inquirySession();
+    if(!api||!session.grantId||!inquiryService().rotateCustomerInquiryGrant){
+      setMessage("Der persönliche Link kann gerade nicht erneuert werden.","error");
+      h().render();
+      return;
+    }
+    if(typeof window!=="undefined"&&typeof window.confirm==="function"&&!window.confirm(api.COPY.rotateConfirm))return;
+    h().patchState({wishSaving:true,wishMessage:"Persönlicher Link wird erneuert ...",wishMessageKind:"saving"});
+    h().render();
+    try{
+      const rotated=await inquiryService().rotateCustomerInquiryGrant({grantId:session.grantId});
+      const next=api.applyGrantResponse(session,rotated,wish.wishId);
+      h().patchState({
+        wishInquiry:next,
+        wishSaving:false,
+        wishMessage:"Persönlicher Link erneuert.",
+        wishMessageKind:"success"
+      });
+      h().render();
+    }catch(error){
+      h().patchState({wishSaving:false});
+      setMessage(inquiryErrorMessage(error),"error");
+      h().render();
+    }
+  }
+
+  async function runInquiryRevoke(){
+    const api=inquiryLib();
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const session=inquirySession();
+    if(!api||!session.grantId||!inquiryService().revokeCustomerInquiryGrant){
+      setMessage("Der persönliche Link kann gerade nicht widerrufen werden.","error");
+      h().render();
+      return;
+    }
+    h().patchState({wishSaving:true,wishMessage:"Persönlicher Link wird widerrufen ...",wishMessageKind:"saving"});
+    h().render();
+    try{
+      const revoked=await inquiryService().revokeCustomerInquiryGrant({grantId:session.grantId});
+      const next=api.applyGrantResponse(session,revoked,wish.wishId);
+      next.rawToken="";
+      next.hasActiveGrant=false;
+      next.reusedWithoutToken=false;
+      h().patchState({
+        wishInquiry:next,
+        wishSaving:false,
+        wishMessage:"Persönlicher Link widerrufen.",
+        wishMessageKind:"success"
+      });
+      h().render();
+    }catch(error){
+      h().patchState({wishSaving:false});
+      setMessage(inquiryErrorMessage(error),"error");
+      h().render();
+    }
+  }
+
+  function createInquiryLink(){
+    void runInquiryCreate();
+  }
+
+  function rotateInquiryLink(){
+    void runInquiryRotate();
+  }
+
+  function revokeInquiryLink(){
+    void runInquiryRevoke();
+  }
+
+  function recreateInquiryLink(){
+    const session=inquirySession();
+    if(session.grantId)void runInquiryRotate();
+    else void runInquiryCreate();
+  }
+
+  function copyInquiryLink(){
+    void runInquiryCopy();
+  }
+
+  async function runInquiryCopy(){
+    const api=inquiryLib();
+    const link=inquiryLinkFromSession();
+    if(!api||!link){
+      setMessage("Der persönliche Link kann aus Sicherheitsgründen nicht erneut angezeigt werden.","error");
+      h().render();
+      return;
+    }
+    try{
+      const copied=await api.copyInquiryText(link,{
+        clipboard:typeof navigator!=="undefined"?navigator.clipboard:null,
+        execCopy(value){
+          if(typeof document==="undefined")return;
+          const area=document.createElement("textarea");
+          area.value=value;
+          area.setAttribute("readonly","");
+          area.style.cssText="position:fixed;left:-9999px;top:0";
+          document.body.appendChild(area);
+          area.select();
+          if(typeof document.execCommand==="function")document.execCommand("copy");
+          document.body.removeChild(area);
+        }
+      });
+      if(!copied.ok)throw new Error("copy-failed");
+      h().patchState({wishInquiry:Object.assign({},inquirySession(),{copied:true})});
+      h().render();
+    }catch(_error){
+      setMessage("Der Link konnte nicht kopiert werden.","error");
+      h().render();
+    }
+  }
+
+  function openInquiryWhatsapp(){
+    const api=inquiryLib();
+    const customer=currentCustomer();
+    const link=inquiryLinkFromSession();
+    if(!api||!link){
+      setMessage("Der persönliche Link kann aus Sicherheitsgründen nicht erneut angezeigt werden.","error");
+      h().render();
+      return;
+    }
+    const url=api.buildInquiryWhatsappUrl(customer,link);
+    if(!url){
+      setMessage("WhatsApp konnte nicht geöffnet werden.","error");
+      h().render();
+      return;
+    }
+    if(typeof window!=="undefined"&&typeof window.open==="function"){
+      window.open(url,"_blank","noopener,noreferrer");
+    }
+  }
+
+  function inquiryMarkup(customer,wish){
+    const api=inquiryLib();
+    if(!api||!shouldShowInquiryPanel(customer,wish))return "";
+    const canOffer=api.canOfferInquiryLink(customer,wish,lib());
+    const status=inquiryDisplayStatus(customer,wish);
+    const session=inquirySession();
+    const link=inquiryLinkFromSession();
+    const expiry=status==="active"||status==="expired"?api.formatInquiryExpiry(session.expiresAt):"";
+    const buttons=[];
+    if(status==="submitted"){
+      /* Keine Link-Aktionen nach Eingang der Antworten. */
+    }else if(status==="expired"&&canOffer){
+      buttons.push(`<button class="v2-button primary" type="button" data-wish-action="inquiry-recreate">${escapeHtml(api.COPY.recreate)}</button>`);
+    }else if(status==="active"){
+      if(link){
+        buttons.push(`<button class="v2-button primary" type="button" data-wish-action="inquiry-whatsapp">${escapeHtml(api.COPY.whatsapp)}</button>`);
+        buttons.push(`<button class="v2-button soft" type="button" data-wish-action="inquiry-copy">${escapeHtml(api.COPY.copy)}</button>`);
+      }
+      buttons.push(`<button class="v2-button soft" type="button" data-wish-action="inquiry-rotate">${escapeHtml(api.COPY.rotate)}</button>`);
+      buttons.push(`<button class="v2-button soft" type="button" data-wish-action="inquiry-revoke">${escapeHtml(api.COPY.revoke)}</button>`);
+    }else if(canOffer){
+      buttons.push(`<button class="v2-button primary" type="button" data-wish-action="inquiry-create">${escapeHtml(api.COPY.create)}</button>`);
+    }
+    return `
+      <article class="v2-wish-panel v2-wish-inquiry" data-wish-inquiry>
+        <h4>Persönlicher Link</h4>
+        <p class="v2-muted" data-inquiry-status>${escapeHtml(api.inquiryStatusLabel(status))}</p>
+        ${expiry?`<p class="v2-muted">${escapeHtml(api.COPY.expiresPrefix)} ${escapeHtml(expiry)}</p>`:""}
+        ${session.reusedWithoutToken&&status==="active"?`<p data-inquiry-reused>${escapeHtml(api.COPY.reused)}</p>`:""}
+        ${session.copied&&link?`<p class="v2-muted" data-inquiry-copied>${escapeHtml(api.COPY.copied)}</p>`:""}
+        ${buttons.length?`<div class="v2-wish-actions">${buttons.join("")}</div>`:""}
+      </article>
     `;
   }
 
@@ -1075,6 +1401,7 @@
           ${knownEditorMarkup(known)}
         </article>
         ${questionsMarkup(wish)}
+        ${inquiryMarkup(customer,wish)}
         ${customerAnswersMarkup(wish)}
         <article class="v2-wish-panel">
           <h4>Interne Notizen</h4>
@@ -1085,7 +1412,8 @@
         </article>
         <div class="v2-wish-actions">
           <button class="v2-button soft" type="button" data-wish-action="preview">Kundensicht ansehen</button>
-          ${isAdminCustomerReplied(wish)?"":`<button class="v2-button primary" type="button" data-wish-action="prepare">Für Kunden freigeben</button>`}
+          ${isAdminCustomerReplied(wish)?`<button class="v2-button primary" type="button" data-wish-action="start-review">Bearbeitung starten</button>`:""}
+          ${isFollowUpRoundLocked(wish)?"":`<button class="v2-button primary" type="button" data-wish-action="prepare">Für Kunden freigeben</button>`}
         </div>
         ${previewMarkup(wish)}
       </section>
@@ -1114,13 +1442,14 @@
     event.preventDefault();
     const action=button.dataset.wishAction||"";
     if(button.disabled||state().wishSaving&&action!=="cancel")return true;
-    if(FOLLOW_UP_LOCK_ACTIONS.has(action)&&isAdminCustomerReplied(selectedWish(currentCustomer())))return true;
+    if(FOLLOW_UP_LOCK_ACTIONS.has(action)&&isFollowUpRoundLocked(selectedWish(currentCustomer())))return true;
     if(action==="create"){openCreate();return true;}
     if(action==="open"){openDetail(button.dataset.wishId||"");return true;}
     if(action==="cancel"){resetWishUi({wishMessage:"",wishMessageKind:""});h().render();return true;}
     if(action==="save-create"){submitCreate();return true;}
     if(action==="save-known"){saveKnownData();return true;}
     if(action==="save-notes"){saveNotes();return true;}
+    if(action==="start-review"){startReview();return true;}
     if(action==="toggle-picker"){h().patchState({wishPickerOpen:!state().wishPickerOpen,wishCustomOpen:false});h().render();return true;}
     if(action==="toggle-custom"){h().patchState({wishCustomOpen:!state().wishCustomOpen,wishPickerOpen:false});h().render();return true;}
     if(action==="add-library"){addLibraryQuestion(button.dataset.wishQuestion||"");return true;}
@@ -1145,13 +1474,19 @@
     if(action==="preview"){h().patchState({wishPreviewOpen:true});h().render();return true;}
     if(action==="close-preview"){h().patchState({wishPreviewOpen:false});h().render();return true;}
     if(action==="prepare"){prepareForCustomer();return true;}
+    if(action==="inquiry-create"){createInquiryLink();return true;}
+    if(action==="inquiry-copy"){copyInquiryLink();return true;}
+    if(action==="inquiry-whatsapp"){openInquiryWhatsapp();return true;}
+    if(action==="inquiry-rotate"){rotateInquiryLink();return true;}
+    if(action==="inquiry-revoke"){revokeInquiryLink();return true;}
+    if(action==="inquiry-recreate"){recreateInquiryLink();return true;}
     return false;
   }
 
   function handleChange(event){
     const required=event.target.closest("[data-wish-required]");
     if(required){
-      if(isAdminCustomerReplied(selectedWish(currentCustomer())))return true;
+      if(isFollowUpRoundLocked(selectedWish(currentCustomer())))return true;
       toggleRequired(required.dataset.wishRequired,required.value==="yes");
       return true;
     }
@@ -1199,6 +1534,7 @@
     knownHint,
     previewWish,
     createWishFromDraft,
+    createAndAppendWish,
     handleClick,
     handleChange,
     handleInput,
@@ -1209,6 +1545,7 @@
     repliedAdminWishes,
     repliedAdminWishCount,
     repliedBadgeLabel,
+    inquiryMarkup,
     QUESTION_LABELS,
     PICKER_ORDER
   };

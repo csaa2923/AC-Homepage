@@ -221,6 +221,12 @@
     data.weatherLocationName=data.weatherLocationName||data.region||"";
     data.documents=Array.isArray(data.documents)?data.documents.map(normalizeDocument):[];
     data.contact=data.contact&&typeof data.contact==="object"?data.contact:{};
+    if(Object.prototype.hasOwnProperty.call(data,"lifecycle")){
+      const lib=typeof window!=="undefined"?window.ACTCustomerLifecycleLibrary:null;
+      data.lifecycle=lib&&typeof lib.normalizeCustomerLifecycle==="function"
+        ?lib.normalizeCustomerLifecycle(data.lifecycle)
+        :String(data.lifecycle||"").trim()==="prospect"?"prospect":"customer";
+    }
     data.weather=data.weather&&typeof data.weather==="object"?data.weather:{summary:"",days:[]};
     data.weather.days=Array.isArray(data.weather.days)?data.weather.days:[];
     data.history=Array.isArray(data.history)?data.history:[];
@@ -239,6 +245,12 @@
     source.concierge=source.concierge||source.conciergeName||"";
     source.whatsapp=source.whatsapp||source.whatsappLink||"";
     source.updatedAt=source.updatedAt||source.lastUpdated||"";
+    if(Object.prototype.hasOwnProperty.call(source,"lifecycle")){
+      const lib=typeof window!=="undefined"?window.ACTCustomerLifecycleLibrary:null;
+      source.lifecycle=lib&&typeof lib.normalizeCustomerLifecycle==="function"
+        ?lib.normalizeCustomerLifecycle(source.lifecycle)
+        :String(source.lifecycle||"").trim()==="prospect"?"prospect":"customer";
+    }
     return source;
   }
 
@@ -1452,6 +1464,55 @@
     return callAdminPortalAccessCallable("getCustomerPortalAccessAdmin",{customerId});
   }
 
+  async function callAdminInquiryGrantCallable(name,payload){
+    const {functions,functionsModule}=await callableFunctionsContext();
+    const callable=functionsModule.httpsCallable(functions,name);
+    const result=await callable(payload||{});
+    return result&&result.data?result.data:{};
+  }
+
+  async function createCustomerInquiryGrant(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const wishId=String(input.wishId||"").trim();
+    if(!customerId||!wishId){
+      const error=new Error("Angaben unvollständig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminInquiryGrantCallable("createCustomerInquiryGrant",{customerId,wishId});
+  }
+
+  async function rotateCustomerInquiryGrant(input={}){
+    const grantId=String(input.grantId||"").trim();
+    if(!grantId){
+      const error=new Error("Angaben unvollständig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminInquiryGrantCallable("rotateCustomerInquiryGrant",{grantId});
+  }
+
+  async function revokeCustomerInquiryGrant(input={}){
+    const grantId=String(input.grantId||"").trim();
+    if(!grantId){
+      const error=new Error("Angaben unvollständig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminInquiryGrantCallable("revokeCustomerInquiryGrant",{grantId});
+  }
+
+  async function getCustomerInquiryGrantStatus(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const wishId=String(input.wishId||"").trim();
+    if(!customerId||!wishId){
+      const error=new Error("Angaben unvollständig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminInquiryGrantCallable("getCustomerInquiryGrantStatus",{customerId,wishId});
+  }
+
   async function createPortalShare(customer,options={}){
     const customerId=customerIdOf(customer);
     if(!customerId)throw new Error("Kunden-ID fehlt.");
@@ -1662,6 +1723,10 @@
     createCustomerPortalAccess,
     disableCustomerPortalAccess,
     getCustomerPortalAccessAdmin,
+    createCustomerInquiryGrant,
+    rotateCustomerInquiryGrant,
+    revokeCustomerInquiryGrant,
+    getCustomerInquiryGrantStatus,
     analyzeConciergeTrip,
     refreshPortalShares,
     listPortalSharesForCustomer,

@@ -405,8 +405,8 @@ describe("tourist demand 8.1c ingestion",()=>{
   });
 
   it("AB) Admin V2 Regression",()=>{
-    assert.match(adminHtml,/admin-v2\.js\?v=104/);
-    assert.match(adminHtml,/admin-v2\.css\?v=81/);
+    assert.match(adminHtml,/admin-v2\.js\?v=105/);
+    assert.match(adminHtml,/admin-v2\.css\?v=82/);
     assert.match(adminHtml,/tourist-demand-ingestion\.js\?v=3/);
     assert.match(adminHtml,/tourist-demand-catalog\.js\?v=3/);
     assert.match(adminHtml,/tourist-demand-data-provider\.js\?v=4/);

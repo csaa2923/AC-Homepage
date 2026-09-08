@@ -1004,10 +1004,10 @@ describe("AI task action workspace persistence (frontend)",()=>{
     const saveFn=js.match(/async function saveAiTaskWorkspaceAction[\s\S]*?(?=\n  function )/)?.[0]||"";
     const restaurantFn=js.match(/function aiTaskRestaurantModuleMarkup[\s\S]*?(?=\n  function )/)?.[0]||"";
 
-    assert.match(html,/firebase-service\.js\?v=35/);
+    assert.match(html,/firebase-service\.js\?v=37/);
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
-    assert.match(html,/admin-v2\.js\?v=104/);
-    assert.match(html,/admin-v2\.css\?v=81/);
+    assert.match(html,/admin-v2\.js\?v=105/);
+    assert.match(html,/admin-v2\.css\?v=82/);
     assert.match(service,/httpsCallable\(functions,"updateConciergeAnalysisTaskAction"/);
     assert.match(service,/async function updateConciergeAnalysisTaskAction/);
     assert.match(service,/await callableUserContext\(auth,authModule\);[\s\S]*updateConciergeAnalysisTaskAction/);

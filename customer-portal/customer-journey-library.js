@@ -121,11 +121,30 @@
     return statusRow("portal","Portal","attention","Noch nicht eingerichtet");
   }
 
+  function wishStatusValue(input){
+    const wishes=list(input?.wishes);
+    const wishReplyCount=numberValue(input?.wishReplyCount);
+    const reviewCount=list(input?.insights).filter(item=>text(item?.id).startsWith("wish-in-review-")).length;
+    if(wishReplyCount){
+      return {
+        tone:"attention",
+        value:wishReplyCount===1?"1 neue Antwort":`${wishReplyCount} neue Antworten`
+      };
+    }
+    if(reviewCount){
+      return {
+        tone:"ready",
+        value:reviewCount===1?"In Bearbeitung":`${reviewCount} in Bearbeitung`
+      };
+    }
+    if(wishes.length)return {tone:"ready",value:wishPreview(wishes)};
+    return {tone:"attention",value:"Noch nicht erfasst"};
+  }
+
   function buildJourneyStatus(input){
     const workspace=input?.workspace&&typeof input.workspace==="object"?input.workspace:{};
     const missing=list(workspace.missingRequired);
-    const wishes=list(input?.wishes);
-    const wishReplyCount=numberValue(input?.wishReplyCount);
+    const wishStatus=wishStatusValue(input);
     const staySummary=text(input?.staySummary);
     const programCount=numberValue(input?.programCount);
     const openBookings=numberValue(input?.openBookings??workspace.openBookings);
@@ -134,7 +153,7 @@
     return [
       statusRow("customer","Kunde",contactMissing.length?"attention":"ready",contactMissing.length?"Stammdaten unvollständig":"Stammdaten"),
       statusRow("stay","Aufenthalt",stayMissing.length?"attention":"ready",stayMissing.length?"Noch nicht erfasst":(staySummary||"Erfasst")),
-      statusRow("wishes","Wünsche",wishReplyCount||wishes.length?(wishReplyCount?"attention":"ready"):"attention",wishReplyCount?(wishReplyCount===1?"1 neue Antwort":`${wishReplyCount} neue Antworten`):(wishes.length?wishPreview(wishes):"Noch nicht erfasst")),
+      statusRow("wishes","Wünsche",wishStatus.tone,wishStatus.value),
       statusRow("program","Programm",programCount?"count":"attention",programValue(programCount)),
       statusRow("bookings","Buchungen",openBookings?"attention":"count",bookingValue(openBookings)),
       portalRow(input?.portal),
@@ -244,6 +263,17 @@
         entityId:text(insight?.entityId)||id.slice("wish-customer-replied-".length)
       });
     }
+    if(id.startsWith("wish-in-review-")){
+      return action({
+        id,
+        source:"insightsFor",
+        title:text(insight?.title)||"Wunsch in Bearbeitung",
+        description:text(insight?.description),
+        buttonLabel:fallbackLabel||"Bearbeitung fortsetzen",
+        targetTab:targetTab||"kunde",
+        entityId:text(insight?.entityId)||id.slice("wish-in-review-".length)
+      });
+    }
     return action({
       id:id||"journey-insight",
       source:"insightsFor",
@@ -335,6 +365,9 @@
         targetTab:"veroeffentlichung"
       });
     }
+
+    const reviewInsight=list(input?.insights).find(item=>text(item?.id).startsWith("wish-in-review-"));
+    if(reviewInsight)return mapInsightToAction(reviewInsight,input?.publication);
 
     return idleAction(input);
   }

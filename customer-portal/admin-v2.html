@@ -8,10 +8,10 @@
 <meta name="googlebot" content="noindex,nofollow">
 <meta name="theme-color" content="#0d3b2f">
 <link rel="icon" href="../favicon.ico">
-<link rel="stylesheet" href="admin-v2.css?v=81">
+<link rel="stylesheet" href="admin-v2.css?v=82">
 <link rel="stylesheet" href="admin-v2-legal-comms.css?v=1">
 <link rel="stylesheet" href="admin-v2-payment.css?v=1">
-<link rel="stylesheet" href="admin-v2-wishes.css?v=3">
+<link rel="stylesheet" href="admin-v2-wishes.css?v=4">
 </head>
 <body>
 <main>
@@ -116,6 +116,7 @@
           </div>
           <div class="v2-dashboard-actions">
             <button class="v2-button primary" type="button" data-new-customer>Neuen Kunden anlegen</button>
+            <button class="v2-button soft" type="button" data-new-prospect>Neuer Interessent</button>
             <button class="v2-button soft" type="button" data-v2-route="customers">Kunden ansehen</button>
           </div>
         </header>
@@ -162,7 +163,10 @@
             <p class="v2-eyebrow">Kundenuebersicht</p>
             <h2>Kundenkarten</h2>
           </div>
-          <button class="v2-button primary" type="button" id="customerNewButton">Neuer Kunde</button>
+          <div class="v2-section-toolbar-actions">
+            <button class="v2-button soft" type="button" id="customerProspectButton">Neuer Interessent</button>
+            <button class="v2-button primary" type="button" id="customerNewButton">Neuer Kunde</button>
+          </div>
         </div>
 
         <div class="v2-filterbar">
@@ -284,6 +288,7 @@
     <header><div><p class="v2-eyebrow">Schnell anlegen</p><h2 id="mobilePlusTitle">Neue Aktion</h2></div><button class="v2-button soft" type="button" data-mobile-sheet-close>Schließen</button></header>
     <div class="admin-mobile-sheet-actions">
       <button type="button" data-new-customer><strong>Neuer Kunde</strong><span>Kunden und Reise anlegen</span></button>
+      <button type="button" data-new-prospect><strong>Neuer Interessent</strong><span>Anfrage ohne Auftrag anlegen</span></button>
       <button type="button" data-booking-action="create"><strong>Neue Buchung</strong><span>Für den aktuellen Kunden</span></button>
       <button type="button" data-mobile-customer-tab="dokumente"><strong>Dokument hochladen</strong><span>Dokumente des Kunden öffnen</span></button>
       <button type="button" data-mobile-customer-tab="kommunikation"><strong>Nachricht vorbereiten</strong><span>Kommunikation öffnen</span></button>
@@ -331,6 +336,24 @@
   </div>
 </div>
 
+<div class="v2-wizard-overlay" id="newProspectDialog" hidden>
+  <div class="v2-wizard-dialog v2-prospect-dialog" role="dialog" aria-modal="true" aria-labelledby="prospectTitle">
+    <header class="v2-wizard-header">
+      <div>
+        <p class="v2-eyebrow">Admin V2</p>
+        <h2 id="prospectTitle">Neuer Interessent</h2>
+      </div>
+      <button class="v2-button soft" type="button" data-prospect-action="cancel">Abbrechen</button>
+    </header>
+    <div class="v2-wizard-body" id="prospectBody"></div>
+    <p class="v2-edit-status" id="prospectStatus" aria-live="polite"></p>
+    <footer class="v2-wizard-footer">
+      <button class="v2-button soft" type="button" data-prospect-action="cancel" id="prospectCancelButton">Abbrechen</button>
+      <button class="v2-button primary" type="button" data-prospect-action="save" id="prospectSaveButton">Interessent anlegen</button>
+    </footer>
+  </div>
+</div>
+
 <div id="bookingEditorHost"></div>
 <div id="aiTaskDetailHost"></div>
 
@@ -340,7 +363,8 @@
 <script src="portal-share-library.js?v=3"></script>
 <script src="publish-workflow.js?v=9"></script>
 <script src="booking-library.js?v=3"></script>
-<script src="firebase-service.js?v=35"></script>
+<script src="customer-lifecycle-library.js?v=2"></script>
+<script src="firebase-service.js?v=37"></script>
 <script src="firebase-auth.js?v=10"></script>
 <script src="firebase-database.js"></script>
 <script src="firebase-storage.js?v=5"></script>
@@ -364,9 +388,10 @@
 <script src="admin-v2-communication.js?v=7"></script>
 <script src="admin-v2-legal-comms.js?v=2"></script>
 <script src="admin-v2-payment.js?v=2"></script>
-<script src="admin-v2-wishes.js?v=5"></script>
+<script src="customer-inquiry-admin-library.js?v=1"></script>
+<script src="admin-v2-wishes.js?v=7"></script>
 <script src="ai-task-open-target-library.js?v=4"></script>
 <script src="ai-task-action-workspace.js?v=10"></script>
-<script src="admin-v2.js?v=104"></script>
+<script src="admin-v2.js?v=105"></script>
 </body>
 </html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ihr persönlicher Wunsch | Alpine Concierge Tirol</title>
+<!-- Preferred link: /customer-inquiry/#token=... — Query ?token= is accepted but must not be generated. -->
+<meta name="description" content="Persönliche Rückfragen von Alpine Concierge Tirol.">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="theme-color" content="#001a14">
+<link rel="icon" href="../favicon.ico">
+<link rel="apple-touch-icon" href="../images/logo/logo.png">
+<link rel="stylesheet" href="customer-inquiry.css">
+</head>
+<body class="inquiry-body">
+<header class="inquiry-header">
+  <p class="inquiry-brand">
+    <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol" width="96" height="72" decoding="async">
+  </p>
+</header>
+
+<main id="inquiryRoot" class="inquiry-main" aria-busy="true">
+  <p id="inquiryLive" class="inquiry-live" role="status" aria-live="polite"></p>
+
+  <section class="inquiry-card" id="inquiryLoading" aria-labelledby="inquiryLoadingTitle">
+    <p class="inquiry-eyebrow">Alpine Concierge Tirol</p>
+    <h1 id="inquiryLoadingTitle">Ihr persönlicher Wunsch</h1>
+    <p class="inquiry-copy">Ihr persönlicher Wunsch wird geladen …</p>
+  </section>
+
+  <section class="inquiry-card inquiry-error" id="inquiryError" hidden>
+    <p class="inquiry-eyebrow">Alpine Concierge Tirol</p>
+    <h1 id="inquiryErrorTitle">Persönlicher Link</h1>
+    <p class="inquiry-copy" id="inquiryErrorCopy">Dieser persönliche Link ist nicht mehr gültig. Bitte kontaktieren Sie Alpine Concierge Tirol, wenn Sie weitere Unterstützung wünschen.</p>
+    <a class="inquiry-contact" href="https://wa.me/4367761410679" target="_blank" rel="noopener noreferrer">Alpine Concierge Tirol kontaktieren</a>
+  </section>
+
+  <section class="inquiry-card inquiry-success" id="inquirySuccess" hidden>
+    <p class="inquiry-eyebrow">Alpine Concierge Tirol</p>
+    <h1 id="inquirySuccessTitle">Vielen Dank</h1>
+    <p class="inquiry-copy" id="inquirySuccessCopy">Vielen Dank. Ihre Angaben sind bei uns angekommen. Wir sehen uns Ihre Wünsche persönlich an und melden uns bei Ihnen.</p>
+  </section>
+
+  <section class="inquiry-card inquiry-form" id="inquiryForm" hidden>
+    <p class="inquiry-eyebrow">Alpine Concierge Tirol</p>
+    <h1 id="inquiryTitle">Ihr persönlicher Wunsch</h1>
+    <blockquote class="inquiry-original" id="inquiryOriginal"></blockquote>
+    <p class="inquiry-copy" id="inquiryIntro">Damit wir etwas Passendes für Sie zusammenstellen können, haben wir noch einige kurze Fragen.</p>
+
+    <button type="button" class="inquiry-hidden-start" id="wishStartButton" hidden data-wish-start aria-hidden="true">Wunsch starten</button>
+
+    <div class="inquiry-wizard" id="wishWizardOverlay">
+      <div class="inquiry-wizard-dialog" id="wishWizardDialog" role="region" aria-labelledby="wishWizardTitle" tabindex="-1">
+        <header class="inquiry-wizard-head">
+          <p class="inquiry-progress" id="wishWizardProgress"></p>
+          <h2 id="wishWizardTitle"></h2>
+          <p class="inquiry-required" id="inquiryRequiredBadge" hidden>Pflichtangabe</p>
+          <button type="button" class="inquiry-hidden-close" id="wishWizardClose" data-wish-close hidden>Schließen</button>
+        </header>
+        <div class="inquiry-wizard-body" id="wishWizardBody"></div>
+        <p class="inquiry-wizard-error" id="wishWizardError" role="alert" hidden></p>
+        <footer class="inquiry-wizard-nav">
+          <button type="button" class="button soft" id="wishWizardBack" data-wish-back>Zurück</button>
+          <button type="button" class="button primary" id="wishWizardNext" data-wish-next>Weiter</button>
+        </footer>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="../customer-portal/i18n/de.js"></script>
+<script src="../customer-portal/i18n/portal-i18n.js"></script>
+<script src="../customer-portal/customer-wish-request-library.js"></script>
+<script src="../customer-portal/customer-portal-wishes.js"></script>
+<script src="../customer-portal/customer-inquiry-grant-library.js"></script>
+<script src="../customer-portal/firebase-config.js"></script>
+<script src="customer-inquiry.js"></script>
+</body>
+</html>

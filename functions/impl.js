@@ -1,7 +1,7 @@
 const fs=require("fs");
 const path=require("path");
 const {HttpsError}=require("firebase-functions/v2/https");
-const {isEmulator,portalShareSecret,openAiApiKey,resendApiKey}=require("./secrets");
+const {isEmulator,portalShareSecret,portalInquirySecret,openAiApiKey,resendApiKey}=require("./secrets");
 const {
   buildAiConciergeContext,
   buildIntelligence,
@@ -27,18 +27,21 @@ const {
   validTaskId
 }=require("./lib/aiTaskActionUpdate");
 
-function loadLocalEmulatorSecret(){
+function loadLocalEmulatorSecret(name){
   const file=path.join(__dirname,".secret.local");
   if(!fs.existsSync(file))return "";
-  const line=fs.readFileSync(file,"utf8").split(/\r?\n/).find(l=>l.startsWith("PORTAL_SHARE_HMAC_SECRET="));
-  return line?line.split("=").slice(1).join("=").trim():"";
+  const prefix=`${name}=`;
+  const line=fs.readFileSync(file,"utf8").split(/\r?\n/).find(item=>item.startsWith(prefix));
+  return line?line.slice(prefix.length).trim():"";
 }
 
 if(isEmulator){
   process.env.FIRESTORE_EMULATOR_HOST=process.env.FIRESTORE_EMULATOR_HOST||"127.0.0.1:8080";
   process.env.FIREBASE_AUTH_EMULATOR_HOST=process.env.FIREBASE_AUTH_EMULATOR_HOST||"127.0.0.1:9099";
-  const localSecret=loadLocalEmulatorSecret();
-  if(localSecret)process.env.PORTAL_SHARE_HMAC_SECRET=localSecret;
+  const localShareSecret=loadLocalEmulatorSecret("PORTAL_SHARE_HMAC_SECRET");
+  if(localShareSecret)process.env.PORTAL_SHARE_HMAC_SECRET=localShareSecret;
+  const localInquirySecret=loadLocalEmulatorSecret("PORTAL_INQUIRY_HMAC_SECRET");
+  if(localInquirySecret)process.env.PORTAL_INQUIRY_HMAC_SECRET=localInquirySecret;
 }
 
 let adminModule;
@@ -125,6 +128,11 @@ const {
   createPortalMailAdapter,
   requestPortalOtpWithMail
 }=require("./lib/portalMail");
+const {
+  createFirestoreInquiryGrantStore
+}=require("./lib/customerInquiryGrantStore");
+const inquiryGrantAdmin=require("./lib/customerInquiryGrantAdmin");
+const inquiryGrantPublic=require("./lib/customerInquiryGrantPublic");
 
 const SIGNED_URL_TTL_MS=5*60*1000;
 const AI_ANALYSIS_HISTORY_PAGE_SIZE=5;
@@ -147,18 +155,26 @@ const rateBuckets=new Map();
 const RATE_LIMIT_WINDOW_MS=60000;
 const RATE_LIMIT_MAX=60;
 
-function getSecret(){
-  const fromEnv=String(process.env.PORTAL_SHARE_HMAC_SECRET||"").trim();
-  if(fromEnv)return fromEnv;
+function readBoundSecret(fromEnv,definedSecret,fallbackName){
+  const envValue=String(fromEnv||"").trim();
+  if(envValue)return envValue;
   try{
-    if(portalShareSecret){
-      const fromSecret=String(portalShareSecret.value()||"").trim();
+    if(definedSecret){
+      const fromSecret=String(definedSecret.value()||"").trim();
       if(fromSecret)return fromSecret;
     }
   }catch(error){
     /* Secret not bound */
   }
-  return isEmulator?loadLocalEmulatorSecret():"";
+  return isEmulator?loadLocalEmulatorSecret(fallbackName):"";
+}
+
+function getSecret(){
+  return readBoundSecret(process.env.PORTAL_SHARE_HMAC_SECRET,portalShareSecret,"PORTAL_SHARE_HMAC_SECRET");
+}
+
+function getInquirySecret(){
+  return readBoundSecret(process.env.PORTAL_INQUIRY_HMAC_SECRET,portalInquirySecret,"PORTAL_INQUIRY_HMAC_SECRET");
 }
 
 function resolveClientIp(req){
@@ -1337,6 +1353,47 @@ async function listConciergeAnalysisTasks(request){
   return {tasks:[...byStableKey.values()].slice(0,100)};
 }
 
+function resolveCallableIp(request){
+  return String(request?.rawRequest?.ip||request?.rawRequest?.socket?.remoteAddress||"unknown");
+}
+
+function inquiryGrantCallableDeps(deps={},request){
+  return {
+    store:deps.store||createFirestoreInquiryGrantStore(getDb()),
+    secret:deps.secret!==undefined?deps.secret:getInquirySecret(),
+    now:deps.now,
+    checkRateLimit:deps.checkRateLimit||checkRateLimit,
+    clientIp:deps.clientIp||resolveCallableIp(request)
+  };
+}
+
+async function createCustomerInquiryGrant(request,deps={}){
+  return inquiryGrantAdmin.createCustomerInquiryGrant(request,inquiryGrantCallableDeps(deps,request));
+}
+
+async function rotateCustomerInquiryGrant(request,deps={}){
+  return inquiryGrantAdmin.rotateCustomerInquiryGrant(request,inquiryGrantCallableDeps(deps,request));
+}
+
+async function revokeCustomerInquiryGrant(request,deps={}){
+  return inquiryGrantAdmin.revokeCustomerInquiryGrant(request,inquiryGrantCallableDeps(deps,request));
+}
+
+async function getCustomerInquiryGrantStatus(request,deps={}){
+  return inquiryGrantAdmin.getCustomerInquiryGrantStatus(request,{
+    store:deps.store||createFirestoreInquiryGrantStore(getDb()),
+    now:deps.now
+  });
+}
+
+async function getCustomerInquiryWish(request,deps={}){
+  return inquiryGrantPublic.getCustomerInquiryWish(request,inquiryGrantCallableDeps(deps,request));
+}
+
+async function submitCustomerInquiryAnswers(request,deps={}){
+  return inquiryGrantPublic.submitCustomerInquiryAnswers(request,inquiryGrantCallableDeps(deps,request));
+}
+
 async function revokePortalShare(request){
   if(!isAdminAuth(request.auth)){
     throw new HttpsError("permission-denied","Keine Admin-Berechtigung.");
@@ -1380,5 +1437,11 @@ module.exports={
   updateConciergeAnalysisItemStatus,
   updateConciergeAnalysisTaskAction,
   createConciergeAnalysisTask,
-  listConciergeAnalysisTasks
+  listConciergeAnalysisTasks,
+  createCustomerInquiryGrant,
+  rotateCustomerInquiryGrant,
+  revokeCustomerInquiryGrant,
+  getCustomerInquiryGrantStatus,
+  getCustomerInquiryWish,
+  submitCustomerInquiryAnswers
 };

@@ -1437,6 +1437,8 @@
     let onSubmitFollowUpImpl=opts.onSubmitFollowUp;
     let onFollowUpSubmittedImpl=opts.onFollowUpSubmitted;
     let onReloadFollowUpsImpl=opts.onReloadFollowUps;
+    let applyDomImpl=opts.applyDom;
+    let lockOpen=Boolean(opts.lockOpen);
     const wizard=createWishWizard({
       lib,
       t:(key,params)=>translate(t,key,params),
@@ -1469,16 +1471,17 @@
       startButton.hidden=true;
       startButton.setAttribute("aria-haspopup","dialog");
       startButton.setAttribute("aria-expanded",wizard.isOpen()?"true":"false");
-      if(typeof opts.applyDom==="function")opts.applyDom(root);
+      if(typeof applyDomImpl==="function")applyDomImpl(root,wizard.getState());
     }
 
     function renderWizard({moveFocus=false}={}){
       const state=wizard.getState();
       overlay.hidden=!state.open;
       startButton.setAttribute("aria-expanded",state.open?"true":"false");
-      if(typeof document!=="undefined"&&document.body){
+      if(!lockOpen&&typeof document!=="undefined"&&document.body){
         document.body.classList.toggle("wish-wizard-open",state.open);
       }
+      if(typeof applyDomImpl==="function")applyDomImpl(root,state);
       if(!state.open)return;
       const progress=byId("wishWizardProgress",root);
       const title=byId("wishWizardTitle",root);
@@ -1509,7 +1512,10 @@
         next.hidden=state.isReview;
         next.textContent=translate(t,"service.wish.next");
       }
-      if(close)close.textContent=translate(t,"service.wish.close");
+      if(close){
+        close.hidden=lockOpen;
+        close.textContent=translate(t,"service.wish.close");
+      }
       if(error){
         const message=state.errors[0]||state.limitHint||state.submittedHint||"";
         error.hidden=!message;
@@ -1838,7 +1844,11 @@
         return;
       }
       if(!wizard.isOpen())return;
-      if(event.target===overlay){event.preventDefault();closeWizard(false);return;}
+      if(event.target===overlay){
+        event.preventDefault();
+        if(!lockOpen)closeWizard(false);
+        return;
+      }
       const map=[
         ["[data-wish-close]",()=>closeWizard(false)],
         ["[data-wish-next]",()=>{const result=wizard.next();renderWizard({moveFocus:result.ok&&(result.reason==="next"||result.reason==="review")});}],
@@ -1952,6 +1962,7 @@
       if(!wizard.isOpen())return;
       if(event.key==="Escape"){
         event.preventDefault();
+        if(lockOpen)return;
         const result=wizard.handleEscape();
         renderWizard();
         renderShell();
@@ -1986,6 +1997,8 @@
         if("onSubmitFollowUp" in extra)onSubmitFollowUpImpl=extra.onSubmitFollowUp;
         if("onFollowUpSubmitted" in extra)onFollowUpSubmittedImpl=extra.onFollowUpSubmitted;
         if("onReloadFollowUps" in extra)onReloadFollowUpsImpl=extra.onReloadFollowUps;
+        if("applyDom" in extra)applyDomImpl=extra.applyDom;
+        if("lockOpen" in extra)lockOpen=Boolean(extra.lockOpen);
         renderShell();
         if(wizard.isOpen())renderWizard();
       },

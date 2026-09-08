@@ -32,6 +32,8 @@
 .v2-wish-answers{display:grid;gap:12px;margin:0;padding:0;list-style:none}
 .v2-wish-answers li{display:grid;gap:6px;padding:14px;border:1px solid var(--line);border-radius:16px;background:#fbfcfa}
 .v2-wish-answers p{margin:0}
+.v2-wish-inquiry .v2-wish-actions{margin-top:4px}
+.v2-wish-inquiry [data-inquiry-reused]{margin:0;max-width:42rem}
 @media (max-width:900px){
   .v2-wish-card dl,.v2-wish-grid{grid-template-columns:1fr}
 }

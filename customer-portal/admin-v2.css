@@ -1232,6 +1232,12 @@ p{color:var(--muted);line-height:1.55}
 .v2-wizard-summary ul{margin:0;padding-left:18px;color:var(--muted)}
 .v2-wizard-finish{display:grid;gap:12px}
 .v2-wizard-finish .v2-document-actions{display:flex;flex-wrap:wrap;gap:10px}
+.v2-section-toolbar-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}
+.v2-prospect-dialog{grid-template-rows:auto 1fr auto auto}
+.v2-customer-card.is-prospect{border-color:rgba(31,107,84,.28)}
+.v2-prospect-request{margin:0;color:var(--muted);font-size:14px;line-height:1.45}
+.v2-prospect-banner{margin:0 0 12px;padding:12px 14px;border:1px solid rgba(31,107,84,.28);border-radius:16px;background:var(--mint);color:var(--green)}
+.v2-prospect-banner strong{display:block}
 .v2-comm-overview{display:grid;gap:16px}
 .v2-comm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .v2-comm-card{display:grid;gap:14px;padding:20px;border:1px solid var(--line);border-radius:22px;background:var(--surface);box-shadow:var(--shadow);min-width:0}

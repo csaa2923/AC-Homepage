@@ -1,5 +1,5 @@
 const {onRequest,onCall}=require("firebase-functions/v2/https");
-const {functionSecrets,aiFunctionSecrets,portalOtpMailSecrets}=require("./secrets");
+const {functionSecrets,inquiryFunctionSecrets,aiFunctionSecrets,portalOtpMailSecrets}=require("./secrets");
 
 let impl;
 function loadImpl(){
@@ -133,3 +133,43 @@ exports.createConciergeAnalysisTask=onCall({
   cors:true,
   invoker:"public"
 },(request)=>loadImpl().createConciergeAnalysisTask(request));
+
+exports.createCustomerInquiryGrant=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public",
+  secrets:inquiryFunctionSecrets()
+},(request)=>loadImpl().createCustomerInquiryGrant(request));
+
+exports.rotateCustomerInquiryGrant=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public",
+  secrets:inquiryFunctionSecrets()
+},(request)=>loadImpl().rotateCustomerInquiryGrant(request));
+
+exports.revokeCustomerInquiryGrant=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().revokeCustomerInquiryGrant(request));
+
+exports.getCustomerInquiryGrantStatus=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().getCustomerInquiryGrantStatus(request));
+
+exports.getCustomerInquiryWish=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public",
+  secrets:inquiryFunctionSecrets()
+},(request)=>loadImpl().getCustomerInquiryWish(request));
+
+exports.submitCustomerInquiryAnswers=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public",
+  secrets:inquiryFunctionSecrets()
+},(request)=>loadImpl().submitCustomerInquiryAnswers(request));

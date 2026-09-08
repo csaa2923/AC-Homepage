@@ -105,6 +105,16 @@
     });
   }
 
+  function adminCustomerInReviewWishes(wishRequests){
+    const seen=new Set();
+    return list(wishRequests).filter(wish=>{
+      const wishId=text(wish&&wish.wishId);
+      if(!wish||text(wish.origin)!=="admin"||text(wish.status)!=="IN_REVIEW"||!wishId||seen.has(wishId))return false;
+      seen.add(wishId);
+      return true;
+    });
+  }
+
   function wishCustomerRepliedInsights(customer,wishRequests){
     const name=text(customer&&customer.customerName);
     return adminCustomerRepliedWishes(wishRequests).map(wish=>{
@@ -118,6 +128,23 @@
         "wishCustomerReplied",
         "kunde",
         "Antworten prüfen",
+        {source:"wishRequests",entityId:wishId}
+      );
+    });
+  }
+
+  function wishInReviewInsights(customer,wishRequests){
+    const name=text(customer&&customer.customerName);
+    return adminCustomerInReviewWishes(wishRequests).map(wish=>{
+      const wishId=text(wish.wishId);
+      return makeInsight(
+        `wish-in-review-${wishId}`,
+        "recommendation",
+        "Wunsch in Bearbeitung",
+        [name,text(wish.title)||"Wunsch"].filter(Boolean).join(" · "),
+        "wishInReview",
+        "kunde",
+        "Bearbeitung fortsetzen",
         {source:"wishRequests",entityId:wishId}
       );
     });
@@ -403,6 +430,7 @@
     }
 
     wishCustomerRepliedInsights(state.customer,wishRequests).forEach(insight=>insights.push(insight));
+    wishInReviewInsights(state.customer,wishRequests).forEach(insight=>insights.push(insight));
 
     return insights.sort((a,b)=>SEVERITY_ORDER[a.severity]-SEVERITY_ORDER[b.severity]||a.id.localeCompare(b.id));
   }
@@ -455,7 +483,8 @@
     calculateConciergeQualityScore,
     getConciergeInsights,
     getRecommendedNextActions,
-    adminCustomerRepliedWishes
+    adminCustomerRepliedWishes,
+    adminCustomerInReviewWishes
   };
   if(typeof window!=="undefined")window.ACTConciergeIntelligenceLibrary=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;

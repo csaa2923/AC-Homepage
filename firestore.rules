@@ -208,6 +208,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /*
+     * Prospect inquiry grants (P2.2).
+     * Functions/Admin SDK only. Clients never read hashes or write grants.
+     */
+    match /customerInquiryGrants/{grantId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

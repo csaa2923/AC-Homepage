@@ -12,23 +12,107 @@
 (function(){
   "use strict";
 
-  const COPY={
-    brand:"ALPINE CONCIERGE TIROL",
-    title:"Ihr persönlicher Wunsch",
-    intro:"Damit wir etwas Passendes für Sie zusammenstellen können, haben wir noch einige kurze Fragen.",
-    loading:"Ihr persönlicher Wunsch wird geladen …",
-    invalid:"Dieser persönliche Link ist nicht mehr gültig. Bitte kontaktieren Sie Alpine Concierge Tirol, wenn Sie weitere Unterstützung wünschen.",
-    success:"Vielen Dank. Ihre Angaben sind bei uns angekommen. Wir sehen uns Ihre Wünsche persönlich an und melden uns bei Ihnen.",
-    successTitle:"Vielen Dank",
-    checkAnswers:"Bitte prüfen Sie Ihre Angaben.",
-    required:"Pflichtangabe",
-    sending:"Ihre Angaben werden gesendet …",
-    next:"Weiter",
-    reviewNext:"Antworten prüfen",
-    back:"Zurück",
-    send:"Antworten senden",
-    unconfirmedTitle:"Ihre Angaben",
-    unconfirmed:"Wir konnten den Eingang Ihrer Angaben gerade nicht eindeutig bestätigen. Bitte öffnen Sie den Link nicht mehrfach und kontaktieren Sie Alpine Concierge Tirol, falls Sie unsicher sind."
+  const COPY_BY_LANG={
+    de:{
+      brand:"ALPINE CONCIERGE TIROL",
+      title:"Ihr persönlicher Wunsch",
+      intro:"Damit wir etwas Passendes für Sie zusammenstellen können, haben wir noch einige kurze Fragen.",
+      loading:"Ihr persönlicher Wunsch wird geladen …",
+      invalid:"Dieser persönliche Link ist nicht mehr gültig. Bitte kontaktieren Sie Alpine Concierge Tirol, wenn Sie weitere Unterstützung wünschen.",
+      success:"Vielen Dank. Ihre Angaben sind bei uns angekommen. Wir sehen uns Ihre Wünsche persönlich an und melden uns bei Ihnen.",
+      successTitle:"Vielen Dank",
+      checkAnswers:"Bitte prüfen Sie Ihre Angaben.",
+      required:"Pflichtangabe",
+      optional:"optional",
+      sending:"Ihre Angaben werden gesendet …",
+      next:"Weiter",
+      reviewNext:"Antworten prüfen",
+      back:"Zurück",
+      send:"Antworten an Alpine Concierge senden",
+      edit:"Wunsch bearbeiten",
+      unconfirmedTitle:"Ihre Angaben",
+      unconfirmed:"Wir konnten den Eingang Ihrer Angaben gerade nicht eindeutig bestätigen. Bitte öffnen Sie den Link nicht mehrfach und kontaktieren Sie Alpine Concierge Tirol, falls Sie unsicher sind.",
+      contact:"Alpine Concierge Tirol kontaktieren",
+      documentTitle:"Ihr persönlicher Wunsch | Alpine Concierge Tirol",
+      linkTitle:"Persönlicher Link"
+    },
+    en:{
+      brand:"ALPINE CONCIERGE TIROL",
+      title:"Your personal wish",
+      intro:"To put together something suitable for you, we have a few short questions.",
+      loading:"Your personal wish is being loaded …",
+      invalid:"This personal link is no longer valid. Please contact Alpine Concierge Tirol if you need further assistance.",
+      success:"Thank you. Your details have reached us. We will review your wishes personally and get back to you.",
+      successTitle:"Thank you",
+      checkAnswers:"Please check your details.",
+      required:"Required",
+      optional:"optional",
+      sending:"Sending your details …",
+      next:"Continue",
+      reviewNext:"Review answers",
+      back:"Back",
+      send:"Send answers to Alpine Concierge",
+      edit:"Edit wish",
+      unconfirmedTitle:"Your details",
+      unconfirmed:"We could not clearly confirm that your details have been received. Please do not open the link repeatedly, and contact Alpine Concierge Tirol if you are unsure.",
+      contact:"Contact Alpine Concierge Tirol",
+      documentTitle:"Your personal wish | Alpine Concierge Tirol",
+      linkTitle:"Personal link"
+    },
+    it:{
+      brand:"ALPINE CONCIERGE TIROL",
+      title:"La Sua richiesta personale",
+      intro:"Per poterle proporre qualcosa di adatto, abbiamo ancora alcune brevi domande.",
+      loading:"La Sua richiesta personale è in caricamento …",
+      invalid:"Questo link personale non è più valido. La preghiamo di contattare Alpine Concierge Tirol se desidera ulteriore assistenza.",
+      success:"Grazie. I Suoi dati sono arrivati. Esamineremo personalmente le Sue richieste e La ricontatteremo.",
+      successTitle:"Grazie",
+      checkAnswers:"La preghiamo di verificare i Suoi dati.",
+      required:"Obbligatorio",
+      optional:"facoltativo",
+      sending:"I Suoi dati vengono inviati …",
+      next:"Avanti",
+      reviewNext:"Controllare le risposte",
+      back:"Indietro",
+      send:"Inviare le risposte ad Alpine Concierge",
+      edit:"Modificare la richiesta",
+      unconfirmedTitle:"I Suoi dati",
+      unconfirmed:"Non abbiamo potuto confermare con certezza la ricezione dei Suoi dati. La preghiamo di non aprire il link più volte e di contattare Alpine Concierge Tirol in caso di dubbi.",
+      contact:"Contattare Alpine Concierge Tirol",
+      documentTitle:"La Sua richiesta personale | Alpine Concierge Tirol",
+      linkTitle:"Link personale"
+    },
+    fr:{
+      brand:"ALPINE CONCIERGE TIROL",
+      title:"Votre demande personnelle",
+      intro:"Afin de vous proposer quelque chose qui vous convienne, nous avons encore quelques brèves questions.",
+      loading:"Votre demande personnelle est en cours de chargement …",
+      invalid:"Ce lien personnel n'est plus valable. Veuillez contacter Alpine Concierge Tirol si vous avez besoin d'une assistance supplémentaire.",
+      success:"Merci. Vos informations nous sont bien parvenues. Nous examinerons personnellement vos souhaits et nous reviendrons vers vous.",
+      successTitle:"Merci",
+      checkAnswers:"Veuillez vérifier vos informations.",
+      required:"Obligatoire",
+      optional:"facultatif",
+      sending:"Vos informations sont en cours d'envoi …",
+      next:"Continuer",
+      reviewNext:"Vérifier les réponses",
+      back:"Retour",
+      send:"Envoyer les réponses à Alpine Concierge",
+      edit:"Modifier la demande",
+      unconfirmedTitle:"Vos informations",
+      unconfirmed:"Nous n'avons pas pu confirmer clairement la réception de vos informations. Veuillez ne pas ouvrir le lien à plusieurs reprises et contacter Alpine Concierge Tirol en cas de doute.",
+      contact:"Contacter Alpine Concierge Tirol",
+      documentTitle:"Votre demande personnelle | Alpine Concierge Tirol",
+      linkTitle:"Lien personnel"
+    }
+  };
+  const COPY=COPY_BY_LANG.de;
+  const INQUIRY_UI_LANGUAGES=["de","en","it","fr"];
+  const INQUIRY_UI_LANGUAGE_ALIASES={
+    de:"de",deutsch:"de",german:"de",
+    en:"en",englisch:"en",english:"en",
+    it:"it",italienisch:"it",italian:"it",italiano:"it",
+    fr:"fr",franzoesisch:"fr",französisch:"fr",francais:"fr",français:"fr",french:"fr"
   };
 
   const GET_NAME="getCustomerInquiryWish";
@@ -44,6 +128,76 @@
 
   function text(value){
     return String(value??"").trim();
+  }
+
+  function normalizeInquiryUiLanguage(value){
+    const raw=text(value).toLowerCase();
+    if(!raw)return "en";
+    const compact=raw.replace(/[^a-zäöüßàéèùì]/g,"");
+    if(INQUIRY_UI_LANGUAGE_ALIASES[compact])return INQUIRY_UI_LANGUAGE_ALIASES[compact];
+    const base=raw.split(/[-_/\s]/)[0];
+    return INQUIRY_UI_LANGUAGES.includes(base)?base:"en";
+  }
+
+  function copyFor(lang){
+    const code=INQUIRY_UI_LANGUAGES.includes(lang)?lang:normalizeInquiryUiLanguage(lang);
+    return COPY_BY_LANG[code]||COPY_BY_LANG.en;
+  }
+
+  function currentInquiryLanguage(root){
+    const raw=text(root&&root._actInquiryLanguage);
+    return INQUIRY_UI_LANGUAGES.includes(raw)?raw:"de";
+  }
+
+  function setNodeText(root,id,value){
+    const node=byId(id,root);
+    if(node)node.textContent=value;
+  }
+
+  function applyInquiryLanguage(root,lang){
+    const code=INQUIRY_UI_LANGUAGES.includes(lang)?lang:normalizeInquiryUiLanguage(lang);
+    if(root&&typeof root==="object")root._actInquiryLanguage=code;
+    const i18n=portalI18n();
+    if(i18n&&typeof i18n.setLanguage==="function"){
+      i18n.setLanguage(code,{persist:false,updateDocument:true});
+    }
+    const copy=copyFor(code);
+    const doc=typeof document!=="undefined"?document:null;
+    if(doc&&doc.documentElement)doc.documentElement.lang=code;
+    if(root&&root.documentElement)root.documentElement.lang=code;
+    if(doc)doc.title=copy.documentTitle;
+    setNodeText(root,"inquiryLoadingTitle",copy.title);
+    const loadingCopy=byId("inquiryLoading",root);
+    if(loadingCopy){
+      const paragraph=loadingCopy.querySelector?loadingCopy.querySelector(".inquiry-copy"):null;
+      if(paragraph)paragraph.textContent=copy.loading;
+    }
+    setNodeText(root,"inquiryErrorTitle",copy.linkTitle);
+    setNodeText(root,"inquiryErrorCopy",copy.invalid);
+    setNodeText(root,"inquirySuccessTitle",copy.successTitle);
+    setNodeText(root,"inquirySuccessCopy",copy.success);
+    setNodeText(root,"inquiryTitle",copy.title);
+    setNodeText(root,"inquiryIntro",copy.intro);
+    setNodeText(root,"inquiryRequiredBadge",copy.required);
+    setNodeText(root,"wishWizardBack",copy.back);
+    setNodeText(root,"wishWizardNext",copy.next);
+    const contact=root&&root.querySelector?root.querySelector(".inquiry-contact"):byId("inquiryContact",root);
+    if(contact)contact.textContent=copy.contact;
+    return copy;
+  }
+
+  function portalI18n(){
+    return typeof window!=="undefined"?window.ACTPortalI18n||null:null;
+  }
+
+  function localizedText(lang,key){
+    const i18n=portalI18n();
+    if(i18n&&typeof i18n.t==="function"){
+      const value=text(i18n.t("inquiry."+key));
+      if(value&&value!=="inquiry."+key)return value;
+    }
+    const pack=copyFor(lang);
+    return text(pack[key])||text(COPY[key]);
   }
 
   function grantLib(){
@@ -99,7 +253,7 @@
     const source=locationLike&&typeof locationLike==="object"?locationLike:{};
     const query=new URLSearchParams(String(source.search||"").replace(/^\?/,"" ));
     const hash=new URLSearchParams(String(source.hash||"").replace(/^#/,""));
-    return ["customerId","wishId","publicPortalId","email","phone","telefon"].some(key=>{
+    return ["customerId","wishId","publicPortalId","email","phone","telefon","lang","language"].some(key=>{
       return text(query.get(key))||text(hash.get(key));
     });
   }
@@ -144,10 +298,12 @@
   function publicWishView(wish){
     const source=wish&&typeof wish==="object"?wish:{};
     const original=source.originalRequest&&typeof source.originalRequest==="object"?source.originalRequest:{};
+    const language=text(source.language)?normalizeInquiryUiLanguage(source.language):"";
     return {
       title:text(source.title),
       originalRequest:text(original.text),
-      followUpQuestions:Array.isArray(source.followUpQuestions)?source.followUpQuestions:[]
+      followUpQuestions:Array.isArray(source.followUpQuestions)?source.followUpQuestions:[],
+      language
     };
   }
 
@@ -243,24 +399,28 @@
   }
 
   function applyInquiryChrome(root,state){
+    const copy=copyFor(currentInquiryLanguage(root));
     const badge=byId("inquiryRequiredBadge",root);
     if(badge){
       const required=currentQuestionRequired(state);
-      badge.hidden=!required;
-      badge.textContent=COPY.required;
+      const showOptional=Boolean(state)&&!state.isReview&&!required;
+      badge.hidden=!(required||showOptional);
+      badge.textContent=required?copy.required:copy.optional;
     }
     const next=byId("wishWizardNext",root);
     if(next&&state&&!state.isReview){
-      next.textContent=nextStepIsReview(state)?COPY.reviewNext:COPY.next;
+      next.textContent=nextStepIsReview(state)?copy.reviewNext:copy.next;
     }
     const submit=root&&root.querySelector?root.querySelector("[data-wish-submit]"):null;
     if(submit){
-      submit.textContent=state&&state.busy?COPY.sending:COPY.send;
+      submit.textContent=state&&state.busy?copy.sending:copy.send;
       if(state&&state.busy)submit.setAttribute("disabled","disabled");
       else submit.removeAttribute("disabled");
     }
     const back=byId("wishWizardBack",root);
-    if(back)back.textContent=COPY.back;
+    if(back)back.textContent=copy.back;
+    const edit=root&&root.querySelector?root.querySelector("[data-wish-edit]"):null;
+    if(edit)edit.textContent=copy.edit;
   }
 
   function createInquiryPage(options){
@@ -269,11 +429,12 @@
     const locationLike=opts.location||(typeof location!=="undefined"?location:null);
     const historyLike=opts.history||(typeof history!=="undefined"?history:null);
     const callFn=typeof opts.callInquiryFunction==="function"?opts.callInquiryFunction:defaultCallInquiryFunction;
-    const memory={token:"",wish:null,answers:null,submitStarted:false,submitLock:false,received:false};
+    const memory={token:"",wish:null,answers:null,submitStarted:false,submitLock:false,received:false,language:"de"};
     let wishApi=null;
+    applyInquiryLanguage(root,memory.language);
 
-    if(typeof window!=="undefined"&&window.ACTPortalI18n&&typeof window.ACTPortalI18n.setLanguage==="function"){
-      window.ACTPortalI18n.setLanguage("de",{persist:false});
+    function pageCopy(){
+      return copyFor(memory.language||currentInquiryLanguage(root));
     }
 
     function renderOriginal(view){
@@ -284,44 +445,48 @@
     }
 
     function showInvalid(){
+      const copy=pageCopy();
       showPanel(root,"inquiryError");
-      const copy=byId("inquiryErrorCopy",root);
-      if(copy)copy.textContent=COPY.invalid;
-      setLive(root,COPY.invalid);
+      const node=byId("inquiryErrorCopy",root);
+      if(node)node.textContent=copy.invalid;
+      setLive(root,copy.invalid);
     }
 
     function showSuccess(message){
+      const copy=pageCopy();
       memory.received=true;
       memory.submitLock=true;
       forgetSensitive(memory);
       clearTokenFromHistory(historyLike,locationLike);
       showPanel(root,"inquirySuccess");
       const title=byId("inquirySuccessTitle",root);
-      if(title)title.textContent=COPY.successTitle;
-      const copy=byId("inquirySuccessCopy",root);
-      if(copy)copy.textContent=message||COPY.success;
-      setLive(root,message||COPY.success);
+      if(title)title.textContent=copy.successTitle;
+      const node=byId("inquirySuccessCopy",root);
+      if(node)node.textContent=message||copy.success;
+      setLive(root,message||copy.success);
     }
 
     function showUnconfirmed(){
+      const copy=pageCopy();
       memory.received=false;
       memory.submitLock=true;
       forgetSensitive(memory);
       clearTokenFromHistory(historyLike,locationLike);
       showPanel(root,"inquirySuccess");
       const title=byId("inquirySuccessTitle",root);
-      if(title)title.textContent=COPY.unconfirmedTitle;
-      const copy=byId("inquirySuccessCopy",root);
-      if(copy)copy.textContent=COPY.unconfirmed;
-      setLive(root,COPY.unconfirmed);
+      if(title)title.textContent=copy.unconfirmedTitle;
+      const node=byId("inquirySuccessCopy",root);
+      if(node)node.textContent=copy.unconfirmed;
+      setLive(root,copy.unconfirmed);
     }
 
     async function submitAnswers(answers){
+      const copy=pageCopy();
       if(memory.received)return {ok:true,alreadyReceived:true,confirmed:true};
       if(memory.submitLock)return {ok:false,code:"busy",message:""};
       if(!memory.token||!isInquiryRawToken(memory.token)){
         showInvalid();
-        return {ok:false,code:"permission-denied",message:COPY.invalid};
+        return {ok:false,code:"permission-denied",message:copy.invalid};
       }
       memory.submitLock=true;
       memory.answers=null;
@@ -333,7 +498,7 @@
       }catch(error){
         if(isValidationError(error)){
           memory.submitLock=false;
-          return {ok:false,code:"invalid-argument",message:COPY.checkAnswers};
+          return {ok:false,code:"invalid-argument",message:copy.checkAnswers};
         }
         memory.submitStarted=true;
         return {
@@ -341,14 +506,15 @@
           confirmed:false,
           unconfirmed:true,
           code:callableError(error).code||"unknown",
-          message:COPY.unconfirmed
+          message:copy.unconfirmed
         };
       }
     }
 
     function translate(key,params){
-      if(typeof window!=="undefined"&&window.ACTPortalI18n&&typeof window.ACTPortalI18n.t==="function"){
-        return window.ACTPortalI18n.t(key,params);
+      const i18n=portalI18n();
+      if(i18n&&typeof i18n.t==="function"){
+        return i18n.t(key,params);
       }
       return String(key||"");
     }
@@ -359,6 +525,7 @@
       return ui.bind({
         root,
         t:translate,
+        locale:memory.language,
         lockOpen:true,
         canStart:()=>true,
         confirmDiscard:()=>false,
@@ -368,7 +535,7 @@
           return submitAnswers(answers);
         },
         onFollowUpSubmitted:result=>{
-          if(result&&result.confirmed===true)showSuccess(COPY.success);
+          if(result&&result.confirmed===true)showSuccess();
           else showUnconfirmed();
         }
       });
@@ -377,7 +544,7 @@
     async function load(){
       if(!root)return {ok:false,reason:"no-root"};
       showPanel(root,"inquiryLoading");
-      setLive(root,COPY.loading);
+      setLive(root,pageCopy().loading);
       const token=parseInquiryTokenFromLocation(locationLike);
       memory.token=token;
       if(!isInquiryRawToken(token)){
@@ -391,10 +558,14 @@
           showInvalid();
           return {ok:false,reason:"empty"};
         }
+        if(view.language){
+          memory.language=view.language;
+          applyInquiryLanguage(root,view.language);
+        }
         memory.wish=view;
         renderOriginal(view);
         showPanel(root,"inquiryForm");
-        setLive(root,COPY.intro);
+        setLive(root,pageCopy().intro);
         wishApi=bindWizard(view);
         if(!wishApi){
           showInvalid();
@@ -404,7 +575,7 @@
           title:view.title,
           followUpQuestions:view.followUpQuestions
         });
-        return {ok:true,view};
+        return {ok:true,view,language:memory.language};
       }catch(error){
         showInvalid();
         return {ok:false,reason:isGenericAccessError(error)?"denied":"failed"};
@@ -432,10 +603,14 @@
 
   const api={
     COPY,
+    COPY_BY_LANG,
     GET_NAME,
     SUBMIT_NAME,
     PREFERRED_INQUIRY_PATH,
     PREFERRED_INQUIRY_TOKEN_LOCATION,
+    normalizeInquiryUiLanguage,
+    copyFor,
+    applyInquiryLanguage,
     parseInquiryTokenFromLocation,
     locationHasIgnoredIds,
     isInquiryRawToken,

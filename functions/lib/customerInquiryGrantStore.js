@@ -15,6 +15,29 @@ function cloneJson(value){
   return value==null?value:JSON.parse(JSON.stringify(value));
 }
 
+function applyCustomerConversionRecord(customer,patch){
+  const source=customer&&typeof customer==="object"&&!Array.isArray(customer)?customer:{};
+  const settings=patch&&typeof patch==="object"&&!Array.isArray(patch)?patch:{};
+  const next=Object.assign({},source);
+  const draft=source.draftData&&typeof source.draftData==="object"&&!Array.isArray(source.draftData)
+    ?Object.assign({},source.draftData)
+    :{};
+  const lifecycle=String(settings.lifecycle||"customer").trim()||"customer";
+  draft.lifecycle=lifecycle;
+  if(settings.writeConversionMeta){
+    if(!String(draft.convertedAt||"").trim()){
+      draft.convertedAt=String(settings.convertedAt||"").trim();
+      draft.convertedFrom=String(settings.convertedFrom||"prospect").trim()||"prospect";
+      const actor=String(settings.convertedBy||"").trim();
+      if(actor)draft.convertedBy=actor;
+    }
+  }
+  next.draftData=draft;
+  next.lifecycle=lifecycle;
+  next.updatedAt=String(settings.updatedAt||"").trim()||new Date().toISOString();
+  return next;
+}
+
 function persistableInquiryGrant(grant){
   const normalized=normalizeInquiryGrant(grant);
   if(!normalized.ok)return null;
@@ -78,6 +101,12 @@ function createMemoryInquiryGrantStore(seed={}){
     return listByTokenHash([...grants.values()],tokenHash);
   }
 
+  function listGrantsForCustomer(customerId){
+    const id=sanitizeCustomerId(customerId);
+    if(!id)return [];
+    return [...grants.values()].filter(item=>item.customerId===id);
+  }
+
   function setGrant(grant){
     const record=persistableInquiryGrant(grant);
     if(!record)throw new Error("Inquiry-Grant ungueltig.");
@@ -110,6 +139,11 @@ function createMemoryInquiryGrantStore(seed={}){
           return [...workingGrants.values()].filter(item=>item.wishId===id).map(cloneJson);
         },
         listGrantsByTokenHash:async tokenHash=>listByTokenHash([...workingGrants.values()],tokenHash).map(cloneJson),
+        listGrantsForCustomer:async customerId=>{
+          const id=sanitizeCustomerId(customerId);
+          if(!id)return [];
+          return [...workingGrants.values()].filter(item=>item.customerId===id).map(cloneJson);
+        },
         setGrant:async grant=>{
           const record=persistableInquiryGrant(grant);
           if(!record)throw new Error("Inquiry-Grant ungueltig.");
@@ -120,6 +154,12 @@ function createMemoryInquiryGrantStore(seed={}){
           const id=sanitizeCustomerId(customerId);
           if(!id)throw new Error("customerId fehlt.");
           workingCustomers[id]=cloneJson(customer);
+          return workingCustomers[id];
+        },
+        setCustomerConversion:async(customerId,patch)=>{
+          const id=sanitizeCustomerId(customerId);
+          if(!id)throw new Error("customerId fehlt.");
+          workingCustomers[id]=applyCustomerConversionRecord(workingCustomers[id],patch);
           return workingCustomers[id];
         }
       });
@@ -141,6 +181,7 @@ function createMemoryInquiryGrantStore(seed={}){
     getGrant,
     listGrantsForWish,
     listGrantsByTokenHash,
+    listGrantsForCustomer,
     listActiveGrants(customerId,wishId,now){
       return listGrantsForWish(wishId).filter(item=>{
         return item.customerId===sanitizeCustomerId(customerId)&&isActive(item,now);
@@ -170,6 +211,7 @@ function createFirestoreInquiryGrantStore(db){
       const grantCache=new Map();
       const wishCache=new Map();
       const hashCache=new Map();
+      const customerGrantCache=new Map();
 
       async function getCustomer(customerId){
         const id=sanitizeCustomerId(customerId);
@@ -211,6 +253,16 @@ function createFirestoreInquiryGrantStore(db){
         return list;
       }
 
+      async function listGrantsForCustomer(customerId){
+        const id=sanitizeCustomerId(customerId);
+        if(!id)return [];
+        if(customerGrantCache.has(id))return customerGrantCache.get(id);
+        const snap=await tx.get(db.collection(COLLECTION_NAME).where("customerId","==",id));
+        const list=snap.docs.map(doc=>grantFromSnap(doc)).filter(Boolean);
+        customerGrantCache.set(id,list);
+        return list;
+      }
+
       async function setGrant(grant){
         const record=persistableInquiryGrant(grant);
         if(!record)throw new Error("Inquiry-Grant ungueltig.");
@@ -226,6 +278,11 @@ function createFirestoreInquiryGrantStore(db){
         if(hashIndex>=0)hashed[hashIndex]=record;
         else hashed.push(record);
         hashCache.set(record.tokenHash,hashed);
+        const ownerList=customerGrantCache.get(record.customerId)||[];
+        const ownerIndex=ownerList.findIndex(item=>item.grantId===record.grantId);
+        if(ownerIndex>=0)ownerList[ownerIndex]=record;
+        else ownerList.push(record);
+        customerGrantCache.set(record.customerId,ownerList);
         return record;
       }
 
@@ -247,13 +304,35 @@ function createFirestoreInquiryGrantStore(db){
         return source;
       }
 
+      async function setCustomerConversion(customerId,patch){
+        const id=sanitizeCustomerId(customerId);
+        if(!id)throw new Error("customerId fehlt.");
+        const current=customerCache.has(id)?customerCache.get(id):null;
+        const next=applyCustomerConversionRecord(current,patch);
+        const settings=patch&&typeof patch==="object"&&!Array.isArray(patch)?patch:{};
+        const update={
+          "draftData.lifecycle":next.draftData.lifecycle,
+          updatedAt:next.updatedAt
+        };
+        if(settings.writeConversionMeta&&next.draftData.convertedAt){
+          update["draftData.convertedAt"]=next.draftData.convertedAt;
+          update["draftData.convertedFrom"]=next.draftData.convertedFrom;
+          if(next.draftData.convertedBy)update["draftData.convertedBy"]=next.draftData.convertedBy;
+        }
+        tx.update(customerRef(id),update);
+        customerCache.set(id,next);
+        return next;
+      }
+
       return work({
         getCustomer,
         getGrant,
         listGrantsForWish,
         listGrantsByTokenHash,
+        listGrantsForCustomer,
         setGrant,
-        setCustomer
+        setCustomer,
+        setCustomerConversion
       });
     });
   }
@@ -283,6 +362,7 @@ function createFirestoreInquiryGrantStore(db){
 module.exports={
   COLLECTION_NAME,
   persistableInquiryGrant,
+  applyCustomerConversionRecord,
   createMemoryInquiryGrantStore,
   createFirestoreInquiryGrantStore
 };

@@ -1306,6 +1306,28 @@
     },
     date:{
       today:"heute"
+    },
+    inquiry:{
+      title:"Ihr persönlicher Wunsch",
+      intro:"Damit wir etwas Passendes für Sie zusammenstellen können, haben wir noch einige kurze Fragen.",
+      loading:"Ihr persönlicher Wunsch wird geladen …",
+      invalid:"Dieser persönliche Link ist nicht mehr gültig. Bitte kontaktieren Sie Alpine Concierge Tirol, wenn Sie weitere Unterstützung wünschen.",
+      success:"Vielen Dank. Ihre Angaben sind bei uns angekommen. Wir sehen uns Ihre Wünsche persönlich an und melden uns bei Ihnen.",
+      successTitle:"Vielen Dank",
+      checkAnswers:"Bitte prüfen Sie Ihre Angaben.",
+      required:"Pflichtangabe",
+      optional:"optional",
+      sending:"Ihre Angaben werden gesendet …",
+      next:"Weiter",
+      reviewNext:"Antworten prüfen",
+      back:"Zurück",
+      send:"Antworten an Alpine Concierge senden",
+      edit:"Wunsch bearbeiten",
+      unconfirmedTitle:"Ihre Angaben",
+      unconfirmed:"Wir konnten den Eingang Ihrer Angaben gerade nicht eindeutig bestätigen. Bitte öffnen Sie den Link nicht mehrfach und kontaktieren Sie Alpine Concierge Tirol, falls Sie unsicher sind.",
+      contact:"Alpine Concierge Tirol kontaktieren",
+      documentTitle:"Ihr persönlicher Wunsch | Alpine Concierge Tirol",
+      linkTitle:"Persönlicher Link"
     }
   };
 })();

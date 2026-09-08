@@ -9,6 +9,7 @@ const grantLib=require("./customerInquiryGrantLibrary");
 const CREATE_FIELDS=new Set(["customerId","wishId"]);
 const GRANT_ID_FIELDS=new Set(["grantId"]);
 const STATUS_FIELDS=new Set(["customerId","wishId"]);
+const CONVERT_FIELDS=new Set(["customerId"]);
 const STATUS_RESPONSE_FIELDS=["grantId","status","expiresAt","hasActiveGrant"];
 
 function text(value){
@@ -50,6 +51,9 @@ function storedCustomerView(doc){
     :{};
   return {
     lifecycle:draft.lifecycle!=null?draft.lifecycle:source.lifecycle,
+    convertedAt:text(draft.convertedAt||source.convertedAt),
+    convertedFrom:text(draft.convertedFrom||source.convertedFrom),
+    convertedBy:text(draft.convertedBy||source.convertedBy),
     wishRequests:Array.isArray(draft.wishRequests)
       ?draft.wishRequests
       :(Array.isArray(source.wishRequests)?source.wishRequests:[])
@@ -250,10 +254,74 @@ async function getCustomerInquiryGrantStatus(request,deps={}){
   });
 }
 
+async function listInquiryGrantsForCustomer(tx,customerId,wishIds){
+  if(tx&&typeof tx.listGrantsForCustomer==="function"){
+    return tx.listGrantsForCustomer(customerId);
+  }
+  const seen=new Map();
+  for(const wishId of wishIds||[]){
+    const list=typeof tx.listGrantsForWish==="function"?await tx.listGrantsForWish(wishId):[];
+    (Array.isArray(list)?list:[]).forEach(item=>{
+      if(item&&item.grantId)seen.set(item.grantId,item);
+    });
+  }
+  return [...seen.values()];
+}
+
+function conversionResponse(customerId,view,revokedCount,reused){
+  return {
+    customerId,
+    lifecycle:lifecycle.CUSTOMER_LIFECYCLE,
+    convertedAt:text(view&&view.convertedAt),
+    revokedInquiryGrants:Number(revokedCount)||0,
+    reused:reused===true
+  };
+}
+
+async function convertProspectToCustomer(request,deps={}){
+  const uid=requireInquiryAdmin(request&&request.auth);
+  assertKnownFields(request&&request.data,CONVERT_FIELDS);
+  const customerId=grantLib.sanitizeCustomerId(request&&request.data&&request.data.customerId);
+  if(!customerId)deny("invalid-argument","customerId fehlt oder ist ungueltig.");
+  const store=requireStore(deps.store);
+  const now=deps.now||new Date().toISOString();
+  return store.runTransaction(async tx=>{
+    const customer=await tx.getCustomer(customerId);
+    if(!customer)deny("not-found","Kunde nicht gefunden.");
+    const view=storedCustomerView(customer);
+    const converted=lifecycle.convertProspectLifecycle(view,{now,convertedBy:uid});
+    const grants=await listInquiryGrantsForCustomer(tx,customerId,view.wishRequests.map(item=>item&&item.wishId));
+    const bound=grants.filter(item=>grantLib.sanitizeCustomerId(item&&item.customerId)===customerId);
+    const active=bound.filter(item=>grantLib.isActive(item,now));
+    if(converted.converted&&typeof tx.setCustomerConversion==="function"){
+      await tx.setCustomerConversion(customerId,{
+        lifecycle:lifecycle.CUSTOMER_LIFECYCLE,
+        convertedAt:converted.value.convertedAt,
+        convertedFrom:lifecycle.PROSPECT_LIFECYCLE,
+        convertedBy:converted.value.convertedBy||uid,
+        updatedAt:now,
+        writeConversionMeta:true
+      });
+    }else if(converted.converted){
+      deny("failed-precondition","Conversion-Store fehlt.");
+    }
+    let revokedCount=0;
+    for(const grant of active){
+      const revoked=grantLib.revokeInquiryGrant(grant,now);
+      if(!revoked.ok)domainError(revoked);
+      await tx.setGrant(revoked.value);
+      revokedCount+=1;
+    }
+    const nextView=converted.converted?converted.value:view;
+    return conversionResponse(customerId,nextView,revokedCount,converted.reused);
+  });
+}
+
 module.exports={
   CREATE_FIELDS,
   GRANT_ID_FIELDS,
   STATUS_FIELDS,
+  CONVERT_FIELDS,
   STATUS_RESPONSE_FIELDS,
   requireInquiryAdmin,
   storedCustomerView,
@@ -264,5 +332,6 @@ module.exports={
   createCustomerInquiryGrant,
   rotateCustomerInquiryGrant,
   revokeCustomerInquiryGrant,
-  getCustomerInquiryGrantStatus
+  getCustomerInquiryGrantStatus,
+  convertProspectToCustomer
 };

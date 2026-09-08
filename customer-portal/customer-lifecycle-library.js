@@ -44,6 +44,31 @@
     return Object.assign({},source,{lifecycle:normalizeCustomerLifecycle(value)});
   }
 
+  function canConvertProspectToCustomer(customer){
+    return isProspectCustomer(customer);
+  }
+
+  function isConvertedCustomer(customer){
+    if(!customer||typeof customer!=="object"||Array.isArray(customer))return false;
+    if(isProspectCustomer(customer))return false;
+    return text(customer.convertedFrom)===PROSPECT_LIFECYCLE&&Boolean(text(customer.convertedAt));
+  }
+
+  function convertProspectLifecycle(customer,options){
+    const source=customer&&typeof customer==="object"&&!Array.isArray(customer)?customer:{};
+    if(!isProspectCustomer(source)){
+      return {ok:true,reused:true,converted:false,value:source};
+    }
+    const settings=options&&typeof options==="object"&&!Array.isArray(options)?options:{};
+    const now=text(settings.now)||new Date().toISOString();
+    const next=withCustomerLifecycle(source,CUSTOMER_LIFECYCLE);
+    next.convertedAt=now;
+    next.convertedFrom=PROSPECT_LIFECYCLE;
+    const actor=text(settings.convertedBy);
+    if(actor)next.convertedBy=actor;
+    return {ok:true,reused:false,converted:true,value:next};
+  }
+
   function normalizeProspectLanguage(value){
     const language=text(value);
     return PROSPECT_LANGUAGES.includes(language)?language:PROSPECT_LANGUAGES[0];
@@ -111,6 +136,9 @@
     resolveCustomerLifecycle,
     isProspectCustomer,
     withCustomerLifecycle,
+    canConvertProspectToCustomer,
+    convertProspectLifecycle,
+    isConvertedCustomer,
     normalizeProspectLanguage,
     validateProspectCreateInput,
     applyProspectIdentity,

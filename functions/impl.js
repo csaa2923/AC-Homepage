@@ -1386,6 +1386,13 @@ async function getCustomerInquiryGrantStatus(request,deps={}){
   });
 }
 
+async function convertProspectToCustomer(request,deps={}){
+  return inquiryGrantAdmin.convertProspectToCustomer(request,{
+    store:deps.store||createFirestoreInquiryGrantStore(getDb()),
+    now:deps.now
+  });
+}
+
 async function getCustomerInquiryWish(request,deps={}){
   return inquiryGrantPublic.getCustomerInquiryWish(request,inquiryGrantCallableDeps(deps,request));
 }
@@ -1442,6 +1449,7 @@ module.exports={
   rotateCustomerInquiryGrant,
   revokeCustomerInquiryGrant,
   getCustomerInquiryGrantStatus,
+  convertProspectToCustomer,
   getCustomerInquiryWish,
   submitCustomerInquiryAnswers
 };

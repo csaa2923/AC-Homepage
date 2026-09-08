@@ -1305,6 +1305,28 @@
     },
     date:{
       today:"today"
+    },
+    inquiry:{
+      title:"Your personal wish",
+      intro:"To put together something suitable for you, we have a few short questions.",
+      loading:"Your personal wish is being loaded …",
+      invalid:"This personal link is no longer valid. Please contact Alpine Concierge Tirol if you need further assistance.",
+      success:"Thank you. Your details have reached us. We will review your wishes personally and get back to you.",
+      successTitle:"Thank you",
+      checkAnswers:"Please check your details.",
+      required:"Required",
+      optional:"optional",
+      sending:"Sending your details …",
+      next:"Continue",
+      reviewNext:"Review answers",
+      back:"Back",
+      send:"Send answers to Alpine Concierge",
+      edit:"Edit wish",
+      unconfirmedTitle:"Your details",
+      unconfirmed:"We could not clearly confirm that your details have been received. Please do not open the link repeatedly, and contact Alpine Concierge Tirol if you are unsure.",
+      contact:"Contact Alpine Concierge Tirol",
+      documentTitle:"Your personal wish | Alpine Concierge Tirol",
+      linkTitle:"Personal link"
     }
   };
 })();

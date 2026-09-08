@@ -112,7 +112,8 @@ describe("customer inquiry grant public (P2.3)",()=>{
     assert.equal(view.wishId,"wr_inquiry_1");
     assert.equal(view.status,"WAITING_FOR_CUSTOMER");
     assert.equal(view.followUpQuestions.length,1);
-    assert.deepEqual(Object.keys(view).sort(),["followUpQuestions","originalRequest","status","title","wishId"]);
+    assert.deepEqual(Object.keys(view).sort(),["followUpQuestions","language","originalRequest","status","title","wishId"]);
+    assert.equal(view.language,"en");
     FORBIDDEN_GET_KEYS.forEach(key=>assert.equal(key in view,false,key));
     assert.doesNotMatch(JSON.stringify(view),/Nicht nach aussen|Geheimreise|CRM intern|nadja/);
     assert.equal(typeof functions.getCustomerInquiryWish,"function");
@@ -378,5 +379,58 @@ describe("customer inquiry grant public (P2.3)",()=>{
     const view=await impl.getCustomerInquiryWish({auth:null,data:{token:created.rawToken}},deps);
     assert.equal(view.wishId,"wr_inquiry_1");
     assert.doesNotMatch(publicSource,/customerPortalAccess|requestCustomerPortalOtp|getCustomerPortalContext|createCustomerPortalAccess/);
+  });
+
+  it("maps prospect language to a normalized UI code on GET",async()=>{
+    const cases=[
+      ["English","en"],
+      ["Englisch","en"],
+      ["en-GB","en"],
+      ["German","de"],
+      ["Deutsch","de"],
+      ["Italian","it"],
+      ["Italienisch","it"],
+      ["French","fr"],
+      ["Französisch","fr"],
+      ["Franzoesisch","fr"],
+      ["Other","en"],
+      ["Sonstiges","en"],
+      ["","en"],
+      ["Klingon","en"]
+    ];
+    for(const [raw,expected] of cases){
+      assert.equal(inquiryPublic.normalizeInquiryUiLanguage(raw),expected,raw);
+      const customer=prospectCustomer({draftData:{language:raw}});
+      const {deps}=setup({"kunde-prospect-1":customer});
+      const created=await createGrant(deps);
+      const view=await impl.getCustomerInquiryWish({data:{token:created.rawToken}},deps);
+      assert.equal(view.language,expected,raw);
+      assert.equal(view.followUpQuestions[0].questionId,"budget");
+      assert.doesNotMatch(JSON.stringify(view),/Lisa Haller|English|Deutsch|Italienisch|Französisch|Sonstiges|Klingon/);
+    }
+    assert.equal(inquiryPublic.prospectLanguageSource(prospectCustomer({draftData:{language:"English"}})),"English");
+  });
+
+  it("reads prospect language from the grant-bound customer, not from client fields",async()=>{
+    const customer=prospectCustomer({draftData:{language:"Italian"}});
+    const {deps}=setup({"kunde-prospect-1":customer});
+    const created=await createGrant(deps);
+    await assert.rejects(
+      ()=>impl.getCustomerInquiryWish({data:{token:created.rawToken,language:"de"}},deps),
+      error=>httpCode(error)==="permission-denied"
+    );
+    const view=await impl.getCustomerInquiryWish({data:{token:created.rawToken}},deps);
+    assert.equal(view.language,"it");
+    assert.match(publicSource,/GET_FIELDS=new Set\(\["token","customerId","wishId","publicPortalId"\]\)/);
+    assert.doesNotMatch(publicSource,/GET_FIELDS=new Set\(\[[^\]]*language/);
+  });
+
+  it("falls back to customer.language when draftData.language is empty",async()=>{
+    const customer=prospectCustomer();
+    customer.language="French";
+    const {deps}=setup({"kunde-prospect-1":customer});
+    const created=await createGrant(deps);
+    const view=await impl.getCustomerInquiryWish({data:{token:created.rawToken}},deps);
+    assert.equal(view.language,"fr");
   });
 });

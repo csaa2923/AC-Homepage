@@ -13,9 +13,35 @@ const {
 const PUBLIC_INQUIRY_DENY_MESSAGE="Dieser persönliche Link ist ungültig oder nicht mehr aktiv.";
 const GET_FIELDS=new Set(["token","customerId","wishId","publicPortalId"]);
 const SUBMIT_FIELDS=new Set(["token","answers","customerId","wishId","publicPortalId"]);
+const INQUIRY_UI_LANGUAGES=["de","en","it","fr"];
+const INQUIRY_UI_LANGUAGE_ALIASES={
+  de:"de",deutsch:"de",german:"de",
+  en:"en",englisch:"en",english:"en",
+  it:"it",italienisch:"it",italian:"it",italiano:"it",
+  fr:"fr",franzoesisch:"fr",französisch:"fr",francais:"fr",français:"fr",french:"fr"
+};
 
 function text(value){
   return String(value??"").trim();
+}
+
+function normalizeInquiryUiLanguage(value){
+  const raw=text(value).toLowerCase();
+  if(!raw)return "en";
+  const compact=raw.replace(/[^a-zäöüßàéèùì]/g,"");
+  if(INQUIRY_UI_LANGUAGE_ALIASES[compact])return INQUIRY_UI_LANGUAGE_ALIASES[compact];
+  const base=raw.split(/[-_/\s]/)[0];
+  return INQUIRY_UI_LANGUAGES.includes(base)?base:"en";
+}
+
+function prospectLanguageSource(customer){
+  const source=customer&&typeof customer==="object"&&!Array.isArray(customer)?customer:{};
+  const draft=source.draftData&&typeof source.draftData==="object"&&!Array.isArray(source.draftData)
+    ?source.draftData
+    :{};
+  const contact=(draft.contact&&typeof draft.contact==="object"?draft.contact:null)
+    ||(source.contact&&typeof source.contact==="object"?source.contact:{});
+  return text(draft.language||source.language||contact.language);
 }
 
 function deny(code,message){
@@ -136,7 +162,9 @@ async function getCustomerInquiryWish(request,deps={}){
   return store.runTransaction(async tx=>{
     const resolved=await resolvePublicInquiry(tx,tokenHash,now);
     if(!resolved)denyPublic();
-    return inquiryPublicWish(resolved.wish);
+    const view=inquiryPublicWish(resolved.wish);
+    view.language=normalizeInquiryUiLanguage(prospectLanguageSource(resolved.customer));
+    return view;
   });
 }
 
@@ -176,6 +204,8 @@ module.exports={
   PUBLIC_INQUIRY_DENY_MESSAGE,
   inquiryPublicWish,
   hashPresentedToken,
+  normalizeInquiryUiLanguage,
+  prospectLanguageSource,
   getCustomerInquiryWish,
   submitCustomerInquiryAnswers
 };

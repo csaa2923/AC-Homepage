@@ -160,6 +160,12 @@ exports.getCustomerInquiryGrantStatus=onCall({
   invoker:"public"
 },(request)=>loadImpl().getCustomerInquiryGrantStatus(request));
 
+exports.convertProspectToCustomer=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().convertProspectToCustomer(request));
+
 exports.getCustomerInquiryWish=onCall({
   region:"europe-west1",
   cors:true,

@@ -483,8 +483,8 @@ describe("8.1b tourist demand dashboard",()=>{
   });
 
   it("AE) admin v2 pins and demand assets are wired",()=>{
-    assert.match(adminHtml,/admin-v2\.js\?v=105/);
-    assert.match(adminHtml,/admin-v2\.css\?v=82/);
+    assert.match(adminHtml,/admin-v2\.js\?v=106/);
+    assert.match(adminHtml,/admin-v2\.css\?v=83/);
     assert.match(adminHtml,/tourist-demand-library\.js\?v=3/);
     assert.match(adminHtml,/tourist-demand-ingestion\.js\?v=3/);
     assert.match(adminHtml,/tourist-demand-catalog\.js\?v=3/);

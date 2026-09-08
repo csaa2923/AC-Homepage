@@ -1305,6 +1305,28 @@
     },
     date:{
       today:"oggi"
+    },
+    inquiry:{
+      title:"La Sua richiesta personale",
+      intro:"Per poterle proporre qualcosa di adatto, abbiamo ancora alcune brevi domande.",
+      loading:"La Sua richiesta personale è in caricamento …",
+      invalid:"Questo link personale non è più valido. La preghiamo di contattare Alpine Concierge Tirol se desidera ulteriore assistenza.",
+      success:"Grazie. I Suoi dati sono arrivati. Esamineremo personalmente le Sue richieste e La ricontatteremo.",
+      successTitle:"Grazie",
+      checkAnswers:"La preghiamo di verificare i Suoi dati.",
+      required:"Obbligatorio",
+      optional:"facoltativo",
+      sending:"I Suoi dati vengono inviati …",
+      next:"Avanti",
+      reviewNext:"Controllare le risposte",
+      back:"Indietro",
+      send:"Inviare le risposte ad Alpine Concierge",
+      edit:"Modificare la richiesta",
+      unconfirmedTitle:"I Suoi dati",
+      unconfirmed:"Non abbiamo potuto confermare con certezza la ricezione dei Suoi dati. La preghiamo di non aprire il link più volte e di contattare Alpine Concierge Tirol in caso di dubbi.",
+      contact:"Contattare Alpine Concierge Tirol",
+      documentTitle:"La Sua richiesta personale | Alpine Concierge Tirol",
+      linkTitle:"Link personale"
     }
   };
 })();

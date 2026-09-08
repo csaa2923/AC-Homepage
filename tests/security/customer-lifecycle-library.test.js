@@ -43,10 +43,10 @@ function existingCustomer(){
 
 describe("customer lifecycle (P0)",()=>{
   it("wires the domain library into Admin V2 before firebase-service",()=>{
-    assert.match(adminHtml,/customer-lifecycle-library\.js\?v=2/);
-    assert.match(adminHtml,/firebase-service\.js\?v=37/);
-    const lifecycleAt=adminHtml.indexOf("customer-lifecycle-library.js?v=2");
-    const firebaseAt=adminHtml.indexOf("firebase-service.js?v=37");
+    assert.match(adminHtml,/customer-lifecycle-library\.js\?v=3/);
+    assert.match(adminHtml,/firebase-service\.js\?v=38/);
+    const lifecycleAt=adminHtml.indexOf("customer-lifecycle-library.js?v=3");
+    const firebaseAt=adminHtml.indexOf("firebase-service.js?v=38");
     assert.ok(lifecycleAt>=0&&firebaseAt>lifecycleAt);
     assert.match(firebaseSource,/normalizeCustomerLifecycle/);
     assert.doesNotMatch(lifecycleSource,/prospectWish|prospectRequests|prospectQuestions/);
@@ -141,5 +141,37 @@ describe("customer lifecycle (P0)",()=>{
     assert.deepEqual(serverLib.validateProspectCreateInput(input),lib.validateProspectCreateInput(input));
     const base={customerId:"kunde-1",customerName:"Neuer Kunde",tripName:"Neue Reise",tripTitle:"Neue Reise",email:"",contact:{}};
     assert.deepEqual(serverLib.applyProspectIdentity(base,input),lib.applyProspectIdentity(base,input));
+  });
+
+  it("converts a prospect to a customer without touching wish data",()=>{
+    const prospect=lib.withCustomerLifecycle(existingCustomer(),"prospect");
+    prospect.email="";
+    const frozenWishes=JSON.stringify(prospect.wishRequests);
+    const frozenRequest=JSON.stringify(prospect.wishRequests[0]);
+    assert.equal(lib.canConvertProspectToCustomer(prospect),true);
+    assert.equal(lib.isConvertedCustomer(prospect),false);
+    const converted=lib.convertProspectLifecycle(prospect,{now:"2026-09-08T14:00:00.000Z",convertedBy:"admin-1"});
+    assert.equal(converted.ok,true);
+    assert.equal(converted.reused,false);
+    assert.equal(converted.value.customerId,"cust-100");
+    assert.equal(converted.value.lifecycle,"customer");
+    assert.equal(converted.value.convertedAt,"2026-09-08T14:00:00.000Z");
+    assert.equal(converted.value.convertedFrom,"prospect");
+    assert.equal(converted.value.convertedBy,"admin-1");
+    assert.equal(converted.value.email,"");
+    assert.equal(converted.value.wishRequests[0].status,"CUSTOMER_REPLIED");
+    assert.equal(JSON.stringify(converted.value.wishRequests),frozenWishes);
+    assert.equal(JSON.stringify(converted.value.wishRequests[0]),frozenRequest);
+    assert.equal(lib.isProspectCustomer(converted.value),false);
+    assert.equal(lib.isConvertedCustomer(converted.value),true);
+    const again=lib.convertProspectLifecycle(converted.value,{now:"2026-09-08T15:00:00.000Z"});
+    assert.equal(again.reused,true);
+    assert.equal(again.value.convertedAt,"2026-09-08T14:00:00.000Z");
+    assert.equal(lib.canConvertProspectToCustomer(existingCustomer()),false);
+    assert.equal(lib.isConvertedCustomer(existingCustomer()),false);
+    const serverConverted=serverLib.convertProspectLifecycle(prospect,{now:"2026-09-08T14:00:00.000Z",convertedBy:"admin-1"});
+    assert.deepEqual(serverConverted,converted);
+    assert.equal(serverLib.canConvertProspectToCustomer(prospect),lib.canConvertProspectToCustomer(prospect));
+    assert.equal(serverLib.isConvertedCustomer(converted.value),lib.isConvertedCustomer(converted.value));
   });
 });

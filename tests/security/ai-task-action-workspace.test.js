@@ -145,8 +145,8 @@ describe("AI task action workspace registry and drafts",()=>{
     const toggleFn=js.match(/function toggleAiTaskActionWorkspace[\s\S]*?(?=\n  function )/)?.[0]||"";
 
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
-    assert.match(html,/admin-v2\.js\?v=105/);
-    assert.match(html,/admin-v2\.css\?v=82/);
+    assert.match(html,/admin-v2\.js\?v=106/);
+    assert.match(html,/admin-v2\.css\?v=83/);
     assert.match(js,/ACTAiTaskActionWorkspace/);
     assert.match(js,/function aiTaskActionWorkspaceMarkup\(/);
     assert.match(js,/function toggleAiTaskActionWorkspace\(/);

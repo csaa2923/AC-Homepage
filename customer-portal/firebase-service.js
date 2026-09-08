@@ -1513,6 +1513,16 @@
     return callAdminInquiryGrantCallable("getCustomerInquiryGrantStatus",{customerId,wishId});
   }
 
+  async function convertProspectToCustomer(input={}){
+    const customerId=String(input.customerId||"").trim();
+    if(!customerId){
+      const error=new Error("Kunden-ID fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminInquiryGrantCallable("convertProspectToCustomer",{customerId});
+  }
+
   async function createPortalShare(customer,options={}){
     const customerId=customerIdOf(customer);
     if(!customerId)throw new Error("Kunden-ID fehlt.");
@@ -1727,6 +1737,7 @@
     rotateCustomerInquiryGrant,
     revokeCustomerInquiryGrant,
     getCustomerInquiryGrantStatus,
+    convertProspectToCustomer,
     analyzeConciergeTrip,
     refreshPortalShares,
     listPortalSharesForCustomer,

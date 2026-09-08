@@ -54,8 +54,8 @@ describe("admin v2 prospect create (P1)",()=>{
     assert.match(adminHtml,/id="customerProspectButton">Neuer Interessent/);
     assert.match(adminHtml,/id="newProspectDialog"/);
     assert.match(adminHtml,/data-new-prospect/);
-    assert.match(adminHtml,/customer-lifecycle-library\.js\?v=2/);
-    assert.match(adminHtml,/admin-v2\.js\?v=105/);
+    assert.match(adminHtml,/customer-lifecycle-library\.js\?v=3/);
+    assert.match(adminHtml,/admin-v2\.js\?v=106/);
     assert.match(adminJs,/function openNewProspect\(/);
     assert.match(adminJs,/function buildProspectCustomer\(/);
     assert.match(adminJs,/function saveProspectCustomer\(/);
@@ -130,6 +130,14 @@ describe("admin v2 prospect create (P1)",()=>{
     assert.match(adminJs,/filter\(customer=>!isArchivedCustomer\(customer\)&&!isProspectRecord\(customer\)\)/);
     assert.match(adminJs,/Interessent – noch kein Kunde/);
     assert.match(adminJs,/Kein Auftrag, keine Customer Journey/);
+    assert.match(adminJs,/data-prospect-convert/);
+    assert.match(adminJs,/Als Kunden übernehmen/);
+    assert.match(adminJs,/Aktive persönliche Inquiry-Links werden ungültig/);
+    assert.match(adminJs,/async function convertProspectToCustomerV2\(/);
+    assert.match(adminJs,/prospect\?`<div class="v2-prospect-banner"/);
+    const convertFn=adminJs.match(/async function convertProspectToCustomerV2\(\)\{[\s\S]*?\n  function /)?.[0]||"";
+    assert.match(convertFn,/convertProspectToCustomer/);
+    assert.doesNotMatch(convertFn,/createCustomerPortalAccess|createPortalShare|publishCustomer|startWishReview/);
   });
 
   it("keeps the existing customer wizard and Phase A wish review intact",()=>{

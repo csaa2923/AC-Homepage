@@ -406,8 +406,8 @@ describe("tourist demand 8.1d source expansion",()=>{
   });
 
   it("AJ) Admin V2 Regression",()=>{
-    assert.match(adminHtml,/admin-v2\.js\?v=105/);
-    assert.match(adminHtml,/admin-v2\.css\?v=82/);
+    assert.match(adminHtml,/admin-v2\.js\?v=106/);
+    assert.match(adminHtml,/admin-v2\.css\?v=83/);
     assert.match(adminHtml,/tourist-demand-sources\.js\?v=1/);
     assert.match(adminHtml,/tourist-demand-library\.js\?v=3/);
     assert.match(adminHtml,/tourist-demand-dashboard\.js\?v=5/);

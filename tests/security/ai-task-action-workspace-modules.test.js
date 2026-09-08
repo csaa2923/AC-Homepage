@@ -164,8 +164,8 @@ describe("AI task action workspace transfer and booking modules",()=>{
     const openFn=js.match(/function openAiTaskWorkspaceBooking[\s\S]*?(?=\n  function )/)?.[0]||"";
 
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
-    assert.match(html,/admin-v2\.js\?v=105/);
-    assert.match(html,/admin-v2\.css\?v=82/);
+    assert.match(html,/admin-v2\.js\?v=106/);
+    assert.match(html,/admin-v2\.css\?v=83/);
     assert.match(js,/function aiTaskTransferModuleMarkup\(/);
     assert.match(js,/function aiTaskBookingModuleMarkup\(/);
     assert.match(js,/function openAiTaskWorkspaceBooking\(/);

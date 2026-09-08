@@ -154,6 +154,7 @@
     prospectMessage:"",
     prospectMessageKind:"",
     prospectSaving:false,
+    prospectConverting:false,
     detailFlashMessage:"",
     detailFlashKind:"",
     demandFilters:{season:"",region:"",audience:"",topic:"",intent:""}
@@ -8883,7 +8884,13 @@
           </div>
         </div>
         ${flash}
-        ${prospect?`<p class="v2-prospect-banner" role="status"><strong>Interessent – noch kein Kunde</strong><span>Kein Auftrag, keine Customer Journey. Der bestehende Wunsch kann im Admin vorbereitet werden.</span></p>`:""}
+        ${prospect?`<div class="v2-prospect-banner" role="status">
+          <div>
+            <strong>Interessent – noch kein Kunde</strong>
+            <span>Kein Auftrag, keine Customer Journey. Der bestehende Wunsch kann im Admin vorbereitet werden.</span>
+          </div>
+          <button class="v2-button primary" type="button" data-prospect-convert ${state.prospectConverting?"disabled aria-busy=\"true\"":""}>Als Kunden übernehmen</button>
+        </div>`:""}
         <div class="v2-detail-hero">
           <div class="v2-detail-title v2-workspace-identity">
             <p class="v2-eyebrow">${prospect?"Interessent":"Customer Workspace"}</p>
@@ -11016,6 +11023,44 @@
     if(action==="save")saveProspectCustomer();
   }
 
+  async function convertProspectToCustomerV2(){
+    const customer=customerById(state.selectedCustomerId);
+    if(!customer||!isProspectRecord(customer)||state.prospectConverting)return null;
+    if(!window.confirm("Dieser Interessent wird als Kunde übernommen. Anfrage, Wünsche und Antworten bleiben erhalten. Aktive persönliche Inquiry-Links werden ungültig.")){
+      return null;
+    }
+    state.prospectConverting=true;
+    renderCustomerDetail();
+    try{
+      const authCheck=await withTimeout(window.ACTFirebaseAuth.requireAdmin(),AUTH_TIMEOUT_MS,"requireAdmin");
+      if(!authCheck.allowed)throw new Error(authCheck.message||"Keine Admin-Berechtigung.");
+      const convert=window.ACTFirebaseService&&window.ACTFirebaseService.convertProspectToCustomer;
+      if(typeof convert!=="function")throw new Error("Conversion ist derzeit nicht verfügbar.");
+      const result=await withTimeout(convert({customerId:customer.customerId}),AUTH_TIMEOUT_MS,"convertProspectToCustomer");
+      const next=clone(customer);
+      next.lifecycle="customer";
+      if(result&&result.convertedAt){
+        next.convertedAt=result.convertedAt;
+        next.convertedFrom="prospect";
+      }
+      next.updatedAt=new Date().toISOString();
+      next._lastSavedAt=next.updatedAt;
+      updateLocalCustomer(next);
+      state.prospectConverting=false;
+      state.detailFlashMessage="Interessent wurde als Kunde übernommen.";
+      state.detailFlashKind="success";
+      renderCustomerDetail();
+      return next;
+    }catch(error){
+      console.error("[ACT Admin V2] Interessent übernehmen:",error&&error.message?error.message:"Fehler");
+      state.prospectConverting=false;
+      state.detailFlashMessage=error&&error.message?error.message:"Interessent konnte nicht als Kunde übernommen werden.";
+      state.detailFlashKind="error";
+      renderCustomerDetail();
+      return null;
+    }
+  }
+
   function handleProspectInput(event){
     const field=event.target.closest("[data-prospect-field]");
     if(!field||!state.prospectDraft)return;
@@ -11872,6 +11917,10 @@
         return;
       }
       if(event.target.closest("[data-new-prospect]")){openNewProspect();return;}
+      if(event.target.closest("[data-prospect-convert]")){
+        convertProspectToCustomerV2();
+        return;
+      }
       if(event.target.closest("[data-demand-reset]")){
         resetDemandFilters();
         return;

@@ -211,7 +211,7 @@ describe("7.7 publication UI cleanup",()=>{
   it("V) publication UI cleanup does not change portal auth or OTP modules",()=>{
     const expected={
       "customer-portal/portal-login-library.js":"a174fd42853be151322a92ceaba0aa0111312386391b928ad3eb5d6417c588d1",
-      "functions/impl.js":"832a10608c451801e7157e8b27969e4b9a62bda0faad85b6cee3de18c360a1ee",
+      "functions/impl.js":"e3f320e51834a823889097d2bd6f96208de6efc95f59bd9b840e267293cdf1a9",
       "functions/lib/portalAccess.js":"16e5711e6d2b8ed2e479f7d93332e8b0d6ddf8b6be56b9ba58b7d0509dab85c5",
       "functions/lib/portalAccessStore.js":"071d86fad792ec8cccc0372fa83c4be0d34c388667120fa9f3e9c343c86b5c88",
       "functions/lib/portalOtp.js":"391dfcffdb754b8449e668e8e76486ed84555f57f1fa80aae6c94502da1f7923"
@@ -223,8 +223,8 @@ describe("7.7 publication UI cleanup",()=>{
   });
 
   it("pins follow the UI cleanup",()=>{
-    assert.match(html,/admin-v2\.js\?v=105/);
-    assert.match(html,/admin-v2\.css\?v=82/);
+    assert.match(html,/admin-v2\.js\?v=106/);
+    assert.match(html,/admin-v2\.css\?v=83/);
     assert.match(html,/portal-access-admin-library\.js\?v=1/);
   });
 });

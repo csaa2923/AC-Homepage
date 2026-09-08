@@ -1,0 +1,37 @@
+.v2-wish-section{display:grid;gap:18px;margin-top:28px}
+.v2-wish-section h3,.v2-wish-section h4,.v2-wish-panel h4{margin:0}
+.v2-wish-list,.v2-wish-questions,.v2-wish-picker ul{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.v2-wish-card,.v2-wish-panel,.v2-wish-picker,.v2-wish-custom,.v2-wish-preview{
+  display:grid;gap:14px;padding:18px 20px;border:1px solid var(--line);border-radius:22px;background:var(--surface);box-shadow:var(--shadow)
+}
+.v2-wish-card h4{margin:0 0 6px}
+.v2-wish-card.is-replied{border-color:#c5d4c8;background:#f7faf7}
+.v2-wish-reply-badge{
+  display:inline-flex;align-items:center;margin-left:8px;padding:3px 10px;
+  border:1px solid #c5d4c8;border-radius:999px;background:#eef5ef;
+  color:#355c3f;font-size:12px;font-weight:750;vertical-align:middle
+}
+.v2-wish-reply-hint{margin:8px 0 0;color:#355c3f;font-size:14px;font-weight:750}
+.v2-wish-card dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0}
+.v2-wish-card dt{color:var(--muted);font-size:12px;font-weight:750}
+.v2-wish-card dd{margin:0}
+.v2-wish-form,.v2-wish-known,.v2-wish-custom{display:grid;gap:14px}
+.v2-wish-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.v2-wish-grid label,.v2-wish-custom label,.v2-wish-known fieldset{display:grid;gap:6px;color:var(--muted);font-size:13px;font-weight:750}
+.v2-wish-grid input,.v2-wish-grid select,.v2-wish-custom input,.v2-wish-custom select,.v2-wish-custom textarea,.v2-wish-known select{
+  min-height:46px;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:#fbfcfa;color:var(--ink);font:inherit
+}
+.v2-wish-checks{display:flex;flex-wrap:wrap;gap:8px 14px}
+.v2-wish-checks label{display:flex;align-items:center;gap:8px;color:var(--ink);font-weight:600}
+.v2-wish-actions{display:flex;flex-wrap:wrap;gap:8px}
+.v2-wish-questions li,.v2-wish-picker li{display:grid;gap:10px;padding:14px;border:1px solid var(--line);border-radius:16px;background:#fbfcfa}
+.v2-wish-picker li.is-known{background:#fbf8f0}
+.v2-wish-chip{display:inline-flex;margin-left:8px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px}
+.v2-wish-panel blockquote{margin:0;padding:12px 14px;border-left:3px solid var(--green);background:#fbfaf7;white-space:pre-wrap}
+.v2-wish-preview{background:#fbf8f0}
+.v2-wish-answers{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.v2-wish-answers li{display:grid;gap:6px;padding:14px;border:1px solid var(--line);border-radius:16px;background:#fbfcfa}
+.v2-wish-answers p{margin:0}
+@media (max-width:900px){
+  .v2-wish-card dl,.v2-wish-grid{grid-template-columns:1fr}
+}

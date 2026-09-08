@@ -60,6 +60,7 @@
 
   function action(spec){
     const targetTab=JOURNEY_TABS[spec.targetTab]?spec.targetTab:"";
+    const entityId=text(spec.entityId);
     return {
       id:text(spec.id),
       source:text(spec.source),
@@ -67,7 +68,8 @@
       description:text(spec.description),
       buttonLabel:text(spec.buttonLabel),
       targetTab,
-      idle:spec.idle===true
+      idle:spec.idle===true,
+      ...(entityId?{entityId}:{})
     };
   }
 
@@ -123,6 +125,7 @@
     const workspace=input?.workspace&&typeof input.workspace==="object"?input.workspace:{};
     const missing=list(workspace.missingRequired);
     const wishes=list(input?.wishes);
+    const wishReplyCount=numberValue(input?.wishReplyCount);
     const staySummary=text(input?.staySummary);
     const programCount=numberValue(input?.programCount);
     const openBookings=numberValue(input?.openBookings??workspace.openBookings);
@@ -131,7 +134,7 @@
     return [
       statusRow("customer","Kunde",contactMissing.length?"attention":"ready",contactMissing.length?"Stammdaten unvollständig":"Stammdaten"),
       statusRow("stay","Aufenthalt",stayMissing.length?"attention":"ready",stayMissing.length?"Noch nicht erfasst":(staySummary||"Erfasst")),
-      statusRow("wishes","Wünsche",wishes.length?"ready":"attention",wishes.length?wishPreview(wishes):"Noch nicht erfasst"),
+      statusRow("wishes","Wünsche",wishReplyCount||wishes.length?(wishReplyCount?"attention":"ready"):"attention",wishReplyCount?(wishReplyCount===1?"1 neue Antwort":`${wishReplyCount} neue Antworten`):(wishes.length?wishPreview(wishes):"Noch nicht erfasst")),
       statusRow("program","Programm",programCount?"count":"attention",programValue(programCount)),
       statusRow("bookings","Buchungen",openBookings?"attention":"count",bookingValue(openBookings)),
       portalRow(input?.portal),
@@ -230,13 +233,25 @@
         targetTab:targetTab||"kommunikation"
       });
     }
+    if(id.startsWith("wish-customer-replied-")){
+      return action({
+        id,
+        source:"insightsFor",
+        title:text(insight?.title)||"Neue Antworten vom Gast",
+        description:text(insight?.description),
+        buttonLabel:fallbackLabel||"Antworten prüfen",
+        targetTab:targetTab||"kunde",
+        entityId:text(insight?.entityId)||id.slice("wish-customer-replied-".length)
+      });
+    }
     return action({
       id:id||"journey-insight",
       source:"insightsFor",
       title:text(insight?.title)||"Nächste Concierge-Aktion",
       description:text(insight?.description),
       buttonLabel:fallbackLabel,
-      targetTab
+      targetTab,
+      ...(text(insight?.entityId)?{entityId:text(insight.entityId)}:{})
     });
   }
 
@@ -287,6 +302,9 @@
         targetTab:"reise"
       });
     }
+
+    const replyInsight=list(input?.insights).find(item=>text(item?.id).startsWith("wish-customer-replied-"));
+    if(replyInsight)return mapInsightToAction(replyInsight,input?.publication);
 
     const wishes=list(input?.wishes);
     if(!wishes.length){

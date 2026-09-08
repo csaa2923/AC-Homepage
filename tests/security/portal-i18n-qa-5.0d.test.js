@@ -275,11 +275,11 @@ describe("portal i18n QA production gate (5.0D)", () => {
   });
 
   it("keeps production cache pins synchronized", () => {
-    assert.match(portalHtml, /i18n\/de\.js\?v=10/);
-    assert.match(portalHtml, /i18n\/en\.js\?v=10/);
-    assert.match(portalHtml, /i18n\/it\.js\?v=10/);
-    assert.match(portalHtml, /i18n\/fr\.js\?v=10/);
+    assert.match(portalHtml, /i18n\/de\.js\?v=16/);
+    assert.match(portalHtml, /i18n\/en\.js\?v=16/);
+    assert.match(portalHtml, /i18n\/it\.js\?v=16/);
+    assert.match(portalHtml, /i18n\/fr\.js\?v=16/);
     assert.match(portalHtml, /i18n\/portal-i18n\.js\?v=3/);
-    assert.match(portalHtml, /customer-portal\.js\?v=76/);
+    assert.match(portalHtml, /customer-portal\.js\?v=82/);
   });
 });

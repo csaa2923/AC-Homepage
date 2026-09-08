@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=41">
+<link rel="stylesheet" href="customer-portal.css?v=46">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -379,6 +379,24 @@
       </aside>
 
       <div class="service-main-column">
+        <section class="portal-section service-wish-section" id="wish" data-app-view="service" data-i18n-aria-label="service.aria.wish" aria-labelledby="wishTitle">
+          <article class="info-card service-wish-card" id="wishCard">
+            <p class="eyebrow service-wish-eyebrow" data-i18n="service.wish.eyebrow">Concierge</p>
+            <h2 id="wishTitle" data-i18n="service.wish.title">Mein Wunsch</h2>
+            <p class="service-wish-lead" data-i18n="service.wish.subtitle">Erzähl uns, was wir für dich organisieren dürfen.</p>
+            <div class="service-wish-actions">
+              <button type="button" class="button primary" id="wishStartButton" data-wish-start data-i18n="service.wish.start" data-i18n-aria-label="service.aria.wishStart" aria-haspopup="dialog" aria-expanded="false" aria-controls="wishWizardDialog">Wunsch starten</button>
+            </div>
+            <p class="service-wish-login-hint" id="wishAuthHint" hidden tabindex="-1" data-i18n="service.wish.loginHint">Bitte melde dich in deinem persönlichen Kundenportal an, um uns einen Wunsch zu senden.</p>
+            <a class="button soft service-wish-login" id="wishLoginLink" hidden data-wish-login data-i18n="service.wish.login" data-i18n-aria-label="service.aria.wishLogin">Zum persönlichen Login</a>
+            <div class="service-wish-list" id="wishList" data-i18n-aria-label="service.aria.wishList" aria-labelledby="wishListTitle">
+              <h3 id="wishListTitle" data-i18n="service.wish.listTitle">Deine Wünsche</h3>
+              <p class="service-wish-list-empty" id="wishListEmpty" data-i18n="service.wish.listEmpty">Du hast uns noch keinen Wunsch gesendet.</p>
+            </div>
+            <p class="service-wish-notice" id="wishFollowUpNotice" hidden></p>
+          </article>
+        </section>
+
         <section class="portal-section service-actions-section" id="actions" data-app-view="service" data-i18n-aria-label="service.aria.actions" aria-labelledby="actionsTitle">
           <div class="section-head">
             <p class="eyebrow" data-i18n="service.overview.eyebrow">Unterstützung</p>
@@ -402,6 +420,22 @@
     </section>
   </section>
 </main>
+
+<div class="wish-wizard-overlay" id="wishWizardOverlay" hidden>
+  <div class="wish-wizard-dialog" id="wishWizardDialog" role="dialog" aria-modal="true" aria-labelledby="wishWizardTitle" data-i18n-aria-label="service.aria.wishWizard" tabindex="-1">
+    <header class="wish-wizard-head">
+      <p class="wish-wizard-progress" id="wishWizardProgress"></p>
+      <h2 id="wishWizardTitle"></h2>
+      <button type="button" class="wish-wizard-close" id="wishWizardClose" data-wish-close data-i18n="service.wish.close">Schließen</button>
+    </header>
+    <div class="wish-wizard-body" id="wishWizardBody"></div>
+    <p class="wish-wizard-error" id="wishWizardError" role="alert" hidden></p>
+    <footer class="wish-wizard-nav">
+      <button type="button" class="button soft" id="wishWizardBack" data-wish-back data-i18n="service.wish.back">Zurück</button>
+      <button type="button" class="button primary" id="wishWizardNext" data-wish-next data-i18n="service.wish.next">Weiter</button>
+    </footer>
+  </div>
+</div>
 
 <template id="notFoundTemplate">
   <section class="portal-section not-found">
@@ -428,19 +462,21 @@
 <script src="booking-library.js?v=1"></script>
 <script src="travel-actions-library.js?v=13"></script>
 <script src="concierge-assistant-library.js?v=2"></script>
-<script src="i18n/de.js?v=10"></script>
-<script src="i18n/en.js?v=10"></script>
-<script src="i18n/it.js?v=10"></script>
-<script src="i18n/fr.js?v=10"></script>
+<script src="i18n/de.js?v=16"></script>
+<script src="i18n/en.js?v=16"></script>
+<script src="i18n/it.js?v=16"></script>
+<script src="i18n/fr.js?v=16"></script>
 <script src="i18n/portal-i18n.js?v=3"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=26"></script>
+<script src="firebase-service.js?v=28"></script>
 <script src="portal-customer-auth.js?v=2"></script>
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js?v=2"></script>
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-portal.js?v=76"></script>
+<script src="customer-wish-request-library.js?v=7"></script>
+<script src="customer-portal-wishes.js?v=7"></script>
+<script src="customer-portal.js?v=82"></script>
 </body>
 </html>

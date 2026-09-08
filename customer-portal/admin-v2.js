@@ -58,6 +58,18 @@
     customerEditSaving:false,
     customerEditMessage:"",
     customerEditMessageKind:"",
+    wishView:"list",
+    wishSelectedId:"",
+    wishPickerOpen:false,
+    wishCustomOpen:false,
+    wishPreviewOpen:false,
+    wishSaving:false,
+    wishMessage:"",
+    wishMessageKind:"",
+    wishCreateDraft:null,
+    wishKnownDraft:null,
+    wishNotesDraft:"",
+    wishCustomDraft:null,
     tripEditMode:false,
     tripEditDraft:null,
     tripEditOriginal:"",
@@ -5091,7 +5103,8 @@
       publication:publicationStatus(customer),
       programItems:flattenProgramItems(customer),
       bookingSummaries,
-      lastCommunicationAt:workspaceLatestCommunicationValue(customer)
+      lastCommunicationAt:workspaceLatestCommunicationValue(customer),
+      wishRequests:Array.isArray(customer.wishRequests)?customer.wishRequests:[]
     });
   }
 
@@ -7981,7 +7994,7 @@
       :`<li><span></span><div><strong>Noch keine Aktivität</strong><small>Änderungen werden hier zusammengefasst.</small></div></li>`;
     const insightMarkup=intelligence?.insights.length
       ?intelligence.insights.slice(0,5).map(insight=>`
-        <button class="v2-workspace-alert ${escapeHtml(insight.severity==="recommendation"?"recommendation":insight.severity==="important"?"warning":"critical")}" type="button" data-detail-tab="${escapeHtml(insight.targetTab)}">
+        <button class="v2-workspace-alert ${escapeHtml(insight.severity==="recommendation"?"recommendation":insight.severity==="important"?"warning":"critical")}" type="button" data-detail-tab="${escapeHtml(insight.targetTab)}"${insight.entityId?` data-open-wish="${escapeHtml(insight.entityId)}"`:""}>
           <span aria-hidden="true">${escapeHtml(insight.severity==="critical"?"!":"→")}</span>
           <span><strong>${escapeHtml(insight.title)}</strong><small>${escapeHtml(`${insight.description} ${insight.actionLabel}.`)}</small></span>
         </button>
@@ -8536,6 +8549,7 @@
       publication:publicationStatus(customer),
       portal:customerJourneyPortalState(customer),
       wishes:customerWishesViewModel(customer).preview,
+      wishReplyCount:window.ACTAdminV2Wishes?.repliedAdminWishCount?.(customer)||0,
       staySummary:customerJourneyStaySummary(trip),
       programCount:programCount(customer),
       openBookings:workspace.openBookings,
@@ -8553,7 +8567,7 @@
       </li>
     `).join("");
     const button=(!next.idle&&next.buttonLabel&&next.targetTab)
-      ?`<button class="v2-button primary" type="button" data-detail-tab="${escapeHtml(next.targetTab)}">${escapeHtml(next.buttonLabel)}</button>`
+      ?`<button class="v2-button primary" type="button" data-detail-tab="${escapeHtml(next.targetTab)}"${next.entityId?` data-open-wish="${escapeHtml(next.entityId)}"`:""}>${escapeHtml(next.buttonLabel)}</button>`
       :"";
     const detail=next.description?`<p class="v2-customer-journey-next-detail">${escapeHtml(next.description)}</p>`:"";
     return `
@@ -9555,7 +9569,7 @@
 
   function customerTabMarkup(customer){
     const contact=customer.contact&&typeof customer.contact==="object"?customer.contact:{};
-    if(state.customerEditMode)return customerEditFormMarkup(customer);
+    if(state.customerEditMode)return `${customerEditFormMarkup(customer)}${window.ACTAdminV2Wishes?.sectionMarkup?.(customer)||""}`;
     return `
       <div class="v2-tab-actions v2-customer-mobile-actions">
         <button class="v2-button primary" type="button" data-customer-edit-action="edit">Bearbeiten</button>
@@ -9582,6 +9596,7 @@
           </div>
         </article>
       </div>
+      ${window.ACTAdminV2Wishes?.sectionMarkup?.(customer)||""}
     `;
   }
 
@@ -11438,6 +11453,19 @@
       routeTo,
       render
     });
+    window.ACTAdminV2Wishes?.bind?.({
+      getState:()=>state,
+      patchState:patch=>Object.assign(state,patch||{}),
+      escapeHtml,
+      byId,
+      customerById,
+      updateLocalCustomer,
+      clone,
+      compactObject,
+      withTimeout,
+      AUTH_TIMEOUT_MS,
+      render
+    });
     window.ACTAdminV2Pdf?.bind?.({
       getState:()=>state,
       escapeHtml,
@@ -11514,6 +11542,7 @@
       if(window.ACTAdminV2Communication?.handleClick?.(event)===true)return;
       if(window.ACTAdminV2LegalComms?.handleClick?.(event)===true)return;
       if(window.ACTAdminV2Payment?.handleClick?.(event)===true)return;
+      if(window.ACTAdminV2Wishes?.handleClick?.(event)===true)return;
       const wizardAction=event.target.closest("[data-wizard-action]");
       if(wizardAction){
         handleWizardAction(wizardAction.dataset.wizardAction);
@@ -11922,13 +11951,26 @@
       const aiCopy=event.target.closest("[data-ai-copy]");
       if(aiCopy&&navigator.clipboard?.writeText){navigator.clipboard.writeText(aiCopy.dataset.aiCopy).catch(()=>{});return;}
       const tab=event.target.closest("[data-detail-tab]");
-      if(tab&&state.selectedCustomerId){openWorkspaceTab(tab.dataset.detailTab);return;}
+      if(tab&&state.selectedCustomerId){
+        const wishId=cleanValue(tab.dataset.openWish);
+        if(wishId)window.ACTAdminV2Wishes?.openWish?.(wishId);
+        openWorkspaceTab(tab.dataset.detailTab);
+        if(wishId){
+          const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          window.requestAnimationFrame(()=>{
+            const root=document.querySelector("[data-wish-root]");
+            if(root)root.scrollIntoView({block:"start",behavior:reduced?"auto":"smooth"});
+          });
+        }
+        return;
+      }
       if(event.target.closest("[data-new-customer]"))openNewCustomer();
       if(event.target.id==="retryInlineButton"&&confirmDiscardCustomerEdit())loadCustomers();
       if(event.target.id==="retryDetailButton"&&confirmDiscardCustomerEdit())loadCustomers();
     });
     document.addEventListener("input",event=>{
       if(window.ACTAdminV2Bookings?.handleInput?.(event))return;
+      if(window.ACTAdminV2Wishes?.handleInput?.(event))return;
       if(event.target.closest("[data-ai-task-workspace]")){
         persistAiTaskWorkspaceDraftFromDom();
         return;
@@ -11949,6 +11991,7 @@
       if(window.ACTAdminV2Communication?.handleChange?.(event))return;
       if(window.ACTAdminV2LegalComms?.handleChange?.(event))return;
       if(window.ACTAdminV2Payment?.handleChange?.(event))return;
+      if(window.ACTAdminV2Wishes?.handleChange?.(event))return;
       if(event.target.closest("[data-ai-restaurant-module], [data-ai-transfer-module], [data-ai-booking-module]")){
         persistAiTaskWorkspaceDraftFromDom();
         if(event.target.matches([

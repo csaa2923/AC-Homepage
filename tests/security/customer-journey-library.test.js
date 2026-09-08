@@ -47,7 +47,8 @@ function operationalInsight(id,extras={}){
     description:extras.description||"Bestehender Hinweis",
     reason:extras.reason||id,
     targetTab:extras.targetTab||"programm",
-    actionLabel:extras.actionLabel||"Öffnen"
+    actionLabel:extras.actionLabel||"Öffnen",
+    ...(extras.entityId?{entityId:extras.entityId}:{})
   };
 }
 
@@ -358,5 +359,42 @@ describe("8.0a customer journey library",()=>{
     assert.doesNotMatch(lib.buildJourneyStatus(readyInput({portal:{known:true,key:"missing"}})).find(row=>row.id==="portal").value,/missing|false/i);
     assert.equal(lib.CONTACT_LABELS.join(","),"Kundenname,E-Mail,Telefon");
     assert.equal(lib.STAY_LABELS.join(","),"Reisename,Reisebeginn,Reiseende,Region");
+  });
+
+  it("maps CUSTOMER_REPLIED insights to a wish-specific next action",()=>{
+    const lib=loadJourney();
+    const insight=operationalInsight("wish-customer-replied-wr_reply_1",{
+      title:"Neue Antworten vom Gast",
+      description:"Familie Berg · Seefeld September · 08.09.2026, 10:00",
+      actionLabel:"Antworten prüfen",
+      targetTab:"kunde",
+      entityId:"wr_reply_1"
+    });
+    const journey=lib.buildCustomerJourney(readyInput({
+      wishes:[],
+      wishReplyCount:1,
+      insights:[insight,operationalInsight("program-empty",{targetTab:"programm"})]
+    }));
+    const wishes=journey.rows.find(row=>row.id==="wishes");
+    assert.equal(wishes.tone,"attention");
+    assert.equal(wishes.value,"1 neue Antwort");
+    assert.equal(journey.nextAction.id,"wish-customer-replied-wr_reply_1");
+    assert.equal(journey.nextAction.source,"insightsFor");
+    assert.equal(journey.nextAction.targetTab,"kunde");
+    assert.equal(journey.nextAction.buttonLabel,"Antworten prüfen");
+    assert.equal(journey.nextAction.entityId,"wr_reply_1");
+    assert.doesNotMatch(JSON.stringify(journey.nextAction),/followUpQuestions|SECRET_ANSWER/);
+  });
+
+  it("keeps separate next-action entityIds for multiple replied wishes",()=>{
+    const lib=loadJourney();
+    const first=operationalInsight("wish-customer-replied-wr_a",{targetTab:"kunde",entityId:"wr_a",actionLabel:"Antworten prüfen"});
+    const second=operationalInsight("wish-customer-replied-wr_b",{targetTab:"kunde",entityId:"wr_b",actionLabel:"Antworten prüfen"});
+    const next=lib.resolveJourneyNextAction(readyInput({
+      wishReplyCount:2,
+      insights:[first,second]
+    }));
+    assert.equal(next.entityId,"wr_a");
+    assert.equal(lib.buildJourneyStatus(readyInput({wishReplyCount:2})).find(row=>row.id==="wishes").value,"2 neue Antworten");
   });
 });

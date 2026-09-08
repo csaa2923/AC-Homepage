@@ -114,6 +114,7 @@ const {
   runDisableCustomerPortalAccess,
   runGetAuthorizedPortalContextAsync
 }=require("./lib/portalAccessStore");
+const {runSubmitCustomerWishRequest,runSubmitCustomerWishFollowUpAnswers,runListCustomerPortalWishes}=require("./lib/portalWishRequests");
 const {createFirestorePortalOtpStore}=require("./lib/portalOtpStore");
 const {
   createPortalAuthAdapter,
@@ -757,6 +758,74 @@ async function getCustomerPortalContext(request,deps={}){
   }
 }
 
+// Optional portal self-service (“I have a new wish”). Not the admin-first Concierge path.
+async function submitCustomerWishRequest(request,deps={}){
+  if(!request?.auth?.uid){
+    throw new HttpsError("unauthenticated","Portalzugang nicht verfuegbar.");
+  }
+  const limiter=typeof deps.checkRateLimit==="function"?deps.checkRateLimit:checkRateLimit;
+  if(!limiter(`wish-request:${request.auth.uid}`)){
+    throw new HttpsError("resource-exhausted","Zu viele Anfragen. Bitte kurz warten.");
+  }
+  try{
+    const store=deps.store||portalAccessStore();
+    const persist={
+      now:deps.now,
+      wishId:deps.wishId,
+      appendWishRequest:deps.appendWishRequest
+    };
+    if(!persist.appendWishRequest)persist.db=deps.db||getDb();
+    const submitted=await runSubmitCustomerWishRequest(store,request.auth,request.data||{},persist);
+    return submitted.result;
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
+async function submitCustomerWishFollowUpAnswers(request,deps={}){
+  if(!request?.auth?.uid){
+    throw new HttpsError("unauthenticated","Portalzugang nicht verfuegbar.");
+  }
+  const limiter=typeof deps.checkRateLimit==="function"?deps.checkRateLimit:checkRateLimit;
+  if(!limiter(`wish-follow-up:${request.auth.uid}`)){
+    throw new HttpsError("resource-exhausted","Zu viele Anfragen. Bitte kurz warten.");
+  }
+  try{
+    assertKnownRequestFields(request.data,new Set(["publicPortalId","wishId","answers"]));
+    const store=deps.store||portalAccessStore();
+    const submitted=await runSubmitCustomerWishFollowUpAnswers(store,request.auth,request.data||{},{
+      now:deps.now,
+      updateWishInTransaction:deps.updateWishInTransaction,
+      db:deps.db
+    });
+    return submitted.result;
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
+async function listCustomerPortalWishes(request,deps={}){
+  if(!request?.auth?.uid){
+    throw new HttpsError("unauthenticated","Portalzugang nicht verfuegbar.");
+  }
+  const limiter=typeof deps.checkRateLimit==="function"?deps.checkRateLimit:checkRateLimit;
+  if(!limiter(`wish-list:${request.auth.uid}`)){
+    throw new HttpsError("resource-exhausted","Zu viele Anfragen. Bitte kurz warten.");
+  }
+  try{
+    assertKnownRequestFields(request.data,new Set(["publicPortalId"]));
+    const store=deps.store||portalAccessStore();
+    const listed=await runListCustomerPortalWishes(store,request.auth,request.data||{},{
+      loadWishRequests:deps.loadWishRequests,
+      loadCustomer:deps.loadCustomer||loadCustomerRecord,
+      db:deps.db
+    });
+    return listed.result;
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
 async function disableCustomerPortalAccess(request,deps={}){
   requireAdminCallable(request);
   try{
@@ -1295,6 +1364,9 @@ module.exports={
   createCustomerPortalAccess,
   bindCustomerPortalMemberAuth,
   getCustomerPortalContext,
+  submitCustomerWishRequest,
+  listCustomerPortalWishes,
+  submitCustomerWishFollowUpAnswers,
   getCustomerPortalAccessAdmin,
   disableCustomerPortalAccess,
   requestCustomerPortalOtp,

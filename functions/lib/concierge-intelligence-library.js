@@ -25,7 +25,43 @@ function dayDifference(start,end){
   return Math.round((to-from)/86400000)+1;
 }
 function insight(id,severity,title,description,reason,targetTab,actionLabel,extra={}){
-  return {id,severity,title,description,reason,targetTab,actionLabel,...(extra.dueDate?{dueDate:extra.dueDate}:{}),...(extra.source?{source:extra.source}:{})};
+  return {id,severity,title,description,reason,targetTab,actionLabel,...(extra.dueDate?{dueDate:extra.dueDate}:{}),...(extra.source?{source:extra.source}:{}),...(extra.entityId?{entityId:text(extra.entityId)}:{})};
+}
+function formatInsightDateTime(value){
+  const date=dateValue(value);
+  if(!date)return "";
+  const pad=n=>String(n).padStart(2,"0");
+  return `${pad(date.getDate())}.${pad(date.getMonth()+1)}.${date.getFullYear()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+function wishRepliedAt(wish){
+  const answered=list(wish&&wish.followUpQuestions).map(item=>text(item&&item.answeredAt)).filter(Boolean).sort();
+  return text(wish&&wish.submittedAt)||answered[answered.length-1]||text(wish&&wish.updatedAt);
+}
+function adminCustomerRepliedWishes(wishRequests){
+  const seen=new Set();
+  return list(wishRequests).filter(wish=>{
+    const wishId=text(wish&&wish.wishId);
+    if(!wish||text(wish.origin)!=="admin"||text(wish.status)!=="CUSTOMER_REPLIED"||!wishId||seen.has(wishId))return false;
+    seen.add(wishId);
+    return true;
+  });
+}
+function wishCustomerRepliedInsights(customer,wishRequests){
+  const name=text(customer&&customer.customerName);
+  return adminCustomerRepliedWishes(wishRequests).map(wish=>{
+    const wishId=text(wish.wishId);
+    const when=formatInsightDateTime(wishRepliedAt(wish));
+    return insight(
+      `wish-customer-replied-${wishId}`,
+      "important",
+      "Neue Antworten vom Gast",
+      [name,text(wish.title)||"Wunsch",when].filter(Boolean).join(" · "),
+      "wishCustomerReplied",
+      "kunde",
+      "Antworten prüfen",
+      {source:"wishRequests",entityId:wishId}
+    );
+  });
 }
 function programText(item){return normalize([item?.title,item?.category,item?.type,item?.description,item?.notes,item?.location].filter(Boolean).join(" "));}
 function matches(items,pattern){return items.some(item=>pattern.test(programText(item)));}
@@ -69,6 +105,7 @@ function analyze(customer={},options={}){
   const children=Number(trip.children||customer.children||0);
   if(Number.isFinite(children)&&children>0&&!matches(items,/familie|kinder|kind|spielplatz|tierpark|bad|schwimmbad/))result.push(insight("family-activity-missing","recommendation","Keine Familienaktivität erkennbar","Für die hinterlegte Kinderanzahl ist im Programm keine erkennbare Familienaktivität vorhanden.","familyActivityMissing","programm","Familienaktivität ergänzen",{source:"program-and-travelers"}));
   if(matches(items,/wander|hike|berg|tour/)&&!indoor)result.push(insight("hike-alternative-missing","recommendation","Wanderung ohne alternative Aktivität","Für eine vorhandene Wanderung ist keine erkennbare wetterunabhängige Alternative hinterlegt.","hikeAlternativeMissing","programm","Alternative ergänzen",{source:"program"}));
+  wishCustomerRepliedInsights(customer,list(options.wishRequests!=null?options.wishRequests:customer.wishRequests)).forEach(item=>result.push(item));
   return result.sort((a,b)=>ORDER[a.severity]-ORDER[b.severity]||a.id.localeCompare(b.id));
 }
 function getConciergeInsights(customer,options){return analyze(customer,options);}
@@ -83,4 +120,4 @@ function analyzeCustomerReadiness(customer,options){
   const insights=analyze(customer,options),quality=calculateConciergeQualityScore(customer,options);
   return {isReady:quality.counts.critical===0&&quality.counts.important===0,quality,insights,recommendedNextActions:getRecommendedNextActions(customer,options)};
 }
-module.exports={analyzeCustomerReadiness,calculateConciergeQualityScore,getConciergeInsights,getRecommendedNextActions};
+module.exports={analyzeCustomerReadiness,calculateConciergeQualityScore,getConciergeInsights,getRecommendedNextActions,adminCustomerRepliedWishes};

@@ -63,6 +63,7 @@
       programItems:list(input.programItems),
       bookingSummaries:list(input.bookingSummaries),
       lastCommunicationAt:input.lastCommunicationAt||"",
+      wishRequests:list(input.wishRequests!=null?input.wishRequests:source.wishRequests),
       settings:{...DEFAULTS,...(input.settings&&typeof input.settings==="object"?input.settings:{})}
     };
   }
@@ -77,8 +78,49 @@
       targetTab,
       actionLabel,
       ...(extra.dueDate?{dueDate:extra.dueDate}:{}),
-      ...(extra.source?{source:extra.source}:{})
+      ...(extra.source?{source:extra.source}:{}),
+      ...(extra.entityId?{entityId:text(extra.entityId)}:{})
     };
+  }
+
+  function formatInsightDateTime(value){
+    const date=dateValue(value);
+    if(!date)return "";
+    const pad=n=>String(n).padStart(2,"0");
+    return `${pad(date.getDate())}.${pad(date.getMonth()+1)}.${date.getFullYear()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function wishRepliedAt(wish){
+    const answered=list(wish&&wish.followUpQuestions).map(item=>text(item&&item.answeredAt)).filter(Boolean).sort();
+    return text(wish&&wish.submittedAt)||answered[answered.length-1]||text(wish&&wish.updatedAt);
+  }
+
+  function adminCustomerRepliedWishes(wishRequests){
+    const seen=new Set();
+    return list(wishRequests).filter(wish=>{
+      const wishId=text(wish&&wish.wishId);
+      if(!wish||text(wish.origin)!=="admin"||text(wish.status)!=="CUSTOMER_REPLIED"||!wishId||seen.has(wishId))return false;
+      seen.add(wishId);
+      return true;
+    });
+  }
+
+  function wishCustomerRepliedInsights(customer,wishRequests){
+    const name=text(customer&&customer.customerName);
+    return adminCustomerRepliedWishes(wishRequests).map(wish=>{
+      const wishId=text(wish.wishId);
+      const when=formatInsightDateTime(wishRepliedAt(wish));
+      return makeInsight(
+        `wish-customer-replied-${wishId}`,
+        "important",
+        "Neue Antworten vom Gast",
+        [name,text(wish.title)||"Wunsch",when].filter(Boolean).join(" · "),
+        "wishCustomerReplied",
+        "kunde",
+        "Antworten prüfen",
+        {source:"wishRequests",entityId:wishId}
+      );
+    });
   }
 
   function programText(item){
@@ -115,7 +157,7 @@
 
   function insightsFor(customer,options){
     const state=context(customer,options);
-    const {trip,workspace,publication,programItems,bookingSummaries,settings,now}=state;
+    const {trip,workspace,publication,programItems,bookingSummaries,settings,now,wishRequests}=state;
     const insights=[];
     const start=trip.start||state.customer.startDatePlain||"";
     const end=trip.end||state.customer.endDatePlain||"";
@@ -360,6 +402,8 @@
       ));
     }
 
+    wishCustomerRepliedInsights(state.customer,wishRequests).forEach(insight=>insights.push(insight));
+
     return insights.sort((a,b)=>SEVERITY_ORDER[a.severity]-SEVERITY_ORDER[b.severity]||a.id.localeCompare(b.id));
   }
 
@@ -410,7 +454,8 @@
     analyzeCustomerReadiness,
     calculateConciergeQualityScore,
     getConciergeInsights,
-    getRecommendedNextActions
+    getRecommendedNextActions,
+    adminCustomerRepliedWishes
   };
   if(typeof window!=="undefined")window.ACTConciergeIntelligenceLibrary=api;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;

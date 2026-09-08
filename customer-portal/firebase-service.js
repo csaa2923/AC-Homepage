@@ -1376,6 +1376,18 @@
     return callPortalCustomerFunction("getCustomerPortalContext",{publicPortalId});
   }
 
+  async function listCustomerPortalWishes(publicPortalId){
+    return callPortalCustomerFunction("listCustomerPortalWishes",{publicPortalId});
+  }
+
+  async function submitCustomerWishFollowUpAnswers(publicPortalId,wishId,answers){
+    return callPortalCustomerFunction("submitCustomerWishFollowUpAnswers",{
+      publicPortalId,
+      wishId,
+      answers
+    });
+  }
+
   function portalSharesCollectionRef(ready){
     const {firestoreModule}=ready.modules;
     return firestoreModule.collection(ready.db,"portalShares");
@@ -1667,6 +1679,8 @@
     requestCustomerPortalOtp,
     exchangePortalOtpForCustomToken,
     getCustomerPortalContext,
+    listCustomerPortalWishes,
+    submitCustomerWishFollowUpAnswers,
     saveConciergeAnalysis,
     listConciergeAnalyses,
     updateConciergeAnalysisItemStatus,

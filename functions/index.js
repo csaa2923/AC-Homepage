@@ -45,6 +45,24 @@ exports.getCustomerPortalContext=onCall({
   invoker:"public"
 },(request)=>loadImpl().getCustomerPortalContext(request));
 
+exports.submitCustomerWishRequest=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().submitCustomerWishRequest(request));
+
+exports.listCustomerPortalWishes=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().listCustomerPortalWishes(request));
+
+exports.submitCustomerWishFollowUpAnswers=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().submitCustomerWishFollowUpAnswers(request));
+
 exports.disableCustomerPortalAccess=onCall({
   region:"europe-west1",
   cors:true,

@@ -20,10 +20,14 @@
   let customer=null;
   let portalGreetingName="";
   let dataSource="demo";
+  let portalFollowUpWishes=[];
+  let portalFollowUpThanks=false;
+  let portalFollowUpNotice="";
   let liveWeatherByDate={};
   const root=document.getElementById("portalRoot");
   const travelLib=()=>window.ACTTravelActionsLibrary||null;
   const conciergeLib=()=>window.ACTConciergeAssistantLibrary||null;
+  const wishUi=()=>window.ACTCustomerPortalWishes||null;
   const i18nLib=()=>window.ACTPortalI18n||null;
   const APP_VIEWS=["today","itinerary","discover","documents","service"];
   const APP_VIEW_LABELS={
@@ -52,7 +56,8 @@
     documents:"documents",
     accommodation:"service",
     contact:"service",
-    actions:"service"
+    actions:"service",
+    wish:"service"
   };
   const PORTAL_LANG_KEY=(i18nLib()&&i18nLib().STORAGE_KEY)||"act_customer_portal_language";
   const calendarState={
@@ -236,6 +241,7 @@
     }
     if(lib?.syncLanguageControls)lib.syncLanguageControls(document);
     syncAppViewLabels();
+    renderPortalFollowUpWishes();
   }
 
   function syncPortalLanguageUI(lang){
@@ -3766,10 +3772,150 @@
     safeRender("dataSourceNotice",renderDataSourceNotice);
     safeRender("adminVersionHint",renderAdminVersionHint);
     bindActions();
+    bindWishPortal();
     syncEmptyFieldsVisibility();
     hydrateShareDocumentUrls();
     applyAppViewVisibility();
     applyPortalI18nDom();
+  }
+
+  function bindWishPortal(){
+    const ui=wishUi();
+    if(!ui||typeof ui.bind!=="function")return;
+    ui.bind({
+      canStart:()=>isSessionAccess&&!isShareAccess,
+      loginUrl:()=>publicPortalId&&loginLib?loginLib.buildPortalLoginUrl(publicPortalId):"",
+      goToLogin:()=>redirectToPortalLogin(),
+      profileStay:()=>ui.resolveWishStayLabel?ui.resolveWishStayLabel(customer):"",
+      profileStayPeriod:()=>ui.resolveWishStayPeriod?ui.resolveWishStayPeriod(customer):{from:"",to:""},
+      getFollowUpWish:id=>portalFollowUpWishes.find(item=>item.wishId===id)||null,
+      onSubmitFollowUp:submitPortalFollowUpAnswers,
+      onFollowUpSubmitted:handlePortalFollowUpSubmitted,
+      onReloadFollowUps:()=>loadPortalFollowUpWishes(),
+      t,
+      applyDom:applyPortalI18nDom
+    });
+    loadPortalFollowUpWishes();
+  }
+
+  function wishFollowUpErrorCode(error){
+    return String(error&&(error.code||error.message)||"").replace(/^functions\//,"").split("/")[0];
+  }
+
+  async function submitPortalFollowUpAnswers({wishId,answers}){
+    if(!isSessionAccess||isShareAccess||!publicPortalId){
+      return {ok:false,code:"unauthenticated",message:t("service.wish.submitAuth")};
+    }
+    const service=window.ACTFirebaseService;
+    if(!service||typeof service.submitCustomerWishFollowUpAnswers!=="function"){
+      return {ok:false,code:"failed-precondition",message:t("service.wish.submitFailed")};
+    }
+    try{
+      const result=await service.submitCustomerWishFollowUpAnswers(publicPortalId,wishId,answers);
+      return {ok:true,result};
+    }catch(error){
+      const code=wishFollowUpErrorCode(error);
+      if(code==="unauthenticated"||code==="permission-denied"){
+        return {ok:false,code,message:t("service.wish.submitAuth")};
+      }
+      if(code==="failed-precondition"){
+        return {ok:false,code,message:t("service.wish.submitChanged")};
+      }
+      return {ok:false,code,message:t("service.wish.submitFailed")};
+    }
+  }
+
+  function handlePortalFollowUpSubmitted(){
+    portalFollowUpThanks=true;
+    portalFollowUpNotice=portalGreetingName
+      ?t("service.wish.submitSuccess",{name:portalGreetingName})
+      :t("service.wish.submitSuccessAnonymous");
+    loadPortalFollowUpWishes();
+  }
+
+  function wishContextSnippet(wish){
+    const text=String(wish&&wish.originalRequest&&wish.originalRequest.text||"").trim();
+    if(!text)return "";
+    return text.length>140?`${text.slice(0,137)}…`:text;
+  }
+
+  function renderPortalFollowUpWishes(){
+    const list=document.getElementById("wishList");
+    const empty=document.getElementById("wishListEmpty");
+    const title=document.getElementById("wishListTitle");
+    const lead=document.querySelector("#wishCard .service-wish-lead");
+    const start=document.getElementById("wishStartButton");
+    const notice=document.getElementById("wishFollowUpNotice");
+    if(start)start.hidden=true;
+    if(notice){
+      notice.hidden=!portalFollowUpNotice;
+      notice.textContent=portalFollowUpNotice;
+    }
+    if(!list||!empty)return;
+    if(isShareAccess||!isSessionAccess){
+      list.hidden=true;
+      empty.hidden=true;
+      return;
+    }
+    list.hidden=false;
+    if(title){
+      title.setAttribute("data-i18n","service.wish.followUpListTitle");
+      title.textContent=t("service.wish.followUpListTitle");
+    }
+    if(!portalFollowUpWishes.length){
+      if(lead){
+        lead.setAttribute("data-i18n","service.wish.followUpEmptyLead");
+        lead.textContent=t("service.wish.followUpEmptyLead");
+      }
+      empty.hidden=false;
+      const emptyKey=portalFollowUpThanks?"service.wish.followUpThanksEmpty":"service.wish.followUpEmpty";
+      empty.setAttribute("data-i18n",emptyKey);
+      empty.textContent=t(emptyKey);
+      list.querySelectorAll("[data-wish-item]").forEach(node=>node.remove());
+      return;
+    }
+    if(lead){
+      lead.setAttribute("data-i18n","service.wish.followUpLead");
+      lead.textContent=t("service.wish.followUpLead");
+    }
+    empty.hidden=true;
+    list.querySelectorAll("[data-wish-item]").forEach(node=>node.remove());
+    portalFollowUpWishes.forEach(wish=>{
+      const count=Array.isArray(wish.followUpQuestions)?wish.followUpQuestions.length:0;
+      const article=document.createElement("article");
+      article.className="service-wish-item";
+      article.setAttribute("data-wish-item",wish.wishId);
+      article.innerHTML=`
+        <div>
+          <h4>${escapeHtml(wish.title||t("service.wish.title"))}</h4>
+          ${wishContextSnippet(wish)?`<p class="service-wish-item-context">${escapeHtml(wishContextSnippet(wish))}</p>`:""}
+          <p class="service-wish-item-meta">${escapeHtml(t("service.wish.followUpCount",{count}))} · ${escapeHtml(t("service.wish.followUpStatus"))}</p>
+        </div>
+        <button type="button" class="button primary" data-wish-open="${escapeHtml(wish.wishId)}">${escapeHtml(t("service.wish.followUpStart"))}</button>
+      `;
+      list.appendChild(article);
+    });
+  }
+
+  async function loadPortalFollowUpWishes(){
+    portalFollowUpWishes=[];
+    if(!isSessionAccess||isShareAccess||!publicPortalId){
+      renderPortalFollowUpWishes();
+      return;
+    }
+    const service=window.ACTFirebaseService;
+    if(!service||typeof service.listCustomerPortalWishes!=="function"){
+      renderPortalFollowUpWishes();
+      return;
+    }
+    try{
+      const result=await service.listCustomerPortalWishes(publicPortalId);
+      portalFollowUpWishes=Array.isArray(result&&result.wishes)?result.wishes:[];
+    }catch(error){
+      console.warn("Rückfragen konnten nicht geladen werden.",error&&error.message?error.message:"Fehler");
+      portalFollowUpWishes=[];
+    }
+    renderPortalFollowUpWishes();
   }
 
   function renderAdminVersionHint(){

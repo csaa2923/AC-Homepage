@@ -149,4 +149,80 @@ describe("concierge intelligence library",()=>{
     const browserResult=JSON.parse(JSON.stringify(browser.analyzeCustomerReadiness(customer,options)));
     assert.deepEqual(serverLibrary.analyzeCustomerReadiness(customer,options),browserResult);
   });
+
+  it("emits one wishId-stable CUSTOMER_REPLIED insight and ignores other statuses",()=>{
+    const library=loadLibrary();
+    const secret="SECRET_ANSWER_TEXT_SHOULD_NOT_LEAK";
+    const replied={
+      wishId:"wr_reply_1",
+      origin:"admin",
+      status:"CUSTOMER_REPLIED",
+      title:"Seefeld September",
+      submittedAt:"2026-09-08T08:00:00.000Z",
+      followUpQuestions:[{instanceId:"fu_1",status:"ANSWERED",answer:secret,answeredAt:"2026-09-08T08:00:00.000Z"}]
+    };
+    const options={
+      now,
+      trip:{},
+      workspace:{missingRequired:[],documents:{critical:0,missing:0}},
+      publication:{key:"draft"},
+      programItems:[],
+      bookingSummaries:[],
+      wishRequests:[
+        replied,
+        {...replied},
+        {wishId:"wr_wait",origin:"admin",status:"WAITING_FOR_CUSTOMER",title:"Wartet"},
+        {wishId:"wr_new",origin:"admin",status:"NEW",title:"Neu"},
+        {wishId:"wr_cancel",origin:"admin",status:"CANCELLED",title:"Abgebrochen"},
+        {wishId:"wr_self",origin:"portal",status:"CUSTOMER_REPLIED",title:"Self-Service"}
+      ]
+    };
+    const first=library.getConciergeInsights({customerName:"Familie Berg"},options);
+    const second=library.getConciergeInsights({customerName:"Familie Berg"},options);
+    const replyInsights=first.filter(item=>item.reason==="wishCustomerReplied");
+    assert.equal(replyInsights.length,1);
+    assert.equal(replyInsights[0].id,"wish-customer-replied-wr_reply_1");
+    assert.equal(replyInsights[0].entityId,"wr_reply_1");
+    assert.equal(replyInsights[0].title,"Neue Antworten vom Gast");
+    assert.equal(replyInsights[0].actionLabel,"Antworten prüfen");
+    assert.equal(replyInsights[0].targetTab,"kunde");
+    assert.equal(replyInsights[0].source,"wishRequests");
+    assert.match(replyInsights[0].description,/Familie Berg/);
+    assert.match(replyInsights[0].description,/Seefeld September/);
+    assert.match(replyInsights[0].description,/08\.09\.2026/);
+    assert.doesNotMatch(JSON.stringify(replyInsights[0]),/SECRET_ANSWER_TEXT_SHOULD_NOT_LEAK|followUpQuestions/);
+    assert.equal(first.filter(item=>String(item.id).startsWith("wish-customer-replied-")).map(item=>item.id).join(","),second.filter(item=>String(item.id).startsWith("wish-customer-replied-")).map(item=>item.id).join(","));
+    assert.equal(library.adminCustomerRepliedWishes(options.wishRequests).map(item=>item.wishId).join(","),"wr_reply_1");
+  });
+
+  it("creates separate insights for multiple replied admin wishes",()=>{
+    const library=loadLibrary();
+    const insights=library.getConciergeInsights({customerName:"Familie Berg"},{
+      now,
+      trip:{},
+      workspace:{missingRequired:[],documents:{critical:0,missing:0}},
+      publication:{key:"draft"},
+      programItems:[],
+      bookingSummaries:[],
+      wishRequests:[
+        {wishId:"wr_a",origin:"admin",status:"CUSTOMER_REPLIED",title:"Abendessen",submittedAt:"2026-09-08T08:00:00.000Z"},
+        {wishId:"wr_b",origin:"admin",status:"CUSTOMER_REPLIED",title:"Wanderung",submittedAt:"2026-09-08T09:00:00.000Z"}
+      ]
+    });
+    const ids=insights.filter(item=>item.reason==="wishCustomerReplied").map(item=>item.id);
+    assert.equal(ids.join(","),"wish-customer-replied-wr_a,wish-customer-replied-wr_b");
+    const server=serverLibrary.getConciergeInsights({customerName:"Familie Berg"},{
+      now,
+      trip:{},
+      workspace:{missingRequired:[],documents:{critical:0,missing:0}},
+      publication:{key:"draft"},
+      programItems:[],
+      bookingSummaries:[],
+      wishRequests:[
+        {wishId:"wr_a",origin:"admin",status:"CUSTOMER_REPLIED",title:"Abendessen",submittedAt:"2026-09-08T08:00:00.000Z"},
+        {wishId:"wr_b",origin:"admin",status:"CUSTOMER_REPLIED",title:"Wanderung",submittedAt:"2026-09-08T09:00:00.000Z"}
+      ]
+    });
+    assert.equal(server.filter(item=>item.reason==="wishCustomerReplied").map(item=>item.id).join(","),ids.join(","));
+  });
 });

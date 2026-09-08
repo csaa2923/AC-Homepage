@@ -322,6 +322,6 @@ describe("8.1a tourist demand library",()=>{
     assert.doesNotMatch(source,/https:\/\/trends\.google|cheerio|puppeteer|fetch\(/);
     assert.doesNotMatch(functionsIndex,/touristDemand|ACTTouristDemandLibrary/);
     assert.match(adminHtml,/customer-wishes-library\.js\?v=1/);
-    assert.match(adminHtml,/customer-journey-library\.js\?v=1/);
+    assert.match(adminHtml,/customer-journey-library\.js\?v=2/);
   });
 });

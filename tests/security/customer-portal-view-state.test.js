@@ -18,8 +18,8 @@ describe("customer portal view-state foundation (4.1B)", () => {
     assert.match(portalHtml, /data-view-mode="filtered"/);
     assert.match(portalHtml, /data-active-view="today"/);
     assert.match(portalHtml, /data-customer-app="1"/);
-    assert.match(portalHtml, /customer-portal\.js\?v=82/);
-    assert.match(portalHtml, /customer-portal\.css\?v=46/);
+    assert.match(portalHtml, /customer-portal\.js\?v=83/);
+    assert.match(portalHtml, /customer-portal\.css\?v=47/);
   });
 
   it("marks existing sections for the five app views without reshaping content", () => {
@@ -360,10 +360,10 @@ describe("customer portal render/layout stabilization (4.4A)", () => {
 
 describe("customer portal critical startup fix (4.4B)", () => {
   it("loads customer-portal.js with cache pin and classic script tag (no module/defer)", () => {
-    assert.match(portalHtml, /<script src="customer-portal\.js\?v=82"><\/script>/);
+    assert.match(portalHtml, /<script src="customer-portal\.js\?v=83"><\/script>/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\btype=["']module["']/);
     assert.doesNotMatch(portalHtml, /customer-portal\.js[^>]*\bdefer\b/);
-    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=82/);
+    assert.match(portalHtml, /concierge-assistant-library\.js[\s\S]*customer-portal\.js\?v=83/);
     assert.doesNotMatch(portalHtml, /serviceWorker|navigator\.serviceWorker/);
   });
 
@@ -448,8 +448,8 @@ describe("customer portal design tokens and today pilot (4.5B)", () => {
   });
 
   it("bumps stylesheet pin only for the design pilot", () => {
-    assert.match(portalHtml, /customer-portal\.css\?v=46/);
-    assert.match(portalHtml, /customer-portal\.js\?v=82/);
+    assert.match(portalHtml, /customer-portal\.css\?v=47/);
+    assert.match(portalHtml, /customer-portal\.js\?v=83/);
   });
 });
 
@@ -472,7 +472,7 @@ describe("customer portal today premium layout redesign (4.5B.1)", () => {
 
   it("keeps sticky side column on desktop without JS changes", () => {
     assert.match(portalCss, /@media\(min-width:980px\)\{[\s\S]*\.today-side-column\{[\s\S]*position:sticky/);
-    assert.match(portalHtml, /customer-portal\.js\?v=82/);
+    assert.match(portalHtml, /customer-portal\.js\?v=83/);
   });
 });
 
@@ -724,7 +724,7 @@ describe("customer portal premium polish (4.6)", () => {
     assert.match(portalJs, /data-discover-group/);
     assert.match(portalJs, /whatsappLink\(/);
     assert.match(portalCss, /prefers-reduced-motion:reduce[\s\S]*\.button,/);
-    assert.match(portalHtml, /customer-portal\.css\?v=46/);
-    assert.match(portalHtml, /customer-portal\.js\?v=82/);
+    assert.match(portalHtml, /customer-portal\.css\?v=47/);
+    assert.match(portalHtml, /customer-portal\.js\?v=83/);
   });
 });

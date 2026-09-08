@@ -994,24 +994,27 @@
 
   function questionsMarkup(wish){
     const items=(wish.followUpQuestions||[]).filter(item=>item.status!=="WITHDRAWN");
+    const locked=isAdminCustomerReplied(wish);
     return `
       <section class="v2-wish-panel">
         <div class="v2-workspace-section-head compact">
           <h4>Rückfragen an den Kunden</h4>
-          <div class="v2-wish-actions">
+          ${locked?"":`<div class="v2-wish-actions">
             <button class="v2-button soft" type="button" data-wish-action="toggle-picker">Fragen auswählen</button>
             <button class="v2-button soft" type="button" data-wish-action="toggle-custom">Eigene Frage hinzufügen</button>
-          </div>
+          </div>`}
         </div>
-        ${pickerMarkup(wish)}
-        ${customMarkup()}
+        ${locked?"":pickerMarkup(wish)}
+        ${locked?"":customMarkup()}
         ${items.length?`<ol class="v2-wish-questions">${items.map((item,index)=>`
           <li data-wish-instance="${escapeHtml(item.instanceId)}">
             <div>
               <strong>${index+1}. ${escapeHtml(followUpTitle(item))}</strong>
               <span class="v2-wish-chip">${escapeHtml(questionStatusLabel(item.status)||statusLabel(item.status))}</span>
             </div>
-            <label>Pflichtfrage
+            ${locked
+              ?`<p class="v2-muted">${item.required?"Pflichtfrage":"Optional"}</p>`
+              :`<label>Pflichtfrage
               <select data-wish-required="${escapeHtml(item.instanceId)}">
                 <option value="yes" ${item.required?"selected":""}>Ja</option>
                 <option value="no" ${item.required?"":"selected"}>Nein</option>
@@ -1021,7 +1024,7 @@
               <button class="v2-button soft" type="button" data-wish-action="move-up" data-wish-instance="${escapeHtml(item.instanceId)}" ${index===0?"disabled":""}>↑</button>
               <button class="v2-button soft" type="button" data-wish-action="move-down" data-wish-instance="${escapeHtml(item.instanceId)}" ${index===items.length-1?"disabled":""}>↓</button>
               <button class="v2-button soft" type="button" data-wish-action="withdraw" data-wish-instance="${escapeHtml(item.instanceId)}">Entfernen</button>
-            </div>
+            </div>`}
           </li>
         `).join("")}</ol>`:`<p class="v2-muted">Noch keine Rückfragen ausgewählt.</p>`}
       </section>
@@ -1082,7 +1085,7 @@
         </article>
         <div class="v2-wish-actions">
           <button class="v2-button soft" type="button" data-wish-action="preview">Kundensicht ansehen</button>
-          <button class="v2-button primary" type="button" data-wish-action="prepare">Für Kunden freigeben</button>
+          ${isAdminCustomerReplied(wish)?"":`<button class="v2-button primary" type="button" data-wish-action="prepare">Für Kunden freigeben</button>`}
         </div>
         <p class="v2-muted">Die echte Portal-Auslieferung folgt im nächsten Schritt.</p>
         ${previewMarkup(wish)}
@@ -1097,12 +1100,22 @@
     return listMarkup(customer);
   }
 
+  const FOLLOW_UP_LOCK_ACTIONS=new Set([
+    "toggle-picker","toggle-custom","add-library","save-custom",
+    "add-option","remove-option","withdraw","move-up","move-down","prepare"
+  ]);
+
+  function currentCustomer(){
+    return h().customerById?.(state().selectedCustomerId)||null;
+  }
+
   function handleClick(event){
     const button=event.target.closest("[data-wish-action]");
     if(!button)return false;
     event.preventDefault();
     const action=button.dataset.wishAction||"";
     if(button.disabled||state().wishSaving&&action!=="cancel")return true;
+    if(FOLLOW_UP_LOCK_ACTIONS.has(action)&&isAdminCustomerReplied(selectedWish(currentCustomer())))return true;
     if(action==="create"){openCreate();return true;}
     if(action==="open"){openDetail(button.dataset.wishId||"");return true;}
     if(action==="cancel"){resetWishUi({wishMessage:"",wishMessageKind:""});h().render();return true;}
@@ -1139,6 +1152,7 @@
   function handleChange(event){
     const required=event.target.closest("[data-wish-required]");
     if(required){
+      if(isAdminCustomerReplied(selectedWish(currentCustomer())))return true;
       toggleRequired(required.dataset.wishRequired,required.value==="yes");
       return true;
     }

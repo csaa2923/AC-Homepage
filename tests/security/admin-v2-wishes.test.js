@@ -121,7 +121,7 @@ describe("admin v2 guest wishes",()=>{
     const html=read("customer-portal/admin-v2.html");
     const js=read("customer-portal/admin-v2.js");
     const module=read("customer-portal/admin-v2-wishes.js");
-    assert.match(html,/admin-v2-wishes\.js\?v=3/);
+    assert.match(html,/admin-v2-wishes\.js\?v=4/);
     assert.match(html,/admin-v2-wishes\.css\?v=3/);
     assert.match(html,/customer-wish-request-library\.js\?v=7/);
     assert.match(js,/ACTAdminV2Wishes\?\.bind/);
@@ -344,6 +344,46 @@ describe("admin v2 guest wishes",()=>{
     assert.match(html,/Übersprungen|Beantwortet/);
     assert.match(html,/Beantwortet am/);
     assert.match(html,/08\.09\.2026|2026/);
+  });
+
+  it("locks answered follow-ups after CUSTOMER_REPLIED but keeps notes and answers",()=>{
+    const {wishes,customer,state,customers}=loadWishes();
+    let wish=wishes.createWishFromDraft(customer,createDraft()).value;
+    wish=lib.addLibraryFollowUpQuestion(wish,"budget").value;
+    wish=lib.addCustomFollowUpQuestion(wish,{customQuestion:"Soll dein Partner überrascht werden?",type:"yes_no",required:false}).value;
+    const prepared=lib.prepareQuestionsForCustomer(wish).value.wish;
+    const submitted=lib.submitPreparedFollowUpAnswers(prepared,[
+      {instanceId:prepared.followUpQuestions[0].instanceId,answer:"consult-first"},
+      {instanceId:prepared.followUpQuestions[1].instanceId,answer:false}
+    ],{now:"2026-09-08T08:00:00.000Z"});
+    const stored=submitted.value.wish;
+    const next={...customer,wishRequests:[stored]};
+    customers.splice(0,1,next);
+    state.wishView="detail";
+    state.wishSelectedId=stored.wishId;
+    const html=wishes.sectionMarkup(next);
+    assert.match(html,/Antworten des Kunden/);
+    assert.match(html,/zuerst beraten lassen/);
+    assert.match(html,/Soll dein Partner überrascht werden\?/);
+    assert.match(html,/data-wish-notes/);
+    assert.match(html,/Notiz speichern/);
+    assert.match(html,/Kundensicht ansehen/);
+    assert.doesNotMatch(html,/Fragen auswählen/);
+    assert.doesNotMatch(html,/Eigene Frage hinzufügen/);
+    assert.doesNotMatch(html,/Für Kunden freigeben/);
+    assert.doesNotMatch(html,/data-wish-action="withdraw"/);
+    assert.doesNotMatch(html,/data-wish-action="move-up"/);
+    assert.doesNotMatch(html,/data-wish-required=/);
+    const before=JSON.stringify(stored.followUpQuestions);
+    assert.equal(wishes.handleClick({
+      preventDefault(){},
+      target:{closest(selector){return selector==="[data-wish-action]"?{disabled:false,dataset:{wishAction:"prepare"}}:null;}}
+    }),true);
+    assert.equal(wishes.handleChange({
+      target:{closest(selector){return selector==="[data-wish-required]"?{dataset:{wishRequired:stored.followUpQuestions[0].instanceId},value:"no"}:null;}}
+    }),true);
+    assert.equal(JSON.stringify(customers[0].wishRequests[0].followUpQuestions),before);
+    assert.equal(customers[0].wishRequests[0].status,"CUSTOMER_REPLIED");
   });
 
   it("shows a reply badge and card hint only for admin CUSTOMER_REPLIED wishes",()=>{

@@ -1388,18 +1388,16 @@
 
   function renderCustomQuestionMarkup(item,t){
     if(!item)return "";
-    const label=escapeHtml(item.customQuestion||"");
+    const labelled='aria-labelledby="wishWizardTitle"';
     if(item.type==="yes_no"){
-      return `<p class="wish-subheading">${label}</p>
-        <div class="wish-choice-grid" role="radiogroup">
+      return `<div class="wish-choice-grid" role="radiogroup" ${labelled}>
           <button type="button" class="wish-choice${item.answer===true?" is-selected":""}" data-wish-follow-up="${escapeHtml(item.instanceId)}" data-wish-follow-value="true" role="radio" aria-checked="${item.answer===true?"true":"false"}">${escapeHtml(translate(t,"service.wish.yes"))}</button>
           <button type="button" class="wish-choice${item.answer===false?" is-selected":""}" data-wish-follow-up="${escapeHtml(item.instanceId)}" data-wish-follow-value="false" role="radio" aria-checked="${item.answer===false?"true":"false"}">${escapeHtml(translate(t,"service.wish.no"))}</button>
         </div>`;
     }
     if(item.type==="single_choice"||item.type==="multi_choice"){
       const values=Array.isArray(item.answer)?item.answer:[item.answer].filter(value=>value!=null&&value!=="");
-      return `<p class="wish-subheading">${label}</p>
-        <div class="wish-choice-grid" role="${item.type==="multi_choice"?"group":"radiogroup"}">
+      return `<div class="wish-choice-grid" role="${item.type==="multi_choice"?"group":"radiogroup"}" ${labelled}>
           ${(item.options||[]).map(option=>{
             const on=values.includes(option.id);
             return `<button type="button" class="wish-choice${on?" is-selected":""}" data-wish-follow-up="${escapeHtml(item.instanceId)}" data-wish-follow-value="${escapeHtml(option.id)}" ${item.type==="multi_choice"?`aria-pressed="${on?"true":"false"}"`:`role="radio" aria-checked="${on?"true":"false"}"`}>${escapeHtml(option.label)}</button>`;
@@ -1407,13 +1405,9 @@
         </div>`;
     }
     if(item.type==="textarea"){
-      return `<label class="wish-field-label">${label}
-        <textarea class="wish-idea-input" id="wishFollowUpAnswer" rows="5" maxlength="2000">${escapeHtml(item.answer||"")}</textarea>
-      </label>`;
+      return `<textarea class="wish-idea-input" id="wishFollowUpAnswer" rows="5" maxlength="2000" ${labelled}>${escapeHtml(item.answer||"")}</textarea>`;
     }
-    return `<label class="wish-field-label">${label}
-      <input class="wish-text-input" id="wishFollowUpAnswer" maxlength="2000" value="${escapeHtml(item.answer||"")}">
-    </label>`;
+    return `<input class="wish-text-input" id="wishFollowUpAnswer" maxlength="2000" ${labelled} value="${escapeHtml(item.answer||"")}">`;
   }
 
   function bind(options){
@@ -1464,11 +1458,11 @@
     function renderShell(){
       const hint=byId("wishAuthHint",root);
       const loginLink=byId("wishLoginLink",root);
-      const canStart=allowed();
-      if(hint)hint.hidden=canStart;
+      const personalSession=allowed();
+      if(hint)hint.hidden=personalSession;
       if(loginLink){
         const href=loginUrl();
-        loginLink.hidden=canStart||!href;
+        loginLink.hidden=personalSession||!href;
         if(href)loginLink.setAttribute("href",href);
         else loginLink.removeAttribute("href");
       }
@@ -2023,6 +2017,7 @@
     showBudgetScope,
     createWishWizard,
     buildReviewGroups,
+    renderCustomQuestionMarkup,
     bind
   };
   if(typeof window!=="undefined")window.ACTCustomerPortalWishes=api;

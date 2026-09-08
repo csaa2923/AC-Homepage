@@ -96,6 +96,58 @@ describe("customer portal wishes shell (Schritt C)",()=>{
     assert.match(portalJs,/goToLogin:\(\)=>redirectToPortalLogin\(\)/);
   });
 
+  it("hides start and personal login for an authenticated portal session",()=>{
+    assert.match(portalHtml,/id="wishStartButton"[^>]*\bhidden\b/);
+    assert.match(portalHtml,/id="wishLoginLink"[^>]*\bhidden\b/);
+    assert.match(wishJs,/startButton\.hidden=true/);
+    assert.match(wishJs,/loginLink\.hidden=personalSession\|\|!href/);
+    assert.match(portalJs,/if\(isSessionAccess&&!isShareAccess\)/);
+    assert.match(portalJs,/if\(login\)login\.hidden=true/);
+    assert.match(portalCss,/#wishStartButton\[hidden\]/);
+    assert.match(portalCss,/#wishLoginLink\[hidden\]/);
+    assert.match(portalCss,/display:none !important/);
+    assert.match(portalJs,/if\(isShareAccess\|\|!isSessionAccess\)/);
+  });
+
+  it("does not render a custom question label twice",()=>{
+    const question="Gibt es etwas, das diesen Tag für euch ganz besonders machen würde?";
+    const t=translator();
+    const cases=[
+      {type:"text"},
+      {type:"textarea"},
+      {type:"yes_no"},
+      {type:"single_choice",options:[{id:"yes",label:"Ja"},{id:"no",label:"Nein"}]},
+      {type:"multi_choice",options:[{id:"a",label:"A"},{id:"b",label:"B"}]}
+    ];
+    for(const item of cases){
+      const markup=wishes.renderCustomQuestionMarkup({
+        instanceId:"fq_custom_1",
+        customQuestion:question,
+        answer:null,
+        ...item
+      },t);
+      assert.equal(markup.includes(question),false,item.type);
+      assert.match(markup,/aria-labelledby="wishWizardTitle"/);
+    }
+    assert.match(wishJs,/title\.textContent=item&&item\.customQuestion/);
+  });
+
+  it("hides the generic next button on the final review step",()=>{
+    const wizard=createWizard({
+      wizard:{followUpQuestions:[{questionId:"budget",required:true,order:1}]}
+    });
+    wizard.start();
+    wizard.setBudgetBand("consult-first");
+    const moved=wizard.next();
+    assert.equal(moved.ok,true);
+    assert.equal(wizard.getState().isReview,true);
+    assert.match(wishJs,/next\.hidden=state\.isReview/);
+    assert.match(wishJs,/data-wish-submit/);
+    assert.match(wishJs,/service\.wish\.sendAnswers/);
+    assert.match(portalCss,/#wishWizardNext\[hidden\]/);
+    assert.match(portalHtml,/id="wishWizardBack"/);
+  });
+
   it("4) step 1 requires at least one category from the A library",()=>{
     const wizard=createWizard();
     wizard.start();

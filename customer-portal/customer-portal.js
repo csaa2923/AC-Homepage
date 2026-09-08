@@ -3845,8 +3845,14 @@
     const title=document.getElementById("wishListTitle");
     const lead=document.querySelector("#wishCard .service-wish-lead");
     const start=document.getElementById("wishStartButton");
+    const login=document.getElementById("wishLoginLink");
+    const hint=document.getElementById("wishAuthHint");
     const notice=document.getElementById("wishFollowUpNotice");
     if(start)start.hidden=true;
+    if(isSessionAccess&&!isShareAccess){
+      if(login)login.hidden=true;
+      if(hint)hint.hidden=true;
+    }
     if(notice){
       notice.hidden=!portalFollowUpNotice;
       notice.textContent=portalFollowUpNotice;

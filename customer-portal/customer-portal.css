@@ -4136,6 +4136,14 @@ h3{font-size:24px;color:var(--green)}
 .service-wish-login{
   min-height:var(--act-btn-min);
 }
+#wishStartButton[hidden],
+#wishLoginLink[hidden],
+.service-wish-login[hidden],
+.service-wish-login-hint[hidden],
+#wishWizardNext[hidden],
+#wishWizardBack[hidden]{
+  display:none !important;
+}
 .service-wish-login-hint{
   padding:12px 14px;
   border-radius:var(--act-radius-md);

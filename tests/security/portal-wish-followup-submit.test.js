@@ -122,6 +122,41 @@ function memoryCustomers(initial={}){
       draft.wishRequests=list;
       docs[customerId]={...current,draftData:draft,updatedAt:now};
       return applied.value;
+    },
+    firestoreDb(){
+      const refs=new WeakMap();
+      return {
+        collection(name){
+          assert.equal(name,"customers");
+          return {
+            doc(customerId){
+              const ref={customerId};
+              refs.set(ref,customerId);
+              return ref;
+            }
+          };
+        },
+        async runTransaction(fn){
+          const tx={
+            async get(ref){
+              const customerId=refs.get(ref);
+              const current=docs[customerId];
+              return {
+                exists:Boolean(current),
+                data:()=>current||{}
+              };
+            },
+            update(ref,patch){
+              const customerId=refs.get(ref);
+              const current=docs[customerId]||{};
+              const draft=current.draftData&&typeof current.draftData==="object"?{...current.draftData}:{};
+              if("draftData.wishRequests" in patch)draft.wishRequests=patch["draftData.wishRequests"];
+              docs[customerId]={...current,draftData:draft,updatedAt:patch.updatedAt};
+            }
+          };
+          return fn(tx);
+        }
+      };
     }
   };
 }
@@ -171,6 +206,44 @@ describe("portal follow-up answer submit",()=>{
     assert.doesNotMatch(wishJs,/httpsCallable|firebase\.functions|wishRequests|submitCustomerWishFollowUpAnswers/);
     assert.doesNotMatch(portalJs,/submitCustomerWishRequest/);
     assert.match(portalWishSource,/runTransaction|updateWishInTransaction/);
+    const followUpImpl=implSource.slice(
+      implSource.indexOf("async function submitCustomerWishFollowUpAnswers"),
+      implSource.indexOf("async function listCustomerPortalWishes")
+    );
+    assert.match(followUpImpl,/if\(!persist\.updateWishInTransaction\)persist\.db=deps\.db\|\|getDb\(\)/);
+    assert.doesNotMatch(followUpImpl,/db:deps\.db/);
+  });
+
+  it("uses injected deps.db when updateWishInTransaction is missing",async()=>{
+    const store=access.createMemoryPortalAccessStore();
+    const wish=createPreparedWish();
+    const customers=memoryCustomers({"kunde-holzer":customerDoc({draftData:{wishRequests:[wish]}})});
+    const created=await seedGrant(store,customers);
+    const result=await impl.submitCustomerWishFollowUpAnswers({
+      auth:userAuth(),
+      data:{
+        publicPortalId:created.publicPortalId,
+        wishId:wish.wishId,
+        answers:[{instanceId:wish.followUpQuestions[0].instanceId,answer:"consult-first"}]
+      }
+    },{
+      store,
+      db:customers.firestoreDb(),
+      checkRateLimit:()=>true,
+      now:"2026-09-08T08:15:00.000Z"
+    });
+    assert.equal(result.status,"CUSTOMER_REPLIED");
+    assert.equal(customers.docs["kunde-holzer"].draftData.wishRequests[0].status,"CUSTOMER_REPLIED");
+  });
+
+  it("falls back to getDb() in production when deps.db is missing",()=>{
+    const followUpImpl=implSource.slice(
+      implSource.indexOf("async function submitCustomerWishFollowUpAnswers"),
+      implSource.indexOf("async function listCustomerPortalWishes")
+    );
+    assert.match(followUpImpl,/portalAccessStore\(\)/);
+    assert.match(followUpImpl,/deps\.db\|\|getDb\(\)/);
+    assert.match(followUpImpl,/if\(!persist\.updateWishInTransaction\)persist\.db=deps\.db\|\|getDb\(\)/);
   });
 
   it("1) an authenticated owner can submit valid answers",async()=>{

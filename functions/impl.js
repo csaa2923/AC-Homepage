@@ -793,11 +793,12 @@ async function submitCustomerWishFollowUpAnswers(request,deps={}){
   try{
     assertKnownRequestFields(request.data,new Set(["publicPortalId","wishId","answers"]));
     const store=deps.store||portalAccessStore();
-    const submitted=await runSubmitCustomerWishFollowUpAnswers(store,request.auth,request.data||{},{
+    const persist={
       now:deps.now,
-      updateWishInTransaction:deps.updateWishInTransaction,
-      db:deps.db
-    });
+      updateWishInTransaction:deps.updateWishInTransaction
+    };
+    if(!persist.updateWishInTransaction)persist.db=deps.db||getDb();
+    const submitted=await runSubmitCustomerWishFollowUpAnswers(store,request.auth,request.data||{},persist);
     return submitted.result;
   }catch(error){
     throwPortalAccessError(error);

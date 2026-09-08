@@ -5,10 +5,9 @@
  * client customerId. Do not delete without a replacement Self-Service flow.
  */
 const crypto=require("crypto");
-const path=require("path");
 const portalAccess=require("./portalAccess");
 const {resolveStoredPortalAccess}=require("./portalAccessStore");
-const wishLib=require(path.join(__dirname,"../../customer-portal/customer-wish-request-library.js"));
+const wishLib=require("./customerWishRequestLibrary");
 
 const ALLOWED_REQUEST_FIELDS=new Set(["publicPortalId","wish"]);
 const ALLOWED_LIST_FIELDS=new Set(["publicPortalId"]);

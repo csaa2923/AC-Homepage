@@ -689,7 +689,7 @@
     }
     persistCustomer(
       replaceWish(customer,result.value.wish),
-      "Rückfragen vorbereitet – Portal-Anbindung folgt im nächsten Schritt.",
+      "Rückfragen wurden für den Kunden freigegeben.",
       "success"
     ).catch(error=>{
       setMessage(error&&error.message?error.message:"Freigabe konnte nicht gespeichert werden.","error");
@@ -1087,7 +1087,6 @@
           <button class="v2-button soft" type="button" data-wish-action="preview">Kundensicht ansehen</button>
           ${isAdminCustomerReplied(wish)?"":`<button class="v2-button primary" type="button" data-wish-action="prepare">Für Kunden freigeben</button>`}
         </div>
-        <p class="v2-muted">Die echte Portal-Auslieferung folgt im nächsten Schritt.</p>
         ${previewMarkup(wish)}
       </section>
     `;

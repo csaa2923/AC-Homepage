@@ -121,7 +121,7 @@ describe("admin v2 guest wishes",()=>{
     const html=read("customer-portal/admin-v2.html");
     const js=read("customer-portal/admin-v2.js");
     const module=read("customer-portal/admin-v2-wishes.js");
-    assert.match(html,/admin-v2-wishes\.js\?v=4/);
+    assert.match(html,/admin-v2-wishes\.js\?v=5/);
     assert.match(html,/admin-v2-wishes\.css\?v=3/);
     assert.match(html,/customer-wish-request-library\.js\?v=7/);
     assert.match(js,/ACTAdminV2Wishes\?\.bind/);
@@ -140,6 +140,9 @@ describe("admin v2 guest wishes",()=>{
     assert.match(module,/Noch kein Wunsch erfasst/);
     assert.doesNotMatch(module,/submitCustomerWishRequest/);
     assert.doesNotMatch(module,/async function handleClick/);
+    assert.doesNotMatch(module,/Portal-Anbindung folgt im nächsten Schritt/);
+    assert.doesNotMatch(module,/echte Portal-Auslieferung folgt/);
+    assert.match(module,/Rückfragen wurden für den Kunden freigegeben\./);
   });
 
   it("1+2) creates a wish on the opened customer via the admin-first domain",()=>{
@@ -288,6 +291,9 @@ describe("admin v2 guest wishes",()=>{
     customer.wishRequests=[wish];
     const html=wishes.sectionMarkup(customer);
     const preview=html.match(/data-wish-preview[\s\S]*<\/aside>/)[0];
+    assert.doesNotMatch(html,/Portal-Auslieferung folgt/);
+    assert.doesNotMatch(html,/Portal-Anbindung folgt/);
+    assert.match(html,/Für Kunden freigeben/);
     assert.match(preview,/Wie soll es sich anfühlen/);
     assert.match(preview,/Soll dein Partner überrascht werden/);
     assert.doesNotMatch(preview,/Nicht für den Kunden/);

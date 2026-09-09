@@ -55,7 +55,17 @@
     title:160,
     adminNotes:2000,
     assignedTo:80,
-    enteredBy:120
+    enteredBy:120,
+    workupNotes:4000,
+    workupTitle:160,
+    workupDescription:2000,
+    workupProvider:200,
+    workupContact:300,
+    workupDateOrTime:200,
+    workupLocation:300,
+    workupEstimatedCost:80,
+    workupInternalNotes:2000,
+    maxWorkupItems:40
   };
 
   const WISH_SOURCES=[
@@ -79,6 +89,27 @@
     {id:"BOOKING",label:"Buchung"},
     {id:"COMPLETED",label:"Abgeschlossen"},
     {id:"CANCELLED",label:"Storniert"}
+  ];
+
+  const WORKUP_CATEGORIES=[
+    {id:"experience",label:"Erlebnis"},
+    {id:"culinary",label:"Kulinarik"},
+    {id:"nature",label:"Natur & Berge"},
+    {id:"wellness",label:"Wellness"},
+    {id:"culture",label:"Kultur & Sehenswürdigkeiten"},
+    {id:"transfer",label:"Transfer & Mobilität"},
+    {id:"media",label:"Fotograf / Medien"},
+    {id:"surprise",label:"Überraschung / Special"},
+    {id:"other",label:"Sonstiges"}
+  ];
+
+  const WORKUP_ITEM_STATUSES=[
+    {id:"IDEA",label:"Idee"},
+    {id:"RESEARCH",label:"Recherche"},
+    {id:"REQUESTED",label:"Angefragt"},
+    {id:"AVAILABLE",label:"Verfügbar"},
+    {id:"SELECTED",label:"Ausgewählt"},
+    {id:"REJECTED",label:"Verworfen"}
   ];
 
   const CATEGORIES=[
@@ -1386,6 +1417,148 @@
     return ok(current);
   }
 
+  function emptyWorkup(){
+    return {notes:"",items:[]};
+  }
+
+  function createWorkupItemId(now){
+    const stamp=nowIso(now).replace(/[^0-9a-z]/gi,"").slice(0,14);
+    return `wu_${stamp}_${Math.random().toString(36).slice(2,8)}`;
+  }
+
+  function resolveWorkupCategory(value){
+    const match=lookup(WORKUP_CATEGORIES,value);
+    return match?match.id:"other";
+  }
+
+  function resolveWorkupItemStatus(value){
+    const key=text(value).toUpperCase();
+    if(WORKUP_ITEM_STATUSES.some(item=>item.id===key))return key;
+    return "IDEA";
+  }
+
+  function workupCategoryLabel(id){
+    const match=WORKUP_CATEGORIES.find(item=>item.id===id);
+    return match?match.label:id||"";
+  }
+
+  function workupItemStatusLabel(id){
+    const match=WORKUP_ITEM_STATUSES.find(item=>item.id===id);
+    return match?match.label:id||"";
+  }
+
+  function normalizeWorkupItem(input,options){
+    const settings=options&&typeof options==="object"?options:{};
+    const source=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
+    const stamped=nowIso(settings.now);
+    const createdAt=text(source.createdAt)||stamped;
+    return {
+      id:text(source.id)||text(settings.itemId)||createWorkupItemId(settings.now),
+      title:clip(source.title,LIMITS.workupTitle),
+      category:resolveWorkupCategory(source.category),
+      description:clip(source.description,LIMITS.workupDescription),
+      status:resolveWorkupItemStatus(source.status),
+      provider:clip(source.provider,LIMITS.workupProvider),
+      contact:clip(source.contact,LIMITS.workupContact),
+      dateOrTime:clip(source.dateOrTime,LIMITS.workupDateOrTime),
+      location:clip(source.location,LIMITS.workupLocation),
+      estimatedCost:clip(source.estimatedCost,LIMITS.workupEstimatedCost),
+      internalNotes:clip(source.internalNotes,LIMITS.workupInternalNotes),
+      customerVisible:source.customerVisible===true,
+      createdAt,
+      updatedAt:text(source.updatedAt)||createdAt
+    };
+  }
+
+  function normalizeWorkup(input){
+    const source=input&&typeof input==="object"&&!Array.isArray(input)?input:emptyWorkup();
+    const seen=new Set();
+    const items=(Array.isArray(source.items)?source.items:[])
+      .map(item=>normalizeWorkupItem(item))
+      .filter(item=>Boolean(item.id))
+      .filter(item=>{
+        if(seen.has(item.id))return false;
+        seen.add(item.id);
+        return true;
+      })
+      .slice(0,LIMITS.maxWorkupItems);
+    return {
+      notes:clip(source.notes,LIMITS.workupNotes),
+      items
+    };
+  }
+
+  function canEditWishWorkup(wish){
+    const source=wish&&typeof wish==="object"?wish:{};
+    return text(source.status)==="IN_REVIEW";
+  }
+
+  function withWorkupMutation(wish,options,mutate){
+    const settings=options&&typeof options==="object"?options:{};
+    const current=cloneWish(wish);
+    if(!canEditWishWorkup(current)){
+      return fail(["Ausarbeitung ist nur während der Bearbeitung möglich."],"failed-precondition");
+    }
+    current.workup=normalizeWorkup(current.workup);
+    const mutated=mutate(current,settings);
+    if(mutated&&mutated.ok===false)return mutated;
+    const next=mutated&&mutated.value?mutated.value:mutated||current;
+    next.workup=normalizeWorkup(next.workup);
+    next.updatedAt=nowIso(settings.now);
+    return ok(next);
+  }
+
+  function setWishWorkupNotes(wish,notes,options){
+    return withWorkupMutation(wish,options,current=>{
+      current.workup.notes=clip(notes,LIMITS.workupNotes);
+      return current;
+    });
+  }
+
+  function addWishWorkupItem(wish,input,options){
+    return withWorkupMutation(wish,options,(current,settings)=>{
+      if(current.workup.items.length>=LIMITS.maxWorkupItems){
+        return fail(["Es können höchstens 40 Ausarbeitungsbausteine gespeichert werden."]);
+      }
+      const item=normalizeWorkupItem(input,settings);
+      item.customerVisible=input&&input.customerVisible===true;
+      current.workup.items=current.workup.items.concat([item]);
+      return current;
+    });
+  }
+
+  function updateWishWorkupItem(wish,itemId,patch,options){
+    return withWorkupMutation(wish,options,(current,settings)=>{
+      const id=text(itemId);
+      const index=current.workup.items.findIndex(item=>item.id===id);
+      if(index<0)return fail(["Baustein nicht gefunden."],"not-found");
+      const previous=current.workup.items[index];
+      const source=patch&&typeof patch==="object"&&!Array.isArray(patch)?patch:{};
+      const nextItem=normalizeWorkupItem(Object.assign({},previous,source,{
+        id:previous.id,
+        createdAt:previous.createdAt,
+        customerVisible:source.customerVisible===undefined?previous.customerVisible:source.customerVisible===true
+      }),{now:settings.now});
+      nextItem.updatedAt=nowIso(settings.now);
+      current.workup.items=current.workup.items.map((item,itemIndex)=>itemIndex===index?nextItem:item);
+      return current;
+    });
+  }
+
+  function setWishWorkupItemStatus(wish,itemId,status,options){
+    return updateWishWorkupItem(wish,itemId,{status},options);
+  }
+
+  function removeWishWorkupItem(wish,itemId,options){
+    return withWorkupMutation(wish,options,current=>{
+      const id=text(itemId);
+      const exists=current.workup.items.some(item=>item.id===id);
+      if(!exists)return fail(["Baustein nicht gefunden."],"not-found");
+      current.workup.items=current.workup.items.filter(item=>item.id!==id);
+      return current;
+    });
+  }
+
   function normalizeOriginalRequest(input,options){
     const settings=options&&typeof options==="object"?options:{};
     const source=input&&typeof input==="object"&&!Array.isArray(input)
@@ -1829,6 +2002,8 @@
     INITIAL_STATUS_LABEL,
     LIMITS,
     STATUSES,
+    WORKUP_CATEGORIES,
+    WORKUP_ITEM_STATUSES,
     CATEGORIES,
     PARTICIPANT_TYPES,
     OCCASIONS,
@@ -1906,6 +2081,18 @@
     setQuestionRequired,
     prepareQuestionsForCustomer,
     startWishReview,
+    emptyWorkup,
+    normalizeWorkup,
+    normalizeWorkupItem,
+    createWorkupItemId,
+    canEditWishWorkup,
+    setWishWorkupNotes,
+    addWishWorkupItem,
+    updateWishWorkupItem,
+    setWishWorkupItemStatus,
+    removeWishWorkupItem,
+    workupCategoryLabel,
+    workupItemStatusLabel,
     normalizeStatusHistory,
     portalFollowUpQuestions,
     applyFollowUpAnswersToKnownData,

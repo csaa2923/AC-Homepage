@@ -154,6 +154,16 @@ describe("functions pack isolation (no files outside functions/)",()=>{
       server.listPreparedPortalWishes([prepared]),
       browser.listPreparedPortalWishes([prepared])
     );
+    const reviewed=browser.startWishReview(
+      browser.submitPreparedFollowUpAnswers(prepared,answers,submitOptions).value.wish,
+      {now:"2026-09-08T09:04:00.000Z"}
+    ).value;
+    const workupInput={title:"Private Kulinarik",category:"culinary",description:"Intern"};
+    const workupOptions={now:"2026-09-08T09:05:00.000Z",itemId:"wu_pack_1"};
+    assert.deepEqual(
+      server.addWishWorkupItem(reviewed,workupInput,workupOptions),
+      browser.addWishWorkupItem(reviewed,workupInput,workupOptions)
+    );
     assert.equal(typeof wishes.runListCustomerPortalWishes,"function");
     assert.equal(typeof access.createMemoryPortalAccessStore,"function");
   });

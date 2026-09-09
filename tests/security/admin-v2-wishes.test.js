@@ -75,7 +75,8 @@ function loadWishes(hostOverrides={}){
           saved.push(next);
           return next;
         }
-      }
+      },
+      confirm:()=>true
     },
     document:{
       getElementById:()=>null
@@ -121,10 +122,10 @@ describe("admin v2 guest wishes",()=>{
     const html=read("customer-portal/admin-v2.html");
     const js=read("customer-portal/admin-v2.js");
     const module=read("customer-portal/admin-v2-wishes.js");
-    assert.match(html,/admin-v2-wishes\.js\?v=7/);
-    assert.match(html,/admin-v2-wishes\.css\?v=4/);
+    assert.match(html,/admin-v2-wishes\.js\?v=8/);
+    assert.match(html,/admin-v2-wishes\.css\?v=5/);
     assert.match(html,/customer-inquiry-admin-library\.js\?v=1/);
-    assert.match(html,/customer-wish-request-library\.js\?v=7/);
+    assert.match(html,/customer-wish-request-library\.js\?v=8/);
     assert.match(js,/ACTAdminV2Wishes\?\.bind/);
     assert.match(js,/ACTAdminV2Wishes\?\.sectionMarkup/);
     assert.match(js,/ACTAdminV2Wishes\?\.handleClick\?\.\(event\)===true/);

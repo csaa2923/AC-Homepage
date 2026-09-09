@@ -398,6 +398,22 @@
     h().patchState({wishMessage:message||"",wishMessageKind:kind||""});
   }
 
+  function emptyWorkupDraft(){
+    return {
+      title:"",
+      category:"experience",
+      description:"",
+      status:"IDEA",
+      provider:"",
+      contact:"",
+      dateOrTime:"",
+      location:"",
+      estimatedCost:"",
+      internalNotes:"",
+      customerVisible:false
+    };
+  }
+
   function resetWishUi(extra){
     h().patchState({
       wishView:"list",
@@ -409,6 +425,9 @@
       wishCreateDraft:emptyCreateDraft(),
       wishKnownDraft:{},
       wishNotesDraft:"",
+      wishWorkupNotesDraft:"",
+      wishWorkupEditor:"",
+      wishWorkupDraft:emptyWorkupDraft(),
       wishCustomDraft:emptyCustomDraft(),
       wishInquiry:inquiryLib()?inquiryLib().emptyInquirySession():null,
       ...extra
@@ -487,6 +506,9 @@
       wishPreviewOpen:false,
       wishKnownDraft:wish.knownData||{},
       wishNotesDraft:wish.internal&&wish.internal.adminNotes||"",
+      wishWorkupNotesDraft:normalizedWorkup(wish).notes,
+      wishWorkupEditor:"",
+      wishWorkupDraft:emptyWorkupDraft(),
       wishCustomDraft:emptyCustomDraft(),
       wishInquiry:session,
       wishMessage:"",
@@ -635,6 +657,115 @@
       setMessage(error&&error.message?error.message:"Notiz konnte nicht gespeichert werden.","error");
       h().render();
     });
+  }
+
+  function normalizedWorkup(wish){
+    const api=lib();
+    if(api&&typeof api.normalizeWorkup==="function")return api.normalizeWorkup(wish&&wish.workup);
+    const source=wish&&wish.workup&&typeof wish.workup==="object"?wish.workup:{};
+    return {
+      notes:text(source.notes),
+      items:Array.isArray(source.items)?source.items:[]
+    };
+  }
+
+  function workupStatusLabel(id){
+    const api=lib();
+    if(api&&typeof api.workupItemStatusLabel==="function")return api.workupItemStatusLabel(id);
+    return text(id)||"";
+  }
+
+  function workupCategoryName(id){
+    const api=lib();
+    if(api&&typeof api.workupCategoryLabel==="function")return api.workupCategoryLabel(id);
+    return text(id)||"";
+  }
+
+  function readWorkupDraftFromForm(form){
+    if(!form)return emptyWorkupDraft();
+    const value=name=>text(form.elements[name]&&form.elements[name].value);
+    const visible=form.elements.workupCustomerVisible;
+    return {
+      title:value("workupTitle"),
+      category:value("workupCategory")||"experience",
+      description:value("workupDescription"),
+      status:value("workupStatus")||"IDEA",
+      provider:value("workupProvider"),
+      contact:value("workupContact"),
+      dateOrTime:value("workupDateOrTime"),
+      location:value("workupLocation"),
+      estimatedCost:value("workupEstimatedCost"),
+      internalNotes:value("workupInternalNotes"),
+      customerVisible:Boolean(visible&&visible.checked)
+    };
+  }
+
+  function itemToWorkupDraft(item){
+    const source=item&&typeof item==="object"?item:{};
+    return {
+      title:text(source.title),
+      category:text(source.category)||"experience",
+      description:text(source.description),
+      status:text(source.status)||"IDEA",
+      provider:text(source.provider),
+      contact:text(source.contact),
+      dateOrTime:text(source.dateOrTime),
+      location:text(source.location),
+      estimatedCost:text(source.estimatedCost),
+      internalNotes:text(source.internalNotes),
+      customerVisible:source.customerVisible===true
+    };
+  }
+
+  function applyWorkupResult(customer,result,successMessage){
+    if(result&&result.ok){
+      h().patchState({wishWorkupEditor:"",wishWorkupDraft:emptyWorkupDraft()});
+    }
+    return applyWishResult(customer,result,successMessage);
+  }
+
+  function saveWorkupNotes(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.setWishWorkupNotes!=="function")return;
+    applyWishResult(customer,api.setWishWorkupNotes(wish,state().wishWorkupNotesDraft),"Ausarbeitungsnotiz gespeichert.");
+  }
+
+  function saveWorkupItem(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api)return;
+    const form=typeof document!=="undefined"&&typeof document.querySelector==="function"
+      ?document.querySelector("[data-workup-form]")
+      :null;
+    const draft=form?readWorkupDraftFromForm(form):(state().wishWorkupDraft||emptyWorkupDraft());
+    const editor=text(state().wishWorkupEditor);
+    const result=editor&&editor!=="create"&&typeof api.updateWishWorkupItem==="function"
+      ?api.updateWishWorkupItem(wish,editor,draft)
+      :api.addWishWorkupItem(wish,draft);
+    applyWorkupResult(customer,result,editor&&editor!=="create"?"Baustein gespeichert.":"Baustein hinzugefügt.");
+  }
+
+  function changeWorkupStatus(itemId,status){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.setWishWorkupItemStatus!=="function")return;
+    applyWishResult(customer,api.setWishWorkupItemStatus(wish,itemId,status),"Baustein-Status aktualisiert.");
+  }
+
+  function deleteWorkupItem(itemId){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.removeWishWorkupItem!=="function")return;
+    const confirmed=typeof window!=="undefined"&&typeof window.confirm==="function"
+      ?window.confirm("Diesen Baustein wirklich löschen?")
+      :false;
+    if(!confirmed)return;
+    applyWorkupResult(customer,api.removeWishWorkupItem(wish,itemId),"Baustein gelöscht.");
   }
 
   function addLibraryQuestion(questionId){
@@ -1376,6 +1507,131 @@
     `;
   }
 
+  function workupEditorMarkup(draft){
+    const api=lib();
+    const source=draft||emptyWorkupDraft();
+    const categories=api&&api.WORKUP_CATEGORIES?api.WORKUP_CATEGORIES:[];
+    const statuses=api&&api.WORKUP_ITEM_STATUSES?api.WORKUP_ITEM_STATUSES:[];
+    return `
+      <form class="v2-wish-form v2-wish-workup-form" data-workup-form>
+        <div class="v2-wish-grid">
+          <label class="v2-edit-field">
+            <span>Titel</span>
+            <input name="workupTitle" type="text" maxlength="160" value="${escapeHtml(source.title)}">
+          </label>
+          <label class="v2-edit-field">
+            <span>Kategorie</span>
+            <select name="workupCategory">${optionList(categories,source.category)}</select>
+          </label>
+          <label class="v2-edit-field">
+            <span>Status</span>
+            <select name="workupStatus">${optionList(statuses,source.status)}</select>
+          </label>
+          <label class="v2-edit-field">
+            <span>Location</span>
+            <input name="workupLocation" type="text" maxlength="300" value="${escapeHtml(source.location)}">
+          </label>
+          <label class="v2-edit-field">
+            <span>Termin / Zeit</span>
+            <input name="workupDateOrTime" type="text" maxlength="200" value="${escapeHtml(source.dateOrTime)}">
+          </label>
+          <label class="v2-edit-field">
+            <span>Anbieter</span>
+            <input name="workupProvider" type="text" maxlength="200" value="${escapeHtml(source.provider)}">
+          </label>
+          <label class="v2-edit-field">
+            <span>Kontakt</span>
+            <input name="workupContact" type="text" maxlength="300" value="${escapeHtml(source.contact)}">
+          </label>
+          <label class="v2-edit-field">
+            <span>Geschätzte Kosten</span>
+            <input name="workupEstimatedCost" type="text" maxlength="80" value="${escapeHtml(source.estimatedCost)}">
+          </label>
+        </div>
+        <label class="v2-edit-field full">
+          <span>Kurzbeschreibung</span>
+          <textarea name="workupDescription" rows="3" maxlength="2000">${escapeHtml(source.description)}</textarea>
+        </label>
+        <label class="v2-edit-field full">
+          <span>Interne Notiz</span>
+          <textarea name="workupInternalNotes" rows="3" maxlength="2000">${escapeHtml(source.internalNotes)}</textarea>
+        </label>
+        <label class="v2-wish-workup-flag">
+          <input name="workupCustomerVisible" type="checkbox" ${source.customerVisible?"checked":""}>
+          <span>Für späteren Kundenvorschlag vormerken</span>
+        </label>
+        <div class="v2-wish-actions">
+          <button class="v2-button primary" type="button" data-wish-action="save-workup">Speichern</button>
+          <button class="v2-button soft" type="button" data-wish-action="cancel-workup">Abbrechen</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function workupCardMarkup(item,editing){
+    const source=item||{};
+    if(editing)return `
+      <article class="v2-wish-workup-card is-editing" data-workup-item="${escapeHtml(source.id)}">
+        ${workupEditorMarkup(state().wishWorkupDraft||itemToWorkupDraft(source))}
+      </article>
+    `;
+    const statuses=lib()&&lib().WORKUP_ITEM_STATUSES?lib().WORKUP_ITEM_STATUSES:[];
+    return `
+      <article class="v2-wish-workup-card" data-workup-item="${escapeHtml(source.id)}">
+        <div class="v2-wish-workup-card-head">
+          <div>
+            <h5>${escapeHtml(text(source.title)||"Ohne Titel")}</h5>
+            <p class="v2-muted">${escapeHtml(workupCategoryName(source.category))}</p>
+          </div>
+          <span class="v2-wish-workup-badge" data-workup-status-badge="${escapeHtml(source.status)}">${escapeHtml(workupStatusLabel(source.status))}</span>
+        </div>
+        ${text(source.description)?`<p>${escapeHtml(source.description)}</p>`:""}
+        <dl class="v2-wish-workup-meta">
+          <div><dt>Location</dt><dd>${escapeHtml(text(source.location)||"–")}</dd></div>
+          <div><dt>Termin / Zeit</dt><dd>${escapeHtml(text(source.dateOrTime)||"–")}</dd></div>
+          <div><dt>Anbieter</dt><dd>${escapeHtml(text(source.provider)||"–")}</dd></div>
+          <div><dt>Geschätzte Kosten</dt><dd>${escapeHtml(text(source.estimatedCost)||"–")}</dd></div>
+        </dl>
+        ${text(source.internalNotes)?`<p class="v2-muted">${escapeHtml(source.internalNotes)}</p>`:""}
+        <div class="v2-wish-actions">
+          <label class="v2-edit-field">
+            <span>Status</span>
+            <select data-workup-status="${escapeHtml(source.id)}">${optionList(statuses,source.status)}</select>
+          </label>
+          <button class="v2-button soft" type="button" data-wish-action="edit-workup" data-workup-id="${escapeHtml(source.id)}">Bearbeiten</button>
+          <button class="v2-button soft" type="button" data-wish-action="delete-workup" data-workup-id="${escapeHtml(source.id)}">Löschen</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function workupMarkup(wish){
+    if(!isAdminWishInReview(wish))return "";
+    const workup=normalizedWorkup(wish);
+    const editor=text(state().wishWorkupEditor);
+    const notes=state().wishWorkupNotesDraft==null?workup.notes:state().wishWorkupNotesDraft;
+    return `
+      <article class="v2-wish-panel v2-wish-workup" data-wish-workup>
+        <div class="v2-workspace-section-head compact">
+          <div>
+            <h4>Ausarbeitung</h4>
+            <p class="v2-muted">Hier entstehen aus dem Kundenwunsch konkrete Erlebnisse, Leistungen und Vorschläge. Dieser Bereich ist nur intern sichtbar.</p>
+          </div>
+          <button class="v2-button primary" type="button" data-wish-action="add-workup">Baustein hinzufügen</button>
+        </div>
+        <label class="v2-edit-field full">
+          <span>Interne Gesamtnotiz zur Ausarbeitung</span>
+          <textarea name="wishWorkupNotes" data-workup-notes rows="4" maxlength="4000">${escapeHtml(notes)}</textarea>
+        </label>
+        <button class="v2-button soft" type="button" data-wish-action="save-workup-notes">Notiz speichern</button>
+        ${editor==="create"?workupEditorMarkup(state().wishWorkupDraft||emptyWorkupDraft()):""}
+        <div class="v2-wish-workup-list">
+          ${(workup.items||[]).map(item=>workupCardMarkup(item,editor===item.id)).join("")||`<p class="v2-muted" data-workup-empty>Noch kein Baustein erfasst.</p>`}
+        </div>
+      </article>
+    `;
+  }
+
   function detailMarkup(customer){
     const wish=selectedWish(customer);
     if(!wish)return listMarkup(customer);
@@ -1403,6 +1659,7 @@
         ${questionsMarkup(wish)}
         ${inquiryMarkup(customer,wish)}
         ${customerAnswersMarkup(wish)}
+        ${workupMarkup(wish)}
         <article class="v2-wish-panel">
           <h4>Interne Notizen</h4>
           <label class="v2-edit-field full">
@@ -1450,6 +1707,28 @@
     if(action==="save-known"){saveKnownData();return true;}
     if(action==="save-notes"){saveNotes();return true;}
     if(action==="start-review"){startReview();return true;}
+    if(action==="add-workup"){
+      if(!isAdminWishInReview(selectedWish(currentCustomer())))return true;
+      h().patchState({wishWorkupEditor:"create",wishWorkupDraft:emptyWorkupDraft()});
+      h().render();
+      return true;
+    }
+    if(action==="save-workup-notes"){saveWorkupNotes();return true;}
+    if(action==="save-workup"){saveWorkupItem();return true;}
+    if(action==="cancel-workup"){
+      h().patchState({wishWorkupEditor:"",wishWorkupDraft:emptyWorkupDraft()});
+      h().render();
+      return true;
+    }
+    if(action==="edit-workup"){
+      const wish=selectedWish(currentCustomer());
+      const item=(normalizedWorkup(wish).items||[]).find(entry=>entry.id===text(button.dataset.workupId));
+      if(!item)return true;
+      h().patchState({wishWorkupEditor:item.id,wishWorkupDraft:itemToWorkupDraft(item)});
+      h().render();
+      return true;
+    }
+    if(action==="delete-workup"){deleteWorkupItem(button.dataset.workupId||"");return true;}
     if(action==="toggle-picker"){h().patchState({wishPickerOpen:!state().wishPickerOpen,wishCustomOpen:false});h().render();return true;}
     if(action==="toggle-custom"){h().patchState({wishCustomOpen:!state().wishCustomOpen,wishPickerOpen:false});h().render();return true;}
     if(action==="add-library"){addLibraryQuestion(button.dataset.wishQuestion||"");return true;}
@@ -1503,12 +1782,29 @@
       h().patchState({wishKnownDraft:readKnownDraftFromForm(event.target.closest("[data-wish-known-form]"))});
       return true;
     }
+    const statusSelect=event.target.closest("[data-workup-status]");
+    if(statusSelect){
+      changeWorkupStatus(statusSelect.dataset.workupStatus||"",statusSelect.value);
+      return true;
+    }
+    if(event.target.closest("[data-workup-form]")){
+      h().patchState({wishWorkupDraft:readWorkupDraftFromForm(event.target.closest("[data-workup-form]"))});
+      return true;
+    }
     return false;
   }
 
   function handleInput(event){
     if(event.target.matches("[data-wish-notes]")){
       h().patchState({wishNotesDraft:event.target.value});
+      return true;
+    }
+    if(event.target.matches("[data-workup-notes]")){
+      h().patchState({wishWorkupNotesDraft:event.target.value});
+      return true;
+    }
+    if(event.target.closest("[data-workup-form]")){
+      h().patchState({wishWorkupDraft:readWorkupDraftFromForm(event.target.closest("[data-workup-form]"))});
       return true;
     }
     if(event.target.closest("[data-wish-create-form]")){

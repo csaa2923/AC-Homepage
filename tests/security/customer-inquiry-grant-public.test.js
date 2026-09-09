@@ -31,7 +31,8 @@ const LATER="2026-09-23T12:00:00.000Z";
 const FORBIDDEN_GET_KEYS=[
   "customerId","lifecycle","internal","publishedData","program","bookings",
   "documents","legalComms","payment","grantId","tokenHash","token","grant",
-  "accessId","publicPortalId","contact","email","phone","assignedTo","statusHistory"
+  "accessId","publicPortalId","contact","email","phone","assignedTo","statusHistory",
+  "workup"
 ];
 
 function httpCode(error){

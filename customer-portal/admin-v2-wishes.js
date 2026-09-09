@@ -660,7 +660,7 @@
       internal:{...(wish.internal||{}),adminNotes:notes},
       updatedAt:new Date().toISOString()
     };
-    persistCustomer(replaceWish(customer,next),"Interne Notiz gespeichert.","success").catch(error=>{
+    persistCustomer(replaceWish(customer,next),"Notiz zum Kundenwunsch gespeichert.","success").catch(error=>{
       setMessage(error&&error.message?error.message:"Notiz konnte nicht gespeichert werden.","error");
       h().render();
     });
@@ -719,11 +719,12 @@
     const value=name=>text(form.elements[name]&&form.elements[name].value);
     const visible=form.elements.workupCustomerVisible;
     const flexible=form.elements.workupFlexible;
+    const previous=state().wishWorkupDraft||emptyWorkupDraft();
     return {
       title:value("workupTitle"),
       category:value("workupCategory")||"experience",
       description:value("workupDescription"),
-      status:value("workupStatus")||"IDEA",
+      status:text(previous.status)||"IDEA",
       provider:value("workupProvider"),
       contact:value("workupContact"),
       dateOrTime:value("workupDateOrTime"),
@@ -771,7 +772,7 @@
     const wish=selectedWish(customer);
     const api=lib();
     if(!customer||!wish||!api||typeof api.setWishWorkupNotes!=="function")return;
-    applyWishResult(customer,api.setWishWorkupNotes(wish,state().wishWorkupNotesDraft),"Ausarbeitungsnotiz gespeichert.");
+    applyWishResult(customer,api.setWishWorkupNotes(wish,state().wishWorkupNotesDraft),"Notizen zur Ausarbeitung gespeichert.");
   }
 
   function saveWorkupItem(){
@@ -784,9 +785,14 @@
       :null;
     const draft=form?readWorkupDraftFromForm(form):(state().wishWorkupDraft||emptyWorkupDraft());
     const editor=text(state().wishWorkupEditor);
-    const result=editor&&editor!=="create"&&typeof api.updateWishWorkupItem==="function"
-      ?api.updateWishWorkupItem(wish,editor,draft)
-      :api.addWishWorkupItem(wish,draft);
+    let result;
+    if(editor&&editor!=="create"&&typeof api.updateWishWorkupItem==="function"){
+      const patch=Object.assign({},draft);
+      delete patch.status;
+      result=api.updateWishWorkupItem(wish,editor,patch);
+    }else{
+      result=api.addWishWorkupItem(wish,draft);
+    }
     applyWorkupResult(customer,result,editor&&editor!=="create"?"Baustein gespeichert.":"Baustein hinzugefügt.");
   }
 
@@ -1553,7 +1559,6 @@
     const api=lib();
     const source=draft||emptyWorkupDraft();
     const categories=api&&api.WORKUP_CATEGORIES?api.WORKUP_CATEGORIES:[];
-    const statuses=api&&api.WORKUP_ITEM_STATUSES?api.WORKUP_ITEM_STATUSES:[];
     return `
       <form class="v2-wish-form v2-wish-workup-form" data-workup-form>
         <div class="v2-wish-grid">
@@ -1564,10 +1569,6 @@
           <label class="v2-edit-field">
             <span>Kategorie</span>
             <select name="workupCategory">${optionList(categories,source.category)}</select>
-          </label>
-          <label class="v2-edit-field">
-            <span>Status</span>
-            <select name="workupStatus">${optionList(statuses,source.status)}</select>
           </label>
           <label class="v2-edit-field">
             <span>Location</span>
@@ -1618,7 +1619,7 @@
           <textarea name="workupDescription" rows="3" maxlength="2000">${escapeHtml(source.description)}</textarea>
         </label>
         <label class="v2-edit-field full">
-          <span>Interne Notiz</span>
+          <span>Notiz zu diesem Baustein</span>
           <textarea name="workupInternalNotes" rows="3" maxlength="2000">${escapeHtml(source.internalNotes)}</textarea>
         </label>
         <label class="v2-wish-workup-flag">
@@ -1647,6 +1648,7 @@
           <div>
             <h5>${escapeHtml(text(source.title)||"Ohne Titel")}</h5>
             <p class="v2-muted">${escapeHtml(workupCategoryName(source.category))}</p>
+            ${source.customerVisible===true?`<p class="v2-wish-workup-mark" data-workup-proposal-mark>Für Kundenvorschlag vorgemerkt</p>`:""}
           </div>
           <span class="v2-wish-workup-badge" data-workup-status-badge="${escapeHtml(source.status)}">${escapeHtml(workupStatusLabel(source.status))}</span>
         </div>
@@ -1655,6 +1657,7 @@
           <div><dt>Location</dt><dd>${escapeHtml(text(source.location)||"–")}</dd></div>
           <div><dt>Termin / Zeit</dt><dd>${escapeHtml(workupScheduleLabel(source)||"–")}</dd></div>
           <div><dt>Anbieter</dt><dd>${escapeHtml(text(source.provider)||"–")}</dd></div>
+          ${text(source.contact)?`<div data-workup-contact><dt>Kontakt</dt><dd>${escapeHtml(text(source.contact))}</dd></div>`:""}
           <div><dt>Geschätzte Kosten</dt><dd>${escapeHtml(text(source.estimatedCost)||"–")}</dd></div>
         </dl>
         ${text(source.internalNotes)?`<p class="v2-muted">${escapeHtml(source.internalNotes)}</p>`:""}
@@ -1684,8 +1687,9 @@
           </div>
           <button class="v2-button primary" type="button" data-wish-action="add-workup">Baustein hinzufügen</button>
         </div>
+        <p class="v2-muted">Interner Überblick über die gesamte Ausarbeitung, unabhängig vom einzelnen Baustein.</p>
         <label class="v2-edit-field full">
-          <span>Interne Gesamtnotiz zur Ausarbeitung</span>
+          <span>Notizen zur Ausarbeitung</span>
           <textarea name="wishWorkupNotes" data-workup-notes rows="4" maxlength="4000">${escapeHtml(notes)}</textarea>
         </label>
         <button class="v2-button soft" type="button" data-wish-action="save-workup-notes">Notiz speichern</button>
@@ -1726,7 +1730,8 @@
         ${customerAnswersMarkup(wish)}
         ${workupMarkup(wish)}
         <article class="v2-wish-panel">
-          <h4>Interne Notizen</h4>
+          <h4>Notizen zum Kundenwunsch</h4>
+          <p class="v2-muted">Interner Vermerk zum Wunsch selbst, unabhängig von den Bausteinen.</p>
           <label class="v2-edit-field full">
             <textarea name="wishAdminNotes" data-wish-notes rows="4" maxlength="2000">${escapeHtml(state().wishNotesDraft||"")}</textarea>
           </label>

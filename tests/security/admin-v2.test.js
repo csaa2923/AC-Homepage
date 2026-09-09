@@ -38,8 +38,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
     assert.match(html,/admin-v2\.js\?v=106/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
-    assert.match(html,/concierge-intelligence-library\.js\?v=2/);
-    assert.match(html,/customer-journey-library\.js\?v=2/);
+    assert.match(html,/concierge-intelligence-library\.js\?v=3/);
+    assert.match(html,/customer-journey-library\.js\?v=3/);
     assert.match(html,/customer-wishes-library\.js\?v=1/);
     assert.match(css,/\[hidden\]\{display:none!important\}/);
     assert.doesNotMatch(html,/data-icon=/);

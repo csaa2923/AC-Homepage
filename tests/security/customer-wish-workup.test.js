@@ -235,7 +235,7 @@ describe("customer wish workup (Phase B)",()=>{
     const wish=withWorkup(inReviewWish(browser),browser);
     assert.equal(wish.workup.items[0].customerVisible,false);
     assert.equal(wish.status,"IN_REVIEW");
-    assert.doesNotMatch(adminWishesSource,/Angebot senden|PROPOSAL_PREPARED|createCustomerPortalAccess|publishCustomer/);
+    assert.doesNotMatch(adminWishesSource,/Angebot senden|createCustomerPortalAccess|publishCustomer/);
     assert.doesNotMatch(adminWishesSource,/status\s*=\s*"IN_REVIEW"/);
     assert.equal(browser.canEditWishWorkup({status:"CUSTOMER_REPLIED"}),false);
     const denied=browser.addWishWorkupItem({status:"CUSTOMER_REPLIED",origin:"admin"},{title:"X"});

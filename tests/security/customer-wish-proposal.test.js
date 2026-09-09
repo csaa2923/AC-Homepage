@@ -491,7 +491,7 @@ describe("customer wish proposal (Phase C1)",()=>{
     assert.doesNotMatch(portalJs,/sourceWorkupItemId|createProposalFromWorkup|publicProposal/);
     assert.match(adminWishesSource,/createProposalFromWorkup/);
     assert.match(adminWishesSource,/Kundenvorschlag erstellen/);
-    assert.doesNotMatch(adminWishesSource,/prepareWishProposal|Vorschlag fertigstellen|Angebot senden/);
+    assert.doesNotMatch(adminWishesSource,/Angebot senden|PROPOSAL_SENT|prepareWishProposalSent/);
     assert.doesNotMatch(adminWishesSource,/createCustomerPortalAccess|publishCustomer/);
     assert.equal(typeof portalWishes.runListCustomerPortalWishes,"function");
     assert.deepEqual(server.publicPortalWish(wish),browser.publicPortalWish(wish));
@@ -731,7 +731,9 @@ describe("customer wish proposal (Phase C1)",()=>{
     assert.match(previewSource,/publicProposalView\(wish\)/);
     assert.doesNotMatch(previewSource,/sourceWorkupItemId|estimatedCost|internalNotes|\.provider|\.contact|workup\.items|wish\.proposal\.items/);
     assert.match(adminWishesSource,/publicProposal\(wish\)/);
-    assert.doesNotMatch(adminWishesSource,/prepareWishProposal|PROPOSAL_PREPARED|Vorschlag fertigstellen/);
+    assert.match(adminWishesSource,/prepareWishProposal/);
+    assert.match(adminWishesSource,/Vorschlag fertigstellen/);
+    assert.doesNotMatch(adminWishesSource,/Angebot senden|PROPOSAL_SENT/);
     assert.doesNotMatch(portalJs,/publicProposal|createProposalFromWorkup|Kundenvorschau/);
   });
 
@@ -756,5 +758,155 @@ describe("customer wish proposal (Phase C1)",()=>{
     assert.equal(stored.workup.items.some(item=>item.customerVisible===true),true);
     const html=proposalUi(wishes.sectionMarkup(customers[0]));
     assert.match(html,/Noch kein Vorschlagspunkt/);
+  });
+
+  it("prepareWishProposal exists in browser and functions and only accepts a non-empty admin IN_REVIEW draft",()=>{
+    assert.equal(typeof browser.prepareWishProposal,"function");
+    assert.equal(typeof server.prepareWishProposal,"function");
+    const created=snapshotWish(browser).value;
+    const options={now:"2026-09-08T16:00:00.000Z"};
+    const portal=Object.assign({},created,{origin:"portal"});
+    assert.equal(browser.prepareWishProposal(portal,options).ok,false);
+    const notReview=Object.assign({},created,{status:"CUSTOMER_REPLIED"});
+    assert.equal(browser.prepareWishProposal(notReview,options).ok,false);
+    const emptyItems=JSON.parse(JSON.stringify(created));
+    emptyItems.proposal.items=[];
+    const blockedEmpty=browser.prepareWishProposal(emptyItems,options);
+    assert.equal(blockedEmpty.ok,false);
+    assert.match(blockedEmpty.errors.join(" "),/mindestens einen Vorschlagspunkt/);
+    const prepared=browser.prepareWishProposal(created,options);
+    assert.equal(prepared.ok,true);
+    assert.deepEqual(server.prepareWishProposal(created,options),prepared);
+    assert.equal(browser.prepareWishProposal(prepared.value,options).ok,false);
+  });
+
+  it("prepareWishProposal sets PROPOSAL_PREPARED, freezes the draft and appends statusHistory",()=>{
+    const created=snapshotWish(browser).value;
+    const historyBefore=created.statusHistory.slice();
+    const prepared=browser.prepareWishProposal(created,{now:"2026-09-08T16:00:00.000Z"});
+    assert.equal(prepared.ok,true);
+    const wish=prepared.value;
+    assert.equal(wish.status,"PROPOSAL_PREPARED");
+    assert.equal(wish.statusLabel,"Vorschlag vorbereitet");
+    assert.equal(wish.proposal.state,"prepared");
+    assert.equal(wish.proposal.preparedAt,"2026-09-08T16:00:00.000Z");
+    assert.equal(wish.proposal.updatedAt,"2026-09-08T16:00:00.000Z");
+    assert.equal(wish.updatedAt,"2026-09-08T16:00:00.000Z");
+    assert.equal(wish.statusHistory.length,historyBefore.length+1);
+    assert.deepEqual(wish.statusHistory[wish.statusHistory.length-1],{
+      status:"PROPOSAL_PREPARED",
+      at:"2026-09-08T16:00:00.000Z",
+      actor:"admin"
+    });
+    assert.equal(wish.statusHistory.some(item=>item.status==="PROPOSAL_SENT"),false);
+    assert.equal(browser.canEditWishProposal(wish),false);
+    assert.equal(browser.updateProposal(wish,{intro:"x"}).ok,false);
+    assert.equal(browser.updateProposalItem(wish,wish.proposal.items[0].id,{title:"x"}).ok,false);
+    assert.equal(browser.removeProposalItem(wish,wish.proposal.items[0].id).ok,false);
+    assert.equal(browser.reorderProposalItems(wish,wish.proposal.items.map(item=>item.id).reverse()).ok,false);
+    assert.equal(browser.createProposalFromWorkup(wish).ok,false);
+    assert.equal(browser.addWishWorkupItem(wish,{title:"Spät"}).ok,false);
+    assert.equal(browser.setWishWorkupNotes(wish,"neu").ok,false);
+    assert.equal(JSON.stringify(wish.workup),JSON.stringify(created.workup));
+    const portalView=browser.publicPortalWish(wish);
+    const inquiryView=inquiryPublic.inquiryPublicWish(wish);
+    [portalView,inquiryView].forEach(view=>{
+      assert.equal("proposal" in view,false);
+      assert.equal("workup" in view,false);
+    });
+  });
+
+  it("shows Vorschlag fertigstellen only for a non-empty draft and requires the send-disclaimer confirmation",async()=>{
+    const emptyDraft=snapshotWish(browser).value;
+    emptyDraft.proposal.items=[];
+    const {wishes,state,customers,confirms}=loadWishes({
+      confirm:false,
+      customer:{
+        customerId:"cust-100",
+        customerName:"Familie Berg",
+        wishRequests:[emptyDraft]
+      }
+    });
+    wishes.openWish(emptyDraft.wishId);
+    const emptyHtml=proposalUi(wishes.sectionMarkup(customers[0]));
+    assert.match(emptyHtml,/prepare-proposal" disabled/);
+    assert.equal(click(wishes,"prepare-proposal"),true);
+    await flush();
+    assert.equal(customers[0].wishRequests[0].status,"IN_REVIEW");
+    assert.equal(state.wishMessageKind,"warning");
+
+    const created=snapshotWish(browser).value;
+    customers[0].wishRequests=[created];
+    wishes.openWish(created.wishId);
+    const draftHtml=proposalUi(wishes.sectionMarkup(customers[0]));
+    assert.match(draftHtml,/data-wish-action="prepare-proposal"/);
+    assert.doesNotMatch(draftHtml,/prepare-proposal" disabled/);
+    assert.equal(click(wishes,"prepare-proposal"),true);
+    await flush();
+    assert.match(confirms[confirms.length-1],/noch nichts an den Gast gesendet/);
+    assert.equal(customers[0].wishRequests[0].status,"IN_REVIEW");
+  });
+
+  it("prepares the proposal through Admin V2, freezes workup and proposal, and keeps publicProposal preview",async()=>{
+    const created=snapshotWish(browser).value;
+    created.proposal.intro="Ein Abend am See.";
+    const workupBefore=JSON.stringify(created.workup);
+    const historyLen=created.statusHistory.length;
+    const {wishes,state,customers,confirms}=loadWishes({
+      confirm:true,
+      customer:{
+        customerId:"cust-100",
+        customerName:"Familie Berg",
+        wishRequests:[created]
+      }
+    });
+    wishes.openWish(created.wishId);
+    assert.equal(click(wishes,"prepare-proposal"),true);
+    await flush();
+    assert.match(confirms[0],/noch nichts an den Gast gesendet/);
+    const stored=customers[0].wishRequests[0];
+    assert.equal(stored.status,"PROPOSAL_PREPARED");
+    assert.equal(stored.proposal.state,"prepared");
+    assert.equal(stored.statusHistory.length,historyLen+1);
+    assert.equal(stored.statusHistory[stored.statusHistory.length-1].actor,"admin");
+    assert.equal(JSON.stringify(stored.workup),workupBefore);
+    assert.match(state.wishMessage,/noch nichts an den Gast gesendet/);
+    const html=wishes.sectionMarkup(customers[0]);
+    const proposal=proposalUi(html);
+    assert.match(proposal,/data-proposal-stage="prepared"/);
+    assert.match(proposal,/Vorschlag vorbereitet/);
+    assert.match(proposal,/noch nicht an den Gast gesendet/);
+    assert.match(proposal,/data-wish-action="proposal-preview"/);
+    assert.doesNotMatch(proposal,/data-wish-action="prepare-proposal"|Neu aus Ausarbeitung|Einleitung speichern|Bearbeiten|Aus Vorschlag entfernen|Nach oben|Nach unten/);
+    assert.match(html,/data-wish-workup/);
+    assert.match(html,/data-workup-stage="prepared"/);
+    assert.doesNotMatch(html,/Baustein hinzufügen|data-wish-action="edit-workup"|data-workup-status=/);
+    assert.match(html,/Für Kundenvorschlag vorgemerkt/);
+    assert.equal(click(wishes,"add-workup"),true);
+    assert.equal(click(wishes,"save-proposal-intro"),true);
+    await flush();
+    assert.equal(customers[0].wishRequests[0].proposal.intro,"Ein Abend am See.");
+    assert.equal(click(wishes,"proposal-preview"),true);
+    const preview=previewUi(wishes.sectionMarkup(customers[0]));
+    assert.match(preview,/Ihr persönlicher Vorschlag/);
+    assert.match(preview,/Ein Abend am See/);
+    assert.doesNotMatch(preview,/PROPOSAL_PREPARED|sourceWorkupItemId|${INTERNAL}|Seefeld Schifffahrt|estimatedCost|internalNotes|statusHistory/);
+    assert.doesNotMatch(preview,/\bprepared\b/);
+    const view=browser.publicProposal(customers[0].wishRequests[0]);
+    assert.match(preview,new RegExp(view.items[0].title.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
+  });
+
+  it("keeps PROPOSAL_PREPARED wishes in the admin list with Vorschlag ansehen",()=>{
+    const prepared=browser.prepareWishProposal(snapshotWish(browser).value,{now:"2026-09-08T16:00:00.000Z"}).value;
+    const {wishes,customer}=loadWishes({customer:{
+      customerId:"cust-100",
+      customerName:"Familie Berg",
+      wishRequests:[prepared]
+    }});
+    const html=wishes.sectionMarkup(customer);
+    assert.match(html,/data-wish-card="wr_proposal_1"/);
+    assert.match(html,/Vorschlag vorbereitet/);
+    assert.match(html,/>Vorschlag ansehen</);
+    assert.doesNotMatch(html,/Bearbeitung fortsetzen/);
   });
 });

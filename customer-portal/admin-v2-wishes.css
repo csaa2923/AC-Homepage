@@ -75,27 +75,51 @@
 .v2-wish-proposal-guest{
   display:block;margin:0 0 4px;color:#6a5428;font-size:12px;font-weight:750;letter-spacing:.02em;text-transform:uppercase
 }
-.v2-wish-proposal-preview-note{padding-top:4px}
-.v2-wish-proposal-preview-note span{
-  display:block;margin:0 0 4px;color:var(--muted);font-size:12px;font-weight:750
-}
 .v2-wish-proposal-form .v2-wish-grid label span{display:block;margin-bottom:4px}
+.v2-wish-card.is-proposal-prepared{border-color:#e2d4b8;background:#fbf8f0}
+.v2-wish-proposal-ready-hint{margin:8px 0 0;color:#6a5428;font-size:14px;font-weight:750}
+.v2-wish-proposal-ready{
+  margin:0;width:fit-content;padding:4px 12px;border:1px solid #e2d4b8;border-radius:999px;
+  background:#f7f1e4;color:#6a5428;font-size:13px;font-weight:750
+}
+.v2-wish-proposal-intro-read{display:grid;gap:6px}
+.v2-wish-proposal-intro-read p{margin:0;font-size:16px;line-height:1.55;white-space:pre-wrap}
+.v2-wish-workup.is-readonly,.v2-wish-proposal.is-readonly{opacity:1}
+.v2-wish-workup-notes-read{display:grid;gap:6px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:#fbfcfa}
+.v2-wish-workup-notes-label{margin:0;color:var(--muted);font-size:13px;font-weight:750}
 .v2-wish-proposal-preview{
-  display:grid;gap:16px;padding:22px 24px;border:1px solid #d7c7a4;border-radius:22px;background:#fffdf8
+  display:grid;gap:28px;padding:32px 28px;border:1px solid #d7c7a4;border-radius:24px;background:#fffdf8
 }
+.v2-wish-proposal-preview-brand{
+  display:grid;gap:6px;padding-bottom:8px;border-bottom:1px solid #eadfc8
+}
+.v2-wish-proposal-preview-brand .v2-button{justify-self:start;margin-top:8px}
 .v2-wish-proposal-kicker{
-  margin:0 0 4px;color:#0d3b2f;font-size:12px;font-weight:750;letter-spacing:.12em;text-transform:uppercase
+  margin:0;color:#0d3b2f;font-size:12px;font-weight:750;letter-spacing:.16em;text-transform:uppercase
 }
-.v2-wish-proposal-preview h4{margin:0;font-size:22px;line-height:1.3}
-.v2-wish-proposal-intro{margin:0;font-size:16px;line-height:1.55;white-space:pre-wrap}
-.v2-wish-proposal-preview-list{display:grid;gap:14px}
-.v2-wish-proposal-preview-item{display:grid;gap:8px;padding:16px 0;border-top:1px solid #eadfc8}
-.v2-wish-proposal-preview-item:first-child{padding-top:0;border-top:0}
-.v2-wish-proposal-preview-item h5{margin:0;font-size:18px;font-weight:750}
-.v2-wish-proposal-preview-item p{margin:0;font-size:15px;line-height:1.5}
-.v2-wish-proposal-preview-item dl{display:grid;gap:8px;margin:0}
-.v2-wish-proposal-preview-item dt{color:var(--muted);font-size:12px;font-weight:750}
-.v2-wish-proposal-preview-item dd{margin:0;font-size:15px}
+.v2-wish-proposal-preview h4{margin:0;font-size:28px;line-height:1.25;font-weight:650}
+.v2-wish-proposal-intro{margin:0;max-width:42rem;font-size:17px;line-height:1.65;white-space:pre-wrap}
+.v2-wish-proposal-preview-list{display:grid;gap:20px}
+.v2-wish-proposal-preview-item{
+  display:grid;gap:12px;padding:22px 22px;border:1px solid #eadfc8;border-radius:20px;background:#fff
+}
+.v2-wish-proposal-preview-category{
+  margin:0;color:#6a5428;font-size:12px;font-weight:750;letter-spacing:.08em;text-transform:uppercase
+}
+.v2-wish-proposal-preview-item h5{margin:0;font-size:22px;font-weight:700;line-height:1.3}
+.v2-wish-proposal-preview-copy{margin:0;font-size:16px;line-height:1.6;max-width:40rem}
+.v2-wish-proposal-preview-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;margin:4px 0 0}
+.v2-wish-proposal-preview-meta dt{color:var(--muted);font-size:12px;font-weight:750}
+.v2-wish-proposal-preview-meta dd{margin:0;font-size:16px;line-height:1.4}
+.v2-wish-proposal-preview-price{
+  margin:4px 0 0;padding:12px 14px;border-left:3px solid var(--green);background:#f4f8f5;
+  font-size:16px;font-weight:700;letter-spacing:.01em
+}
+.v2-wish-proposal-preview-note{padding:12px 14px;border-left:3px solid #e2d4b8;background:#f7f1e4;font-size:15px;line-height:1.55}
+.v2-wish-proposal-preview-note span{
+  display:block;margin:0 0 6px;color:#6a5428;font-size:12px;font-weight:750;letter-spacing:.04em;text-transform:uppercase
+}
 @media (max-width:900px){
-  .v2-wish-card dl,.v2-wish-grid,.v2-wish-workup-meta{grid-template-columns:1fr}
+  .v2-wish-card dl,.v2-wish-grid,.v2-wish-workup-meta,.v2-wish-proposal-preview-meta{grid-template-columns:1fr}
+  .v2-wish-proposal-preview{padding:24px 18px}
 }

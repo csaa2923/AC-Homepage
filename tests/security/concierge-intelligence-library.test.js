@@ -225,4 +225,39 @@ describe("concierge intelligence library",()=>{
     });
     assert.equal(server.filter(item=>item.reason==="wishCustomerReplied").map(item=>item.id).join(","),ids.join(","));
   });
+
+  it("emits a PROPOSAL_PREPARED insight with Vorschlag ansehen and ignores other statuses",()=>{
+    const library=loadLibrary();
+    const options={
+      now,
+      trip:{},
+      workspace:{missingRequired:[],documents:{critical:0,missing:0}},
+      publication:{key:"draft"},
+      programItems:[],
+      bookingSummaries:[],
+      wishRequests:[
+        {wishId:"wr_prep_1",origin:"admin",status:"PROPOSAL_PREPARED",title:"Seefeld September"},
+        {wishId:"wr_prep_1",origin:"admin",status:"PROPOSAL_PREPARED",title:"Duplikat"},
+        {wishId:"wr_review",origin:"admin",status:"IN_REVIEW",title:"Noch in Arbeit"},
+        {wishId:"wr_self",origin:"portal",status:"PROPOSAL_PREPARED",title:"Self-Service"}
+      ]
+    };
+    const insights=library.getConciergeInsights({customerName:"Familie Berg"},options);
+    const prepared=insights.filter(item=>item.reason==="wishProposalPrepared");
+    assert.equal(prepared.length,1);
+    assert.equal(prepared[0].id,"wish-proposal-prepared-wr_prep_1");
+    assert.equal(prepared[0].entityId,"wr_prep_1");
+    assert.equal(prepared[0].title,"Vorschlag vorbereitet");
+    assert.equal(prepared[0].actionLabel,"Vorschlag ansehen");
+    assert.equal(prepared[0].targetTab,"kunde");
+    assert.match(prepared[0].description,/fertig vorbereitet/);
+    assert.match(prepared[0].description,/versendet werden/);
+    assert.doesNotMatch(prepared[0].description,/veröffentlicht|Kunde informiert|PROPOSAL_SENT/);
+    assert.equal(library.adminCustomerProposalPreparedWishes(options.wishRequests).map(item=>item.wishId).join(","),"wr_prep_1");
+    assert.equal(
+      serverLibrary.getConciergeInsights({customerName:"Familie Berg"},options).filter(item=>item.reason==="wishProposalPrepared").map(item=>item.id).join(","),
+      prepared.map(item=>item.id).join(",")
+    );
+    assert.equal(serverLibrary.adminCustomerProposalPreparedWishes(options.wishRequests).map(item=>item.wishId).join(","),"wr_prep_1");
+  });
 });

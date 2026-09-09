@@ -55,6 +55,15 @@ function adminCustomerInReviewWishes(wishRequests){
     return true;
   });
 }
+function adminCustomerProposalPreparedWishes(wishRequests){
+  const seen=new Set();
+  return list(wishRequests).filter(wish=>{
+    const wishId=text(wish&&wish.wishId);
+    if(!wish||text(wish.origin)!=="admin"||text(wish.status)!=="PROPOSAL_PREPARED"||!wishId||seen.has(wishId))return false;
+    seen.add(wishId);
+    return true;
+  });
+}
 function wishCustomerRepliedInsights(customer,wishRequests){
   const name=text(customer&&customer.customerName);
   return adminCustomerRepliedWishes(wishRequests).map(wish=>{
@@ -84,6 +93,25 @@ function wishInReviewInsights(customer,wishRequests){
       "wishInReview",
       "kunde",
       "Bearbeitung fortsetzen",
+      {source:"wishRequests",entityId:wishId}
+    );
+  });
+}
+function wishProposalPreparedInsights(customer,wishRequests){
+  const name=text(customer&&customer.customerName);
+  return adminCustomerProposalPreparedWishes(wishRequests).map(wish=>{
+    const wishId=text(wish.wishId);
+    return insight(
+      `wish-proposal-prepared-${wishId}`,
+      "important",
+      "Vorschlag vorbereitet",
+      [
+        [name,text(wish.title)||"Wunsch"].filter(Boolean).join(" · "),
+        "Der persönliche Kundenvorschlag ist fertig vorbereitet und kann als Nächstes versendet werden."
+      ].filter(Boolean).join(" · "),
+      "wishProposalPrepared",
+      "kunde",
+      "Vorschlag ansehen",
       {source:"wishRequests",entityId:wishId}
     );
   });
@@ -132,6 +160,7 @@ function analyze(customer={},options={}){
   if(matches(items,/wander|hike|berg|tour/)&&!indoor)result.push(insight("hike-alternative-missing","recommendation","Wanderung ohne alternative Aktivität","Für eine vorhandene Wanderung ist keine erkennbare wetterunabhängige Alternative hinterlegt.","hikeAlternativeMissing","programm","Alternative ergänzen",{source:"program"}));
   wishCustomerRepliedInsights(customer,list(options.wishRequests!=null?options.wishRequests:customer.wishRequests)).forEach(item=>result.push(item));
   wishInReviewInsights(customer,list(options.wishRequests!=null?options.wishRequests:customer.wishRequests)).forEach(item=>result.push(item));
+  wishProposalPreparedInsights(customer,list(options.wishRequests!=null?options.wishRequests:customer.wishRequests)).forEach(item=>result.push(item));
   return result.sort((a,b)=>ORDER[a.severity]-ORDER[b.severity]||a.id.localeCompare(b.id));
 }
 function getConciergeInsights(customer,options){return analyze(customer,options);}
@@ -146,4 +175,4 @@ function analyzeCustomerReadiness(customer,options){
   const insights=analyze(customer,options),quality=calculateConciergeQualityScore(customer,options);
   return {isReady:quality.counts.critical===0&&quality.counts.important===0,quality,insights,recommendedNextActions:getRecommendedNextActions(customer,options)};
 }
-module.exports={analyzeCustomerReadiness,calculateConciergeQualityScore,getConciergeInsights,getRecommendedNextActions,adminCustomerRepliedWishes,adminCustomerInReviewWishes};
+module.exports={analyzeCustomerReadiness,calculateConciergeQualityScore,getConciergeInsights,getRecommendedNextActions,adminCustomerRepliedWishes,adminCustomerInReviewWishes,adminCustomerProposalPreparedWishes};

@@ -1836,6 +1836,37 @@
     return ok(current);
   }
 
+  function prepareWishProposal(wish,options){
+    const settings=options&&typeof options==="object"?options:{};
+    const current=cloneWish(wish);
+    if(text(current.origin)!=="admin"){
+      return fail(["Nur Concierge-Wünsche können einen Kundenvorschlag fertigstellen."],"failed-precondition");
+    }
+    if(text(current.status)!=="IN_REVIEW"){
+      return fail(["Der Kundenvorschlag kann nur während der Bearbeitung fertiggestellt werden."],"failed-precondition");
+    }
+    current.proposal=normalizeProposal(current.proposal);
+    if(!text(current.proposal.createdAt)||current.proposal.state!=="draft"){
+      return fail(["Es liegt kein bearbeitbarer Kundenvorschlag vor."],"failed-precondition");
+    }
+    if(!current.proposal.items.length){
+      return fail(["Bitte mindestens einen Vorschlagspunkt belassen, bevor der Kundenvorschlag fertiggestellt wird."]);
+    }
+    const now=nowIso(settings.now);
+    current.status="PROPOSAL_PREPARED";
+    current.statusLabel=statusLabel(current.status);
+    current.updatedAt=now;
+    current.proposal.state="prepared";
+    current.proposal.preparedAt=now;
+    current.proposal.updatedAt=now;
+    current.statusHistory=appendStatusHistory(current.statusHistory,{
+      status:"PROPOSAL_PREPARED",
+      at:now,
+      actor:"admin"
+    });
+    return ok(current);
+  }
+
   function publicProposal(wish){
     const proposal=normalizeProposal(wish&&wish.proposal);
     return {
@@ -2483,6 +2514,7 @@
     createProposalItemId,
     canEditWishProposal,
     createProposalFromWorkup,
+    prepareWishProposal,
     publicProposal,
     updateProposal,
     updateProposalItem,

@@ -132,8 +132,12 @@
     return text(wish&&wish.origin)==="admin"&&text(wish&&wish.status)==="IN_REVIEW"&&Boolean(text(wish&&wish.wishId));
   }
 
+  function isAdminWishProposalPrepared(wish){
+    return text(wish&&wish.origin)==="admin"&&text(wish&&wish.status)==="PROPOSAL_PREPARED"&&Boolean(text(wish&&wish.wishId));
+  }
+
   function isFollowUpRoundLocked(wish){
-    return isAdminCustomerReplied(wish)||isAdminWishInReview(wish);
+    return isAdminCustomerReplied(wish)||isAdminWishInReview(wish)||isAdminWishProposalPrepared(wish);
   }
 
   function repliedAdminWishes(customer){
@@ -556,6 +560,7 @@
       setMessage("Wunsch wurde nicht gefunden.","error");
     }
     h().render();
+    queueWishSectionFocus();
   }
 
   function createWishFromDraft(customer,draft,options){
@@ -861,6 +866,15 @@
     return Boolean(text(proposal.createdAt))&&proposal.state==="draft";
   }
 
+  function hasPreparedProposal(wish){
+    const proposal=normalizedProposal(wish);
+    return Boolean(text(proposal.createdAt))&&proposal.state==="prepared";
+  }
+
+  function canPrepareWishProposal(wish){
+    return isAdminWishInReview(wish)&&hasDraftProposal(wish)&&(normalizedProposal(wish).items||[]).length>=1;
+  }
+
   function markedProposalCount(wish){
     return (normalizedWorkup(wish).items||[]).filter(item=>item.customerVisible===true).length;
   }
@@ -1044,6 +1058,43 @@
     const moved=order.splice(index,1)[0];
     order.splice(next,0,moved);
     applyProposalResult(customer,api.reorderProposalItems(wish,order),"Reihenfolge gespeichert.");
+  }
+
+  function prepareProposalFromDraft(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.prepareWishProposal!=="function")return;
+    if(!isAdminWishInReview(wish))return;
+    if(!hasDraftProposal(wish)||!(normalizedProposal(wish).items||[]).length){
+      setMessage("Bitte mindestens einen Vorschlagspunkt belassen, bevor der Kundenvorschlag fertiggestellt wird.","warning");
+      h().render();
+      return;
+    }
+    const confirmed=typeof window!=="undefined"&&typeof window.confirm==="function"
+      ?window.confirm("Der Kundenvorschlag wird als fertig vorbereitet markiert und anschließend nicht mehr bearbeitbar. Es wird noch nichts an den Gast gesendet. Fortfahren?")
+      :false;
+    if(!confirmed)return;
+    applyProposalResult(
+      customer,
+      api.prepareWishProposal(wish),
+      "Kundenvorschlag wurde fertig vorbereitet. Es wurde noch nichts an den Gast gesendet."
+    );
+  }
+
+  function queueWishSectionFocus(){
+    if(typeof document==="undefined"||typeof document.querySelector!=="function")return;
+    const scroll=()=>{
+      const frozen=document.querySelector("[data-wish-proposal][data-proposal-stage='prepared']");
+      const target=frozen||document.querySelector("[data-wish-root]");
+      if(!target||typeof target.scrollIntoView!=="function")return;
+      const reduced=typeof window!=="undefined"&&window.matchMedia
+        ?window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        :false;
+      target.scrollIntoView({block:"start",behavior:reduced?"auto":"smooth"});
+    };
+    if(typeof requestAnimationFrame==="function")requestAnimationFrame(scroll);
+    else scroll();
   }
 
   function addLibraryQuestion(questionId){
@@ -1242,14 +1293,16 @@
         ${wishes.length?`<div class="v2-wish-list">${wishes.map(wish=>{
           const replied=isAdminCustomerReplied(wish);
           const inReview=isAdminWishInReview(wish);
-          const openLabel=replied?"Antworten prüfen":inReview?"Bearbeitung fortsetzen":"Wunsch öffnen";
+          const prepared=isAdminWishProposalPrepared(wish);
+          const openLabel=replied?"Antworten prüfen":inReview?"Bearbeitung fortsetzen":prepared?"Vorschlag ansehen":"Wunsch öffnen";
           return `
-          <article class="v2-wish-card${replied?" is-replied":""}" data-wish-card="${escapeHtml(wish.wishId)}">
+          <article class="v2-wish-card${replied?" is-replied":""}${prepared?" is-proposal-prepared":""}" data-wish-card="${escapeHtml(wish.wishId)}">
             <div>
               <h4>${escapeHtml(wish.title||"Ohne Titel")}</h4>
               <p class="v2-muted">${escapeHtml(snippet(wish.originalRequest&&wish.originalRequest.text))}</p>
               ${replied?`<p class="v2-wish-reply-hint">Kunde hat geantwortet</p><p class="v2-muted">Antworten prüfen</p>`:""}
               ${inReview?`<p class="v2-muted">In Bearbeitung</p>`:""}
+              ${prepared?`<p class="v2-wish-proposal-ready-hint">Vorschlag vorbereitet</p><p class="v2-muted">Noch nicht an den Gast gesendet</p>`:""}
             </div>
             <dl>
               <div><dt>Quelle</dt><dd>${escapeHtml(sourceLabel(wish.source))}</dd></div>
@@ -1257,7 +1310,7 @@
               <div><dt>Status</dt><dd>${escapeHtml(wish.statusLabel||statusLabel(wish.status))}</dd></div>
               <div><dt>Offene Rückfragen</dt><dd>${escapeHtml(String(openFollowUpCount(wish)))}</dd></div>
             </dl>
-            <button class="v2-button ${replied?"primary":"soft"}" type="button" data-wish-action="open" data-wish-id="${escapeHtml(wish.wishId)}">${openLabel}</button>
+          <button class="v2-button ${replied||prepared?"primary":"soft"}" type="button" data-wish-action="open" data-wish-id="${escapeHtml(wish.wishId)}">${openLabel}</button>
           </article>
         `;
         }).join("")}</div>`:`<p class="v2-muted" data-wish-empty>Noch kein Wunsch erfasst.</p>`}
@@ -1864,16 +1917,16 @@
     `;
   }
 
-  function workupCardMarkup(item,editing){
+  function workupCardMarkup(item,editing,readOnly){
     const source=item||{};
-    if(editing)return `
+    if(editing&&!readOnly)return `
       <article class="v2-wish-workup-card is-editing" data-workup-item="${escapeHtml(source.id)}">
         ${workupEditorMarkup(state().wishWorkupDraft||itemToWorkupDraft(source))}
       </article>
     `;
     const statuses=lib()&&lib().WORKUP_ITEM_STATUSES?lib().WORKUP_ITEM_STATUSES:[];
     return `
-      <article class="v2-wish-workup-card" data-workup-item="${escapeHtml(source.id)}">
+      <article class="v2-wish-workup-card${readOnly?" is-readonly":""}" data-workup-item="${escapeHtml(source.id)}">
         <div class="v2-wish-workup-card-head">
           <div>
             <h5>${escapeHtml(text(source.title)||"Ohne Titel")}</h5>
@@ -1891,41 +1944,49 @@
           <div><dt>Geschätzte Kosten</dt><dd>${escapeHtml(text(source.estimatedCost)||"–")}</dd></div>
         </dl>
         ${text(source.internalNotes)?`<p class="v2-muted">${escapeHtml(source.internalNotes)}</p>`:""}
-        <div class="v2-wish-actions">
+        ${readOnly?"":`<div class="v2-wish-actions">
           <label class="v2-edit-field">
             <span>Status</span>
             <select data-workup-status="${escapeHtml(source.id)}">${optionList(statuses,source.status)}</select>
           </label>
           <button class="v2-button soft" type="button" data-wish-action="edit-workup" data-workup-id="${escapeHtml(source.id)}">Bearbeiten</button>
           <button class="v2-button soft" type="button" data-wish-action="delete-workup" data-workup-id="${escapeHtml(source.id)}">Löschen</button>
-        </div>
+        </div>`}
       </article>
     `;
   }
 
   function workupMarkup(wish){
-    if(!isAdminWishInReview(wish))return "";
+    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish))return "";
+    const readOnly=isAdminWishProposalPrepared(wish);
     const workup=normalizedWorkup(wish);
-    const editor=text(state().wishWorkupEditor);
-    const notes=state().wishWorkupNotesDraft==null?workup.notes:state().wishWorkupNotesDraft;
+    const editor=readOnly?"":text(state().wishWorkupEditor);
+    const notes=readOnly?workup.notes:(state().wishWorkupNotesDraft==null?workup.notes:state().wishWorkupNotesDraft);
     return `
-      <article class="v2-wish-panel v2-wish-workup" data-wish-workup>
+      <article class="v2-wish-panel v2-wish-workup${readOnly?" is-readonly":""}" data-wish-workup ${readOnly?`data-workup-stage="prepared"`:""}>
         <div class="v2-workspace-section-head compact">
           <div>
             <h4>Ausarbeitung</h4>
-            <p class="v2-muted">Hier entstehen aus dem Kundenwunsch konkrete Erlebnisse, Leistungen und Vorschläge. Dieser Bereich ist nur intern sichtbar.</p>
+            <p class="v2-muted">${readOnly
+              ?"Interne Grundlage des fertigen Kundenvorschlags. Dieser Bereich bleibt nur intern sichtbar und ist nicht mehr bearbeitbar."
+              :"Hier entstehen aus dem Kundenwunsch konkrete Erlebnisse, Leistungen und Vorschläge. Dieser Bereich ist nur intern sichtbar."}</p>
           </div>
-          <button class="v2-button primary" type="button" data-wish-action="add-workup">Baustein hinzufügen</button>
+          ${readOnly?"":`<button class="v2-button primary" type="button" data-wish-action="add-workup">Baustein hinzufügen</button>`}
         </div>
         <p class="v2-muted">Interner Überblick über die gesamte Ausarbeitung, unabhängig vom einzelnen Baustein.</p>
-        <label class="v2-edit-field full">
-          <span>Notizen zur Ausarbeitung</span>
-          <textarea name="wishWorkupNotes" data-workup-notes rows="4" maxlength="4000">${escapeHtml(notes)}</textarea>
-        </label>
-        <button class="v2-button soft" type="button" data-wish-action="save-workup-notes">Notiz speichern</button>
-        ${editor==="create"?workupEditorMarkup(state().wishWorkupDraft||emptyWorkupDraft()):""}
+        ${readOnly
+          ?`<div class="v2-wish-workup-notes-read" data-workup-notes-read>
+            <p class="v2-wish-workup-notes-label">Notizen zur Ausarbeitung</p>
+            <p>${escapeHtml(text(notes)||"Keine Notizen zur Ausarbeitung.")}</p>
+          </div>`
+          :`<label class="v2-edit-field full">
+            <span>Notizen zur Ausarbeitung</span>
+            <textarea name="wishWorkupNotes" data-workup-notes rows="4" maxlength="4000">${escapeHtml(notes)}</textarea>
+          </label>
+          <button class="v2-button soft" type="button" data-wish-action="save-workup-notes">Notiz speichern</button>
+          ${editor==="create"?workupEditorMarkup(state().wishWorkupDraft||emptyWorkupDraft()):""}`}
         <div class="v2-wish-workup-list">
-          ${(workup.items||[]).map(item=>workupCardMarkup(item,editor===item.id)).join("")||`<p class="v2-muted" data-workup-empty>Noch kein Baustein erfasst.</p>`}
+          ${(workup.items||[]).map(item=>workupCardMarkup(item,editor===item.id,readOnly)).join("")||`<p class="v2-muted" data-workup-empty>Noch kein Baustein erfasst.</p>`}
         </div>
       </article>
     `;
@@ -1997,15 +2058,15 @@
     `;
   }
 
-  function proposalCardMarkup(item,index,total,editing){
+  function proposalCardMarkup(item,index,total,editing,readOnly){
     const source=item||{};
-    if(editing)return `
+    if(editing&&!readOnly)return `
       <article class="v2-wish-proposal-card is-editing" data-proposal-item="${escapeHtml(source.id)}">
         ${proposalEditorMarkup(state().wishProposalDraft||itemToProposalDraft(source))}
       </article>
     `;
     return `
-      <article class="v2-wish-proposal-card" data-proposal-item="${escapeHtml(source.id)}">
+      <article class="v2-wish-proposal-card${readOnly?" is-readonly":""}" data-proposal-item="${escapeHtml(source.id)}">
         <div class="v2-wish-workup-card-head">
           <div>
             <p class="v2-wish-proposal-order">Vorschlag ${index+1}</p>
@@ -2020,12 +2081,12 @@
           ${text(source.customerPriceText)?`<div><dt>Preis / Preisinformation <span class="v2-wish-proposal-guest">für den Gast</span></dt><dd>${escapeHtml(source.customerPriceText)}</dd></div>`:""}
         </dl>
         ${text(source.note)?`<p class="v2-wish-proposal-note"><span class="v2-wish-proposal-guest">Besonderer Hinweis für den Gast</span>${escapeHtml(source.note)}</p>`:""}
-        <div class="v2-wish-actions">
+        ${readOnly?"":`<div class="v2-wish-actions">
           <button class="v2-button soft" type="button" data-wish-action="proposal-up" data-proposal-id="${escapeHtml(source.id)}" ${index===0?"disabled":""}>Nach oben</button>
           <button class="v2-button soft" type="button" data-wish-action="proposal-down" data-proposal-id="${escapeHtml(source.id)}" ${index>=total-1?"disabled":""}>Nach unten</button>
           <button class="v2-button soft" type="button" data-wish-action="edit-proposal" data-proposal-id="${escapeHtml(source.id)}">Bearbeiten</button>
           <button class="v2-button soft" type="button" data-wish-action="remove-proposal" data-proposal-id="${escapeHtml(source.id)}">Aus Vorschlag entfernen</button>
-        </div>
+        </div>`}
       </article>
     `;
   }
@@ -2036,26 +2097,23 @@
     const items=Array.isArray(view.items)?view.items:[];
     return `
       <aside class="v2-wish-proposal-preview" data-proposal-preview>
-        <div class="v2-workspace-section-head compact">
-          <div>
-            <p class="v2-wish-proposal-kicker">Alpine Concierge Tirol</p>
-            <h4>Ihr persönlicher Vorschlag</h4>
-          </div>
+        <div class="v2-wish-proposal-preview-brand">
+          <p class="v2-wish-proposal-kicker">Alpine Concierge Tirol</p>
+          <h4>Ihr persönlicher Vorschlag</h4>
           <button class="v2-button soft" type="button" data-wish-action="close-proposal-preview">Schließen</button>
         </div>
-        <p class="v2-muted">Nur lokale Admin-Vorschau. Nichts wird an den Gast gesendet oder veröffentlicht.</p>
         ${text(view.intro)?`<p class="v2-wish-proposal-intro">${escapeHtml(view.intro)}</p>`:""}
         <div class="v2-wish-proposal-preview-list">
           ${items.map(item=>`
             <article class="v2-wish-proposal-preview-item">
+              ${text(item.category)?`<p class="v2-wish-proposal-preview-category">${escapeHtml(workupCategoryName(item.category))}</p>`:""}
               <h5>${escapeHtml(text(item.title)||"Ohne Titel")}</h5>
-              ${text(item.description)?`<p>${escapeHtml(item.description)}</p>`:""}
-              <dl>
-                ${text(item.category)?`<div><dt>Kategorie</dt><dd>${escapeHtml(workupCategoryName(item.category))}</dd></div>`:""}
+              ${text(item.description)?`<p class="v2-wish-proposal-preview-copy">${escapeHtml(item.description)}</p>`:""}
+              <dl class="v2-wish-proposal-preview-meta">
                 ${text(item.location)?`<div><dt>Ort</dt><dd>${escapeHtml(item.location)}</dd></div>`:""}
                 ${text(item.whenLabel)?`<div><dt>Termin</dt><dd>${escapeHtml(item.whenLabel)}</dd></div>`:""}
-                ${text(item.customerPriceText)?`<div><dt>Preis / Preisinformation</dt><dd>${escapeHtml(item.customerPriceText)}</dd></div>`:""}
               </dl>
+              ${text(item.customerPriceText)?`<p class="v2-wish-proposal-preview-price">${escapeHtml(item.customerPriceText)}</p>`:""}
               ${text(item.note)?`<p class="v2-wish-proposal-preview-note"><span>Besonderer Hinweis</span>${escapeHtml(item.note)}</p>`:""}
             </article>
           `).join("")||`<p class="v2-muted">Noch keine Vorschlagspunkte.</p>`}
@@ -2065,25 +2123,41 @@
   }
 
   function proposalMarkup(wish){
-    if(!isAdminWishInReview(wish))return "";
+    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish))return "";
     const marked=markedProposalCount(wish);
     const draft=hasDraftProposal(wish);
+    const prepared=isAdminWishProposalPrepared(wish)&&hasPreparedProposal(wish);
     const proposal=normalizedProposal(wish);
-    const editor=text(state().wishProposalEditor);
-    const intro=state().wishProposalIntroDraft==null?proposal.intro:state().wishProposalIntroDraft;
+    const editor=prepared?"":text(state().wishProposalEditor);
+    const intro=prepared||state().wishProposalIntroDraft==null?proposal.intro:state().wishProposalIntroDraft;
     const items=proposal.items||[];
     const createButton=marked
       ?`<button class="v2-button primary" type="button" data-wish-action="create-proposal">Kundenvorschlag erstellen</button>`
       :`<button class="v2-button primary" type="button" data-wish-action="create-proposal" disabled>Kundenvorschlag erstellen</button>`;
+    const prepareButton=canPrepareWishProposal(wish)
+      ?`<button class="v2-button primary" type="button" data-wish-action="prepare-proposal">Vorschlag fertigstellen</button>`
+      :(draft?`<button class="v2-button primary" type="button" data-wish-action="prepare-proposal" disabled>Vorschlag fertigstellen</button>`:"");
     return `
-      <article class="v2-wish-panel v2-wish-proposal" data-wish-proposal>
+      <article class="v2-wish-panel v2-wish-proposal${prepared?" is-readonly":""}" data-wish-proposal data-proposal-stage="${prepared?"prepared":"draft"}">
         <div class="v2-workspace-section-head compact">
           <div>
             <h4>Kundenvorschlag</h4>
-            <p class="v2-muted">Aus den vorgemerkten Bausteinen entsteht hier der persönliche Vorschlag für den Gast. Interne Notizen, Anbieterinformationen und interne Kosten werden nicht übernommen.</p>
+            <p class="v2-muted">${prepared
+              ?"Der Vorschlag ist fertig vorbereitet, aber noch nicht an den Gast gesendet."
+              :"Aus den vorgemerkten Bausteinen entsteht hier der persönliche Vorschlag für den Gast. Interne Notizen, Anbieterinformationen und interne Kosten werden nicht übernommen."}</p>
           </div>
         </div>
-        ${draft?`
+        ${prepared?`
+          <p class="v2-wish-proposal-ready" data-proposal-ready>Vorschlag vorbereitet</p>
+          <div class="v2-wish-actions">
+            <button class="v2-button primary" type="button" data-wish-action="proposal-preview">Kundenvorschau</button>
+          </div>
+          ${text(intro)?`<div class="v2-wish-proposal-intro-read"><p class="v2-wish-proposal-guest">Einleitung für den Gast</p><p>${escapeHtml(intro)}</p></div>`:`<p class="v2-muted">Keine Einleitung für den Gast.</p>`}
+          <div class="v2-wish-proposal-list">
+            ${items.map((item,index)=>proposalCardMarkup(item,index,items.length,false,true)).join("")||`<p class="v2-muted" data-proposal-empty>Noch kein Vorschlagspunkt.</p>`}
+          </div>
+          ${proposalPreviewMarkup(wish)}
+        `:draft?`
           <p class="v2-wish-proposal-count" data-proposal-marked>${escapeHtml(markedProposalLabel(marked))}</p>
           <div class="v2-wish-actions">
             <button class="v2-button primary" type="button" data-wish-action="proposal-preview">Kundenvorschau</button>
@@ -2096,8 +2170,9 @@
           <p class="v2-muted">Dieser Text ist für den Gast sichtbar.</p>
           <button class="v2-button soft" type="button" data-wish-action="save-proposal-intro">Einleitung speichern</button>
           <div class="v2-wish-proposal-list">
-            ${items.map((item,index)=>proposalCardMarkup(item,index,items.length,editor===item.id)).join("")||`<p class="v2-muted" data-proposal-empty>Noch kein Vorschlagspunkt. Du kannst den Vorschlag neu aus der Ausarbeitung erstellen.</p>`}
+            ${items.map((item,index)=>proposalCardMarkup(item,index,items.length,editor===item.id,false)).join("")||`<p class="v2-muted" data-proposal-empty>Noch kein Vorschlagspunkt. Du kannst den Vorschlag neu aus der Ausarbeitung erstellen.</p>`}
           </div>
+          ${prepareButton}
           ${proposalPreviewMarkup(wish)}
         `:`
           <p class="v2-wish-proposal-count" data-proposal-marked>${escapeHtml(markedProposalLabel(marked))}</p>
@@ -2191,8 +2266,16 @@
       h().render();
       return true;
     }
-    if(action==="save-workup-notes"){saveWorkupNotes();return true;}
-    if(action==="save-workup"){saveWorkupItem();return true;}
+    if(action==="save-workup-notes"){
+      if(!isAdminWishInReview(selectedWish(currentCustomer())))return true;
+      saveWorkupNotes();
+      return true;
+    }
+    if(action==="save-workup"){
+      if(!isAdminWishInReview(selectedWish(currentCustomer())))return true;
+      saveWorkupItem();
+      return true;
+    }
     if(action==="cancel-workup"){
       h().patchState({wishWorkupEditor:"",wishWorkupDraft:emptyWorkupDraft()});
       h().render();
@@ -2200,15 +2283,21 @@
     }
     if(action==="edit-workup"){
       const wish=selectedWish(currentCustomer());
+      if(!isAdminWishInReview(wish))return true;
       const item=(normalizedWorkup(wish).items||[]).find(entry=>entry.id===text(button.dataset.workupId));
       if(!item)return true;
       h().patchState({wishWorkupEditor:item.id,wishWorkupDraft:itemToWorkupDraft(item)});
       h().render();
       return true;
     }
-    if(action==="delete-workup"){deleteWorkupItem(button.dataset.workupId||"");return true;}
+    if(action==="delete-workup"){
+      if(!isAdminWishInReview(selectedWish(currentCustomer())))return true;
+      deleteWorkupItem(button.dataset.workupId||"");
+      return true;
+    }
     if(action==="create-proposal"){createProposalFromMarked(false);return true;}
     if(action==="recreate-proposal"){createProposalFromMarked(true);return true;}
+    if(action==="prepare-proposal"){prepareProposalFromDraft();return true;}
     if(action==="save-proposal-intro"){saveProposalIntro();return true;}
     if(action==="save-proposal-item"){saveProposalItem();return true;}
     if(action==="cancel-proposal-item"){
@@ -2284,6 +2373,7 @@
     }
     const statusSelect=event.target.closest("[data-workup-status]");
     if(statusSelect){
+      if(!isAdminWishInReview(selectedWish(currentCustomer())))return true;
       changeWorkupStatus(statusSelect.dataset.workupStatus||"",statusSelect.value);
       return true;
     }

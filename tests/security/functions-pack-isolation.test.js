@@ -170,6 +170,11 @@ describe("functions pack isolation (no files outside functions/)",()=>{
       server.createProposalFromWorkup(withWorkup,proposalOptions),
       browser.createProposalFromWorkup(withWorkup,proposalOptions)
     );
+    const withProposal=browser.createProposalFromWorkup(withWorkup,proposalOptions).value;
+    assert.deepEqual(
+      server.prepareWishProposal(withProposal,{now:"2026-09-08T09:07:00.000Z"}),
+      browser.prepareWishProposal(withProposal,{now:"2026-09-08T09:07:00.000Z"})
+    );
     const dirty={
       intro:"Hallo",
       workup:{notes:"intern"},

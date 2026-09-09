@@ -397,4 +397,26 @@ describe("8.0a customer journey library",()=>{
     assert.equal(next.entityId,"wr_a");
     assert.equal(lib.buildJourneyStatus(readyInput({wishReplyCount:2})).find(row=>row.id==="wishes").value,"2 neue Antworten");
   });
+
+  it("maps PROPOSAL_PREPARED insights to Vorschlag ansehen on the matching wish",()=>{
+    const lib=loadJourney();
+    const insight=operationalInsight("wish-proposal-prepared-wr_prep_1",{
+      title:"Vorschlag vorbereitet",
+      description:"Familie Berg · Seefeld September · Der persönliche Kundenvorschlag ist fertig vorbereitet und kann als Nächstes versendet werden.",
+      actionLabel:"Vorschlag ansehen",
+      targetTab:"kunde",
+      entityId:"wr_prep_1"
+    });
+    const journey=lib.buildCustomerJourney(readyInput({
+      insights:[insight,operationalInsight("program-empty",{targetTab:"programm"})]
+    }));
+    const wishes=journey.rows.find(row=>row.id==="wishes");
+    assert.equal(wishes.value,"Vorschlag vorbereitet");
+    assert.equal(journey.nextAction.id,"wish-proposal-prepared-wr_prep_1");
+    assert.equal(journey.nextAction.buttonLabel,"Vorschlag ansehen");
+    assert.equal(journey.nextAction.targetTab,"kunde");
+    assert.equal(journey.nextAction.entityId,"wr_prep_1");
+    assert.match(journey.nextAction.description,/fertig vorbereitet/);
+    assert.doesNotMatch(JSON.stringify(journey.nextAction),/PROPOSAL_SENT|veröffentlicht|Bearbeitung fortsetzen/);
+  });
 });

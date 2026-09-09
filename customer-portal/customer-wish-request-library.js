@@ -65,7 +65,13 @@
     workupLocation:300,
     workupEstimatedCost:80,
     workupInternalNotes:2000,
-    maxWorkupItems:40
+    maxWorkupItems:40,
+    proposalIntro:2000,
+    proposalWhenLabel:200,
+    proposalPriceText:80,
+    proposalNote:2000,
+    proposalSourceId:80,
+    maxProposalItems:40
   };
 
   const WISH_SOURCES=[
@@ -1663,6 +1669,274 @@
     });
   }
 
+  const PROPOSAL_STATES=["draft","prepared"];
+
+  function emptyProposal(){
+    return {
+      version:1,
+      state:"draft",
+      intro:"",
+      createdAt:"",
+      updatedAt:"",
+      preparedAt:"",
+      items:[]
+    };
+  }
+
+  function createProposalItemId(now){
+    const stamp=nowIso(now).replace(/[^0-9a-z]/gi,"").slice(0,14);
+    return `pi_${stamp}_${Math.random().toString(36).slice(2,8)}`;
+  }
+
+  function resolveProposalState(value){
+    const key=text(value).toLowerCase();
+    return PROPOSAL_STATES.includes(key)?key:"draft";
+  }
+
+  function normalizeProposalVersion(value){
+    const number=Number(value);
+    if(!Number.isInteger(number)||number<1)return 1;
+    return number;
+  }
+
+  function normalizeProposalOrder(value,fallback){
+    const number=Number(value);
+    if(!Number.isInteger(number)||number<1)return fallback||1;
+    return number;
+  }
+
+  function normalizeProposalItem(input,options){
+    const settings=options&&typeof options==="object"?options:{};
+    const source=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
+    const stamped=settings.now?nowIso(settings.now):"";
+    const createdAt=text(source.createdAt)||stamped;
+    const order=normalizeProposalOrder(source.order,settings.order||1);
+    return {
+      id:text(source.id)||text(settings.itemId)||(stamped?createProposalItemId(settings.now):""),
+      sourceWorkupItemId:clip(source.sourceWorkupItemId,LIMITS.proposalSourceId),
+      order,
+      title:clip(source.title,LIMITS.workupTitle),
+      description:clip(source.description,LIMITS.workupDescription),
+      category:resolveWorkupCategory(source.category),
+      location:clip(source.location,LIMITS.workupLocation),
+      schedule:normalizeWorkupSchedule(source.schedule),
+      whenLabel:clip(source.whenLabel,LIMITS.proposalWhenLabel),
+      customerPriceText:clip(source.customerPriceText,LIMITS.proposalPriceText),
+      note:clip(source.note,LIMITS.proposalNote),
+      createdAt,
+      updatedAt:text(source.updatedAt)||createdAt
+    };
+  }
+
+  function normalizeProposal(input){
+    const source=input&&typeof input==="object"&&!Array.isArray(input)?input:emptyProposal();
+    const seen=new Set();
+    const items=(Array.isArray(source.items)?source.items:[])
+      .map((item,index)=>normalizeProposalItem(item,{order:index+1}))
+      .filter(item=>Boolean(item.id))
+      .filter(item=>{
+        if(seen.has(item.id))return false;
+        seen.add(item.id);
+        return true;
+      })
+      .slice(0,LIMITS.maxProposalItems)
+      .sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+    return {
+      version:normalizeProposalVersion(source.version),
+      state:resolveProposalState(source.state),
+      intro:clip(source.intro,LIMITS.proposalIntro),
+      createdAt:text(source.createdAt),
+      updatedAt:text(source.updatedAt),
+      preparedAt:text(source.preparedAt),
+      items
+    };
+  }
+
+  function canEditWishProposal(wish){
+    const source=wish&&typeof wish==="object"?wish:{};
+    if(text(source.origin)!=="admin")return false;
+    if(text(source.status)!=="IN_REVIEW")return false;
+    const proposal=normalizeProposal(source.proposal);
+    if(!text(proposal.createdAt))return false;
+    return proposal.state==="draft";
+  }
+
+  function withProposalMutation(wish,options,mutate){
+    const settings=options&&typeof options==="object"?options:{};
+    const current=cloneWish(wish);
+    if(text(current.origin)!=="admin"){
+      return fail(["Nur Concierge-Wünsche können einen Kundenvorschlag bearbeiten."],"failed-precondition");
+    }
+    if(text(current.status)!=="IN_REVIEW"){
+      return fail(["Der Kundenvorschlag kann nur während der Bearbeitung geändert werden."],"failed-precondition");
+    }
+    current.proposal=normalizeProposal(current.proposal);
+    if(!text(current.proposal.createdAt)||current.proposal.state!=="draft"){
+      return fail(["Der Kundenvorschlag kann in diesem Zustand nicht geändert werden."],"failed-precondition");
+    }
+    const mutated=mutate(current,settings);
+    if(mutated&&mutated.ok===false)return mutated;
+    const next=mutated&&mutated.value?mutated.value:mutated||current;
+    next.proposal=normalizeProposal(next.proposal);
+    const stamped=nowIso(settings.now);
+    next.updatedAt=stamped;
+    next.proposal.updatedAt=stamped;
+    return ok(next);
+  }
+
+  function markedWorkupItems(workup){
+    return normalizeWorkup(workup).items.filter(item=>item.customerVisible===true);
+  }
+
+  function createProposalFromWorkup(wish,options){
+    const settings=options&&typeof options==="object"?options:{};
+    const current=cloneWish(wish);
+    if(text(current.origin)!=="admin"){
+      return fail(["Nur Concierge-Wünsche können einen Kundenvorschlag erhalten."],"failed-precondition");
+    }
+    if(text(current.status)!=="IN_REVIEW"){
+      return fail(["Ein Kundenvorschlag kann nur während der Bearbeitung erstellt werden."],"failed-precondition");
+    }
+    const existing=current.proposal&&typeof current.proposal==="object"&&!Array.isArray(current.proposal)
+      ?normalizeProposal(current.proposal)
+      :emptyProposal();
+    if(existing.state!=="draft"){
+      return fail(["Der fertige Vorschlag kann nicht neu erzeugt werden."],"failed-precondition");
+    }
+    const marked=markedWorkupItems(current.workup);
+    if(!marked.length){
+      return fail(["Bitte mindestens einen Baustein für den Kundenvorschlag vormerken."]);
+    }
+    const ids=Array.isArray(settings.itemIds)?settings.itemIds.map(text):[];
+    const stamped=nowIso(settings.now);
+    const items=marked.map((item,index)=>normalizeProposalItem({
+      sourceWorkupItemId:item.id,
+      order:index+1,
+      title:item.title,
+      description:item.description,
+      category:item.category,
+      location:item.location,
+      schedule:item.schedule,
+      whenLabel:formatWorkupScheduleLabel(item),
+      customerPriceText:"",
+      note:"",
+      createdAt:stamped,
+      updatedAt:stamped
+    },{now:stamped,itemId:ids[index],order:index+1}));
+    current.proposal=normalizeProposal({
+      version:1,
+      state:"draft",
+      intro:"",
+      createdAt:text(existing.createdAt)||stamped,
+      updatedAt:stamped,
+      preparedAt:"",
+      items
+    });
+    current.updatedAt=stamped;
+    return ok(current);
+  }
+
+  function publicProposal(wish){
+    const proposal=normalizeProposal(wish&&wish.proposal);
+    return {
+      version:proposal.version,
+      state:proposal.state,
+      intro:proposal.intro,
+      preparedAt:proposal.preparedAt,
+      items:proposal.items.map(item=>({
+        id:item.id,
+        title:item.title,
+        description:item.description,
+        category:item.category,
+        location:item.location,
+        schedule:{
+          startDate:item.schedule.startDate,
+          startTime:item.schedule.startTime,
+          endDate:item.schedule.endDate,
+          endTime:item.schedule.endTime,
+          flexible:item.schedule.flexible===true
+        },
+        whenLabel:item.whenLabel,
+        customerPriceText:item.customerPriceText,
+        note:item.note
+      }))
+    };
+  }
+
+  function updateProposal(wish,patch,options){
+    return withProposalMutation(wish,options,current=>{
+      const source=patch&&typeof patch==="object"&&!Array.isArray(patch)?patch:{};
+      if(source.intro!==undefined)current.proposal.intro=clip(source.intro,LIMITS.proposalIntro);
+      return current;
+    });
+  }
+
+  function updateProposalItem(wish,itemId,patch,options){
+    return withProposalMutation(wish,options,(current,settings)=>{
+      const id=text(itemId);
+      const index=current.proposal.items.findIndex(item=>item.id===id);
+      if(index<0)return fail(["Vorschlagsbaustein nicht gefunden."],"not-found");
+      const previous=current.proposal.items[index];
+      const source=patch&&typeof patch==="object"&&!Array.isArray(patch)?patch:{};
+      const nextItem=normalizeProposalItem({
+        id:previous.id,
+        sourceWorkupItemId:previous.sourceWorkupItemId,
+        order:previous.order,
+        title:source.title!==undefined?source.title:previous.title,
+        description:source.description!==undefined?source.description:previous.description,
+        category:source.category!==undefined?source.category:previous.category,
+        location:source.location!==undefined?source.location:previous.location,
+        schedule:source.schedule!==undefined
+          ?Object.assign({},previous.schedule,source.schedule)
+          :previous.schedule,
+        whenLabel:source.whenLabel!==undefined?source.whenLabel:previous.whenLabel,
+        customerPriceText:source.customerPriceText!==undefined?source.customerPriceText:previous.customerPriceText,
+        note:source.note!==undefined?source.note:previous.note,
+        createdAt:previous.createdAt,
+        updatedAt:previous.updatedAt
+      },{now:settings.now,order:previous.order});
+      const checked=validateWorkupSchedule(nextItem.schedule);
+      if(!checked.ok)return checked;
+      nextItem.updatedAt=nowIso(settings.now);
+      current.proposal.items=current.proposal.items.map((item,itemIndex)=>itemIndex===index?nextItem:item);
+      return current;
+    });
+  }
+
+  function removeProposalItem(wish,itemId,options){
+    return withProposalMutation(wish,options,current=>{
+      const id=text(itemId);
+      const exists=current.proposal.items.some(item=>item.id===id);
+      if(!exists)return fail(["Vorschlagsbaustein nicht gefunden."],"not-found");
+      current.proposal.items=current.proposal.items.filter(item=>item.id!==id);
+      return current;
+    });
+  }
+
+  function reorderProposalItems(wish,orderedIds,options){
+    return withProposalMutation(wish,options,(current,settings)=>{
+      const ids=(Array.isArray(orderedIds)?orderedIds:[]).map(text).filter(Boolean);
+      const currentIds=current.proposal.items.map(item=>item.id);
+      if(ids.length!==currentIds.length){
+        return fail(["Die Reihenfolge ist unvollständig."]);
+      }
+      const seen=new Set();
+      for(const id of ids){
+        if(seen.has(id)||!currentIds.includes(id)){
+          return fail(["Die Reihenfolge ist ungültig."]);
+        }
+        seen.add(id);
+      }
+      const byId=new Map(current.proposal.items.map(item=>[item.id,item]));
+      const stamped=nowIso(settings.now);
+      current.proposal.items=ids.map((id,index)=>Object.assign({},byId.get(id),{
+        order:index+1,
+        updatedAt:stamped
+      }));
+      return current;
+    });
+  }
+
   function normalizeOriginalRequest(input,options){
     const settings=options&&typeof options==="object"?options:{};
     const source=input&&typeof input==="object"&&!Array.isArray(input)
@@ -2202,6 +2476,18 @@
     removeWishWorkupItem,
     workupCategoryLabel,
     workupItemStatusLabel,
+    PROPOSAL_STATES,
+    emptyProposal,
+    normalizeProposal,
+    normalizeProposalItem,
+    createProposalItemId,
+    canEditWishProposal,
+    createProposalFromWorkup,
+    publicProposal,
+    updateProposal,
+    updateProposalItem,
+    removeProposalItem,
+    reorderProposalItems,
     normalizeStatusHistory,
     portalFollowUpQuestions,
     applyFollowUpAnswersToKnownData,

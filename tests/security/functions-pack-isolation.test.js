@@ -158,12 +158,35 @@ describe("functions pack isolation (no files outside functions/)",()=>{
       browser.submitPreparedFollowUpAnswers(prepared,answers,submitOptions).value.wish,
       {now:"2026-09-08T09:04:00.000Z"}
     ).value;
-    const workupInput={title:"Private Kulinarik",category:"culinary",description:"Intern"};
+    const workupInput={title:"Private Kulinarik",category:"culinary",description:"Intern",customerVisible:true};
     const workupOptions={now:"2026-09-08T09:05:00.000Z",itemId:"wu_pack_1"};
     assert.deepEqual(
       server.addWishWorkupItem(reviewed,workupInput,workupOptions),
       browser.addWishWorkupItem(reviewed,workupInput,workupOptions)
     );
+    const withWorkup=browser.addWishWorkupItem(reviewed,workupInput,workupOptions).value;
+    const proposalOptions={now:"2026-09-08T09:06:00.000Z",itemIds:["pi_pack_1"]};
+    assert.deepEqual(
+      server.createProposalFromWorkup(withWorkup,proposalOptions),
+      browser.createProposalFromWorkup(withWorkup,proposalOptions)
+    );
+    const dirty={
+      intro:"Hallo",
+      workup:{notes:"intern"},
+      internalNotes:"intern",
+      items:[{
+        id:"pi_dirty_1",
+        title:"Boot",
+        createdAt:"2026-09-08T09:06:00.000Z",
+        updatedAt:"2026-09-08T09:06:00.000Z",
+        provider:"Geheim",
+        contact:"x",
+        estimatedCost:"9",
+        internalNotes:"x"
+      }]
+    };
+    assert.deepEqual(server.normalizeProposal(dirty),browser.normalizeProposal(dirty));
+    assert.deepEqual(server.publicProposal(withWorkup),browser.publicProposal(withWorkup));
     assert.equal(typeof wishes.runListCustomerPortalWishes,"function");
     assert.equal(typeof access.createMemoryPortalAccessStore,"function");
   });

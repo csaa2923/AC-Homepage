@@ -125,7 +125,7 @@ describe("admin v2 guest wishes",()=>{
     assert.match(html,/admin-v2-wishes\.js\?v=10/);
     assert.match(html,/admin-v2-wishes\.css\?v=7/);
     assert.match(html,/customer-inquiry-admin-library\.js\?v=1/);
-    assert.match(html,/customer-wish-request-library\.js\?v=9/);
+    assert.match(html,/customer-wish-request-library\.js\?v=10/);
     assert.match(js,/ACTAdminV2Wishes\?\.bind/);
     assert.match(js,/ACTAdminV2Wishes\?\.sectionMarkup/);
     assert.match(js,/ACTAdminV2Wishes\?\.handleClick\?\.\(event\)===true/);

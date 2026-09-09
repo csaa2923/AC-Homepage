@@ -439,8 +439,8 @@ describe("Mein Wunsch E2E probe (local fixture, no deploy)",()=>{
     assert.match(adminHtml,/admin-v2-wishes\.css\?v=7/);
     assert.match(adminHtml,/concierge-intelligence-library\.js\?v=2/);
     assert.match(adminHtml,/customer-journey-library\.js\?v=2/);
-    assert.match(adminHtml,/customer-wish-request-library\.js\?v=9/);
-    assert.match(portalHtml,/customer-wish-request-library\.js\?v=9/);
+    assert.match(adminHtml,/customer-wish-request-library\.js\?v=10/);
+    assert.match(portalHtml,/customer-wish-request-library\.js\?v=10/);
     assert.match(portalHtml,/customer-portal-wishes\.js\?v=8/);
     assert.match(portalHtml,/customer-portal\.js\?v=83/);
     assert.match(adminJs,/ACTAdminV2Wishes\?\.handleClick\?\.\(event\)===true/);

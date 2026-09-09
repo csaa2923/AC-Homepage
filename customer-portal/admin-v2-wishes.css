@@ -38,20 +38,24 @@
 .v2-wish-workup .v2-workspace-section-head.compact{align-items:flex-start}
 .v2-wish-workup-list{display:grid;gap:12px}
 .v2-wish-workup-card{
-  display:grid;gap:12px;padding:16px 18px;border:1px solid var(--line);border-radius:18px;background:#fbfcfa
+  display:grid;gap:12px;padding:16px 18px;border:1px solid var(--line);border-radius:18px;background:#fbfcfa;font-size:15px
 }
 .v2-wish-workup-card.is-editing{background:#fbf8f0}
 .v2-wish-workup-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
-.v2-wish-workup-card h5{margin:0}
+.v2-wish-workup-card h5{margin:0;font-size:18px;font-weight:750;line-height:1.3}
+.v2-wish-workup-card p{margin:0;font-size:15px;line-height:1.45}
+.v2-wish-workup-card .v2-muted{font-size:14px}
 .v2-wish-workup-badge{
-  display:inline-flex;align-items:center;padding:3px 10px;border:1px solid var(--line);
-  border-radius:999px;background:#eef5ef;color:#355c3f;font-size:12px;font-weight:750;white-space:nowrap
+  display:inline-flex;align-items:center;padding:4px 10px;border:1px solid var(--line);
+  border-radius:999px;background:#eef5ef;color:#355c3f;font-size:13px;font-weight:750;white-space:nowrap
 }
 .v2-wish-workup-meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0}
-.v2-wish-workup-meta dt{color:var(--muted);font-size:12px;font-weight:750}
-.v2-wish-workup-meta dd{margin:0}
+.v2-wish-workup-meta dt{color:var(--muted);font-size:13px;font-weight:750}
+.v2-wish-workup-meta dd{margin:0;font-size:15px;line-height:1.4}
 .v2-wish-workup-flag{display:flex;align-items:center;gap:8px;font-weight:650}
 .v2-wish-workup-form .v2-wish-grid label span{display:block;margin-bottom:4px}
+.v2-wish-workup-schedule{display:grid;gap:12px}
+.v2-wish-workup-schedule-label{margin:0;font-size:13px;font-weight:750;color:var(--muted)}
 @media (max-width:900px){
   .v2-wish-card dl,.v2-wish-grid,.v2-wish-workup-meta{grid-template-columns:1fr}
 }

@@ -407,6 +407,13 @@
       provider:"",
       contact:"",
       dateOrTime:"",
+      schedule:{
+        startDate:"",
+        startTime:"",
+        endDate:"",
+        endTime:"",
+        flexible:false
+      },
       location:"",
       estimatedCost:"",
       internalNotes:"",
@@ -681,10 +688,37 @@
     return text(id)||"";
   }
 
+  function workupScheduleOf(source){
+    const api=lib();
+    const raw=source&&source.schedule;
+    if(api&&typeof api.normalizeWorkupSchedule==="function")return api.normalizeWorkupSchedule(raw);
+    return {
+      startDate:text(raw&&raw.startDate),
+      startTime:text(raw&&raw.startTime),
+      endDate:text(raw&&raw.endDate),
+      endTime:text(raw&&raw.endTime),
+      flexible:Boolean(raw&&raw.flexible)
+    };
+  }
+
+  function workupScheduleLabel(item){
+    const api=lib();
+    if(api&&typeof api.formatWorkupScheduleLabel==="function")return api.formatWorkupScheduleLabel(item);
+    return text(item&&item.dateOrTime);
+  }
+
+  function hasStructuredWorkupSchedule(item){
+    const api=lib();
+    if(api&&typeof api.hasStructuredWorkupSchedule==="function")return api.hasStructuredWorkupSchedule(item&&item.schedule);
+    const schedule=workupScheduleOf(item);
+    return Boolean(schedule.startDate||schedule.endDate||schedule.startTime||schedule.endTime||schedule.flexible);
+  }
+
   function readWorkupDraftFromForm(form){
     if(!form)return emptyWorkupDraft();
     const value=name=>text(form.elements[name]&&form.elements[name].value);
     const visible=form.elements.workupCustomerVisible;
+    const flexible=form.elements.workupFlexible;
     return {
       title:value("workupTitle"),
       category:value("workupCategory")||"experience",
@@ -693,6 +727,13 @@
       provider:value("workupProvider"),
       contact:value("workupContact"),
       dateOrTime:value("workupDateOrTime"),
+      schedule:{
+        startDate:value("workupStartDate"),
+        startTime:value("workupStartTime"),
+        endDate:value("workupEndDate"),
+        endTime:value("workupEndTime"),
+        flexible:Boolean(flexible&&flexible.checked)
+      },
       location:value("workupLocation"),
       estimatedCost:value("workupEstimatedCost"),
       internalNotes:value("workupInternalNotes"),
@@ -710,6 +751,7 @@
       provider:text(source.provider),
       contact:text(source.contact),
       dateOrTime:text(source.dateOrTime),
+      schedule:workupScheduleOf(source),
       location:text(source.location),
       estimatedCost:text(source.estimatedCost),
       internalNotes:text(source.internalNotes),
@@ -1532,10 +1574,6 @@
             <input name="workupLocation" type="text" maxlength="300" value="${escapeHtml(source.location)}">
           </label>
           <label class="v2-edit-field">
-            <span>Termin / Zeit</span>
-            <input name="workupDateOrTime" type="text" maxlength="200" value="${escapeHtml(source.dateOrTime)}">
-          </label>
-          <label class="v2-edit-field">
             <span>Anbieter</span>
             <input name="workupProvider" type="text" maxlength="200" value="${escapeHtml(source.provider)}">
           </label>
@@ -1546,6 +1584,33 @@
           <label class="v2-edit-field">
             <span>Geschätzte Kosten</span>
             <input name="workupEstimatedCost" type="text" maxlength="80" value="${escapeHtml(source.estimatedCost)}">
+          </label>
+        </div>
+        <div class="v2-wish-workup-schedule">
+          <p class="v2-wish-workup-schedule-label">Terminplanung</p>
+          ${text(source.dateOrTime)&&!hasStructuredWorkupSchedule(source)?`<p class="v2-muted" data-workup-legacy-schedule>Bisheriger Eintrag: ${escapeHtml(source.dateOrTime)}</p>`:""}
+          <input type="hidden" name="workupDateOrTime" value="${escapeHtml(source.dateOrTime||"")}">
+          <div class="v2-wish-grid">
+            <label class="v2-edit-field">
+              <span>Datum von</span>
+              <input name="workupStartDate" type="date" value="${escapeHtml((source.schedule&&source.schedule.startDate)||"")}">
+            </label>
+            <label class="v2-edit-field">
+              <span>Uhrzeit von</span>
+              <input name="workupStartTime" type="time" value="${escapeHtml((source.schedule&&source.schedule.startTime)||"")}">
+            </label>
+            <label class="v2-edit-field">
+              <span>Datum bis</span>
+              <input name="workupEndDate" type="date" value="${escapeHtml((source.schedule&&source.schedule.endDate)||"")}">
+            </label>
+            <label class="v2-edit-field">
+              <span>Uhrzeit bis</span>
+              <input name="workupEndTime" type="time" value="${escapeHtml((source.schedule&&source.schedule.endTime)||"")}">
+            </label>
+          </div>
+          <label class="v2-wish-workup-flag">
+            <input name="workupFlexible" type="checkbox" ${source.schedule&&source.schedule.flexible?"checked":""}>
+            <span>Zeit noch offen / flexibel</span>
           </label>
         </div>
         <label class="v2-edit-field full">
@@ -1588,7 +1653,7 @@
         ${text(source.description)?`<p>${escapeHtml(source.description)}</p>`:""}
         <dl class="v2-wish-workup-meta">
           <div><dt>Location</dt><dd>${escapeHtml(text(source.location)||"–")}</dd></div>
-          <div><dt>Termin / Zeit</dt><dd>${escapeHtml(text(source.dateOrTime)||"–")}</dd></div>
+          <div><dt>Termin / Zeit</dt><dd>${escapeHtml(workupScheduleLabel(source)||"–")}</dd></div>
           <div><dt>Anbieter</dt><dd>${escapeHtml(text(source.provider)||"–")}</dd></div>
           <div><dt>Geschätzte Kosten</dt><dd>${escapeHtml(text(source.estimatedCost)||"–")}</dd></div>
         </dl>

@@ -1447,6 +1447,102 @@
     return match?match.label:id||"";
   }
 
+  function emptyWorkupSchedule(){
+    return {startDate:"",startTime:"",endDate:"",endTime:"",flexible:false};
+  }
+
+  function normalizeWorkupDate(value){
+    const raw=text(value);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return "";
+    const date=new Date(`${raw}T00:00:00.000Z`);
+    if(Number.isNaN(date.getTime())||date.toISOString().slice(0,10)!==raw)return "";
+    return raw;
+  }
+
+  function normalizeWorkupTime(value){
+    const match=text(value).match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if(!match)return "";
+    const hour=Number(match[1]);
+    const minute=Number(match[2]);
+    if(hour>23||minute>59)return "";
+    return `${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
+  }
+
+  function normalizeWorkupSchedule(input){
+    const source=input&&typeof input==="object"&&!Array.isArray(input)?input:emptyWorkupSchedule();
+    return {
+      startDate:normalizeWorkupDate(source.startDate),
+      startTime:normalizeWorkupTime(source.startTime),
+      endDate:normalizeWorkupDate(source.endDate),
+      endTime:normalizeWorkupTime(source.endTime),
+      flexible:source.flexible===true
+    };
+  }
+
+  function hasStructuredWorkupSchedule(schedule){
+    const next=normalizeWorkupSchedule(schedule);
+    return Boolean(next.startDate||next.endDate||next.startTime||next.endTime||next.flexible);
+  }
+
+  function sameWorkupScheduleDay(schedule){
+    const next=normalizeWorkupSchedule(schedule);
+    if(next.startDate&&next.endDate)return next.startDate===next.endDate;
+    return true;
+  }
+
+  function validateWorkupSchedule(input){
+    const schedule=normalizeWorkupSchedule(input);
+    if(schedule.startDate&&schedule.endDate&&schedule.endDate<schedule.startDate){
+      return fail(["Das Ende darf nicht vor dem Beginn liegen."],"invalid-argument");
+    }
+    if(sameWorkupScheduleDay(schedule)&&schedule.startTime&&schedule.endTime&&schedule.endTime<schedule.startTime){
+      return fail(["Die Endzeit darf nicht vor der Startzeit liegen."],"invalid-argument");
+    }
+    return ok(schedule);
+  }
+
+  function formatWorkupDateDe(value){
+    const raw=normalizeWorkupDate(value);
+    if(!raw)return "";
+    const [year,month,day]=raw.split("-");
+    return `${day}.${month}.${year}`;
+  }
+
+  function formatWorkupDateRange(startDate,endDate){
+    const from=normalizeWorkupDate(startDate);
+    const to=normalizeWorkupDate(endDate);
+    if(from&&to&&from!==to){
+      const [startYear,startMonth,startDay]=from.split("-");
+      const [endYear,endMonth,endDay]=to.split("-");
+      if(startYear===endYear&&startMonth===endMonth)return `${startDay}.–${endDay}.${endMonth}.${endYear}`;
+      if(startYear===endYear)return `${startDay}.${startMonth}.–${endDay}.${endMonth}.${endYear}`;
+      return `${startDay}.${startMonth}.${startYear}–${endDay}.${endMonth}.${endYear}`;
+    }
+    if(from)return formatWorkupDateDe(from);
+    if(to)return `bis ${formatWorkupDateDe(to)}`;
+    return "";
+  }
+
+  function formatWorkupTimeRange(schedule){
+    const next=normalizeWorkupSchedule(schedule);
+    if(next.flexible&&!next.startTime&&!next.endTime)return "flexibel";
+    if(next.startTime&&next.endTime)return `${next.startTime}–${next.endTime} Uhr`;
+    if(next.startTime)return `${next.startTime} Uhr`;
+    if(next.endTime)return `bis ${next.endTime} Uhr`;
+    if(next.flexible)return "flexibel";
+    return next.startDate||next.endDate?"Zeit offen":"";
+  }
+
+  function formatWorkupScheduleLabel(item){
+    const source=item&&typeof item==="object"&&!Array.isArray(item)?item:{};
+    const schedule=normalizeWorkupSchedule(source.schedule);
+    if(!hasStructuredWorkupSchedule(schedule))return clip(source.dateOrTime,LIMITS.workupDateOrTime);
+    const datePart=formatWorkupDateRange(schedule.startDate,schedule.endDate);
+    const timePart=formatWorkupTimeRange(schedule);
+    if(datePart&&timePart)return `${datePart} · ${timePart}`;
+    return datePart||timePart;
+  }
+
   function normalizeWorkupItem(input,options){
     const settings=options&&typeof options==="object"?options:{};
     const source=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
@@ -1461,6 +1557,7 @@
       provider:clip(source.provider,LIMITS.workupProvider),
       contact:clip(source.contact,LIMITS.workupContact),
       dateOrTime:clip(source.dateOrTime,LIMITS.workupDateOrTime),
+      schedule:normalizeWorkupSchedule(source.schedule),
       location:clip(source.location,LIMITS.workupLocation),
       estimatedCost:clip(source.estimatedCost,LIMITS.workupEstimatedCost),
       internalNotes:clip(source.internalNotes,LIMITS.workupInternalNotes),
@@ -1522,6 +1619,8 @@
       }
       const item=normalizeWorkupItem(input,settings);
       item.customerVisible=input&&input.customerVisible===true;
+      const checked=validateWorkupSchedule(item.schedule);
+      if(!checked.ok)return checked;
       current.workup.items=current.workup.items.concat([item]);
       return current;
     });
@@ -1537,8 +1636,13 @@
       const nextItem=normalizeWorkupItem(Object.assign({},previous,source,{
         id:previous.id,
         createdAt:previous.createdAt,
+        schedule:source.schedule!==undefined
+          ?Object.assign({},previous.schedule,source.schedule)
+          :previous.schedule,
         customerVisible:source.customerVisible===undefined?previous.customerVisible:source.customerVisible===true
       }),{now:settings.now});
+      const checked=validateWorkupSchedule(nextItem.schedule);
+      if(!checked.ok)return checked;
       nextItem.updatedAt=nowIso(settings.now);
       current.workup.items=current.workup.items.map((item,itemIndex)=>itemIndex===index?nextItem:item);
       return current;
@@ -2082,8 +2186,13 @@
     prepareQuestionsForCustomer,
     startWishReview,
     emptyWorkup,
+    emptyWorkupSchedule,
     normalizeWorkup,
     normalizeWorkupItem,
+    normalizeWorkupSchedule,
+    validateWorkupSchedule,
+    hasStructuredWorkupSchedule,
+    formatWorkupScheduleLabel,
     createWorkupItemId,
     canEditWishWorkup,
     setWishWorkupNotes,

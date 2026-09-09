@@ -1392,6 +1392,22 @@
     return callPortalCustomerFunction("listCustomerPortalWishes",{publicPortalId});
   }
 
+  async function sendCustomerWishProposal(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const wishId=String(input.wishId||"").trim();
+    if(!customerId){
+      const error=new Error("Kunden-ID fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    if(!wishId){
+      const error=new Error("Wunsch-ID fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminPortalAccessCallable("sendCustomerWishProposal",{customerId,wishId});
+  }
+
   async function submitCustomerWishFollowUpAnswers(publicPortalId,wishId,answers){
     return callPortalCustomerFunction("submitCustomerWishFollowUpAnswers",{
       publicPortalId,
@@ -1756,6 +1772,7 @@
     exchangePortalOtpForCustomToken,
     getCustomerPortalContext,
     listCustomerPortalWishes,
+    sendCustomerWishProposal,
     submitCustomerWishFollowUpAnswers,
     saveConciergeAnalysis,
     listConciergeAnalyses,

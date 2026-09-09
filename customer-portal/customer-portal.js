@@ -21,6 +21,7 @@
   let portalGreetingName="";
   let dataSource="demo";
   let portalFollowUpWishes=[];
+  let portalProposals=[];
   let portalFollowUpThanks=false;
   let portalFollowUpNotice="";
   let liveWeatherByDate={};
@@ -242,6 +243,7 @@
     if(lib?.syncLanguageControls)lib.syncLanguageControls(document);
     syncAppViewLabels();
     renderPortalFollowUpWishes();
+    renderPortalProposals();
   }
 
   function syncPortalLanguageUI(lang){
@@ -3839,6 +3841,67 @@
     return text.length>140?`${text.slice(0,137)}…`:text;
   }
 
+  function proposalCategoryLabel(id){
+    const key=`service.wish.proposalCategory.${id}`;
+    const value=t(key);
+    if(value&&value!==key)return value;
+    return String(id||"");
+  }
+
+  function renderTodayProposalHint(){
+    const card=document.getElementById("todayProposalCard");
+    if(!card)return;
+    if(isShareAccess||!isSessionAccess||!portalProposals.length){
+      card.hidden=true;
+      card.replaceChildren();
+      return;
+    }
+    card.hidden=false;
+    card.innerHTML=`
+      <p class="service-proposal-kicker">Alpine Concierge Tirol</p>
+      <h3>${escapeHtml(t("today.proposal.title"))}</h3>
+      <p>${escapeHtml(t("service.wish.proposalLead"))}</p>
+      <div class="service-wish-actions">
+        <button type="button" class="button primary" data-app-nav="service" data-scroll-to="portalProposalRoot">${escapeHtml(t("today.proposal.cta"))}</button>
+      </div>
+    `;
+  }
+
+  function renderPortalProposals(){
+    const root=document.getElementById("portalProposalRoot");
+    renderTodayProposalHint();
+    if(!root)return;
+    if(isShareAccess||!isSessionAccess||!portalProposals.length){
+      root.hidden=true;
+      root.replaceChildren();
+      return;
+    }
+    root.hidden=false;
+    root.innerHTML=portalProposals.map(proposal=>{
+      const items=Array.isArray(proposal.items)?proposal.items:[];
+      return `
+        <article class="service-proposal-card" data-portal-proposal="${escapeHtml(proposal.wishId||"")}">
+          <p class="service-proposal-kicker">Alpine Concierge Tirol</p>
+          <h3>${escapeHtml(t("service.wish.proposalTitle"))}</h3>
+          ${proposal.intro?`<p class="service-proposal-lead">${escapeHtml(proposal.intro)}</p>`:`<p class="service-proposal-lead">${escapeHtml(t("service.wish.proposalLead"))}</p>`}
+          ${items.map(item=>`
+            <article class="service-proposal-item">
+              ${item.category?`<p class="service-proposal-category">${escapeHtml(proposalCategoryLabel(item.category))}</p>`:""}
+              <h4>${escapeHtml(item.title||"")}</h4>
+              ${item.description?`<p class="service-proposal-copy">${escapeHtml(item.description)}</p>`:""}
+              <dl class="service-proposal-meta">
+                ${item.location?`<div><dt>${escapeHtml(t("service.wish.proposalLocation"))}</dt><dd>${escapeHtml(item.location)}</dd></div>`:""}
+                ${item.whenLabel?`<div><dt>${escapeHtml(t("service.wish.proposalWhen"))}</dt><dd>${escapeHtml(item.whenLabel)}</dd></div>`:""}
+              </dl>
+              ${item.customerPriceText?`<p class="service-proposal-price">${escapeHtml(item.customerPriceText)}</p>`:""}
+              ${item.note?`<p class="service-proposal-note"><span>${escapeHtml(t("service.wish.proposalNote"))}</span>${escapeHtml(item.note)}</p>`:""}
+            </article>
+          `).join("")}
+        </article>
+      `;
+    }).join("");
+  }
+
   function renderPortalFollowUpWishes(){
     const list=document.getElementById("wishList");
     const empty=document.getElementById("wishListEmpty");
@@ -3905,23 +3968,29 @@
 
   async function loadPortalFollowUpWishes(){
     portalFollowUpWishes=[];
+    portalProposals=[];
     if(!isSessionAccess||isShareAccess||!publicPortalId){
       renderPortalFollowUpWishes();
+      renderPortalProposals();
       return;
     }
     const service=window.ACTFirebaseService;
     if(!service||typeof service.listCustomerPortalWishes!=="function"){
       renderPortalFollowUpWishes();
+      renderPortalProposals();
       return;
     }
     try{
       const result=await service.listCustomerPortalWishes(publicPortalId);
       portalFollowUpWishes=Array.isArray(result&&result.wishes)?result.wishes:[];
+      portalProposals=Array.isArray(result&&result.proposals)?result.proposals:[];
     }catch(error){
       console.warn("Rückfragen konnten nicht geladen werden.",error&&error.message?error.message:"Fehler");
       portalFollowUpWishes=[];
+      portalProposals=[];
     }
     renderPortalFollowUpWishes();
+    renderPortalProposals();
   }
 
   function renderAdminVersionHint(){

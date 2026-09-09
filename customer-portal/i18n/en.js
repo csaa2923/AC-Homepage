@@ -137,6 +137,10 @@
         contact:"Contact",
         whatsapp:"WhatsApp"
       },
+      proposal:{
+        title:"Your personal proposal is ready",
+        cta:"View proposal"
+      },
       concierge:{
         eyebrow:"Concierge",
         title:"Important today",
@@ -725,6 +729,24 @@
         submitChanged:"This wish has changed in the meantime. Please reload your open follow-up questions.",
         reloadFollowUps:"Reload current follow-ups",
         followUpThanksEmpty:"Thank you – we currently have no further open follow-up questions for you.",
+        proposalTitle:"Your personal proposal",
+        proposalLead:"Alpine Concierge Tirol has prepared a personal proposal for you.",
+        proposalLocation:"Place",
+        proposalWhen:"Date",
+        proposalPrice:"Price",
+        proposalNote:"Special note",
+        proposalView:"View proposal",
+        proposalCategory:{
+          experience:"Experience",
+          culinary:"Culinary",
+          nature:"Nature & mountains",
+          wellness:"Wellness",
+          culture:"Culture & sights",
+          transfer:"Transfer & mobility",
+          media:"Photographer / media",
+          surprise:"Surprise / special",
+          other:"Other"
+        },
         progress:"Your wish · Step {step}",
         next:"Continue",
         back:"Back",

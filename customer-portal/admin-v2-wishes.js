@@ -136,8 +136,12 @@
     return text(wish&&wish.origin)==="admin"&&text(wish&&wish.status)==="PROPOSAL_PREPARED"&&Boolean(text(wish&&wish.wishId));
   }
 
+  function isAdminWishProposalSent(wish){
+    return text(wish&&wish.origin)==="admin"&&text(wish&&wish.status)==="PROPOSAL_SENT"&&Boolean(text(wish&&wish.wishId));
+  }
+
   function isFollowUpRoundLocked(wish){
-    return isAdminCustomerReplied(wish)||isAdminWishInReview(wish)||isAdminWishProposalPrepared(wish);
+    return isAdminCustomerReplied(wish)||isAdminWishInReview(wish)||isAdminWishProposalPrepared(wish)||isAdminWishProposalSent(wish);
   }
 
   function repliedAdminWishes(customer){
@@ -875,6 +879,10 @@
     return isAdminWishInReview(wish)&&hasDraftProposal(wish)&&(normalizedProposal(wish).items||[]).length>=1;
   }
 
+  function canSendWishProposal(wish){
+    return isAdminWishProposalPrepared(wish)&&hasPreparedProposal(wish)&&(normalizedProposal(wish).items||[]).length>=1;
+  }
+
   function markedProposalCount(wish){
     return (normalizedWorkup(wish).items||[]).filter(item=>item.customerVisible===true).length;
   }
@@ -1082,10 +1090,144 @@
     );
   }
 
+  function customerLanguage(customer){
+    const source=customer&&typeof customer==="object"?customer:{};
+    const contact=source.contact&&typeof source.contact==="object"?source.contact:{};
+    const raw=text(source.language||source.portalLanguage||contact.language).toLowerCase();
+    const base=raw.split(/[-_/]/)[0];
+    return ["de","en","it","fr"].includes(base)?base:"de";
+  }
+
+  function customerWhatsappDigits(customer){
+    const comm=typeof window!=="undefined"?window.ACTAdminV2Communication:null;
+    if(comm&&typeof comm.analyzeCustomerWhatsapp==="function"){
+      return text(comm.analyzeCustomerWhatsapp(customer).digits);
+    }
+    const raw=text(customer&&(customer.whatsapp||(customer.contact&&customer.contact.whatsapp)||customer.phone||(customer.contact&&customer.contact.phone)));
+    const digits=raw.replace(/[^\d]/g,"");
+    return digits.length>=8?digits:"";
+  }
+
+  function portalLoginUrlForCustomer(customer){
+    const lib=typeof window!=="undefined"?window.ACTPortalAccessAdminLibrary:null;
+    const access=state().portalAccess;
+    const customerId=text(customer&&customer.customerId);
+    if(!lib||typeof lib.buildCustomerPortalLoginUrl!=="function")return "";
+    if(!access||access.exists!==true)return "";
+    if(text(access.customerId)&&customerId&&text(access.customerId)!==customerId)return "";
+    if(text(access.status)==="disabled")return "";
+    return text(lib.buildCustomerPortalLoginUrl(access.publicPortalId));
+  }
+
+  function proposalWhatsappMessage(customer,portalUrl){
+    const name=text(customer&&customer.customerName)||"Gast";
+    const link=text(portalUrl);
+    const lang=customerLanguage(customer);
+    if(lang==="en"){
+      return `Good day ${name}, your personal proposal from Alpine Concierge Tirol is ready for you. You may view it through your personal access: ${link}`;
+    }
+    if(lang==="it"){
+      return `Buongiorno ${name}, la Sua proposta personale di Alpine Concierge Tirol è pronta. Può consultarla tramite il Suo accesso personale: ${link}`;
+    }
+    if(lang==="fr"){
+      return `Bonjour ${name}, votre proposition personnalisée d'Alpine Concierge Tirol est prête. Vous pouvez la consulter via votre accès personnel : ${link}`;
+    }
+    return `Guten Tag ${name}, Ihr persönlicher Vorschlag von Alpine Concierge Tirol ist für Sie vorbereitet. Sie können ihn über Ihren persönlichen Zugang ansehen: ${link}`;
+  }
+
+  function proposalWhatsappUrl(customer,message){
+    const comm=typeof window!=="undefined"?window.ACTAdminV2Communication:null;
+    const digits=customerWhatsappDigits(customer);
+    if(comm&&typeof comm.buildWhatsappUrl==="function"&&digits){
+      return comm.buildWhatsappUrl(digits,message);
+    }
+    if(!digits)return "";
+    return `https://api.whatsapp.com/send?phone=${encodeURIComponent(digits)}&text=${encodeURIComponent(message||"")}`;
+  }
+
+  function sendPreparedProposal(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    if(!customer||!wish)return;
+    if(!canSendWishProposal(wish)){
+      setMessage("Der Kundenvorschlag kann in diesem Zustand nicht freigegeben werden.","error");
+      h().render();
+      return;
+    }
+    if(!(normalizedProposal(wish).items||[]).length){
+      setMessage("Bitte mindestens einen Vorschlagspunkt belassen, bevor der Kundenvorschlag freigegeben wird.","warning");
+      h().render();
+      return;
+    }
+    const confirmed=typeof window!=="undefined"&&typeof window.confirm==="function"
+      ?window.confirm("Der vorbereitete Kundenvorschlag wird jetzt für den Gast im persönlichen Kundenportal freigegeben. Interne Ausarbeitung, Anbieterinformationen und interne Kosten bleiben verborgen. Fortfahren?")
+      :false;
+    if(!confirmed)return;
+    const service=typeof window!=="undefined"?window.ACTFirebaseService:null;
+    if(!service||typeof service.sendCustomerWishProposal!=="function"){
+      setMessage("Der Vorschlag konnte nicht freigegeben werden.","error");
+      h().render();
+      return;
+    }
+    h().patchState({wishSaving:true});
+    h().render();
+    const finish=error=>{
+      h().patchState({wishSaving:false});
+      if(error){
+        setMessage("Der Vorschlag konnte nicht freigegeben werden.","error");
+        h().render();
+        return;
+      }
+    };
+    Promise.resolve(h().withTimeout(
+      service.sendCustomerWishProposal({customerId:customer.customerId,wishId:wish.wishId}),
+      h().AUTH_TIMEOUT_MS,
+      "sendCustomerWishProposal"
+    )).then(result=>{
+      const api=lib();
+      const sentWish=result&&result.wish
+        ?result.wish
+        :(api&&typeof api.sendWishProposal==="function"?api.sendWishProposal(wish,{now:result&&result.sentAt}).value:null);
+      if(!sentWish||text(sentWish.status)!=="PROPOSAL_SENT"){
+        throw new Error("send-failed");
+      }
+      const next=replaceWish(customer,sentWish);
+      if(typeof h().updateLocalCustomer==="function")h().updateLocalCustomer(next);
+      h().patchState({wishSaving:false,wishProposalPreviewOpen:false});
+      setMessage("Der Kundenvorschlag wurde für den Gast freigegeben.","success");
+      h().render();
+    }).catch(error=>{
+      console.error("[ACT Admin V2] Vorschlag freigeben:",error&&error.message?error.message:"Fehler");
+      finish(error||true);
+    });
+  }
+
+  function openProposalWhatsapp(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    if(!customer||!wish||!isAdminWishProposalSent(wish))return;
+    const portalUrl=portalLoginUrlForCustomer(customer);
+    if(!portalUrl){
+      setMessage("Bitte zuerst einen persönlichen Portalzugang erzeugen.","warning");
+      h().render();
+      return;
+    }
+    const href=proposalWhatsappUrl(customer,proposalWhatsappMessage(customer,portalUrl));
+    if(!href){
+      setMessage("Bitte zuerst eine WhatsApp-Nummer hinterlegen.","warning");
+      h().render();
+      return;
+    }
+    if(typeof window!=="undefined"&&typeof window.open==="function"){
+      window.open(href,"_blank","noopener,noreferrer");
+    }
+  }
+
   function queueWishSectionFocus(){
     if(typeof document==="undefined"||typeof document.querySelector!=="function")return;
     const scroll=()=>{
-      const frozen=document.querySelector("[data-wish-proposal][data-proposal-stage='prepared']");
+      const frozen=document.querySelector("[data-wish-proposal][data-proposal-stage='sent']")
+        ||document.querySelector("[data-wish-proposal][data-proposal-stage='prepared']");
       const target=frozen||document.querySelector("[data-wish-root]");
       if(!target||typeof target.scrollIntoView!=="function")return;
       const reduced=typeof window!=="undefined"&&window.matchMedia
@@ -1294,15 +1436,17 @@
           const replied=isAdminCustomerReplied(wish);
           const inReview=isAdminWishInReview(wish);
           const prepared=isAdminWishProposalPrepared(wish);
-          const openLabel=replied?"Antworten prüfen":inReview?"Bearbeitung fortsetzen":prepared?"Vorschlag ansehen":"Wunsch öffnen";
+          const sent=isAdminWishProposalSent(wish);
+          const openLabel=replied?"Antworten prüfen":inReview?"Bearbeitung fortsetzen":(prepared||sent)?"Vorschlag ansehen":"Wunsch öffnen";
           return `
-          <article class="v2-wish-card${replied?" is-replied":""}${prepared?" is-proposal-prepared":""}" data-wish-card="${escapeHtml(wish.wishId)}">
+          <article class="v2-wish-card${replied?" is-replied":""}${prepared?" is-proposal-prepared":""}${sent?" is-proposal-sent":""}" data-wish-card="${escapeHtml(wish.wishId)}">
             <div>
               <h4>${escapeHtml(wish.title||"Ohne Titel")}</h4>
               <p class="v2-muted">${escapeHtml(snippet(wish.originalRequest&&wish.originalRequest.text))}</p>
               ${replied?`<p class="v2-wish-reply-hint">Kunde hat geantwortet</p><p class="v2-muted">Antworten prüfen</p>`:""}
               ${inReview?`<p class="v2-muted">In Bearbeitung</p>`:""}
               ${prepared?`<p class="v2-wish-proposal-ready-hint">Vorschlag vorbereitet</p><p class="v2-muted">Noch nicht an den Gast gesendet</p>`:""}
+              ${sent?`<p class="v2-wish-proposal-sent-hint">Vorschlag freigegeben</p><p class="v2-muted">Im Kundenportal verfügbar</p>`:""}
             </div>
             <dl>
               <div><dt>Quelle</dt><dd>${escapeHtml(sourceLabel(wish.source))}</dd></div>
@@ -1310,7 +1454,7 @@
               <div><dt>Status</dt><dd>${escapeHtml(wish.statusLabel||statusLabel(wish.status))}</dd></div>
               <div><dt>Offene Rückfragen</dt><dd>${escapeHtml(String(openFollowUpCount(wish)))}</dd></div>
             </dl>
-          <button class="v2-button ${replied||prepared?"primary":"soft"}" type="button" data-wish-action="open" data-wish-id="${escapeHtml(wish.wishId)}">${openLabel}</button>
+          <button class="v2-button ${replied||prepared||sent?"primary":"soft"}" type="button" data-wish-action="open" data-wish-id="${escapeHtml(wish.wishId)}">${openLabel}</button>
           </article>
         `;
         }).join("")}</div>`:`<p class="v2-muted" data-wish-empty>Noch kein Wunsch erfasst.</p>`}
@@ -1957,13 +2101,13 @@
   }
 
   function workupMarkup(wish){
-    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish))return "";
-    const readOnly=isAdminWishProposalPrepared(wish);
+    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish)&&!isAdminWishProposalSent(wish))return "";
+    const readOnly=isAdminWishProposalPrepared(wish)||isAdminWishProposalSent(wish);
     const workup=normalizedWorkup(wish);
     const editor=readOnly?"":text(state().wishWorkupEditor);
     const notes=readOnly?workup.notes:(state().wishWorkupNotesDraft==null?workup.notes:state().wishWorkupNotesDraft);
     return `
-      <article class="v2-wish-panel v2-wish-workup${readOnly?" is-readonly":""}" data-wish-workup ${readOnly?`data-workup-stage="prepared"`:""}>
+      <article class="v2-wish-panel v2-wish-workup${readOnly?" is-readonly":""}" data-wish-workup ${readOnly?`data-workup-stage="${isAdminWishProposalSent(wish)?"sent":"prepared"}"`:""}>
         <div class="v2-workspace-section-head compact">
           <div>
             <h4>Ausarbeitung</h4>
@@ -2122,14 +2266,29 @@
     `;
   }
 
+  function proposalWhatsappActions(customer){
+    const portalUrl=portalLoginUrlForCustomer(customer);
+    if(!portalUrl){
+      return `<p class="v2-muted" data-proposal-portal-missing>Bitte zuerst einen persönlichen Portalzugang erzeugen.</p>`;
+    }
+    const digits=customerWhatsappDigits(customer);
+    if(!digits){
+      return `<p class="v2-muted" data-proposal-whatsapp-missing>WhatsApp-Nummer fehlt. Der Portal-Link ist bereit.</p>
+        <button class="v2-button soft" type="button" data-wish-action="proposal-whatsapp" disabled>WhatsApp-Nachricht vorbereiten</button>`;
+    }
+    return `<button class="v2-button primary" type="button" data-wish-action="proposal-whatsapp">WhatsApp-Nachricht vorbereiten</button>`;
+  }
+
   function proposalMarkup(wish){
-    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish))return "";
+    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish)&&!isAdminWishProposalSent(wish))return "";
     const marked=markedProposalCount(wish);
     const draft=hasDraftProposal(wish);
+    const sent=isAdminWishProposalSent(wish);
     const prepared=isAdminWishProposalPrepared(wish)&&hasPreparedProposal(wish);
+    const frozen=prepared||sent;
     const proposal=normalizedProposal(wish);
-    const editor=prepared?"":text(state().wishProposalEditor);
-    const intro=prepared||state().wishProposalIntroDraft==null?proposal.intro:state().wishProposalIntroDraft;
+    const editor=frozen?"":text(state().wishProposalEditor);
+    const intro=frozen||state().wishProposalIntroDraft==null?proposal.intro:state().wishProposalIntroDraft;
     const items=proposal.items||[];
     const createButton=marked
       ?`<button class="v2-button primary" type="button" data-wish-action="create-proposal">Kundenvorschlag erstellen</button>`
@@ -2137,20 +2296,39 @@
     const prepareButton=canPrepareWishProposal(wish)
       ?`<button class="v2-button primary" type="button" data-wish-action="prepare-proposal">Vorschlag fertigstellen</button>`
       :(draft?`<button class="v2-button primary" type="button" data-wish-action="prepare-proposal" disabled>Vorschlag fertigstellen</button>`:"");
+    const sendButton=canSendWishProposal(wish)
+      ?`<button class="v2-button primary" type="button" data-wish-action="send-proposal" ${state().wishSaving?"disabled":""}>Vorschlag an Gast freigeben</button>`
+      :"";
+    const sentAt=text(wish&&wish.delivery&&wish.delivery.sentAt);
     return `
-      <article class="v2-wish-panel v2-wish-proposal${prepared?" is-readonly":""}" data-wish-proposal data-proposal-stage="${prepared?"prepared":"draft"}">
+      <article class="v2-wish-panel v2-wish-proposal${frozen?" is-readonly":""}" data-wish-proposal data-proposal-stage="${sent?"sent":prepared?"prepared":"draft"}">
         <div class="v2-workspace-section-head compact">
           <div>
             <h4>Kundenvorschlag</h4>
-            <p class="v2-muted">${prepared
-              ?"Der Vorschlag ist fertig vorbereitet, aber noch nicht an den Gast gesendet."
-              :"Aus den vorgemerkten Bausteinen entsteht hier der persönliche Vorschlag für den Gast. Interne Notizen, Anbieterinformationen und interne Kosten werden nicht übernommen."}</p>
+            <p class="v2-muted">${sent
+              ?"Der Vorschlag ist für den Gast im persönlichen Kundenportal freigegeben."
+              :prepared
+                ?"Der Vorschlag ist fertig vorbereitet, aber noch nicht an den Gast gesendet."
+                :"Aus den vorgemerkten Bausteinen entsteht hier der persönliche Vorschlag für den Gast. Interne Notizen, Anbieterinformationen und interne Kosten werden nicht übernommen."}</p>
           </div>
         </div>
-        ${prepared?`
+        ${sent?`
+          <p class="v2-wish-proposal-sent" data-proposal-sent>Vorschlag freigegeben</p>
+          ${sentAt?`<p class="v2-muted" data-proposal-sent-at>Freigegeben am ${escapeHtml(formatWishDateTime(sentAt))}</p>`:""}
+          <div class="v2-wish-actions">
+            <button class="v2-button primary" type="button" data-wish-action="proposal-preview">Kundenvorschau</button>
+            ${proposalWhatsappActions(currentCustomer())}
+          </div>
+          ${text(intro)?`<div class="v2-wish-proposal-intro-read"><p class="v2-wish-proposal-guest">Einleitung für den Gast</p><p>${escapeHtml(intro)}</p></div>`:`<p class="v2-muted">Keine Einleitung für den Gast.</p>`}
+          <div class="v2-wish-proposal-list">
+            ${items.map((item,index)=>proposalCardMarkup(item,index,items.length,false,true)).join("")||`<p class="v2-muted" data-proposal-empty>Noch kein Vorschlagspunkt.</p>`}
+          </div>
+          ${proposalPreviewMarkup(wish)}
+        `:prepared?`
           <p class="v2-wish-proposal-ready" data-proposal-ready>Vorschlag vorbereitet</p>
           <div class="v2-wish-actions">
             <button class="v2-button primary" type="button" data-wish-action="proposal-preview">Kundenvorschau</button>
+            ${sendButton}
           </div>
           ${text(intro)?`<div class="v2-wish-proposal-intro-read"><p class="v2-wish-proposal-guest">Einleitung für den Gast</p><p>${escapeHtml(intro)}</p></div>`:`<p class="v2-muted">Keine Einleitung für den Gast.</p>`}
           <div class="v2-wish-proposal-list">
@@ -2298,6 +2476,8 @@
     if(action==="create-proposal"){createProposalFromMarked(false);return true;}
     if(action==="recreate-proposal"){createProposalFromMarked(true);return true;}
     if(action==="prepare-proposal"){prepareProposalFromDraft();return true;}
+    if(action==="send-proposal"){sendPreparedProposal();return true;}
+    if(action==="proposal-whatsapp"){openProposalWhatsapp();return true;}
     if(action==="save-proposal-intro"){saveProposalIntro();return true;}
     if(action==="save-proposal-item"){saveProposalItem();return true;}
     if(action==="cancel-proposal-item"){

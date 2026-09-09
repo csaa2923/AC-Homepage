@@ -12,7 +12,10 @@ const browser=require(join(root,"customer-portal/customer-wish-request-library.j
 const server=require(join(root,"functions/lib/customerWishRequestLibrary.js"));
 const inquiryPublic=require(join(root,"functions/lib/customerInquiryGrantPublic.js"));
 const portalWishes=require(join(root,"functions/lib/portalWishRequests.js"));
+const sendLib=require(join(root,"functions/lib/adminWishProposalSend.js"));
+const portalAccessAdmin=require(join(root,"customer-portal/portal-access-admin-library.js"));
 const portalJs=readFileSync(join(root,"customer-portal/customer-portal-wishes.js"),"utf8");
+const portalPageJs=readFileSync(join(root,"customer-portal/customer-portal.js"),"utf8");
 const adminWishesSource=readFileSync(join(root,"customer-portal/admin-v2-wishes.js"),"utf8");
 
 const NOW="2026-09-08T12:00:00.000Z";
@@ -163,6 +166,7 @@ function loadWishes(hostOverrides={}){
     wishCustomDraft:null,
     ...(hostOverrides.state||{})
   };
+  const opened=[];
   const host={
     getState:()=>state,
     patchState:patch=>Object.assign(state,patch||{}),
@@ -198,16 +202,43 @@ function loadWishes(hostOverrides={}){
       confirm(message){
         confirms.push(String(message||""));
         return hostOverrides.confirm!==undefined?hostOverrides.confirm:true;
+      },
+      ACTPortalAccessAdminLibrary:portalAccessAdmin,
+      ACTFirebaseService:{
+        sendCustomerWishProposal:async({customerId,wishId})=>{
+          const current=customers.find(item=>item.customerId===customerId);
+          const wish=(current&&current.wishRequests||[]).find(item=>item.wishId===wishId);
+          const result=browser.sendWishProposal(wish);
+          if(!result.ok){
+            const error=new Error((result.errors||["send-failed"])[0]);
+            error.code=result.code||"failed-precondition";
+            throw error;
+          }
+          const next=JSON.parse(JSON.stringify(current));
+          next.wishRequests=(next.wishRequests||[]).map(item=>item.wishId===wishId?result.value:item);
+          host.updateLocalCustomer(next);
+          return {
+            customerId,
+            wishId,
+            status:result.value.status,
+            sentAt:result.value.delivery.sentAt,
+            wish:result.value
+          };
+        }
+      },
+      open(url,target,features){
+        opened.push({url,target,features});
+        return {closed:false};
       }
     },
     document:{getElementById:()=>null},
     console,
-    Date,Math,JSON,String,Number,Boolean,Array,Object
+    Date,Math,JSON,String,Number,Boolean,Array,Object,Promise
   };
   vm.runInNewContext(readFileSync(join(root,"customer-portal/admin-v2-wishes.js"),"utf8"),sandbox);
   const wishes=sandbox.window.ACTAdminV2Wishes;
   wishes.bind(host);
-  return {wishes,host,state,customer,customers,saved,sandbox,confirms};
+  return {wishes,host,state,customer,customers,saved,sandbox,confirms,opened};
 }
 
 function click(wishes,action,dataset={}){
@@ -491,7 +522,7 @@ describe("customer wish proposal (Phase C1)",()=>{
     assert.doesNotMatch(portalJs,/sourceWorkupItemId|createProposalFromWorkup|publicProposal/);
     assert.match(adminWishesSource,/createProposalFromWorkup/);
     assert.match(adminWishesSource,/Kundenvorschlag erstellen/);
-    assert.doesNotMatch(adminWishesSource,/Angebot senden|PROPOSAL_SENT|prepareWishProposalSent/);
+    assert.doesNotMatch(adminWishesSource,/Angebot senden|prepareWishProposalSent/);
     assert.doesNotMatch(adminWishesSource,/createCustomerPortalAccess|publishCustomer/);
     assert.equal(typeof portalWishes.runListCustomerPortalWishes,"function");
     assert.deepEqual(server.publicPortalWish(wish),browser.publicPortalWish(wish));
@@ -733,7 +764,7 @@ describe("customer wish proposal (Phase C1)",()=>{
     assert.match(adminWishesSource,/publicProposal\(wish\)/);
     assert.match(adminWishesSource,/prepareWishProposal/);
     assert.match(adminWishesSource,/Vorschlag fertigstellen/);
-    assert.doesNotMatch(adminWishesSource,/Angebot senden|PROPOSAL_SENT/);
+    assert.doesNotMatch(previewSource,/Angebot senden|PROPOSAL_SENT/);
     assert.doesNotMatch(portalJs,/publicProposal|createProposalFromWorkup|Kundenvorschau/);
   });
 
@@ -908,5 +939,316 @@ describe("customer wish proposal (Phase C1)",()=>{
     assert.match(html,/Vorschlag vorbereitet/);
     assert.match(html,/>Vorschlag ansehen</);
     assert.doesNotMatch(html,/Bearbeitung fortsetzen/);
+  });
+});
+
+const SNAPSHOT_ROOT=new Set(["version","intro","items"]);
+const SNAPSHOT_ITEM=new Set([
+  "id","order","title","description","category","location","schedule","whenLabel","customerPriceText","note"
+]);
+const SNAPSHOT_FORBIDDEN=/workup|provider|contact|estimatedCost|internalNotes|customerVisible|sourceWorkupItemId|statusHistory|adminNotes|sentBy|customerId|"state"|preparedAt|PROPOSAL_SENT|PROPOSAL_PREPARED/;
+
+function preparedWish(lib,now="2026-09-08T16:00:00.000Z"){
+  return lib.prepareWishProposal(snapshotWish(lib).value,{now}).value;
+}
+
+function sentWish(lib,now="2026-09-08T17:00:00.000Z"){
+  return lib.sendWishProposal(preparedWish(lib),{now}).value;
+}
+
+function assertSnapshotSafe(snapshot){
+  assert.deepEqual(Object.keys(snapshot).sort(),[...SNAPSHOT_ROOT].sort());
+  assert.equal("state" in snapshot,false);
+  assert.equal("preparedAt" in snapshot,false);
+  (snapshot.items||[]).forEach(item=>{
+    Object.keys(item).forEach(key=>assert.equal(SNAPSHOT_ITEM.has(key),true,key));
+    assert.equal("sourceWorkupItemId" in item,false);
+    assert.equal("provider" in item,false);
+    assert.equal("contact" in item,false);
+    assert.equal("estimatedCost" in item,false);
+    assert.equal("internalNotes" in item,false);
+  });
+  assert.doesNotMatch(JSON.stringify(snapshot),SNAPSHOT_FORBIDDEN);
+}
+
+describe("customer wish proposal (Phase C4)",()=>{
+  it("sendWishProposal exists in browser and functions and only accepts a prepared admin proposal with items",()=>{
+    assert.equal(typeof browser.sendWishProposal,"function");
+    assert.equal(typeof server.sendWishProposal,"function");
+    const prepared=preparedWish(browser);
+    const options={now:"2026-09-08T17:00:00.000Z"};
+    assert.equal(browser.sendWishProposal(Object.assign({},prepared,{origin:"portal"}),options).ok,false);
+    assert.equal(browser.sendWishProposal(snapshotWish(browser).value,options).ok,false);
+    const empty=JSON.parse(JSON.stringify(prepared));
+    empty.proposal.items=[];
+    assert.equal(browser.sendWishProposal(empty,options).ok,false);
+    const draftState=JSON.parse(JSON.stringify(prepared));
+    draftState.proposal.state="draft";
+    assert.equal(browser.sendWishProposal(draftState,options).ok,false);
+    const sent=browser.sendWishProposal(prepared,options);
+    assert.equal(sent.ok,true);
+    assert.deepEqual(server.sendWishProposal(prepared,options),sent);
+    const again=browser.sendWishProposal(sent.value,options);
+    assert.equal(again.ok,false);
+    assert.match(again.errors.join(" "),/bereits für den Gast freigegeben/);
+  });
+
+  it("sendWishProposal sets PROPOSAL_SENT, stores a publicProposal snapshot and appends history",()=>{
+    const prepared=preparedWish(browser);
+    const historyBefore=prepared.statusHistory.slice();
+    const publicView=browser.publicProposal(prepared);
+    const sent=browser.sendWishProposal(prepared,{now:"2026-09-08T17:00:00.000Z"});
+    assert.equal(sent.ok,true);
+    const wish=sent.value;
+    assert.equal(wish.status,"PROPOSAL_SENT");
+    assert.equal(wish.statusLabel,"Vorschlag freigegeben");
+    assert.equal(wish.proposal.state,"prepared");
+    assert.equal(wish.delivery.state,"sent");
+    assert.equal(wish.delivery.sentAt,"2026-09-08T17:00:00.000Z");
+    assert.equal(wish.delivery.sentBy,"admin");
+    assert.equal(wish.updatedAt,"2026-09-08T17:00:00.000Z");
+    assertSnapshotSafe(wish.delivery.proposalSnapshot);
+    assert.equal(wish.delivery.proposalSnapshot.intro,publicView.intro);
+    assert.equal(wish.delivery.proposalSnapshot.items[0].title,publicView.items[0].title);
+    assert.equal(wish.delivery.proposalSnapshot.items[0].id,publicView.items[0].id);
+    assert.equal(wish.statusHistory.length,historyBefore.length+1);
+    assert.deepEqual(wish.statusHistory[wish.statusHistory.length-1],{
+      status:"PROPOSAL_SENT",
+      at:"2026-09-08T17:00:00.000Z",
+      actor:"admin"
+    });
+    assert.equal(wish.statusHistory.filter(item=>item.status==="PROPOSAL_SENT").length,1);
+    assert.equal(browser.canEditWishProposal(wish),false);
+    assert.equal(browser.updateProposal(wish,{intro:"x"}).ok,false);
+    assert.equal(browser.updateProposalItem(wish,wish.proposal.items[0].id,{title:"x"}).ok,false);
+    assert.equal(browser.removeProposalItem(wish,wish.proposal.items[0].id).ok,false);
+    assert.equal(browser.reorderProposalItems(wish,wish.proposal.items.map(item=>item.id).reverse()).ok,false);
+    assert.equal(browser.createProposalFromWorkup(wish).ok,false);
+    assert.equal(browser.addWishWorkupItem(wish,{title:"Spät"}).ok,false);
+    const again=browser.sendWishProposal(wish,{now:"2026-09-08T18:00:00.000Z"});
+    assert.equal(again.ok,false);
+    assert.equal(wish.delivery.sentAt,"2026-09-08T17:00:00.000Z");
+  });
+
+  it("does not overwrite an existing snapshot on a second send attempt",()=>{
+    const sent=sentWish(browser);
+    const snapshot=JSON.stringify(sent.delivery);
+    const history=JSON.stringify(sent.statusHistory);
+    const blocked=browser.sendWishProposal(sent,{now:"2026-09-08T19:00:00.000Z"});
+    assert.equal(blocked.ok,false);
+    assert.equal(JSON.stringify(sent.delivery),snapshot);
+    assert.equal(JSON.stringify(sent.statusHistory),history);
+  });
+
+  it("keeps raw proposal internal and exposes only the delivery snapshot to the portal",()=>{
+    const sent=sentWish(browser);
+    assert.equal(Boolean(sent.proposal.items[0].sourceWorkupItemId),true);
+    const portalView=browser.publicPortalWish(sent);
+    const listedFollowUps=browser.listPreparedPortalWishes([sent]);
+    const listed=browser.listSentPortalProposals([sent,preparedWish(browser)]);
+    const inquiryView=inquiryPublic.inquiryPublicWish(sent);
+    [portalView,inquiryView].forEach(view=>{
+      assert.equal("proposal" in view,false);
+      assert.equal("workup" in view,false);
+      assert.equal("delivery" in view,false);
+    });
+    assert.equal(listedFollowUps.length,0);
+    assert.equal(listed.length,1);
+    assert.equal(listed[0].wishId,"wr_proposal_1");
+    assert.equal("delivery" in listed[0],false);
+    assert.equal("sentBy" in listed[0],false);
+    assert.equal("workup" in listed[0],false);
+    assert.equal("proposal" in listed[0],false);
+    assertSnapshotSafe({version:1,intro:listed[0].intro,items:listed[0].items});
+    assert.equal(browser.publicPortalProposal(preparedWish(browser)),null);
+    assert.deepEqual(server.listSentPortalProposals([sent]),browser.listSentPortalProposals([sent]));
+    assert.deepEqual(server.publicPortalWish(sent),browser.publicPortalWish(sent));
+  });
+
+  it("shows Vorschlag an Gast freigeben only for PROPOSAL_PREPARED and requires the portal disclaimer",async()=>{
+    const prepared=preparedWish(browser);
+    const {wishes,customers,confirms}=loadWishes({
+      confirm:false,
+      customer:{
+        customerId:"cust-100",
+        customerName:"Familie Berg",
+        wishRequests:[prepared]
+      }
+    });
+    wishes.openWish(prepared.wishId);
+    const html=proposalUi(wishes.sectionMarkup(customers[0]));
+    assert.match(html,/data-wish-action="send-proposal"/);
+    assert.match(html,/Vorschlag an Gast freigeben/);
+    assert.doesNotMatch(html,/prepare-proposal|Neu aus Ausarbeitung|Einleitung speichern/);
+    assert.equal(click(wishes,"send-proposal"),true);
+    await flush();
+    assert.match(confirms[confirms.length-1],/im persönlichen Kundenportal freigegeben/);
+    assert.match(confirms[confirms.length-1],/Interne Ausarbeitung, Anbieterinformationen und interne Kosten bleiben verborgen/);
+    assert.equal(customers[0].wishRequests[0].status,"PROPOSAL_PREPARED");
+  });
+
+  it("sends through the admin callable, freezes mutations and keeps workup and proposal read-only",async()=>{
+    const prepared=preparedWish(browser);
+    prepared.proposal.intro="Ein Abend am See.";
+    const workupBefore=JSON.stringify(prepared.workup);
+    const historyLen=prepared.statusHistory.length;
+    const {wishes,state,customers,confirms,saved}=loadWishes({
+      confirm:true,
+      customer:{
+        customerId:"cust-100",
+        customerName:"Familie Berg",
+        whatsapp:"+436641234567",
+        language:"de",
+        wishRequests:[prepared]
+      }
+    });
+    wishes.openWish(prepared.wishId);
+    const beforeSaved=saved.length;
+    assert.equal(click(wishes,"send-proposal"),true);
+    await flush();
+    assert.match(confirms[0],/im persönlichen Kundenportal freigegeben/);
+    const stored=customers[0].wishRequests[0];
+    assert.equal(stored.status,"PROPOSAL_SENT");
+    assert.equal(stored.delivery.state,"sent");
+    assert.equal(stored.delivery.sentBy,"admin");
+    assert.equal(stored.statusHistory.length,historyLen+1);
+    assert.equal(JSON.stringify(stored.workup),workupBefore);
+    assert.equal(saved.length,beforeSaved);
+    assert.match(state.wishMessage,/für den Gast freigegeben/);
+    assert.doesNotMatch(state.wishMessage,/erhalten|gelesen|angenommen/);
+    const html=wishes.sectionMarkup(customers[0]);
+    const proposal=proposalUi(html);
+    assert.match(proposal,/data-proposal-stage="sent"/);
+    assert.match(proposal,/Vorschlag freigegeben/);
+    assert.match(proposal,/im persönlichen Kundenportal freigegeben/);
+    assert.doesNotMatch(proposal,/Vorschlag versendet|Versendet am|WhatsApp gesendet|Nachricht versendet|Gast informiert|erhalten|gelesen/);
+    assert.match(proposal,/data-wish-action="proposal-preview"/);
+    assert.match(proposal,/Bitte zuerst einen persönlichen Portalzugang erzeugen/);
+    assert.doesNotMatch(proposal,/data-wish-action="send-proposal"|data-wish-action="prepare-proposal"|Neu aus Ausarbeitung|Einleitung speichern|Bearbeiten|Aus Vorschlag entfernen/);
+    assert.match(html,/data-workup-stage="sent"/);
+    assert.doesNotMatch(html,/Baustein hinzufügen|data-wish-action="edit-workup"|data-workup-status=/);
+    assert.equal(click(wishes,"send-proposal"),true);
+    await flush();
+    assert.equal(customers[0].wishRequests[0].delivery.sentAt,stored.delivery.sentAt);
+    assert.equal(click(wishes,"proposal-preview"),true);
+    const preview=previewUi(wishes.sectionMarkup(customers[0]));
+    assert.match(preview,/Ihr persönlicher Vorschlag/);
+    assert.doesNotMatch(preview,/PROPOSAL_SENT|sourceWorkupItemId|${INTERNAL}|Seefeld Schifffahrt|estimatedCost|internalNotes|sentBy/);
+    assert.doesNotMatch(adminWishesSource,/Annehmen|Ablehnen|Buchen|Bezahlen/);
+    assert.match(adminWishesSource,/sendCustomerWishProposal/);
+    assert.doesNotMatch(adminWishesSource,/saveDraftCustomer\(.*send/);
+  });
+
+  it("keeps PROPOSAL_SENT wishes in the admin list with Vorschlag ansehen",()=>{
+    const sent=sentWish(browser);
+    const {wishes,customer}=loadWishes({customer:{
+      customerId:"cust-100",
+      customerName:"Familie Berg",
+      wishRequests:[sent]
+    }});
+    const html=wishes.sectionMarkup(customer);
+    assert.match(html,/data-wish-card="wr_proposal_1"/);
+    assert.match(html,/is-proposal-sent/);
+    assert.match(html,/Vorschlag freigegeben/);
+    assert.match(html,/Im Kundenportal verfügbar/);
+    assert.match(html,/>Vorschlag ansehen</);
+    assert.doesNotMatch(html,/Vorschlag versendet|Für den Gast freigegeben/);
+    assert.doesNotMatch(html,/Bearbeitung fortsetzen|Vorschlag fertigstellen/);
+  });
+
+  it("prepares a WhatsApp message with the authenticated portal login URL",()=>{
+    const sent=sentWish(browser);
+    const {wishes,state,opened,customers}=loadWishes({customer:{
+      customerId:"cust-100",
+      customerName:"Familie Berg",
+      language:"de",
+      whatsapp:"+436641234567",
+      wishRequests:[sent]
+    }});
+    state.portalAccess={
+      exists:true,
+      customerId:"cust-100",
+      publicPortalId:"pp_abcdefghijklmnop",
+      status:"active"
+    };
+    wishes.openWish(sent.wishId);
+    const html=proposalUi(wishes.sectionMarkup(customers[0]));
+    assert.match(html,/WhatsApp-Nachricht vorbereiten/);
+    assert.equal(click(wishes,"proposal-whatsapp"),true);
+    assert.equal(opened.length,1);
+    assert.match(opened[0].url,/api\.whatsapp\.com\/send/);
+    const decoded=decodeURIComponent(opened[0].url);
+    assert.match(decoded,/Guten Tag Familie Berg/);
+    assert.match(decoded,/persönlicher Vorschlag von Alpine Concierge Tirol/);
+    assert.match(decoded,/https:\/\/www\.alpineconcierge\.info\/customer-portal\/login\?p=pp_abcdefghijklmnop/);
+    assert.doesNotMatch(decoded,/angenommen|gebucht|share=|token=/);
+  });
+
+  it("renders the customer portal from list proposals only and without decision buttons",()=>{
+    assert.match(portalPageJs,/result&&result.proposals/);
+    assert.match(portalPageJs,/service\.wish\.proposalTitle/);
+    assert.match(portalPageJs,/today\.proposal\.title/);
+    assert.match(portalPageJs,/isShareAccess\|\|!isSessionAccess/);
+    assert.doesNotMatch(portalPageJs,/wish\.proposal\b|wish\.workup|delivery\.proposalSnapshot|publicProposal\(/);
+    assert.doesNotMatch(portalPageJs,/Annehmen|Ablehnen|service\.wish\.accept|service\.wish\.reject/);
+    assert.match(portalPageJs,/listCustomerPortalWishes/);
+    const de=readFileSync(join(root,"customer-portal/i18n/de.js"),"utf8");
+    const en=readFileSync(join(root,"customer-portal/i18n/en.js"),"utf8");
+    const it=readFileSync(join(root,"customer-portal/i18n/it.js"),"utf8");
+    const fr=readFileSync(join(root,"customer-portal/i18n/fr.js"),"utf8");
+    assert.match(de,/Ihr persönlicher Vorschlag/);
+    assert.match(en,/Your personal proposal/);
+    assert.match(it,/La Sua proposta personale/);
+    assert.match(fr,/Votre proposition personnalisée/);
+  });
+
+  it("rejects browser-supplied snapshots and persists sendWishProposal server-side",async()=>{
+    const prepared=preparedWish(browser);
+    const docs={"cust-100":{customerId:"cust-100",draftData:{wishRequests:[JSON.parse(JSON.stringify(prepared))]}}};
+    const first=await sendLib.runSendCustomerWishProposal({
+      customerId:"cust-100",
+      wishId:"wr_proposal_1"
+    },{
+      now:"2026-09-08T17:30:00.000Z",
+      updateWishInTransaction:async({wishId,apply,now})=>{
+        const list=docs["cust-100"].draftData.wishRequests;
+        const index=list.findIndex(item=>item.wishId===wishId);
+        const applied=apply(list[index],now);
+        if(!applied.ok)throw new Error(applied.errors[0]);
+        list[index]=applied.value;
+        return applied.value;
+      }
+    });
+    assert.equal(first.result.status,"PROPOSAL_SENT");
+    assert.equal(first.result.wish.delivery.sentBy,"admin");
+    assertSnapshotSafe(first.result.wish.delivery.proposalSnapshot);
+    assert.equal(docs["cust-100"].publishedData,undefined);
+    await assert.rejects(
+      ()=>sendLib.runSendCustomerWishProposal({
+        customerId:"cust-100",
+        wishId:"wr_proposal_1",
+        proposalSnapshot:{intro:"hack"}
+      },{updateWishInTransaction:async()=>({})}),
+      error=>String(error&&error.code||error.message).includes("invalid-argument")||String(error.message).includes("Unbekannte")
+    );
+    const snapshot=JSON.stringify(docs["cust-100"].draftData.wishRequests[0].delivery);
+    await assert.rejects(
+      ()=>sendLib.runSendCustomerWishProposal({
+        customerId:"cust-100",
+        wishId:"wr_proposal_1"
+      },{
+        now:"2026-09-08T18:00:00.000Z",
+        updateWishInTransaction:async({apply,now})=>{
+          const applied=apply(docs["cust-100"].draftData.wishRequests[0],now);
+          if(!applied.ok){
+            const error=new Error(applied.errors[0]);
+            error.code=applied.code;
+            throw error;
+          }
+          return applied.value;
+        }
+      })
+    );
+    assert.equal(JSON.stringify(docs["cust-100"].draftData.wishRequests[0].delivery),snapshot);
   });
 });

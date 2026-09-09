@@ -44,9 +44,9 @@ function existingCustomer(){
 describe("customer lifecycle (P0)",()=>{
   it("wires the domain library into Admin V2 before firebase-service",()=>{
     assert.match(adminHtml,/customer-lifecycle-library\.js\?v=3/);
-    assert.match(adminHtml,/firebase-service\.js\?v=38/);
+    assert.match(adminHtml,/firebase-service\.js\?v=39/);
     const lifecycleAt=adminHtml.indexOf("customer-lifecycle-library.js?v=3");
-    const firebaseAt=adminHtml.indexOf("firebase-service.js?v=38");
+    const firebaseAt=adminHtml.indexOf("firebase-service.js?v=39");
     assert.ok(lifecycleAt>=0&&firebaseAt>lifecycleAt);
     assert.match(firebaseSource,/normalizeCustomerLifecycle/);
     assert.doesNotMatch(lifecycleSource,/prospectWish|prospectRequests|prospectQuestions/);

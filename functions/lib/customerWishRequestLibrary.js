@@ -90,7 +90,7 @@
     {id:"CUSTOMER_REPLIED",label:"Kunde hat geantwortet"},
     {id:"IN_REVIEW",label:"In Bearbeitung"},
     {id:"PROPOSAL_PREPARED",label:"Vorschlag vorbereitet"},
-    {id:"PROPOSAL_SENT",label:"Vorschlag gesendet"},
+    {id:"PROPOSAL_SENT",label:"Vorschlag freigegeben"},
     {id:"CUSTOMER_DECISION",label:"Kundenentscheidung"},
     {id:"BOOKING",label:"Buchung"},
     {id:"COMPLETED",label:"Abgeschlossen"},
@@ -1867,6 +1867,95 @@
     return ok(current);
   }
 
+  function customerSafeProposalItem(item,index){
+    const source=item&&typeof item==="object"&&!Array.isArray(item)?item:{};
+    const schedule=source.schedule&&typeof source.schedule==="object"&&!Array.isArray(source.schedule)
+      ?source.schedule
+      :{};
+    return {
+      id:text(source.id),
+      order:normalizeProposalOrder(source.order,index+1),
+      title:clip(source.title,LIMITS.workupTitle),
+      description:clip(source.description,LIMITS.workupDescription),
+      category:resolveWorkupCategory(source.category),
+      location:clip(source.location,LIMITS.workupLocation),
+      schedule:{
+        startDate:text(schedule.startDate),
+        startTime:text(schedule.startTime),
+        endDate:text(schedule.endDate),
+        endTime:text(schedule.endTime),
+        flexible:schedule.flexible===true
+      },
+      whenLabel:clip(source.whenLabel,LIMITS.proposalWhenLabel),
+      customerPriceText:clip(source.customerPriceText,LIMITS.proposalPriceText),
+      note:clip(source.note,LIMITS.proposalNote)
+    };
+  }
+
+  function customerSafeProposalSnapshot(source){
+    const proposal=source&&typeof source==="object"&&!Array.isArray(source)?source:{};
+    const items=(Array.isArray(proposal.items)?proposal.items:[])
+      .map((item,index)=>customerSafeProposalItem(item,index))
+      .filter(item=>Boolean(item.id))
+      .slice(0,LIMITS.maxProposalItems);
+    return {
+      version:normalizeProposalVersion(proposal.version),
+      intro:clip(proposal.intro,LIMITS.proposalIntro),
+      items
+    };
+  }
+
+  function hasSentWishProposal(wish){
+    const source=wish&&typeof wish==="object"?wish:{};
+    const delivery=source.delivery&&typeof source.delivery==="object"&&!Array.isArray(source.delivery)
+      ?source.delivery
+      :null;
+    if(text(source.status)==="PROPOSAL_SENT")return true;
+    return Boolean(delivery&&text(delivery.state)==="sent"&&text(delivery.sentAt));
+  }
+
+  function sendWishProposal(wish,options){
+    const settings=options&&typeof options==="object"?options:{};
+    const current=cloneWish(wish);
+    if(text(current.origin)!=="admin"){
+      return fail(["Nur Concierge-Wünsche können an den Gast freigegeben werden."],"failed-precondition");
+    }
+    if(hasSentWishProposal(current)){
+      return fail(["Der Kundenvorschlag wurde bereits für den Gast freigegeben."],"failed-precondition");
+    }
+    if(text(current.status)!=="PROPOSAL_PREPARED"){
+      return fail(["Der Kundenvorschlag kann erst nach der Fertigstellung freigegeben werden."],"failed-precondition");
+    }
+    current.proposal=normalizeProposal(current.proposal);
+    if(!text(current.proposal.createdAt)||current.proposal.state!=="prepared"){
+      return fail(["Es liegt kein fertig vorbereiteter Kundenvorschlag vor."],"failed-precondition");
+    }
+    if(!current.proposal.items.length){
+      return fail(["Bitte mindestens einen Vorschlagspunkt belassen, bevor der Kundenvorschlag freigegeben wird."]);
+    }
+    const now=nowIso(settings.now);
+    const snapshot=customerSafeProposalSnapshot(publicProposal(current));
+    if(!snapshot.items.length){
+      return fail(["Bitte mindestens einen Vorschlagspunkt belassen, bevor der Kundenvorschlag freigegeben wird."]);
+    }
+    current.delivery={
+      version:1,
+      state:"sent",
+      sentAt:now,
+      sentBy:"admin",
+      proposalSnapshot:snapshot
+    };
+    current.status="PROPOSAL_SENT";
+    current.statusLabel=statusLabel(current.status);
+    current.updatedAt=now;
+    current.statusHistory=appendStatusHistory(current.statusHistory,{
+      status:"PROPOSAL_SENT",
+      at:now,
+      actor:"admin"
+    });
+    return ok(current);
+  }
+
   function publicProposal(wish){
     const proposal=normalizeProposal(wish&&wish.proposal);
     return {
@@ -2398,6 +2487,31 @@
       .filter(item=>item.wishId&&item.followUpQuestions.length);
   }
 
+  function publicPortalProposal(wish){
+    const source=wish&&typeof wish==="object"?wish:{};
+    if(text(source.origin)!=="admin")return null;
+    if(text(source.status)!=="PROPOSAL_SENT")return null;
+    const delivery=source.delivery&&typeof source.delivery==="object"&&!Array.isArray(source.delivery)
+      ?source.delivery
+      :null;
+    if(!delivery||text(delivery.state)!=="sent")return null;
+    const snapshot=customerSafeProposalSnapshot(delivery.proposalSnapshot);
+    if(!text(source.wishId)||!snapshot.items.length)return null;
+    return {
+      wishId:text(source.wishId),
+      title:text(source.title),
+      sentAt:text(delivery.sentAt),
+      intro:snapshot.intro,
+      items:snapshot.items
+    };
+  }
+
+  function listSentPortalProposals(list){
+    return (Array.isArray(list)?list:[])
+      .map(publicPortalProposal)
+      .filter(item=>item&&item.wishId&&item.items.length);
+  }
+
   function adminSelectableQuestions(){
     return QUESTION_LIBRARY.filter(item=>item.adminSelectable);
   }
@@ -2515,6 +2629,9 @@
     canEditWishProposal,
     createProposalFromWorkup,
     prepareWishProposal,
+    sendWishProposal,
+    customerSafeProposalSnapshot,
+    hasSentWishProposal,
     publicProposal,
     updateProposal,
     updateProposalItem,
@@ -2526,8 +2643,10 @@
     applyFollowUpAnswerToWish,
     submitPreparedFollowUpAnswers,
     publicPortalWish,
+    publicPortalProposal,
     isPreparedAdminWish,
     listPreparedPortalWishes,
+    listSentPortalProposals,
     adminSelectableQuestions
   };
   module.exports=api;

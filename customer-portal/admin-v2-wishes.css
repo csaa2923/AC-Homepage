@@ -77,7 +77,13 @@
 }
 .v2-wish-proposal-form .v2-wish-grid label span{display:block;margin-bottom:4px}
 .v2-wish-card.is-proposal-prepared{border-color:#e2d4b8;background:#fbf8f0}
+.v2-wish-card.is-proposal-sent{border-color:#c5d4c8;background:#f7faf7}
 .v2-wish-proposal-ready-hint{margin:8px 0 0;color:#6a5428;font-size:14px;font-weight:750}
+.v2-wish-proposal-sent-hint{margin:8px 0 0;color:#355c3f;font-size:14px;font-weight:750}
+.v2-wish-proposal-sent{
+  margin:0;width:fit-content;padding:4px 12px;border:1px solid #c5d4c8;border-radius:999px;
+  background:#eef5ef;color:#355c3f;font-size:13px;font-weight:750
+}
 .v2-wish-proposal-ready{
   margin:0;width:fit-content;padding:4px 12px;border:1px solid #e2d4b8;border-radius:999px;
   background:#f7f1e4;color:#6a5428;font-size:13px;font-weight:750

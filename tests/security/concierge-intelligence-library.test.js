@@ -260,4 +260,31 @@ describe("concierge intelligence library",()=>{
     );
     assert.equal(serverLibrary.adminCustomerProposalPreparedWishes(options.wishRequests).map(item=>item.wishId).join(","),"wr_prep_1");
   });
+
+  it("emits a PROPOSAL_SENT insight with Vorschlag ansehen and ignores other statuses",()=>{
+    const library=loadLibrary();
+    const options={
+      wishRequests:[
+        {wishId:"wr_sent_1",origin:"admin",status:"PROPOSAL_SENT",title:"Seefeld September"},
+        {wishId:"wr_sent_1",origin:"admin",status:"PROPOSAL_SENT",title:"Duplikat"},
+        {wishId:"wr_prep",origin:"admin",status:"PROPOSAL_PREPARED",title:"Noch intern"},
+        {wishId:"wr_self",origin:"portal",status:"PROPOSAL_SENT",title:"Self-Service"}
+      ]
+    };
+    const insights=library.getConciergeInsights({customerName:"Familie Berg"},options);
+    const sent=insights.filter(item=>item.reason==="wishProposalSent");
+    assert.equal(sent.length,1);
+    assert.equal(sent[0].id,"wish-proposal-sent-wr_sent_1");
+    assert.equal(sent[0].entityId,"wr_sent_1");
+    assert.equal(sent[0].title,"Vorschlag freigegeben");
+    assert.equal(sent[0].actionLabel,"Vorschlag ansehen");
+    assert.equal(sent[0].targetTab,"kunde");
+    assert.match(sent[0].description,/für den Gast im Kundenportal freigegeben/);
+    assert.doesNotMatch(sent[0].description,/versendet|gelesen|angenommen|gebucht|veröffentlicht/);
+    assert.equal(library.adminCustomerProposalSentWishes(options.wishRequests).map(item=>item.wishId).join(","),"wr_sent_1");
+    assert.equal(
+      serverLibrary.getConciergeInsights({customerName:"Familie Berg"},options).filter(item=>item.reason==="wishProposalSent").map(item=>item.id).join(","),
+      sent.map(item=>item.id).join(",")
+    );
+  });
 });

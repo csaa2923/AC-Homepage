@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#001a14">
 <link rel="icon" href="../favicon.ico">
 <link rel="apple-touch-icon" href="../images/logo/logo.png">
-<link rel="stylesheet" href="customer-portal.css?v=47">
+<link rel="stylesheet" href="customer-portal.css?v=48">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -107,6 +107,7 @@
     <!-- 2 Concierge · 3 Next · 4 Wetter · 5 Quick Actions -->
     <section class="today-primary-grid today-experience" data-i18n-aria-label="today.focusAria" aria-label="Heute im Fokus">
       <div class="today-main-column">
+        <article class="info-card today-proposal-card" id="todayProposalCard" hidden></article>
         <section class="today-concierge portal-section concierge-section" id="concierge" aria-labelledby="conciergeTitle" data-i18n-aria-label="today.aria.concierge">
           <div class="section-head">
             <p class="eyebrow" data-i18n="today.concierge.eyebrow">Concierge</p>
@@ -389,6 +390,7 @@
             </div>
             <p class="service-wish-login-hint" id="wishAuthHint" hidden tabindex="-1" data-i18n="service.wish.loginHint">Bitte melde dich in deinem persönlichen Kundenportal an, um uns einen Wunsch zu senden.</p>
             <a class="button soft service-wish-login" id="wishLoginLink" hidden data-wish-login data-i18n="service.wish.login" data-i18n-aria-label="service.aria.wishLogin">Zum persönlichen Login</a>
+            <div class="service-proposal-root" id="portalProposalRoot" hidden></div>
             <div class="service-wish-list" id="wishList" data-i18n-aria-label="service.aria.wishList" aria-labelledby="wishListTitle">
               <h3 id="wishListTitle" data-i18n="service.wish.listTitle">Deine Wünsche</h3>
               <p class="service-wish-list-empty" id="wishListEmpty" data-i18n="service.wish.listEmpty">Du hast uns noch keinen Wunsch gesendet.</p>
@@ -462,21 +464,21 @@
 <script src="booking-library.js?v=1"></script>
 <script src="travel-actions-library.js?v=13"></script>
 <script src="concierge-assistant-library.js?v=2"></script>
-<script src="i18n/de.js?v=16"></script>
-<script src="i18n/en.js?v=16"></script>
-<script src="i18n/it.js?v=16"></script>
-<script src="i18n/fr.js?v=16"></script>
+<script src="i18n/de.js?v=17"></script>
+<script src="i18n/en.js?v=17"></script>
+<script src="i18n/it.js?v=17"></script>
+<script src="i18n/fr.js?v=17"></script>
 <script src="i18n/portal-i18n.js?v=3"></script>
 <script src="firebase-config.js"></script>
-<script src="firebase-service.js?v=28"></script>
+<script src="firebase-service.js?v=29"></script>
 <script src="portal-customer-auth.js?v=2"></script>
 <script src="firebase-auth.js"></script>
 <script src="firebase-database.js?v=2"></script>
 <script src="firebase-storage.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="customer-wish-request-library.js?v=11"></script>
+<script src="customer-wish-request-library.js?v=13"></script>
 <script src="customer-portal-wishes.js?v=8"></script>
-<script src="customer-portal.js?v=83"></script>
+<script src="customer-portal.js?v=84"></script>
 </body>
 </html>

@@ -64,6 +64,15 @@ function adminCustomerProposalPreparedWishes(wishRequests){
     return true;
   });
 }
+function adminCustomerProposalSentWishes(wishRequests){
+  const seen=new Set();
+  return list(wishRequests).filter(wish=>{
+    const wishId=text(wish&&wish.wishId);
+    if(!wish||text(wish.origin)!=="admin"||text(wish.status)!=="PROPOSAL_SENT"||!wishId||seen.has(wishId))return false;
+    seen.add(wishId);
+    return true;
+  });
+}
 function wishCustomerRepliedInsights(customer,wishRequests){
   const name=text(customer&&customer.customerName);
   return adminCustomerRepliedWishes(wishRequests).map(wish=>{
@@ -116,6 +125,25 @@ function wishProposalPreparedInsights(customer,wishRequests){
     );
   });
 }
+function wishProposalSentInsights(customer,wishRequests){
+  const name=text(customer&&customer.customerName);
+  return adminCustomerProposalSentWishes(wishRequests).map(wish=>{
+    const wishId=text(wish.wishId);
+    return insight(
+      `wish-proposal-sent-${wishId}`,
+      "important",
+      "Vorschlag freigegeben",
+      [
+        [name,text(wish.title)||"Wunsch"].filter(Boolean).join(" · "),
+        "Der persönliche Vorschlag wurde für den Gast im Kundenportal freigegeben."
+      ].filter(Boolean).join(" · "),
+      "wishProposalSent",
+      "kunde",
+      "Vorschlag ansehen",
+      {source:"wishRequests",entityId:wishId}
+    );
+  });
+}
 function programText(item){return normalize([item?.title,item?.category,item?.type,item?.description,item?.notes,item?.location].filter(Boolean).join(" "));}
 function matches(items,pattern){return items.some(item=>pattern.test(programText(item)));}
 function arrival(trip,items){return [trip.arrivalType,trip.arrivalTime,trip.pickup,trip.transfer].some(value=>text(value))||matches(items,/\banreise\b|check.?in|abholung|airport|flughafen|transfer/);}
@@ -161,6 +189,7 @@ function analyze(customer={},options={}){
   wishCustomerRepliedInsights(customer,list(options.wishRequests!=null?options.wishRequests:customer.wishRequests)).forEach(item=>result.push(item));
   wishInReviewInsights(customer,list(options.wishRequests!=null?options.wishRequests:customer.wishRequests)).forEach(item=>result.push(item));
   wishProposalPreparedInsights(customer,list(options.wishRequests!=null?options.wishRequests:customer.wishRequests)).forEach(item=>result.push(item));
+  wishProposalSentInsights(customer,list(options.wishRequests!=null?options.wishRequests:customer.wishRequests)).forEach(item=>result.push(item));
   return result.sort((a,b)=>ORDER[a.severity]-ORDER[b.severity]||a.id.localeCompare(b.id));
 }
 function getConciergeInsights(customer,options){return analyze(customer,options);}
@@ -175,4 +204,4 @@ function analyzeCustomerReadiness(customer,options){
   const insights=analyze(customer,options),quality=calculateConciergeQualityScore(customer,options);
   return {isReady:quality.counts.critical===0&&quality.counts.important===0,quality,insights,recommendedNextActions:getRecommendedNextActions(customer,options)};
 }
-module.exports={analyzeCustomerReadiness,calculateConciergeQualityScore,getConciergeInsights,getRecommendedNextActions,adminCustomerRepliedWishes,adminCustomerInReviewWishes,adminCustomerProposalPreparedWishes};
+module.exports={analyzeCustomerReadiness,calculateConciergeQualityScore,getConciergeInsights,getRecommendedNextActions,adminCustomerRepliedWishes,adminCustomerInReviewWishes,adminCustomerProposalPreparedWishes,adminCustomerProposalSentWishes};

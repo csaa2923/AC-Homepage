@@ -137,6 +137,10 @@
         contact:"Contact",
         whatsapp:"WhatsApp"
       },
+      proposal:{
+        title:"Votre proposition personnalisée est prête",
+        cta:"Voir la proposition"
+      },
       concierge:{
         eyebrow:"Concierge",
         title:"Important aujourd'hui",
@@ -725,6 +729,24 @@
         submitChanged:"Ce souhait a changé entre-temps. Veuillez recharger vos questions ouvertes.",
         reloadFollowUps:"Recharger les questions actuelles",
         followUpThanksEmpty:"Merci – nous n’avons actuellement plus de questions ouvertes pour vous.",
+        proposalTitle:"Votre proposition personnalisée",
+        proposalLead:"Alpine Concierge Tirol a préparé une proposition personnalisée pour vous.",
+        proposalLocation:"Lieu",
+        proposalWhen:"Date",
+        proposalPrice:"Prix",
+        proposalNote:"Note particulière",
+        proposalView:"Voir la proposition",
+        proposalCategory:{
+          experience:"Expérience",
+          culinary:"Culinaire",
+          nature:"Nature et montagnes",
+          wellness:"Bien-être",
+          culture:"Culture et sites",
+          transfer:"Transfert et mobilité",
+          media:"Photographe / médias",
+          surprise:"Surprise / moment spécial",
+          other:"Autre"
+        },
         progress:"Votre souhait · Étape {step}",
         next:"Continuer",
         back:"Retour",

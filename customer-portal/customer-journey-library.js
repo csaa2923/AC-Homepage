@@ -126,6 +126,7 @@
     const wishReplyCount=numberValue(input?.wishReplyCount);
     const reviewCount=list(input?.insights).filter(item=>text(item?.id).startsWith("wish-in-review-")).length;
     const preparedCount=list(input?.insights).filter(item=>text(item?.id).startsWith("wish-proposal-prepared-")).length;
+    const sentCount=list(input?.insights).filter(item=>text(item?.id).startsWith("wish-proposal-sent-")).length;
     if(wishReplyCount){
       return {
         tone:"attention",
@@ -136,6 +137,12 @@
       return {
         tone:"attention",
         value:preparedCount===1?"Vorschlag vorbereitet":`${preparedCount} Vorschläge vorbereitet`
+      };
+    }
+    if(sentCount){
+      return {
+        tone:"ready",
+        value:sentCount===1?"Vorschlag freigegeben":`${sentCount} Vorschläge freigegeben`
       };
     }
     if(reviewCount){
@@ -292,6 +299,17 @@
         entityId:text(insight?.entityId)||id.slice("wish-proposal-prepared-".length)
       });
     }
+    if(id.startsWith("wish-proposal-sent-")){
+      return action({
+        id,
+        source:"insightsFor",
+        title:text(insight?.title)||"Vorschlag freigegeben",
+        description:text(insight?.description),
+        buttonLabel:fallbackLabel||"Vorschlag ansehen",
+        targetTab:targetTab||"kunde",
+        entityId:text(insight?.entityId)||id.slice("wish-proposal-sent-".length)
+      });
+    }
     return action({
       id:id||"journey-insight",
       source:"insightsFor",
@@ -356,6 +374,9 @@
 
     const preparedInsight=list(input?.insights).find(item=>text(item?.id).startsWith("wish-proposal-prepared-"));
     if(preparedInsight)return mapInsightToAction(preparedInsight,input?.publication);
+
+    const sentInsight=list(input?.insights).find(item=>text(item?.id).startsWith("wish-proposal-sent-"));
+    if(sentInsight)return mapInsightToAction(sentInsight,input?.publication);
 
     const wishes=list(input?.wishes);
     if(!wishes.length){

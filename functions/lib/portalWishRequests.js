@@ -247,7 +247,10 @@ async function runListCustomerPortalWishes(store,auth,data,deps={}){
   if(!customerId)throw portalAccess.validationError("permission-denied","Portalzugang nicht verfuegbar.");
   const stored=await loadDraftWishRequests(deps,customerId);
   return {
-    result:{wishes:wishLib.listPreparedPortalWishes(stored)},
+    result:{
+      wishes:wishLib.listPreparedPortalWishes(stored),
+      proposals:wishLib.listSentPortalProposals(stored)
+    },
     customerId,
     grant
   };

@@ -160,7 +160,9 @@ describe("portal follow-up delivery",()=>{
     assert.equal(typeof functions.listCustomerPortalWishes,"function");
     assert.equal(typeof impl.listCustomerPortalWishes,"function");
     assert.match(indexSource,/exports\.listCustomerPortalWishes=onCall/);
+    assert.match(indexSource,/exports\.sendCustomerWishProposal=onCall/);
     assert.match(serviceJs,/listCustomerPortalWishes/);
+    assert.match(serviceJs,/sendCustomerWishProposal/);
     assert.match(portalJs,/listCustomerPortalWishes/);
     assert.match(portalJs,/isSessionAccess&&!isShareAccess/);
     assert.doesNotMatch(wishJs,/httpsCallable|firebase\.functions|wishRequests|listCustomerPortalWishes/);
@@ -179,6 +181,7 @@ describe("portal follow-up delivery",()=>{
     assert.equal(result.wishes[0].title,"Seefeld September");
     assert.equal(result.wishes[0].status,"WAITING_FOR_CUSTOMER");
     assert.equal(result.customerId,undefined);
+    assert.deepEqual(result.proposals,[]);
   });
 
   it("2+3) hides NEW, QUESTIONS_PREPARED, CANCELLED and self-service wishes",async()=>{
@@ -421,5 +424,66 @@ describe("portal follow-up delivery",()=>{
       }
     }
     assert.match(portalJs,/applyPortalI18nDom[\s\S]*renderPortalFollowUpWishes/);
+  });
+
+  it("lists sent proposal snapshots only after PROPOSAL_SENT and never from raw proposal",async()=>{
+    const store=access.createMemoryPortalAccessStore();
+    const followUp=createAdminWish();
+    const prepared={
+      ...followUp,
+      wishId:"wr_prepared_portal",
+      status:"PROPOSAL_PREPARED",
+      proposal:{state:"prepared",intro:"Intern",items:[{id:"pi_1",title:"Boot",provider:"Geheim"}]},
+      workup:{notes:"intern",items:[{provider:"Geheim",estimatedCost:"9"}]}
+    };
+    const sent={
+      ...followUp,
+      wishId:"wr_sent_portal",
+      status:"PROPOSAL_SENT",
+      origin:"admin",
+      title:"Seefeld September",
+      proposal:{state:"prepared",intro:"Intern raw",items:[{id:"pi_raw",title:"Raw",sourceWorkupItemId:"wu_x",provider:"Geheim"}]},
+      workup:{notes:"intern",items:[{provider:"Geheim",contact:"x",estimatedCost:"9",internalNotes:"secret"}]},
+      delivery:{
+        version:1,
+        state:"sent",
+        sentAt:"2026-09-08T17:00:00.000Z",
+        sentBy:"admin",
+        proposalSnapshot:{
+          version:1,
+          intro:"Ein Abend am See.",
+          items:[{
+            id:"pi_safe",
+            order:1,
+            title:"Private Bootsfahrt",
+            description:"Ruhige Ausfahrt",
+            category:"experience",
+            location:"Seefeld",
+            schedule:{startDate:"2026-11-12",startTime:"18:00",endDate:"",endTime:"",flexible:false},
+            whenLabel:"12. November, 18:00",
+            customerPriceText:"180 € p. P.",
+            note:"Bitte pünktlich sein"
+          }]
+        }
+      }
+    };
+    const customers=memoryCustomers({"kunde-holzer":customerDoc({
+      draftData:{wishRequests:[followUp,prepared,sent]},
+      publishedData:{customerName:"Familie Holzer",wishRequests:[{wishId:"wr_published_secret",proposal:{intro:"leak"}}]}
+    })});
+    const created=await seedGrant(store,customers);
+    const result=await listWishes(store,customers,{publicPortalId:created.publicPortalId});
+    assert.equal(result.wishes.length,1);
+    assert.equal(result.proposals.length,1);
+    assert.equal(result.proposals[0].wishId,"wr_sent_portal");
+    assert.equal(result.proposals[0].intro,"Ein Abend am See.");
+    assert.equal(result.proposals[0].items[0].title,"Private Bootsfahrt");
+    assert.equal("proposal" in result.proposals[0],false);
+    assert.equal("workup" in result.proposals[0],false);
+    assert.equal("sentBy" in result.proposals[0],false);
+    const blob=JSON.stringify(result);
+    assert.doesNotMatch(blob,/Geheim|estimatedCost|internalNotes|sourceWorkupItemId|wr_published_secret|Intern raw/);
+    assert.equal(typeof functions.sendCustomerWishProposal,"function");
+    assert.equal(typeof impl.sendCustomerWishProposal,"function");
   });
 });

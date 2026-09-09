@@ -419,4 +419,28 @@ describe("8.0a customer journey library",()=>{
     assert.match(journey.nextAction.description,/fertig vorbereitet/);
     assert.doesNotMatch(JSON.stringify(journey.nextAction),/PROPOSAL_SENT|veröffentlicht|Bearbeitung fortsetzen/);
   });
+
+  it("maps PROPOSAL_SENT insights to Vorschlag ansehen on the matching wish",()=>{
+    const lib=loadJourney();
+    const insight=operationalInsight("wish-proposal-sent-wr_sent_1",{
+      title:"Vorschlag freigegeben",
+      description:"Familie Berg · Seefeld September · Der persönliche Vorschlag wurde für den Gast im Kundenportal freigegeben.",
+      actionLabel:"Vorschlag ansehen",
+      targetTab:"kunde",
+      entityId:"wr_sent_1"
+    });
+    const journey=lib.buildCustomerJourney(readyInput({
+      insights:[insight,operationalInsight("program-empty",{targetTab:"programm"})]
+    }));
+    const wishes=journey.rows.find(row=>row.id==="wishes");
+    assert.equal(wishes.value,"Vorschlag freigegeben");
+    assert.equal(journey.nextAction.id,"wish-proposal-sent-wr_sent_1");
+    assert.equal(journey.nextAction.title,"Vorschlag freigegeben");
+    assert.equal(journey.nextAction.buttonLabel,"Vorschlag ansehen");
+    assert.equal(journey.nextAction.targetTab,"kunde");
+    assert.equal(journey.nextAction.entityId,"wr_sent_1");
+    assert.match(journey.nextAction.description,/für den Gast im Kundenportal freigegeben/);
+    assert.doesNotMatch(JSON.stringify(journey.nextAction),/versendet|gelesen|angenommen|gebucht|Bearbeitung fortsetzen/);
+    assert.doesNotMatch(wishes.value,/versendet/);
+  });
 });

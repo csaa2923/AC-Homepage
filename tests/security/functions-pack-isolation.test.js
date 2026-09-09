@@ -171,9 +171,18 @@ describe("functions pack isolation (no files outside functions/)",()=>{
       browser.createProposalFromWorkup(withWorkup,proposalOptions)
     );
     const withProposal=browser.createProposalFromWorkup(withWorkup,proposalOptions).value;
+    const preparedProposal=browser.prepareWishProposal(withProposal,{now:"2026-09-08T09:07:00.000Z"}).value;
     assert.deepEqual(
       server.prepareWishProposal(withProposal,{now:"2026-09-08T09:07:00.000Z"}),
       browser.prepareWishProposal(withProposal,{now:"2026-09-08T09:07:00.000Z"})
+    );
+    assert.deepEqual(
+      server.sendWishProposal(preparedProposal,{now:"2026-09-08T09:08:00.000Z"}),
+      browser.sendWishProposal(preparedProposal,{now:"2026-09-08T09:08:00.000Z"})
+    );
+    assert.deepEqual(
+      server.listSentPortalProposals([browser.sendWishProposal(preparedProposal,{now:"2026-09-08T09:08:00.000Z"}).value]),
+      browser.listSentPortalProposals([browser.sendWishProposal(preparedProposal,{now:"2026-09-08T09:08:00.000Z"}).value])
     );
     const dirty={
       intro:"Hallo",

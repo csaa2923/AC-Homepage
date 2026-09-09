@@ -118,6 +118,7 @@ const {
   runGetAuthorizedPortalContextAsync
 }=require("./lib/portalAccessStore");
 const {runSubmitCustomerWishRequest,runSubmitCustomerWishFollowUpAnswers,runListCustomerPortalWishes}=require("./lib/portalWishRequests");
+const {runSendCustomerWishProposal}=require("./lib/adminWishProposalSend");
 const {createFirestorePortalOtpStore}=require("./lib/portalOtpStore");
 const {
   createPortalAuthAdapter,
@@ -843,6 +844,22 @@ async function listCustomerPortalWishes(request,deps={}){
   }
 }
 
+async function sendCustomerWishProposal(request,deps={}){
+  requireAdminCallable(request);
+  try{
+    assertKnownRequestFields(request.data,new Set(["customerId","wishId"]));
+    const persist={
+      now:deps.now,
+      updateWishInTransaction:deps.updateWishInTransaction,
+      db:deps.db||(deps.updateWishInTransaction?undefined:getDb())
+    };
+    const sent=await runSendCustomerWishProposal(request.data||{},persist);
+    return sent.result;
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
 async function disableCustomerPortalAccess(request,deps={}){
   requireAdminCallable(request);
   try{
@@ -1431,6 +1448,7 @@ module.exports={
   getCustomerPortalContext,
   submitCustomerWishRequest,
   listCustomerPortalWishes,
+  sendCustomerWishProposal,
   submitCustomerWishFollowUpAnswers,
   getCustomerPortalAccessAdmin,
   disableCustomerPortalAccess,

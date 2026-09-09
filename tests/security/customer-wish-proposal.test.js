@@ -4,6 +4,7 @@ import {readFileSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 import {dirname,join} from "node:path";
 import {createRequire} from "node:module";
+import vm from "node:vm";
 
 const require=createRequire(import.meta.url);
 const root=join(dirname(fileURLToPath(import.meta.url)),"../..");
@@ -124,6 +125,129 @@ function assertAllowedShape(proposal){
     Object.keys(item.schedule).forEach(key=>assert.ok(ALLOWED_SCHEDULE.has(key),`unexpected schedule ${key}`));
   });
   FORBIDDEN_PROPOSAL_KEYS.forEach(key=>assert.equal(objectKeys(proposal).has(key),false,key));
+}
+
+function escapeHtml(value){
+  return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
+}
+
+function loadWishes(hostOverrides={}){
+  const customer=hostOverrides.customer||{
+    customerId:"cust-100",
+    customerName:"Familie Berg",
+    wishRequests:[]
+  };
+  const customers=[customer];
+  const saved=[];
+  const confirms=[];
+  const state={
+    selectedCustomerId:customer.customerId,
+    wishView:"list",
+    wishSelectedId:"",
+    wishPickerOpen:false,
+    wishCustomOpen:false,
+    wishPreviewOpen:false,
+    wishSaving:false,
+    wishMessage:"",
+    wishMessageKind:"",
+    wishCreateDraft:null,
+    wishKnownDraft:null,
+    wishNotesDraft:"",
+    wishWorkupNotesDraft:"",
+    wishWorkupEditor:"",
+    wishWorkupDraft:null,
+    wishProposalEditor:"",
+    wishProposalDraft:null,
+    wishProposalIntroDraft:null,
+    wishProposalPreviewOpen:false,
+    wishCustomDraft:null,
+    ...(hostOverrides.state||{})
+  };
+  const host={
+    getState:()=>state,
+    patchState:patch=>Object.assign(state,patch||{}),
+    escapeHtml,
+    byId:()=>null,
+    customerById:id=>customers.find(item=>item.customerId===id)||null,
+    updateLocalCustomer(next){
+      const index=customers.findIndex(item=>item.customerId===next.customerId);
+      if(index>=0)customers.splice(index,1,next);
+      else customers.push(next);
+    },
+    clone:value=>JSON.parse(JSON.stringify(value||{})),
+    compactObject:value=>value,
+    withTimeout:promise=>promise,
+    AUTH_TIMEOUT_MS:1000,
+    render(){},
+    customers,
+    saved
+  };
+  const sandbox={
+    window:{
+      ACTCustomerWishRequestLibrary:browser,
+      ACTFirebaseAuth:{
+        getAuthDiagnostics:()=>({email:"nadja@alpineconcierge.info"}),
+        requireAdmin:async()=>({allowed:true})
+      },
+      ACTFirebaseDatabase:{
+        saveDraftCustomer:async next=>{
+          saved.push(JSON.parse(JSON.stringify(next)));
+          return next;
+        }
+      },
+      confirm(message){
+        confirms.push(String(message||""));
+        return hostOverrides.confirm!==undefined?hostOverrides.confirm:true;
+      }
+    },
+    document:{getElementById:()=>null},
+    console,
+    Date,Math,JSON,String,Number,Boolean,Array,Object
+  };
+  vm.runInNewContext(readFileSync(join(root,"customer-portal/admin-v2-wishes.js"),"utf8"),sandbox);
+  const wishes=sandbox.window.ACTAdminV2Wishes;
+  wishes.bind(host);
+  return {wishes,host,state,customer,customers,saved,sandbox,confirms};
+}
+
+function click(wishes,action,dataset={}){
+  return wishes.handleClick({
+    preventDefault(){},
+    target:{
+      closest(selector){
+        if(selector==="[data-wish-action]"){
+          return {disabled:false,dataset:{wishAction:action,...dataset}};
+        }
+        return null;
+      }
+    }
+  });
+}
+
+async function flush(){
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise(resolve=>setTimeout(resolve,20));
+}
+
+function proposalUi(html){
+  const start=String(html||"").indexOf("data-wish-proposal");
+  if(start<0)return "";
+  const rest=String(html).slice(start);
+  const end=rest.search(/Notizen zum Kundenwunsch|data-wish-notes/);
+  return end>=0?rest.slice(0,end):rest;
+}
+
+function previewUi(html){
+  const start=String(html||"").indexOf("data-proposal-preview");
+  return start<0?"":String(html).slice(start);
+}
+
+function proposalPreviewSource(){
+  const start=adminWishesSource.indexOf("function proposalPreviewMarkup");
+  const end=adminWishesSource.indexOf("function proposalMarkup");
+  return start<0||end<0?"":adminWishesSource.slice(start,end);
 }
 
 describe("customer wish proposal (Phase C1)",()=>{
@@ -365,7 +489,10 @@ describe("customer wish proposal (Phase C1)",()=>{
     });
     assert.equal(listed.length,0);
     assert.doesNotMatch(portalJs,/sourceWorkupItemId|createProposalFromWorkup|publicProposal/);
-    assert.doesNotMatch(adminWishesSource,/createProposalFromWorkup|Kundenvorschlag erstellen|prepareWishProposal/);
+    assert.match(adminWishesSource,/createProposalFromWorkup/);
+    assert.match(adminWishesSource,/Kundenvorschlag erstellen/);
+    assert.doesNotMatch(adminWishesSource,/prepareWishProposal|Vorschlag fertigstellen|Angebot senden/);
+    assert.doesNotMatch(adminWishesSource,/createCustomerPortalAccess|publishCustomer/);
     assert.equal(typeof portalWishes.runListCustomerPortalWishes,"function");
     assert.deepEqual(server.publicPortalWish(wish),browser.publicPortalWish(wish));
     const shared=addItem(browser,inReviewWish(browser),{title:"Sichtbar",customerVisible:true},"wu_one");
@@ -374,5 +501,260 @@ describe("customer wish proposal (Phase C1)",()=>{
       server.createProposalFromWorkup(shared,options),
       browser.createProposalFromWorkup(shared,options)
     );
+  });
+
+  it("shows the Kundenvorschlag section only for IN_REVIEW admin wishes",()=>{
+    const replied=inReviewWish(browser);
+    replied.status="CUSTOMER_REPLIED";
+    replied.statusLabel="Kunde hat geantwortet";
+    const {wishes,customer,state}=loadWishes({customer:{
+      customerId:"cust-100",
+      customerName:"Familie Berg",
+      wishRequests:[replied]
+    }});
+    state.wishView="detail";
+    state.wishSelectedId=replied.wishId;
+    const hidden=wishes.sectionMarkup(customer);
+    assert.doesNotMatch(hidden,/data-wish-proposal|Kundenvorschlag erstellen/);
+
+    const reviewing=addItem(browser,inReviewWish(browser),{
+      title:"Bootsfahrt",
+      customerVisible:true,
+      provider:"Geheimanbieter",
+      contact:"intern@example.com",
+      estimatedCost:"999 €",
+      internalNotes:INTERNAL
+    },"wu_mark");
+    customer.wishRequests=[reviewing];
+    state.wishSelectedId=reviewing.wishId;
+    const html=wishes.sectionMarkup(customer);
+    assert.match(html,/data-wish-proposal/);
+    assert.match(html,/>Kundenvorschlag</);
+    assert.match(html,/1 Baustein für Kundenvorschlag vorgemerkt/);
+    assert.match(html,/data-wish-action="create-proposal"/);
+    assert.doesNotMatch(html,/create-proposal" disabled/);
+    assert.doesNotMatch(html,/Vorschlag fertigstellen|prepareWishProposal/);
+  });
+
+  it("does not count SELECTED-only items as marked and disables create without a mark",()=>{
+    const selected=addItem(browser,inReviewWish(browser),{
+      title:"Nur intern gewählt",
+      status:"SELECTED",
+      customerVisible:false
+    },"wu_selected");
+    const {wishes,customer,state}=loadWishes({customer:{
+      customerId:"cust-100",
+      customerName:"Familie Berg",
+      wishRequests:[selected]
+    }});
+    wishes.openWish(selected.wishId);
+    const html=wishes.sectionMarkup(customer);
+    assert.match(html,/0 Bausteine für Kundenvorschlag vorgemerkt/);
+    assert.match(html,/Markiere zuerst mindestens einen Baustein/);
+    assert.match(html,/create-proposal" disabled/);
+    assert.equal(click(wishes,"create-proposal"),true);
+    assert.equal(state.wishMessageKind,"warning");
+    assert.equal(customer.wishRequests[0].proposal,undefined);
+  });
+
+  it("creates a draft proposal through Admin V2 without changing wish status or history",async()=>{
+    const reviewing=addItem(browser,inReviewWish(browser),{
+      title:"Private Bootsfahrt",
+      description:"Ruhige Ausfahrt",
+      customerVisible:true,
+      provider:"Seefeld Schifffahrt",
+      contact:"boot@example.com",
+      estimatedCost:"180 €",
+      internalNotes:INTERNAL
+    },"wu_boot");
+    const history=JSON.stringify(reviewing.statusHistory);
+    const {wishes,customer,state,customers}=loadWishes({customer:{
+      customerId:"cust-100",
+      customerName:"Familie Berg",
+      wishRequests:[reviewing]
+    }});
+    wishes.openWish(reviewing.wishId);
+    assert.equal(click(wishes,"create-proposal"),true);
+    await flush();
+    const stored=customers[0].wishRequests[0];
+    assert.equal(stored.status,"IN_REVIEW");
+    assert.equal(JSON.stringify(stored.statusHistory),history);
+    assert.equal(stored.proposal.state,"draft");
+    assert.equal(stored.proposal.items.length,1);
+    assert.equal(stored.proposal.items[0].title,"Private Bootsfahrt");
+    assert.equal(stored.proposal.items[0].customerPriceText,"");
+    assert.equal(stored.proposal.items[0].provider,undefined);
+    assert.equal(stored.workup.items[0].provider,"Seefeld Schifffahrt");
+    const html=proposalUi(wishes.sectionMarkup(customers[0]));
+    assert.match(html,/Neu aus Ausarbeitung erstellen/);
+    assert.doesNotMatch(html,/data-wish-action="create-proposal"/);
+    assert.doesNotMatch(html,/Geheimanbieter|boot@example.com|180 €|${INTERNAL}|sourceWorkupItemId|estimatedCost|Seefeld Schifffahrt/);
+    assert.match(adminWishesSource,/createProposalFromWorkup\(wish\)/);
+    assert.match(adminWishesSource,/canEditWishProposal/);
+  });
+
+  it("does not recreate an existing draft unless the replacement is confirmed",async()=>{
+    const created=snapshotWish(browser).value;
+    created.proposal.intro="Bitte nicht überschreiben";
+    const {wishes,customers}=loadWishes({
+      confirm:false,
+      customer:{
+        customerId:"cust-100",
+        customerName:"Familie Berg",
+        wishRequests:[created]
+      }
+    });
+    wishes.openWish(created.wishId);
+    const before=JSON.stringify(customers[0].wishRequests[0].proposal);
+    assert.equal(click(wishes,"create-proposal"),true);
+    await flush();
+    assert.equal(JSON.stringify(customers[0].wishRequests[0].proposal),before);
+    assert.equal(click(wishes,"recreate-proposal"),true);
+    await flush();
+    assert.equal(JSON.stringify(customers[0].wishRequests[0].proposal),before);
+    assert.equal(customers[0].wishRequests[0].proposal.intro,"Bitte nicht überschreiben");
+  });
+
+  it("recreates from workup only after confirmation and keeps workup intact",async()=>{
+    const created=snapshotWish(browser).value;
+    created.proposal.intro="Alter Text";
+    const workupBefore=JSON.stringify(created.workup);
+    const {wishes,customers,confirms}=loadWishes({
+      confirm:true,
+      customer:{
+        customerId:"cust-100",
+        customerName:"Familie Berg",
+        wishRequests:[created]
+      }
+    });
+    wishes.openWish(created.wishId);
+    assert.equal(click(wishes,"recreate-proposal"),true);
+    await flush();
+    assert.match(confirms[0],/bestehende Kundenvorschlag wird ersetzt/);
+    const stored=customers[0].wishRequests[0];
+    assert.equal(stored.proposal.intro,"");
+    assert.equal(stored.status,"IN_REVIEW");
+    assert.equal(JSON.stringify(stored.workup),workupBefore);
+  });
+
+  it("edits intro, item, schedule and order without mutating workup",async()=>{
+    const created=snapshotWish(browser).value;
+    const workupBefore=JSON.stringify(created.workup);
+    const workupOrder=created.workup.items.map(item=>item.id).join(",");
+    const {wishes,state,customers}=loadWishes({customer:{
+      customerId:"cust-100",
+      customerName:"Familie Berg",
+      wishRequests:[created]
+    }});
+    wishes.openWish(created.wishId);
+    state.wishProposalIntroDraft="Unser Vorschlag für Ihren Aufenthalt.";
+    assert.equal(click(wishes,"save-proposal-intro"),true);
+    await flush();
+    assert.equal(customers[0].wishRequests[0].proposal.intro,"Unser Vorschlag für Ihren Aufenthalt.");
+    assert.equal(JSON.stringify(customers[0].wishRequests[0].workup),workupBefore);
+
+    const itemId=customers[0].wishRequests[0].proposal.items[0].id;
+    assert.equal(click(wishes,"edit-proposal",{proposalId:itemId}),true);
+    const editor=proposalUi(wishes.sectionMarkup(customers[0]));
+    assert.match(editor,/Beschreibung für den Gast/);
+    assert.match(editor,/Preis \/ Preisinformation/);
+    assert.doesNotMatch(editor,/estimatedCost|sourceWorkupItemId|internalNotes|name="workupProvider"|<dt>Anbieter<\/dt>/);
+    state.wishProposalDraft={
+      title:"Bootsfahrt für Gäste",
+      description:"Ruhige Ausfahrt",
+      category:"experience",
+      location:"Seefeld",
+      schedule:{startDate:"2026-11-12",startTime:"18:00",endDate:"2026-11-12",endTime:"17:00",flexible:false},
+      customerPriceText:"180 € p. P.",
+      note:"Bitte pünktlich sein"
+    };
+    assert.equal(click(wishes,"save-proposal-item"),true);
+    await flush();
+    assert.equal(state.wishMessageKind,"error");
+    assert.match(state.wishMessage,/Endzeit darf nicht vor der Startzeit/);
+    assert.equal(customers[0].wishRequests[0].proposal.items[0].title,"Private Bootsfahrt");
+
+    state.wishProposalEditor=itemId;
+    state.wishProposalDraft={
+      title:"Bootsfahrt für Gäste",
+      description:"Ruhige Ausfahrt",
+      category:"experience",
+      location:"Seefeld",
+      schedule:{startDate:"2026-11-12",startTime:"18:00",endDate:"2026-11-12",endTime:"20:00",flexible:false},
+      customerPriceText:"180 € p. P.",
+      note:"Bitte pünktlich sein"
+    };
+    assert.equal(click(wishes,"save-proposal-item"),true);
+    await flush();
+    const item=customers[0].wishRequests[0].proposal.items[0];
+    assert.equal(item.title,"Bootsfahrt für Gäste");
+    assert.equal(item.customerPriceText,"180 € p. P.");
+    assert.equal(item.schedule.startDate,"2026-11-12");
+    assert.equal(item.whenLabel,"12.11.2026 · 18:00–20:00 Uhr");
+    assert.equal(JSON.stringify(customers[0].wishRequests[0].workup),workupBefore);
+
+    const second=customers[0].wishRequests[0].proposal.items[1].id;
+    assert.equal(click(wishes,"proposal-down",{proposalId:item.id}),true);
+    await flush();
+    assert.equal(customers[0].wishRequests[0].proposal.items.map(entry=>entry.id).join(","),`${second},${item.id}`);
+    assert.equal(customers[0].wishRequests[0].workup.items.map(entry=>entry.id).join(","),workupOrder);
+
+    assert.equal(click(wishes,"remove-proposal",{proposalId:second}),true);
+    await flush();
+    assert.equal(customers[0].wishRequests[0].proposal.items.length,1);
+    assert.equal(customers[0].wishRequests[0].workup.items.length,3);
+    assert.equal(JSON.stringify(customers[0].wishRequests[0].workup),workupBefore);
+  });
+
+  it("renders the customer preview from publicProposal only",async()=>{
+    const created=snapshotWish(browser).value;
+    created.proposal.intro="Ein Abend am See.";
+    const {wishes,state,customers}=loadWishes({customer:{
+      customerId:"cust-100",
+      customerName:"Familie Berg",
+      wishRequests:[created]
+    }});
+    wishes.openWish(created.wishId);
+    assert.equal(click(wishes,"proposal-preview"),true);
+    const html=wishes.sectionMarkup(customers[0]);
+    const preview=previewUi(html);
+    assert.match(preview,/data-proposal-preview/);
+    assert.match(preview,/Alpine Concierge Tirol/);
+    assert.match(preview,/Ihr persönlicher Vorschlag/);
+    assert.match(preview,/Ein Abend am See/);
+    assert.match(preview,/Private Bootsfahrt/);
+    assert.doesNotMatch(preview,/sourceWorkupItemId|${INTERNAL}|Seefeld Schifffahrt|boot@example.com|estimatedCost|internalNotes/);
+    const view=browser.publicProposal(customers[0].wishRequests[0]);
+    assert.match(preview,new RegExp(view.items[0].title.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
+    assert.equal(state.wishProposalPreviewOpen,true);
+    const previewSource=proposalPreviewSource();
+    assert.match(previewSource,/publicProposalView\(wish\)/);
+    assert.doesNotMatch(previewSource,/sourceWorkupItemId|estimatedCost|internalNotes|\.provider|\.contact|workup\.items|wish\.proposal\.items/);
+    assert.match(adminWishesSource,/publicProposal\(wish\)/);
+    assert.doesNotMatch(adminWishesSource,/prepareWishProposal|PROPOSAL_PREPARED|Vorschlag fertigstellen/);
+    assert.doesNotMatch(portalJs,/publicProposal|createProposalFromWorkup|Kundenvorschau/);
+  });
+
+  it("can remove the last proposal item without touching workup or wish status",async()=>{
+    const created=snapshotWish(browser).value;
+    created.proposal.items=created.proposal.items.slice(0,1);
+    const workupBefore=JSON.stringify(created.workup);
+    const history=JSON.stringify(created.statusHistory);
+    const {wishes,customers}=loadWishes({customer:{
+      customerId:"cust-100",
+      customerName:"Familie Berg",
+      wishRequests:[created]
+    }});
+    wishes.openWish(created.wishId);
+    assert.equal(click(wishes,"remove-proposal",{proposalId:created.proposal.items[0].id}),true);
+    await flush();
+    const stored=customers[0].wishRequests[0];
+    assert.equal(stored.proposal.items.length,0);
+    assert.equal(stored.status,"IN_REVIEW");
+    assert.equal(JSON.stringify(stored.statusHistory),history);
+    assert.equal(JSON.stringify(stored.workup),workupBefore);
+    assert.equal(stored.workup.items.some(item=>item.customerVisible===true),true);
+    const html=proposalUi(wishes.sectionMarkup(customers[0]));
+    assert.match(html,/Noch kein Vorschlagspunkt/);
   });
 });

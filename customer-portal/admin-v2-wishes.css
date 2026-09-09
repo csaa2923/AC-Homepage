@@ -61,6 +61,41 @@
 .v2-wish-workup-form .v2-wish-grid label span{display:block;margin-bottom:4px}
 .v2-wish-workup-schedule{display:grid;gap:12px}
 .v2-wish-workup-schedule-label{margin:0;font-size:13px;font-weight:750;color:var(--muted)}
+.v2-wish-proposal{gap:16px;border-color:#e2d4b8;background:#fbf8f0}
+.v2-wish-proposal-count{margin:0;font-size:15px;font-weight:700;color:#6a5428}
+.v2-wish-proposal-list{display:grid;gap:12px}
+.v2-wish-proposal-card{
+  display:grid;gap:12px;padding:16px 18px;border:1px solid #e2d4b8;border-radius:18px;background:#fffcf6;font-size:15px
+}
+.v2-wish-proposal-card.is-editing{background:#fff}
+.v2-wish-proposal-card h5{margin:0;font-size:18px;font-weight:750;line-height:1.3}
+.v2-wish-proposal-card p{margin:0;font-size:15px;line-height:1.45}
+.v2-wish-proposal-order{margin:0 0 4px;color:#6a5428;font-size:13px;font-weight:750;letter-spacing:.02em;text-transform:uppercase}
+.v2-wish-proposal-note{padding:10px 12px;border-left:3px solid #e2d4b8;background:#f7f1e4;font-size:15px}
+.v2-wish-proposal-guest{
+  display:block;margin:0 0 4px;color:#6a5428;font-size:12px;font-weight:750;letter-spacing:.02em;text-transform:uppercase
+}
+.v2-wish-proposal-preview-note{padding-top:4px}
+.v2-wish-proposal-preview-note span{
+  display:block;margin:0 0 4px;color:var(--muted);font-size:12px;font-weight:750
+}
+.v2-wish-proposal-form .v2-wish-grid label span{display:block;margin-bottom:4px}
+.v2-wish-proposal-preview{
+  display:grid;gap:16px;padding:22px 24px;border:1px solid #d7c7a4;border-radius:22px;background:#fffdf8
+}
+.v2-wish-proposal-kicker{
+  margin:0 0 4px;color:#0d3b2f;font-size:12px;font-weight:750;letter-spacing:.12em;text-transform:uppercase
+}
+.v2-wish-proposal-preview h4{margin:0;font-size:22px;line-height:1.3}
+.v2-wish-proposal-intro{margin:0;font-size:16px;line-height:1.55;white-space:pre-wrap}
+.v2-wish-proposal-preview-list{display:grid;gap:14px}
+.v2-wish-proposal-preview-item{display:grid;gap:8px;padding:16px 0;border-top:1px solid #eadfc8}
+.v2-wish-proposal-preview-item:first-child{padding-top:0;border-top:0}
+.v2-wish-proposal-preview-item h5{margin:0;font-size:18px;font-weight:750}
+.v2-wish-proposal-preview-item p{margin:0;font-size:15px;line-height:1.5}
+.v2-wish-proposal-preview-item dl{display:grid;gap:8px;margin:0}
+.v2-wish-proposal-preview-item dt{color:var(--muted);font-size:12px;font-weight:750}
+.v2-wish-proposal-preview-item dd{margin:0;font-size:15px}
 @media (max-width:900px){
   .v2-wish-card dl,.v2-wish-grid,.v2-wish-workup-meta{grid-template-columns:1fr}
 }

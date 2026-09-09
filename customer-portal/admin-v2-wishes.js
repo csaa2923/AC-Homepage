@@ -421,6 +421,24 @@
     };
   }
 
+  function emptyProposalItemDraft(){
+    return {
+      title:"",
+      description:"",
+      category:"experience",
+      location:"",
+      schedule:{
+        startDate:"",
+        startTime:"",
+        endDate:"",
+        endTime:"",
+        flexible:false
+      },
+      customerPriceText:"",
+      note:""
+    };
+  }
+
   function resetWishUi(extra){
     h().patchState({
       wishView:"list",
@@ -435,6 +453,10 @@
       wishWorkupNotesDraft:"",
       wishWorkupEditor:"",
       wishWorkupDraft:emptyWorkupDraft(),
+      wishProposalEditor:"",
+      wishProposalDraft:emptyProposalItemDraft(),
+      wishProposalIntroDraft:null,
+      wishProposalPreviewOpen:false,
       wishCustomDraft:emptyCustomDraft(),
       wishInquiry:inquiryLib()?inquiryLib().emptyInquirySession():null,
       ...extra
@@ -516,6 +538,10 @@
       wishWorkupNotesDraft:normalizedWorkup(wish).notes,
       wishWorkupEditor:"",
       wishWorkupDraft:emptyWorkupDraft(),
+      wishProposalEditor:"",
+      wishProposalDraft:emptyProposalItemDraft(),
+      wishProposalIntroDraft:null,
+      wishProposalPreviewOpen:false,
       wishCustomDraft:emptyCustomDraft(),
       wishInquiry:session,
       wishMessage:"",
@@ -814,6 +840,210 @@
       :false;
     if(!confirmed)return;
     applyWorkupResult(customer,api.removeWishWorkupItem(wish,itemId),"Baustein gelöscht.");
+  }
+
+  function normalizedProposal(wish){
+    const api=lib();
+    if(api&&typeof api.normalizeProposal==="function")return api.normalizeProposal(wish&&wish.proposal);
+    return {
+      version:1,
+      state:"draft",
+      intro:"",
+      createdAt:"",
+      updatedAt:"",
+      preparedAt:"",
+      items:[]
+    };
+  }
+
+  function hasDraftProposal(wish){
+    const proposal=normalizedProposal(wish);
+    return Boolean(text(proposal.createdAt))&&proposal.state==="draft";
+  }
+
+  function markedProposalCount(wish){
+    return (normalizedWorkup(wish).items||[]).filter(item=>item.customerVisible===true).length;
+  }
+
+  function markedProposalLabel(count){
+    const total=Number(count)||0;
+    if(total===1)return "1 Baustein für Kundenvorschlag vorgemerkt";
+    return `${total} Bausteine für Kundenvorschlag vorgemerkt`;
+  }
+
+  function publicProposalView(wish){
+    const api=lib();
+    if(api&&typeof api.publicProposal==="function")return api.publicProposal(wish);
+    return {version:1,state:"draft",intro:"",preparedAt:"",items:[]};
+  }
+
+  function proposalWhenLabelForSave(previous,schedule){
+    const api=lib();
+    const hadStructured=hasStructuredWorkupSchedule({schedule:previous&&previous.schedule});
+    const hasStructured=hasStructuredWorkupSchedule({schedule});
+    if(hasStructured&&api&&typeof api.formatWorkupScheduleLabel==="function"){
+      return api.formatWorkupScheduleLabel({schedule});
+    }
+    if(hadStructured&&!hasStructured)return "";
+    return text(previous&&previous.whenLabel);
+  }
+
+  function itemToProposalDraft(item){
+    const source=item&&typeof item==="object"?item:{};
+    return {
+      title:text(source.title),
+      description:text(source.description),
+      category:text(source.category)||"experience",
+      location:text(source.location),
+      schedule:workupScheduleOf(source),
+      customerPriceText:text(source.customerPriceText),
+      note:text(source.note)
+    };
+  }
+
+  function readProposalDraftFromForm(form){
+    if(!form)return emptyProposalItemDraft();
+    const value=name=>text(form.elements[name]&&form.elements[name].value);
+    const flexible=form.elements.proposalFlexible;
+    return {
+      title:value("proposalTitle"),
+      description:value("proposalDescription"),
+      category:value("proposalCategory")||"experience",
+      location:value("proposalLocation"),
+      schedule:{
+        startDate:value("proposalStartDate"),
+        startTime:value("proposalStartTime"),
+        endDate:value("proposalEndDate"),
+        endTime:value("proposalEndTime"),
+        flexible:Boolean(flexible&&flexible.checked)
+      },
+      customerPriceText:value("proposalPriceText"),
+      note:value("proposalNote")
+    };
+  }
+
+  function applyProposalResult(customer,result,successMessage){
+    if(result&&result.ok){
+      h().patchState({
+        wishProposalEditor:"",
+        wishProposalDraft:emptyProposalItemDraft(),
+        wishProposalIntroDraft:null
+      });
+    }
+    return applyWishResult(customer,result,successMessage);
+  }
+
+  function createProposalFromMarked(replaceExisting){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.createProposalFromWorkup!=="function")return;
+    if(!isAdminWishInReview(wish))return;
+    if(!markedProposalCount(wish)){
+      setMessage("Markiere zuerst mindestens einen Baustein in der Ausarbeitung für den Kundenvorschlag.","warning");
+      h().render();
+      return;
+    }
+    if(hasDraftProposal(wish)){
+      if(!replaceExisting)return;
+      const confirmed=typeof window!=="undefined"&&typeof window.confirm==="function"
+        ?window.confirm("Der bestehende Kundenvorschlag wird ersetzt. Manuell bearbeitete Kundentexte, Preisangaben und Hinweise im aktuellen Entwurf gehen dabei verloren. Fortfahren?")
+        :false;
+      if(!confirmed)return;
+    }
+    applyProposalResult(customer,api.createProposalFromWorkup(wish),"Kundenvorschlag erstellt.");
+  }
+
+  function canMutateProposalDraft(wish){
+    const api=lib();
+    if(api&&typeof api.canEditWishProposal==="function")return api.canEditWishProposal(wish);
+    return hasDraftProposal(wish)&&isAdminWishInReview(wish);
+  }
+
+  function saveProposalIntro(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.updateProposal!=="function")return;
+    if(!canMutateProposalDraft(wish)){
+      setMessage("Der Kundenvorschlag kann in diesem Zustand nicht geändert werden.","error");
+      h().render();
+      return;
+    }
+    const intro=state().wishProposalIntroDraft==null?normalizedProposal(wish).intro:state().wishProposalIntroDraft;
+    applyProposalResult(customer,api.updateProposal(wish,{intro}),"Einleitung gespeichert.");
+  }
+
+  function saveProposalItem(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.updateProposalItem!=="function")return;
+    if(!canMutateProposalDraft(wish)){
+      setMessage("Der Kundenvorschlag kann in diesem Zustand nicht geändert werden.","error");
+      h().render();
+      return;
+    }
+    const form=typeof document!=="undefined"&&typeof document.querySelector==="function"
+      ?document.querySelector("[data-proposal-form]")
+      :null;
+    const draft=form?readProposalDraftFromForm(form):(state().wishProposalDraft||emptyProposalItemDraft());
+    const editor=text(state().wishProposalEditor);
+    if(!editor)return;
+    const previous=(normalizedProposal(wish).items||[]).find(item=>item.id===editor);
+    if(!previous){
+      setMessage("Vorschlagsbaustein nicht gefunden.","error");
+      h().render();
+      return;
+    }
+    const patch={
+      title:draft.title,
+      description:draft.description,
+      category:draft.category,
+      location:draft.location,
+      schedule:draft.schedule,
+      whenLabel:proposalWhenLabelForSave(previous,draft.schedule),
+      customerPriceText:draft.customerPriceText,
+      note:draft.note
+    };
+    applyProposalResult(customer,api.updateProposalItem(wish,editor,patch),"Vorschlagspunkt gespeichert.");
+  }
+
+  function removeProposalItemFromDraft(itemId){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.removeProposalItem!=="function")return;
+    if(!canMutateProposalDraft(wish)){
+      setMessage("Der Kundenvorschlag kann in diesem Zustand nicht geändert werden.","error");
+      h().render();
+      return;
+    }
+    const confirmed=typeof window!=="undefined"&&typeof window.confirm==="function"
+      ?window.confirm("Diesen Vorschlagspunkt wirklich aus dem Kundenvorschlag entfernen? Die interne Ausarbeitung bleibt erhalten.")
+      :false;
+    if(!confirmed)return;
+    applyProposalResult(customer,api.removeProposalItem(wish,itemId),"Aus dem Vorschlag entfernt.");
+  }
+
+  function moveProposalItem(itemId,delta){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const api=lib();
+    if(!customer||!wish||!api||typeof api.reorderProposalItems!=="function")return;
+    if(!canMutateProposalDraft(wish)){
+      setMessage("Der Kundenvorschlag kann in diesem Zustand nicht geändert werden.","error");
+      h().render();
+      return;
+    }
+    const ids=(normalizedProposal(wish).items||[]).map(item=>item.id);
+    const index=ids.indexOf(text(itemId));
+    const next=index+Number(delta||0);
+    if(index<0||next<0||next>=ids.length)return;
+    const order=ids.slice();
+    const moved=order.splice(index,1)[0];
+    order.splice(next,0,moved);
+    applyProposalResult(customer,api.reorderProposalItems(wish,order),"Reihenfolge gespeichert.");
   }
 
   function addLibraryQuestion(questionId){
@@ -1701,6 +1931,183 @@
     `;
   }
 
+  function proposalEditorMarkup(draft){
+    const api=lib();
+    const source=draft||emptyProposalItemDraft();
+    const categories=api&&api.WORKUP_CATEGORIES?api.WORKUP_CATEGORIES:[];
+    return `
+      <form class="v2-wish-form v2-wish-proposal-form" data-proposal-form>
+        <div class="v2-wish-grid">
+          <label class="v2-edit-field">
+            <span>Titel</span>
+            <input name="proposalTitle" type="text" maxlength="160" value="${escapeHtml(source.title)}">
+          </label>
+          <label class="v2-edit-field">
+            <span>Kategorie</span>
+            <select name="proposalCategory">${optionList(categories,source.category)}</select>
+          </label>
+          <label class="v2-edit-field">
+            <span>Ort</span>
+            <input name="proposalLocation" type="text" maxlength="300" value="${escapeHtml(source.location)}">
+          </label>
+          <label class="v2-edit-field">
+            <span>Preis / Preisinformation</span>
+            <input name="proposalPriceText" type="text" maxlength="80" placeholder="€ 280 für 2 Personen" value="${escapeHtml(source.customerPriceText)}">
+          </label>
+        </div>
+        <p class="v2-muted">Dieser Preis ist für den Gast sichtbar. Interne Kostenschätzungen werden nicht übernommen. z. B. „Preis auf Anfrage“ oder „Im Arrangement enthalten“.</p>
+        <div class="v2-wish-workup-schedule">
+          <p class="v2-wish-workup-schedule-label">Termin</p>
+          <div class="v2-wish-grid">
+            <label class="v2-edit-field">
+              <span>Datum von</span>
+              <input name="proposalStartDate" type="date" value="${escapeHtml((source.schedule&&source.schedule.startDate)||"")}">
+            </label>
+            <label class="v2-edit-field">
+              <span>Uhrzeit von</span>
+              <input name="proposalStartTime" type="time" value="${escapeHtml((source.schedule&&source.schedule.startTime)||"")}">
+            </label>
+            <label class="v2-edit-field">
+              <span>Datum bis</span>
+              <input name="proposalEndDate" type="date" value="${escapeHtml((source.schedule&&source.schedule.endDate)||"")}">
+            </label>
+            <label class="v2-edit-field">
+              <span>Uhrzeit bis</span>
+              <input name="proposalEndTime" type="time" value="${escapeHtml((source.schedule&&source.schedule.endTime)||"")}">
+            </label>
+          </div>
+          <label class="v2-wish-workup-flag">
+            <input name="proposalFlexible" type="checkbox" ${source.schedule&&source.schedule.flexible?"checked":""}>
+            <span>Zeit noch offen / flexibel</span>
+          </label>
+        </div>
+        <label class="v2-edit-field full">
+          <span>Beschreibung für den Gast</span>
+          <textarea name="proposalDescription" rows="3" maxlength="2000">${escapeHtml(source.description)}</textarea>
+        </label>
+        <label class="v2-edit-field full">
+          <span>Besonderer Hinweis für den Gast</span>
+          <textarea name="proposalNote" rows="3" maxlength="2000">${escapeHtml(source.note)}</textarea>
+        </label>
+        <div class="v2-wish-actions">
+          <button class="v2-button primary" type="button" data-wish-action="save-proposal-item">Speichern</button>
+          <button class="v2-button soft" type="button" data-wish-action="cancel-proposal-item">Abbrechen</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function proposalCardMarkup(item,index,total,editing){
+    const source=item||{};
+    if(editing)return `
+      <article class="v2-wish-proposal-card is-editing" data-proposal-item="${escapeHtml(source.id)}">
+        ${proposalEditorMarkup(state().wishProposalDraft||itemToProposalDraft(source))}
+      </article>
+    `;
+    return `
+      <article class="v2-wish-proposal-card" data-proposal-item="${escapeHtml(source.id)}">
+        <div class="v2-wish-workup-card-head">
+          <div>
+            <p class="v2-wish-proposal-order">Vorschlag ${index+1}</p>
+            <h5>${escapeHtml(text(source.title)||"Ohne Titel")}</h5>
+            <p class="v2-muted">${escapeHtml(workupCategoryName(source.category))}</p>
+          </div>
+        </div>
+        ${text(source.description)?`<p>${escapeHtml(source.description)}</p>`:""}
+        <dl class="v2-wish-workup-meta">
+          <div><dt>Ort</dt><dd>${escapeHtml(text(source.location)||"–")}</dd></div>
+          <div><dt>Termin</dt><dd>${escapeHtml(text(source.whenLabel)||"–")}</dd></div>
+          ${text(source.customerPriceText)?`<div><dt>Preis / Preisinformation <span class="v2-wish-proposal-guest">für den Gast</span></dt><dd>${escapeHtml(source.customerPriceText)}</dd></div>`:""}
+        </dl>
+        ${text(source.note)?`<p class="v2-wish-proposal-note"><span class="v2-wish-proposal-guest">Besonderer Hinweis für den Gast</span>${escapeHtml(source.note)}</p>`:""}
+        <div class="v2-wish-actions">
+          <button class="v2-button soft" type="button" data-wish-action="proposal-up" data-proposal-id="${escapeHtml(source.id)}" ${index===0?"disabled":""}>Nach oben</button>
+          <button class="v2-button soft" type="button" data-wish-action="proposal-down" data-proposal-id="${escapeHtml(source.id)}" ${index>=total-1?"disabled":""}>Nach unten</button>
+          <button class="v2-button soft" type="button" data-wish-action="edit-proposal" data-proposal-id="${escapeHtml(source.id)}">Bearbeiten</button>
+          <button class="v2-button soft" type="button" data-wish-action="remove-proposal" data-proposal-id="${escapeHtml(source.id)}">Aus Vorschlag entfernen</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function proposalPreviewMarkup(wish){
+    if(!state().wishProposalPreviewOpen)return "";
+    const view=publicProposalView(wish);
+    const items=Array.isArray(view.items)?view.items:[];
+    return `
+      <aside class="v2-wish-proposal-preview" data-proposal-preview>
+        <div class="v2-workspace-section-head compact">
+          <div>
+            <p class="v2-wish-proposal-kicker">Alpine Concierge Tirol</p>
+            <h4>Ihr persönlicher Vorschlag</h4>
+          </div>
+          <button class="v2-button soft" type="button" data-wish-action="close-proposal-preview">Schließen</button>
+        </div>
+        <p class="v2-muted">Nur lokale Admin-Vorschau. Nichts wird an den Gast gesendet oder veröffentlicht.</p>
+        ${text(view.intro)?`<p class="v2-wish-proposal-intro">${escapeHtml(view.intro)}</p>`:""}
+        <div class="v2-wish-proposal-preview-list">
+          ${items.map(item=>`
+            <article class="v2-wish-proposal-preview-item">
+              <h5>${escapeHtml(text(item.title)||"Ohne Titel")}</h5>
+              ${text(item.description)?`<p>${escapeHtml(item.description)}</p>`:""}
+              <dl>
+                ${text(item.category)?`<div><dt>Kategorie</dt><dd>${escapeHtml(workupCategoryName(item.category))}</dd></div>`:""}
+                ${text(item.location)?`<div><dt>Ort</dt><dd>${escapeHtml(item.location)}</dd></div>`:""}
+                ${text(item.whenLabel)?`<div><dt>Termin</dt><dd>${escapeHtml(item.whenLabel)}</dd></div>`:""}
+                ${text(item.customerPriceText)?`<div><dt>Preis / Preisinformation</dt><dd>${escapeHtml(item.customerPriceText)}</dd></div>`:""}
+              </dl>
+              ${text(item.note)?`<p class="v2-wish-proposal-preview-note"><span>Besonderer Hinweis</span>${escapeHtml(item.note)}</p>`:""}
+            </article>
+          `).join("")||`<p class="v2-muted">Noch keine Vorschlagspunkte.</p>`}
+        </div>
+      </aside>
+    `;
+  }
+
+  function proposalMarkup(wish){
+    if(!isAdminWishInReview(wish))return "";
+    const marked=markedProposalCount(wish);
+    const draft=hasDraftProposal(wish);
+    const proposal=normalizedProposal(wish);
+    const editor=text(state().wishProposalEditor);
+    const intro=state().wishProposalIntroDraft==null?proposal.intro:state().wishProposalIntroDraft;
+    const items=proposal.items||[];
+    const createButton=marked
+      ?`<button class="v2-button primary" type="button" data-wish-action="create-proposal">Kundenvorschlag erstellen</button>`
+      :`<button class="v2-button primary" type="button" data-wish-action="create-proposal" disabled>Kundenvorschlag erstellen</button>`;
+    return `
+      <article class="v2-wish-panel v2-wish-proposal" data-wish-proposal>
+        <div class="v2-workspace-section-head compact">
+          <div>
+            <h4>Kundenvorschlag</h4>
+            <p class="v2-muted">Aus den vorgemerkten Bausteinen entsteht hier der persönliche Vorschlag für den Gast. Interne Notizen, Anbieterinformationen und interne Kosten werden nicht übernommen.</p>
+          </div>
+        </div>
+        ${draft?`
+          <p class="v2-wish-proposal-count" data-proposal-marked>${escapeHtml(markedProposalLabel(marked))}</p>
+          <div class="v2-wish-actions">
+            <button class="v2-button primary" type="button" data-wish-action="proposal-preview">Kundenvorschau</button>
+            <button class="v2-button soft" type="button" data-wish-action="recreate-proposal">Neu aus Ausarbeitung erstellen</button>
+          </div>
+          <label class="v2-edit-field full">
+            <span>Einleitung für den Gast</span>
+            <textarea name="proposalIntro" data-proposal-intro rows="4" maxlength="2000">${escapeHtml(intro)}</textarea>
+          </label>
+          <p class="v2-muted">Dieser Text ist für den Gast sichtbar.</p>
+          <button class="v2-button soft" type="button" data-wish-action="save-proposal-intro">Einleitung speichern</button>
+          <div class="v2-wish-proposal-list">
+            ${items.map((item,index)=>proposalCardMarkup(item,index,items.length,editor===item.id)).join("")||`<p class="v2-muted" data-proposal-empty>Noch kein Vorschlagspunkt. Du kannst den Vorschlag neu aus der Ausarbeitung erstellen.</p>`}
+          </div>
+          ${proposalPreviewMarkup(wish)}
+        `:`
+          <p class="v2-wish-proposal-count" data-proposal-marked>${escapeHtml(markedProposalLabel(marked))}</p>
+          ${marked?"":`<p class="v2-muted" data-proposal-hint>Markiere zuerst mindestens einen Baustein in der Ausarbeitung für den Kundenvorschlag.</p>`}
+          ${createButton}
+        `}
+      </article>
+    `;
+  }
+
   function detailMarkup(customer){
     const wish=selectedWish(customer);
     if(!wish)return listMarkup(customer);
@@ -1729,6 +2136,7 @@
         ${inquiryMarkup(customer,wish)}
         ${customerAnswersMarkup(wish)}
         ${workupMarkup(wish)}
+        ${proposalMarkup(wish)}
         <article class="v2-wish-panel">
           <h4>Notizen zum Kundenwunsch</h4>
           <p class="v2-muted">Interner Vermerk zum Wunsch selbst, unabhängig von den Bausteinen.</p>
@@ -1799,6 +2207,28 @@
       return true;
     }
     if(action==="delete-workup"){deleteWorkupItem(button.dataset.workupId||"");return true;}
+    if(action==="create-proposal"){createProposalFromMarked(false);return true;}
+    if(action==="recreate-proposal"){createProposalFromMarked(true);return true;}
+    if(action==="save-proposal-intro"){saveProposalIntro();return true;}
+    if(action==="save-proposal-item"){saveProposalItem();return true;}
+    if(action==="cancel-proposal-item"){
+      h().patchState({wishProposalEditor:"",wishProposalDraft:emptyProposalItemDraft()});
+      h().render();
+      return true;
+    }
+    if(action==="edit-proposal"){
+      const wish=selectedWish(currentCustomer());
+      const item=(normalizedProposal(wish).items||[]).find(entry=>entry.id===text(button.dataset.proposalId));
+      if(!item)return true;
+      h().patchState({wishProposalEditor:item.id,wishProposalDraft:itemToProposalDraft(item)});
+      h().render();
+      return true;
+    }
+    if(action==="remove-proposal"){removeProposalItemFromDraft(button.dataset.proposalId||"");return true;}
+    if(action==="proposal-up"){moveProposalItem(button.dataset.proposalId||"",-1);return true;}
+    if(action==="proposal-down"){moveProposalItem(button.dataset.proposalId||"",1);return true;}
+    if(action==="proposal-preview"){h().patchState({wishProposalPreviewOpen:true});h().render();return true;}
+    if(action==="close-proposal-preview"){h().patchState({wishProposalPreviewOpen:false});h().render();return true;}
     if(action==="toggle-picker"){h().patchState({wishPickerOpen:!state().wishPickerOpen,wishCustomOpen:false});h().render();return true;}
     if(action==="toggle-custom"){h().patchState({wishCustomOpen:!state().wishCustomOpen,wishPickerOpen:false});h().render();return true;}
     if(action==="add-library"){addLibraryQuestion(button.dataset.wishQuestion||"");return true;}
@@ -1861,6 +2291,10 @@
       h().patchState({wishWorkupDraft:readWorkupDraftFromForm(event.target.closest("[data-workup-form]"))});
       return true;
     }
+    if(event.target.closest("[data-proposal-form]")){
+      h().patchState({wishProposalDraft:readProposalDraftFromForm(event.target.closest("[data-proposal-form]"))});
+      return true;
+    }
     return false;
   }
 
@@ -1871,6 +2305,14 @@
     }
     if(event.target.matches("[data-workup-notes]")){
       h().patchState({wishWorkupNotesDraft:event.target.value});
+      return true;
+    }
+    if(event.target.matches("[data-proposal-intro]")){
+      h().patchState({wishProposalIntroDraft:event.target.value});
+      return true;
+    }
+    if(event.target.closest("[data-proposal-form]")){
+      h().patchState({wishProposalDraft:readProposalDraftFromForm(event.target.closest("[data-proposal-form]"))});
       return true;
     }
     if(event.target.closest("[data-workup-form]")){

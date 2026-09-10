@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your personal proposal | Alpine Concierge Tirol</title>
+<!-- Preferred link: /customer-proposal/#token=... — Query ?token= is accepted but must not be generated. -->
+<meta name="description" content="Persönlicher Vorschlag von Alpine Concierge Tirol.">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="theme-color" content="#001a14">
+<link rel="icon" href="../favicon.ico">
+<link rel="apple-touch-icon" href="../images/logo/logo.png">
+<link rel="stylesheet" href="customer-proposal.css?v=1">
+</head>
+<body class="proposal-body">
+<header class="proposal-header">
+  <p class="proposal-brand">
+    <img src="../images/logo/logo.jpg" alt="Alpine Concierge Tirol" width="96" height="72" decoding="async">
+  </p>
+</header>
+
+<main id="proposalRoot" class="proposal-main" aria-busy="true">
+  <p id="proposalLive" class="proposal-live" role="status" aria-live="polite"></p>
+
+  <section class="proposal-card" id="proposalLoading" aria-labelledby="proposalLoadingTitle">
+    <p class="proposal-eyebrow">Alpine Concierge Tirol</p>
+    <h1 id="proposalLoadingTitle">Your personal proposal</h1>
+    <p class="proposal-copy">Your personal proposal is being loaded …</p>
+  </section>
+
+  <section class="proposal-card proposal-error" id="proposalError" hidden>
+    <p class="proposal-eyebrow">Alpine Concierge Tirol</p>
+    <h1 id="proposalErrorTitle">Personal link</h1>
+    <p class="proposal-copy" id="proposalErrorCopy">This personal link is no longer valid. Please contact Alpine Concierge Tirol if you need further assistance.</p>
+    <a class="proposal-contact" href="https://wa.me/4367761410679" target="_blank" rel="noopener noreferrer">Contact Alpine Concierge Tirol</a>
+  </section>
+
+  <section class="proposal-card proposal-view" id="proposalView" hidden>
+    <p class="proposal-eyebrow">Alpine Concierge Tirol</p>
+    <h1 id="proposalTitle">Your personal proposal</h1>
+    <p class="proposal-intro" id="proposalIntro" hidden></p>
+    <div class="proposal-list" id="proposalList"></div>
+  </section>
+</main>
+
+<script src="../customer-portal/i18n/de.js"></script>
+<script src="../customer-portal/i18n/en.js"></script>
+<script src="../customer-portal/i18n/it.js"></script>
+<script src="../customer-portal/i18n/fr.js"></script>
+<script src="../customer-portal/i18n/portal-i18n.js"></script>
+<script src="../customer-portal/customer-proposal-grant-library.js?v=1"></script>
+<script src="../customer-portal/firebase-config.js"></script>
+<script src="customer-proposal.js?v=1"></script>
+</body>
+</html>

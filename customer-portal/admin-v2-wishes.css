@@ -34,6 +34,8 @@
 .v2-wish-answers p{margin:0}
 .v2-wish-inquiry .v2-wish-actions{margin-top:4px}
 .v2-wish-inquiry [data-inquiry-reused]{margin:0;max-width:42rem}
+.v2-wish-proposal-grant .v2-wish-actions{margin-top:4px}
+.v2-wish-proposal-grant [data-proposal-grant-reused]{margin:0;max-width:42rem}
 .v2-wish-workup{gap:16px}
 .v2-wish-workup .v2-workspace-section-head.compact{align-items:flex-start}
 .v2-wish-workup-list{display:grid;gap:12px}

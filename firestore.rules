@@ -216,6 +216,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /*
+     * Prospect proposal grants (C4.1).
+     * Functions/Admin SDK only. Clients never read hashes or write grants.
+     */
+    match /customerProposalGrants/{grantId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

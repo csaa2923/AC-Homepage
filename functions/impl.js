@@ -1,7 +1,7 @@
 const fs=require("fs");
 const path=require("path");
 const {HttpsError}=require("firebase-functions/v2/https");
-const {isEmulator,portalShareSecret,portalInquirySecret,openAiApiKey,resendApiKey}=require("./secrets");
+const {isEmulator,portalShareSecret,portalInquirySecret,portalProposalSecret,openAiApiKey,resendApiKey}=require("./secrets");
 const {
   buildAiConciergeContext,
   buildIntelligence,
@@ -42,6 +42,8 @@ if(isEmulator){
   if(localShareSecret)process.env.PORTAL_SHARE_HMAC_SECRET=localShareSecret;
   const localInquirySecret=loadLocalEmulatorSecret("PORTAL_INQUIRY_HMAC_SECRET");
   if(localInquirySecret)process.env.PORTAL_INQUIRY_HMAC_SECRET=localInquirySecret;
+  const localProposalSecret=loadLocalEmulatorSecret("PORTAL_PROPOSAL_HMAC_SECRET");
+  if(localProposalSecret)process.env.PORTAL_PROPOSAL_HMAC_SECRET=localProposalSecret;
 }
 
 let adminModule;
@@ -134,6 +136,11 @@ const {
 }=require("./lib/customerInquiryGrantStore");
 const inquiryGrantAdmin=require("./lib/customerInquiryGrantAdmin");
 const inquiryGrantPublic=require("./lib/customerInquiryGrantPublic");
+const {
+  createFirestoreProposalGrantStore
+}=require("./lib/customerProposalGrantStore");
+const proposalGrantAdmin=require("./lib/customerProposalGrantAdmin");
+const proposalGrantPublic=require("./lib/customerProposalGrantPublic");
 
 const SIGNED_URL_TTL_MS=5*60*1000;
 const AI_ANALYSIS_HISTORY_PAGE_SIZE=5;
@@ -176,6 +183,10 @@ function getSecret(){
 
 function getInquirySecret(){
   return readBoundSecret(process.env.PORTAL_INQUIRY_HMAC_SECRET,portalInquirySecret,"PORTAL_INQUIRY_HMAC_SECRET");
+}
+
+function getProposalSecret(){
+  return readBoundSecret(process.env.PORTAL_PROPOSAL_HMAC_SECRET,portalProposalSecret,"PORTAL_PROPOSAL_HMAC_SECRET");
 }
 
 function resolveClientIp(req){
@@ -1404,10 +1415,62 @@ async function getCustomerInquiryGrantStatus(request,deps={}){
 }
 
 async function convertProspectToCustomer(request,deps={}){
-  return inquiryGrantAdmin.convertProspectToCustomer(request,{
+  const result=await inquiryGrantAdmin.convertProspectToCustomer(request,{
     store:deps.store||createFirestoreInquiryGrantStore(getDb()),
     now:deps.now
   });
+  let revokedProposalGrants=0;
+  if(deps.proposalStore){
+    revokedProposalGrants=await proposalGrantAdmin.revokeActiveProposalGrantsForCustomer(
+      deps.proposalStore,
+      request&&request.data&&request.data.customerId,
+      deps.now
+    );
+  }else if(!deps.store){
+    try{
+      revokedProposalGrants=await proposalGrantAdmin.revokeActiveProposalGrantsForCustomer(
+        createFirestoreProposalGrantStore(getDb()),
+        request&&request.data&&request.data.customerId,
+        deps.now
+      );
+    }catch(_error){
+      revokedProposalGrants=0;
+    }
+  }
+  return Object.assign({},result,{revokedProposalGrants});
+}
+
+function proposalGrantCallableDeps(deps={},request){
+  return {
+    store:deps.store||createFirestoreProposalGrantStore(getDb()),
+    secret:deps.secret!==undefined?deps.secret:getProposalSecret(),
+    now:deps.now,
+    checkRateLimit:deps.checkRateLimit||checkRateLimit,
+    clientIp:deps.clientIp||resolveCallableIp(request)
+  };
+}
+
+async function createCustomerProposalGrant(request,deps={}){
+  return proposalGrantAdmin.createCustomerProposalGrant(request,proposalGrantCallableDeps(deps,request));
+}
+
+async function rotateCustomerProposalGrant(request,deps={}){
+  return proposalGrantAdmin.rotateCustomerProposalGrant(request,proposalGrantCallableDeps(deps,request));
+}
+
+async function revokeCustomerProposalGrant(request,deps={}){
+  return proposalGrantAdmin.revokeCustomerProposalGrant(request,proposalGrantCallableDeps(deps,request));
+}
+
+async function getCustomerProposalGrantStatus(request,deps={}){
+  return proposalGrantAdmin.getCustomerProposalGrantStatus(request,{
+    store:deps.store||createFirestoreProposalGrantStore(getDb()),
+    now:deps.now
+  });
+}
+
+async function getCustomerProposalByToken(request,deps={}){
+  return proposalGrantPublic.getCustomerProposalByToken(request,proposalGrantCallableDeps(deps,request));
 }
 
 async function getCustomerInquiryWish(request,deps={}){
@@ -1469,5 +1532,10 @@ module.exports={
   getCustomerInquiryGrantStatus,
   convertProspectToCustomer,
   getCustomerInquiryWish,
-  submitCustomerInquiryAnswers
+  submitCustomerInquiryAnswers,
+  createCustomerProposalGrant,
+  rotateCustomerProposalGrant,
+  revokeCustomerProposalGrant,
+  getCustomerProposalGrantStatus,
+  getCustomerProposalByToken
 };

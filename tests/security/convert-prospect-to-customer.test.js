@@ -12,6 +12,8 @@ const functions=require(join(root,"functions/index.js"));
 const grantLib=require(join(root,"functions/lib/customerInquiryGrantLibrary.js"));
 const wishLib=require(join(root,"functions/lib/customerWishRequestLibrary.js"));
 const storeLib=require(join(root,"functions/lib/customerInquiryGrantStore.js"));
+const proposalStoreLib=require(join(root,"functions/lib/customerProposalGrantStore.js"));
+const proposalGrantLib=require(join(root,"functions/lib/customerProposalGrantLibrary.js"));
 const lifecycle=require(join(root,"functions/lib/customerLifecycleLibrary.js"));
 const indexSource=readFileSync(join(root,"functions/index.js"),"utf8");
 const implSource=readFileSync(join(root,"functions/impl.js"),"utf8");
@@ -261,6 +263,67 @@ describe("convert prospect to customer",()=>{
     await impl.convertProspectToCustomer({auth:adminAuth(),data:{customerId:"kunde-prospect-1"}},deps);
     await assert.rejects(
       ()=>createGrant(deps),
+      error=>httpCode(error)==="failed-precondition"
+    );
+  });
+
+  it("revokes active proposal grants and leaves the frozen snapshot on the wish",async()=>{
+    let wish=wishLib.createWishForCustomer({
+      customerId:"kunde-prospect-1",
+      source:"whatsapp",
+      title:"Seefeld September",
+      originalRequest:{text:"Wanderung in Seefeld",source:"whatsapp"}
+    },{now:NOW,wishId:"wr_proposal_1"}).value;
+    wish=wishLib.addLibraryFollowUpQuestion(wish,"budget",{now:NOW,required:true}).value;
+    wish=wishLib.prepareQuestionsForCustomer(wish,{now:NOW}).value.wish;
+    wish=wishLib.submitPreparedFollowUpAnswers(wish,[
+      {instanceId:wish.followUpQuestions[0].instanceId,answer:"250-500"}
+    ],{now:NOW}).value.wish;
+    wish=wishLib.startWishReview(wish,{now:NOW}).value;
+    wish=wishLib.addWishWorkupItem(wish,{
+      title:"Private Bootsfahrt",
+      customerVisible:true
+    },{now:NOW,itemId:"wu_boot"}).value;
+    wish=wishLib.createProposalFromWorkup(wish,{now:NOW,itemIds:["pi_boot"]}).value;
+    wish=wishLib.prepareWishProposal(wish,{now:NOW}).value;
+    wish=wishLib.sendWishProposal(wish,{now:NOW}).value;
+    const snapshot=JSON.parse(JSON.stringify(wish.delivery.proposalSnapshot));
+    const {deps}=setup({"kunde-prospect-1":prospectCustomer({wish})});
+    const proposalStore=proposalStoreLib.createMemoryProposalGrantStore({
+      customers:{"kunde-prospect-1":deps.store.getCustomer("kunde-prospect-1")}
+    });
+    const created=await impl.createCustomerProposalGrant({
+      auth:adminAuth(),
+      data:{customerId:"kunde-prospect-1",wishId:"wr_proposal_1"}
+    },{store:proposalStore,secret:"test-proposal-hmac-secret-convert",now:NOW});
+    assert.equal(proposalStore.getGrant(created.grantId).status,"active");
+    const result=await impl.convertProspectToCustomer({
+      auth:adminAuth(),
+      data:{customerId:"kunde-prospect-1"}
+    },{...deps,proposalStore});
+    assert.equal(result.revokedProposalGrants,1);
+    assert.equal(result.revokedInquiryGrants,0);
+    const grant=proposalStore.getGrant(created.grantId);
+    assert.equal(grant.status,"revoked");
+    assert.equal(proposalGrantLib.isActive(grant,NOW),false);
+    const storedWish=deps.store.getCustomer("kunde-prospect-1").draftData.wishRequests[0];
+    assert.deepEqual(storedWish.delivery.proposalSnapshot,snapshot);
+    assert.equal(storedWish.wishId,"wr_proposal_1");
+    proposalStore.setCustomer("kunde-prospect-1",deps.store.getCustomer("kunde-prospect-1"));
+    await assert.rejects(
+      ()=>impl.getCustomerProposalByToken({data:{token:created.rawToken}},{
+        store:proposalStore,
+        secret:"test-proposal-hmac-secret-convert",
+        now:NOW,
+        checkRateLimit:()=>true
+      }),
+      error=>httpCode(error)==="permission-denied"
+    );
+    await assert.rejects(
+      ()=>impl.createCustomerProposalGrant({
+        auth:adminAuth(),
+        data:{customerId:"kunde-prospect-1",wishId:"wr_proposal_1"}
+      },{store:proposalStore,secret:"test-proposal-hmac-secret-convert",now:NOW}),
       error=>httpCode(error)==="failed-precondition"
     );
   });

@@ -226,7 +226,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/async function updateAiTaskStatus\(task,status\)/);
     assert.match(css,/\.workspace-ai-task-controls\{/);
     assert.match(css,/\.workspace-ai-task\.completed \.task-card__status-dot/);
-    assert.match(html,/firebase-service\.js\?v=39/);
+    assert.match(html,/firebase-service\.js\?v=40/);
   });
 
   it("surfaces created AI tasks in the customer overview and opens them by task id",()=>{
@@ -1058,7 +1058,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
-    assert.match(html,/firebase-service\.js\?v=39/);
+    assert.match(html,/firebase-service\.js\?v=40/);
     assert.match(html,/admin-v2\.js\?v=106/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
@@ -1182,7 +1182,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/redact-public-snapshot\.js\?v=2/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
-    assert.match(html,/firebase-service\.js\?v=39/);
+    assert.match(html,/firebase-service\.js\?v=40/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
     assert.match(html,/admin-v2\.js\?v=106/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);

@@ -51,6 +51,10 @@
     return window.ACTCustomerInquiryAdminLibrary||null;
   }
 
+  function proposalLib(){
+    return window.ACTCustomerProposalAdminLibrary||null;
+  }
+
   function inquiryService(){
     return window.ACTFirebaseService||{};
   }
@@ -467,6 +471,7 @@
       wishProposalPreviewOpen:false,
       wishCustomDraft:emptyCustomDraft(),
       wishInquiry:inquiryLib()?inquiryLib().emptyInquirySession():null,
+      wishProposalGrant:proposalLib()?proposalLib().emptyProposalGrantSession():null,
       ...extra
     });
   }
@@ -535,6 +540,10 @@
     const session=text(previous.wishId)===wish.wishId
       ?previous
       :Object.assign(inquiryLib()?inquiryLib().emptyInquirySession():{},{wishId:wish.wishId});
+    const previousGrant=state().wishProposalGrant||(proposalLib()?proposalLib().emptyProposalGrantSession():{});
+    const grantSession=text(previousGrant.wishId)===wish.wishId
+      ?previousGrant
+      :Object.assign(proposalLib()?proposalLib().emptyProposalGrantSession():{},{wishId:wish.wishId});
     h().patchState({
       wishView:"detail",
       wishSelectedId:wish.wishId,
@@ -552,10 +561,12 @@
       wishProposalPreviewOpen:false,
       wishCustomDraft:emptyCustomDraft(),
       wishInquiry:session,
+      wishProposalGrant:grantSession,
       wishMessage:"",
       wishMessageKind:""
     });
     queueInquiryStatus(customer,wish);
+    queueProposalGrantStatus(customer,wish);
     return true;
   }
 
@@ -2266,7 +2277,20 @@
     `;
   }
 
+  function isProspectCustomer(customer){
+    if(proposalLib()&&typeof proposalLib().isProspectCustomer==="function"){
+      return proposalLib().isProspectCustomer(customer);
+    }
+    if(inquiryLib()&&typeof inquiryLib().isProspectCustomer==="function"){
+      return inquiryLib().isProspectCustomer(customer);
+    }
+    return text(customer&&customer.lifecycle)==="prospect";
+  }
+
   function proposalWhatsappActions(customer){
+    if(isProspectCustomer(customer)){
+      return `<p class="v2-muted" data-proposal-prospect-hint>Erstellen Sie einen persönlichen Vorschlagslink für den Interessenten.</p>`;
+    }
     const portalUrl=portalLoginUrlForCustomer(customer);
     if(!portalUrl){
       return `<p class="v2-muted" data-proposal-portal-missing>Bitte zuerst einen persönlichen Portalzugang erzeugen.</p>`;
@@ -2277,6 +2301,279 @@
         <button class="v2-button soft" type="button" data-wish-action="proposal-whatsapp" disabled>WhatsApp-Nachricht vorbereiten</button>`;
     }
     return `<button class="v2-button primary" type="button" data-wish-action="proposal-whatsapp">WhatsApp-Nachricht vorbereiten</button>`;
+  }
+
+  function proposalGrantSession(){
+    const api=proposalLib();
+    return state().wishProposalGrant||(api?api.emptyProposalGrantSession():{});
+  }
+
+  function shouldShowProposalGrantPanel(customer,wish){
+    const api=proposalLib();
+    if(!api||!customer||!wish)return false;
+    if(!api.canOfferProposalLink(customer,wish))return false;
+    return true;
+  }
+
+  function proposalGrantDisplayStatus(customer,wish){
+    const api=proposalLib();
+    if(!api)return "none";
+    const session=proposalGrantSession();
+    if(session.wishId===wish.wishId&&(session.status||session.grantId||session.hasActiveGrant)){
+      return api.displayProposalStatus(session);
+    }
+    return "none";
+  }
+
+  function proposalGrantLinkFromSession(){
+    const api=proposalLib();
+    const session=proposalGrantSession();
+    if(!api||!session||!session.rawToken)return "";
+    const link=api.buildProposalLink(session.rawToken,typeof window!=="undefined"?window.location:null);
+    return api.proposalLinkIsSafe(link)?link:"";
+  }
+
+  function proposalGrantErrorMessage(error){
+    const code=text(error&&error.code).replace(/^functions\//,"");
+    if(code==="unauthenticated")return "Bitte zuerst anmelden.";
+    if(code==="permission-denied")return "Keine Berechtigung für den persönlichen Vorschlagslink.";
+    if(code==="failed-precondition")return "Der persönliche Vorschlagslink kann für diesen Wunsch gerade nicht erstellt werden.";
+    if(code==="not-found")return "Der Wunsch oder der persönliche Vorschlagslink wurde nicht gefunden.";
+    return "Der persönliche Vorschlagslink konnte nicht aktualisiert werden.";
+  }
+
+  function queueProposalGrantStatus(customer,wish){
+    if(!shouldShowProposalGrantPanel(customer,wish))return;
+    if(!inquiryService().getCustomerProposalGrantStatus)return;
+    void loadProposalGrantStatus(customer,wish);
+  }
+
+  async function loadProposalGrantStatus(customer,wish){
+    const api=proposalLib();
+    if(!api||!customer||!wish)return;
+    try{
+      const data=await inquiryService().getCustomerProposalGrantStatus({
+        customerId:customer.customerId,
+        wishId:wish.wishId
+      });
+      if(text(state().wishSelectedId)!==wish.wishId)return;
+      h().patchState({wishProposalGrant:api.applyStatusResponse(proposalGrantSession(),data,wish.wishId)});
+      h().render();
+    }catch(_error){
+      /* Status bleibt lokal; kein Token und kein technischer Fehlertext. */
+    }
+  }
+
+  async function runProposalGrantCreate(){
+    const api=proposalLib();
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    if(!api||!api.canOfferProposalLink(customer,wish)){
+      setMessage("Der persönliche Vorschlagslink kann für diesen Wunsch gerade nicht erstellt werden.","error");
+      h().render();
+      return;
+    }
+    if(!inquiryService().createCustomerProposalGrant){
+      setMessage("Der persönliche Vorschlagslink kann gerade nicht erstellt werden.","error");
+      h().render();
+      return;
+    }
+    h().patchState({wishSaving:true,wishMessage:"Persönlicher Vorschlagslink wird erstellt ...",wishMessageKind:"saving"});
+    h().render();
+    try{
+      const created=await inquiryService().createCustomerProposalGrant({
+        customerId:customer.customerId,
+        wishId:wish.wishId
+      });
+      const next=api.applyGrantResponse(proposalGrantSession(),created,wish.wishId);
+      h().patchState({
+        wishProposalGrant:next,
+        wishSaving:false,
+        wishMessage:next.reusedWithoutToken?"":"Persönlicher Vorschlagslink erstellt.",
+        wishMessageKind:next.reusedWithoutToken?"":"success"
+      });
+      h().render();
+    }catch(error){
+      h().patchState({wishSaving:false});
+      setMessage(proposalGrantErrorMessage(error),"error");
+      h().render();
+    }
+  }
+
+  async function runProposalGrantRotate(){
+    const api=proposalLib();
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const session=proposalGrantSession();
+    if(!api||!inquiryService().rotateCustomerProposalGrant){
+      setMessage("Der persönliche Vorschlagslink kann gerade nicht erneuert werden.","error");
+      h().render();
+      return;
+    }
+    if(!session.hasActiveGrant&&!session.grantId){
+      void runProposalGrantCreate();
+      return;
+    }
+    if(typeof window!=="undefined"&&typeof window.confirm==="function"&&!window.confirm(api.COPY.rotateConfirm))return;
+    h().patchState({wishSaving:true,wishMessage:"Persönlicher Vorschlagslink wird erneuert ...",wishMessageKind:"saving"});
+    h().render();
+    try{
+      const rotated=await inquiryService().rotateCustomerProposalGrant({
+        customerId:customer.customerId,
+        wishId:wish.wishId
+      });
+      const next=api.applyGrantResponse(session,rotated,wish.wishId);
+      h().patchState({
+        wishProposalGrant:next,
+        wishSaving:false,
+        wishMessage:"Persönlicher Vorschlagslink erneuert.",
+        wishMessageKind:"success"
+      });
+      h().render();
+    }catch(error){
+      h().patchState({wishSaving:false});
+      setMessage(proposalGrantErrorMessage(error),"error");
+      h().render();
+    }
+  }
+
+  async function runProposalGrantRevoke(){
+    const api=proposalLib();
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    const session=proposalGrantSession();
+    if(!api||!inquiryService().revokeCustomerProposalGrant){
+      setMessage("Der persönliche Vorschlagslink kann gerade nicht widerrufen werden.","error");
+      h().render();
+      return;
+    }
+    h().patchState({wishSaving:true,wishMessage:"Persönlicher Vorschlagslink wird widerrufen ...",wishMessageKind:"saving"});
+    h().render();
+    try{
+      const revoked=await inquiryService().revokeCustomerProposalGrant({
+        customerId:customer.customerId,
+        wishId:wish.wishId
+      });
+      const next=api.applyGrantResponse(session,revoked,wish.wishId);
+      next.rawToken="";
+      next.hasActiveGrant=false;
+      next.reusedWithoutToken=false;
+      h().patchState({
+        wishProposalGrant:next,
+        wishSaving:false,
+        wishMessage:"Persönlicher Vorschlagslink widerrufen.",
+        wishMessageKind:"success"
+      });
+      h().render();
+    }catch(error){
+      h().patchState({wishSaving:false});
+      setMessage(proposalGrantErrorMessage(error),"error");
+      h().render();
+    }
+  }
+
+  function createProposalGrantLink(){
+    void runProposalGrantCreate();
+  }
+
+  function rotateProposalGrantLink(){
+    void runProposalGrantRotate();
+  }
+
+  function revokeProposalGrantLink(){
+    void runProposalGrantRevoke();
+  }
+
+  async function runProposalGrantCopy(){
+    const api=proposalLib();
+    const link=proposalGrantLinkFromSession();
+    if(!api||!link){
+      setMessage("Der persönliche Vorschlagslink kann aus Sicherheitsgründen nicht erneut angezeigt werden.","error");
+      h().render();
+      return;
+    }
+    try{
+      const copied=await api.copyProposalText(link,{
+        clipboard:typeof navigator!=="undefined"?navigator.clipboard:null,
+        execCopy(value){
+          if(typeof document==="undefined")return;
+          const area=document.createElement("textarea");
+          area.value=value;
+          area.setAttribute("readonly","");
+          area.style.cssText="position:fixed;left:-9999px;top:0";
+          document.body.appendChild(area);
+          area.select();
+          if(typeof document.execCommand==="function")document.execCommand("copy");
+          document.body.removeChild(area);
+        }
+      });
+      if(!copied.ok)throw new Error("copy-failed");
+      h().patchState({wishProposalGrant:Object.assign({},proposalGrantSession(),{copied:true})});
+      h().render();
+    }catch(_error){
+      setMessage("Der Link konnte nicht kopiert werden.","error");
+      h().render();
+    }
+  }
+
+  function copyProposalGrantLink(){
+    void runProposalGrantCopy();
+  }
+
+  function openProposalGrantWhatsapp(){
+    const api=proposalLib();
+    const customer=currentCustomer();
+    const link=proposalGrantLinkFromSession();
+    if(!api||!link){
+      setMessage("Der persönliche Vorschlagslink kann aus Sicherheitsgründen nicht erneut angezeigt werden.","error");
+      h().render();
+      return;
+    }
+    const url=api.buildProposalWhatsappUrl(customer,link);
+    if(!url){
+      setMessage("WhatsApp konnte nicht geöffnet werden.","error");
+      h().render();
+      return;
+    }
+    if(typeof window!=="undefined"&&typeof window.open==="function"){
+      window.open(url,"_blank","noopener,noreferrer");
+    }
+  }
+
+  function proposalGrantMarkup(customer,wish){
+    const api=proposalLib();
+    if(!api||!shouldShowProposalGrantPanel(customer,wish))return "";
+    const canOffer=api.canOfferProposalLink(customer,wish);
+    const status=proposalGrantDisplayStatus(customer,wish);
+    const session=proposalGrantSession();
+    const link=proposalGrantLinkFromSession();
+    const expiry=status==="active"||status==="expired"?api.formatProposalExpiry(session.expiresAt):"";
+    const statusLabel=status==="active"&&expiry
+      ?`${api.COPY.expiresPrefix} ${expiry}`
+      :api.proposalStatusLabel(status);
+    const buttons=[];
+    if(status==="expired"&&canOffer){
+      buttons.push(`<button class="v2-button primary" type="button" data-wish-action="proposal-grant-create">${escapeHtml(api.COPY.rotate)}</button>`);
+    }else if(status==="active"){
+      if(link){
+        buttons.push(`<button class="v2-button primary" type="button" data-wish-action="proposal-grant-whatsapp">${escapeHtml(api.COPY.whatsapp)}</button>`);
+        buttons.push(`<button class="v2-button soft" type="button" data-wish-action="proposal-grant-copy">${escapeHtml(api.COPY.copy)}</button>`);
+      }
+      buttons.push(`<button class="v2-button soft" type="button" data-wish-action="proposal-grant-rotate">${escapeHtml(api.COPY.rotate)}</button>`);
+      buttons.push(`<button class="v2-button soft" type="button" data-wish-action="proposal-grant-revoke">${escapeHtml(api.COPY.revoke)}</button>`);
+    }else if(canOffer){
+      buttons.push(`<button class="v2-button primary" type="button" data-wish-action="proposal-grant-create">${escapeHtml(api.COPY.create)}</button>`);
+    }
+    return `
+      <article class="v2-wish-panel v2-wish-proposal-grant" data-wish-proposal-grant>
+        <h4>${escapeHtml(api.COPY.heading)}</h4>
+        <p class="v2-muted" data-proposal-grant-status>${escapeHtml(statusLabel)}</p>
+        ${status==="active"&&!expiry?`<p class="v2-muted">${escapeHtml(api.COPY.active)}</p>`:""}
+        ${session.reusedWithoutToken&&status==="active"?`<p data-proposal-grant-reused>${escapeHtml(api.COPY.reused)}</p>`:""}
+        ${session.copied&&link?`<p class="v2-muted" data-proposal-grant-copied>${escapeHtml(api.COPY.copied)}</p>`:""}
+        ${buttons.length?`<div class="v2-wish-actions">${buttons.join("")}</div>`:""}
+      </article>
+    `;
   }
 
   function proposalMarkup(wish){
@@ -2306,7 +2603,9 @@
           <div>
             <h4>Kundenvorschlag</h4>
             <p class="v2-muted">${sent
-              ?"Der Vorschlag ist für den Gast im persönlichen Kundenportal freigegeben."
+              ?(isProspectCustomer(currentCustomer())
+                ?"Der Vorschlag ist für den Interessenten freigegeben."
+                :"Der Vorschlag ist für den Gast im persönlichen Kundenportal freigegeben.")
               :prepared
                 ?"Der Vorschlag ist fertig vorbereitet, aber noch nicht an den Gast gesendet."
                 :"Aus den vorgemerkten Bausteinen entsteht hier der persönliche Vorschlag für den Gast. Interne Notizen, Anbieterinformationen und interne Kosten werden nicht übernommen."}</p>
@@ -2323,6 +2622,7 @@
           <div class="v2-wish-proposal-list">
             ${items.map((item,index)=>proposalCardMarkup(item,index,items.length,false,true)).join("")||`<p class="v2-muted" data-proposal-empty>Noch kein Vorschlagspunkt.</p>`}
           </div>
+          ${proposalGrantMarkup(currentCustomer(),wish)}
           ${proposalPreviewMarkup(wish)}
         `:prepared?`
           <p class="v2-wish-proposal-ready" data-proposal-ready>Vorschlag vorbereitet</p>
@@ -2478,6 +2778,11 @@
     if(action==="prepare-proposal"){prepareProposalFromDraft();return true;}
     if(action==="send-proposal"){sendPreparedProposal();return true;}
     if(action==="proposal-whatsapp"){openProposalWhatsapp();return true;}
+    if(action==="proposal-grant-create"){createProposalGrantLink();return true;}
+    if(action==="proposal-grant-copy"){copyProposalGrantLink();return true;}
+    if(action==="proposal-grant-whatsapp"){openProposalGrantWhatsapp();return true;}
+    if(action==="proposal-grant-rotate"){rotateProposalGrantLink();return true;}
+    if(action==="proposal-grant-revoke"){revokeProposalGrantLink();return true;}
     if(action==="save-proposal-intro"){saveProposalIntro();return true;}
     if(action==="save-proposal-item"){saveProposalItem();return true;}
     if(action==="cancel-proposal-item"){
@@ -2624,6 +2929,7 @@
     repliedAdminWishCount,
     repliedBadgeLabel,
     inquiryMarkup,
+    proposalGrantMarkup,
     QUESTION_LABELS,
     PICKER_ORDER
   };

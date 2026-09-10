@@ -1,5 +1,5 @@
 const {onRequest,onCall}=require("firebase-functions/v2/https");
-const {functionSecrets,inquiryFunctionSecrets,aiFunctionSecrets,portalOtpMailSecrets}=require("./secrets");
+const {functionSecrets,inquiryFunctionSecrets,proposalFunctionSecrets,aiFunctionSecrets,portalOtpMailSecrets}=require("./secrets");
 
 let impl;
 function loadImpl(){
@@ -185,3 +185,36 @@ exports.submitCustomerInquiryAnswers=onCall({
   invoker:"public",
   secrets:inquiryFunctionSecrets()
 },(request)=>loadImpl().submitCustomerInquiryAnswers(request));
+
+exports.createCustomerProposalGrant=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public",
+  secrets:proposalFunctionSecrets()
+},(request)=>loadImpl().createCustomerProposalGrant(request));
+
+exports.rotateCustomerProposalGrant=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public",
+  secrets:proposalFunctionSecrets()
+},(request)=>loadImpl().rotateCustomerProposalGrant(request));
+
+exports.revokeCustomerProposalGrant=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().revokeCustomerProposalGrant(request));
+
+exports.getCustomerProposalGrantStatus=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().getCustomerProposalGrantStatus(request));
+
+exports.getCustomerProposalByToken=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public",
+  secrets:proposalFunctionSecrets()
+},(request)=>loadImpl().getCustomerProposalByToken(request));

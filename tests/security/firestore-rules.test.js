@@ -232,3 +232,23 @@ describe("firestore rules — inquiry grants",()=>{
     await assertFails(ownerDb.doc(grantPath).set({status:"revoked"}));
   });
 });
+
+describe("firestore rules — proposal grants",()=>{
+  const grantPath="customerProposalGrants/pg_testgrant0000000001";
+
+  it("denies all client reads on proposal grants",async()=>{
+    const unauthedDb=testEnv.unauthenticatedContext().firestore();
+    const customerDb=testEnv.authenticatedContext("proposal-customer-read",{role:"customer"}).firestore();
+    const adminDb=testEnv.authenticatedContext("proposal-admin-read",{role:"admin",orgId:"act"}).firestore();
+    await assertFails(unauthedDb.doc(grantPath).get());
+    await assertFails(customerDb.doc(grantPath).get());
+    await assertFails(adminDb.doc(grantPath).get());
+  });
+
+  it("denies all client writes on proposal grants",async()=>{
+    const adminDb=testEnv.authenticatedContext("proposal-admin-write",{role:"admin"}).firestore();
+    const ownerDb=testEnv.authenticatedContext("proposal-owner-write",{role:"owner"}).firestore();
+    await assertFails(adminDb.doc(grantPath).set({status:"active",tokenHash:"x"}));
+    await assertFails(ownerDb.doc(grantPath).set({status:"revoked"}));
+  });
+});

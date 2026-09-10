@@ -1539,6 +1539,50 @@
     return callAdminInquiryGrantCallable("convertProspectToCustomer",{customerId});
   }
 
+  async function createCustomerProposalGrant(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const wishId=String(input.wishId||"").trim();
+    if(!customerId||!wishId){
+      const error=new Error("Angaben unvollständig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminInquiryGrantCallable("createCustomerProposalGrant",{customerId,wishId});
+  }
+
+  async function rotateCustomerProposalGrant(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const wishId=String(input.wishId||"").trim();
+    if(!customerId||!wishId){
+      const error=new Error("Angaben unvollständig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminInquiryGrantCallable("rotateCustomerProposalGrant",{customerId,wishId});
+  }
+
+  async function revokeCustomerProposalGrant(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const wishId=String(input.wishId||"").trim();
+    if(!customerId||!wishId){
+      const error=new Error("Angaben unvollständig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminInquiryGrantCallable("revokeCustomerProposalGrant",{customerId,wishId});
+  }
+
+  async function getCustomerProposalGrantStatus(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const wishId=String(input.wishId||"").trim();
+    if(!customerId||!wishId){
+      const error=new Error("Angaben unvollständig.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminInquiryGrantCallable("getCustomerProposalGrantStatus",{customerId,wishId});
+  }
+
   async function createPortalShare(customer,options={}){
     const customerId=customerIdOf(customer);
     if(!customerId)throw new Error("Kunden-ID fehlt.");
@@ -1754,6 +1798,10 @@
     revokeCustomerInquiryGrant,
     getCustomerInquiryGrantStatus,
     convertProspectToCustomer,
+    createCustomerProposalGrant,
+    rotateCustomerProposalGrant,
+    revokeCustomerProposalGrant,
+    getCustomerProposalGrantStatus,
     analyzeConciergeTrip,
     refreshPortalShares,
     listPortalSharesForCustomer,

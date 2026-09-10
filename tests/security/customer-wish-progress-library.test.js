@@ -107,9 +107,9 @@ function sentProposal(wish){
 
 describe("customer wish progress library",()=>{
   it("is pinned into Admin V2 without touching Functions or rules",()=>{
-    assert.match(adminHtml,/customer-wish-progress-library\.js\?v=1/);
-    assert.match(adminHtml,/admin-v2-wishes\.js\?v=17/);
-    assert.match(adminHtml,/admin-v2-wishes\.css\?v=13/);
+    assert.match(adminHtml,/customer-wish-progress-library\.js\?v=2/);
+    assert.match(adminHtml,/admin-v2-wishes\.js\?v=18/);
+    assert.match(adminHtml,/admin-v2-wishes\.css\?v=14/);
     assert.match(css,/v2-wish-detail-layout/);
     assert.match(css,/position:sticky/);
     assert.match(wishesSource,/buildWishProgress/);
@@ -214,6 +214,28 @@ describe("customer wish progress library",()=>{
     assert.doesNotMatch(serialized,new RegExp(TOKEN));
     assert.doesNotMatch(serialized,/pg_secret_id/);
     assert.doesNotMatch(serialized,/rawToken/);
+  });
+
+  it("E+F) transmittedAt marks delivery done and moves the next step to the decision",()=>{
+    const wish=sentProposal(newWish());
+    wish.delivery=Object.assign({},wish.delivery,{
+      transmittedAt:"2026-09-08T18:10:00.000Z",
+      transmittedBy:"admin",
+      transmittedChannel:"whatsapp"
+    });
+    const steps=progress.buildWishProgress(wish,prospectContext({
+      proposalGrant:{
+        wishId:wish.wishId,
+        hasActiveGrant:true,
+        status:"active",
+        expiresAt:"2026-09-22T12:00:00.000Z"
+      }
+    }));
+    assert.equal(byKey(steps,"proposalDelivered").state,"done");
+    assert.equal(byKey(steps,"proposalDelivered").timestamp,"2026-09-08T18:10:00.000Z");
+    assert.match(byKey(steps,"proposalDelivered").detail,/über WhatsApp/);
+    assert.equal(byKey(steps,"decision").state,"current");
+    assert.equal(byKey(steps,"decision").next,true);
   });
 
   it("J) customers use portal access, never a prospect proposal link",()=>{

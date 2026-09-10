@@ -1956,6 +1956,60 @@
     return ok(current);
   }
 
+  const PROPOSAL_TRANSMIT_CHANNELS=["whatsapp"];
+
+  function resolveProposalTransmitChannel(value){
+    const key=text(value).toLowerCase();
+    return PROPOSAL_TRANSMIT_CHANNELS.includes(key)?key:"";
+  }
+
+  function proposalTransmitChannelLabel(channel){
+    if(text(channel).toLowerCase()==="whatsapp")return "WhatsApp";
+    return "";
+  }
+
+  function hasTransmittedWishProposal(wish){
+    const delivery=asDelivery(wish);
+    return Boolean(delivery&&text(delivery.transmittedAt));
+  }
+
+  function asDelivery(wish){
+    const source=wish&&typeof wish==="object"?wish:{};
+    return source.delivery&&typeof source.delivery==="object"&&!Array.isArray(source.delivery)
+      ?source.delivery
+      :null;
+  }
+
+  function markWishProposalTransmitted(wish,options){
+    const settings=options&&typeof options==="object"?options:{};
+    const current=cloneWish(wish);
+    if(text(current.origin)!=="admin"){
+      return fail(["Nur Concierge-Wünsche können als übermittelt markiert werden."],"failed-precondition");
+    }
+    if(text(current.status)!=="PROPOSAL_SENT"){
+      return fail(["Der Vorschlag kann erst nach der Freigabe als übermittelt markiert werden."],"failed-precondition");
+    }
+    const delivery=asDelivery(current);
+    if(!delivery||text(delivery.state)!=="sent"){
+      return fail(["Es liegt keine freigegebene Auslieferung vor."],"failed-precondition");
+    }
+    const snapshot=customerSafeProposalSnapshot(delivery.proposalSnapshot);
+    if(!snapshot.items.length){
+      return fail(["Es liegt kein freigegebener Kundenvorschlag vor."],"failed-precondition");
+    }
+    if(text(delivery.transmittedAt))return ok(current);
+    const channel=resolveProposalTransmitChannel(settings.channel);
+    if(!channel)return fail(["Bitte einen gültigen Übermittlungsweg angeben."]);
+    const now=nowIso(settings.now);
+    current.delivery=Object.assign({},delivery,{
+      transmittedAt:now,
+      transmittedBy:"admin",
+      transmittedChannel:channel
+    });
+    current.updatedAt=now;
+    return ok(current);
+  }
+
   function publicProposal(wish){
     const proposal=normalizeProposal(wish&&wish.proposal);
     return {
@@ -2630,6 +2684,11 @@
     createProposalFromWorkup,
     prepareWishProposal,
     sendWishProposal,
+    PROPOSAL_TRANSMIT_CHANNELS,
+    resolveProposalTransmitChannel,
+    proposalTransmitChannelLabel,
+    hasTransmittedWishProposal,
+    markWishProposalTransmitted,
     customerSafeProposalSnapshot,
     hasSentWishProposal,
     publicProposal,

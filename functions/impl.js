@@ -121,6 +121,7 @@ const {
 }=require("./lib/portalAccessStore");
 const {runSubmitCustomerWishRequest,runSubmitCustomerWishFollowUpAnswers,runListCustomerPortalWishes}=require("./lib/portalWishRequests");
 const {runSendCustomerWishProposal}=require("./lib/adminWishProposalSend");
+const {runMarkCustomerWishProposalTransmitted}=require("./lib/adminWishProposalTransmit");
 const {createFirestorePortalOtpStore}=require("./lib/portalOtpStore");
 const {
   createPortalAuthAdapter,
@@ -871,6 +872,22 @@ async function sendCustomerWishProposal(request,deps={}){
   }
 }
 
+async function markCustomerWishProposalTransmitted(request,deps={}){
+  requireAdminCallable(request);
+  try{
+    assertKnownRequestFields(request.data,new Set(["customerId","wishId","channel"]));
+    const persist={
+      now:deps.now,
+      updateWishInTransaction:deps.updateWishInTransaction,
+      db:deps.db||(deps.updateWishInTransaction?undefined:getDb())
+    };
+    const marked=await runMarkCustomerWishProposalTransmitted(request.data||{},persist);
+    return marked.result;
+  }catch(error){
+    throwPortalAccessError(error);
+  }
+}
+
 async function disableCustomerPortalAccess(request,deps={}){
   requireAdminCallable(request);
   try{
@@ -1512,6 +1529,7 @@ module.exports={
   submitCustomerWishRequest,
   listCustomerPortalWishes,
   sendCustomerWishProposal,
+  markCustomerWishProposalTransmitted,
   submitCustomerWishFollowUpAnswers,
   getCustomerPortalAccessAdmin,
   disableCustomerPortalAccess,

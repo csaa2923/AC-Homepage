@@ -194,13 +194,21 @@
     const name=text(customer&&customer.customerName);
     return adminCustomerProposalSentWishes(wishRequests).map(wish=>{
       const wishId=text(wish.wishId);
+      const transmittedAt=text(wish&&wish.delivery&&wish.delivery.transmittedAt);
+      const transmittedChannel=text(wish&&wish.delivery&&wish.delivery.transmittedChannel).toLowerCase()==="whatsapp"
+        ?"WhatsApp"
+        :"";
+      const transmitted=transmittedAt
+        ?["Vorschlag übermittelt",transmittedChannel,formatInsightDateTime(transmittedAt)].filter(Boolean).join(" · ")
+        :"";
       return makeInsight(
         `wish-proposal-sent-${wishId}`,
         "important",
         "Vorschlag freigegeben",
         [
           [name,text(wish.title)||"Wunsch"].filter(Boolean).join(" · "),
-          "Der persönliche Vorschlag wurde für den Gast im Kundenportal freigegeben."
+          "Der persönliche Vorschlag wurde für den Gast im Kundenportal freigegeben.",
+          transmitted
         ].filter(Boolean).join(" · "),
         "wishProposalSent",
         "kunde",

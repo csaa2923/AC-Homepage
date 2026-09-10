@@ -1408,6 +1408,23 @@
     return callAdminPortalAccessCallable("sendCustomerWishProposal",{customerId,wishId});
   }
 
+  async function markCustomerWishProposalTransmitted(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const wishId=String(input.wishId||"").trim();
+    const channel=String(input.channel||"whatsapp").trim();
+    if(!customerId){
+      const error=new Error("Kunden-ID fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    if(!wishId){
+      const error=new Error("Wunsch-ID fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    return callAdminPortalAccessCallable("markCustomerWishProposalTransmitted",{customerId,wishId,channel});
+  }
+
   async function submitCustomerWishFollowUpAnswers(publicPortalId,wishId,answers){
     return callPortalCustomerFunction("submitCustomerWishFollowUpAnswers",{
       publicPortalId,
@@ -1821,6 +1838,7 @@
     getCustomerPortalContext,
     listCustomerPortalWishes,
     sendCustomerWishProposal,
+    markCustomerWishProposalTransmitted,
     submitCustomerWishFollowUpAnswers,
     saveConciergeAnalysis,
     listConciergeAnalyses,

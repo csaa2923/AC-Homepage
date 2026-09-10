@@ -435,12 +435,12 @@ describe("Mein Wunsch E2E probe (local fixture, no deploy)",()=>{
     const portalHtml=read("customer-portal/index.html");
     const adminJs=read("customer-portal/admin-v2.js");
     assert.match(adminHtml,/admin-v2\.js\?v=106/);
-    assert.match(adminHtml,/admin-v2-wishes\.js\?v=15/);
-    assert.match(adminHtml,/admin-v2-wishes\.css\?v=11/);
-    assert.match(adminHtml,/concierge-intelligence-library\.js\?v=5/);
+    assert.match(adminHtml,/admin-v2-wishes\.js\?v=18/);
+    assert.match(adminHtml,/admin-v2-wishes\.css\?v=14/);
+    assert.match(adminHtml,/concierge-intelligence-library\.js\?v=6/);
     assert.match(adminHtml,/customer-journey-library\.js\?v=5/);
-    assert.match(adminHtml,/customer-wish-request-library\.js\?v=13/);
-    assert.match(portalHtml,/customer-wish-request-library\.js\?v=13/);
+    assert.match(adminHtml,/customer-wish-request-library\.js\?v=14/);
+    assert.match(portalHtml,/customer-wish-request-library\.js\?v=14/);
     assert.match(portalHtml,/customer-portal-wishes\.js\?v=8/);
     assert.match(portalHtml,/customer-portal\.js\?v=84/);
     assert.match(adminJs,/ACTAdminV2Wishes\?\.handleClick\?\.\(event\)===true/);

@@ -287,4 +287,29 @@ describe("concierge intelligence library",()=>{
       sent.map(item=>item.id).join(",")
     );
   });
+
+  it("adds a transmitted detail to the existing PROPOSAL_SENT insight without a new status",()=>{
+    const library=loadLibrary();
+    const insights=library.getConciergeInsights({customerName:"Familie Berg"},{
+      wishRequests:[{
+        wishId:"wr_sent_1",
+        origin:"admin",
+        status:"PROPOSAL_SENT",
+        title:"Seefeld September",
+        delivery:{
+          state:"sent",
+          sentAt:"2026-09-08T17:00:00.000Z",
+          transmittedAt:"2026-09-08T18:10:00.000Z",
+          transmittedBy:"admin",
+          transmittedChannel:"whatsapp"
+        }
+      }]
+    });
+    const sent=insights.filter(item=>item.reason==="wishProposalSent");
+    assert.equal(sent.length,1);
+    assert.equal(sent[0].title,"Vorschlag freigegeben");
+    assert.match(sent[0].description,/Vorschlag übermittelt/);
+    assert.match(sent[0].description,/WhatsApp/);
+    assert.doesNotMatch(sent[0].description,/CUSTOMER_DECISION|angenommen|gebucht/);
+  });
 });

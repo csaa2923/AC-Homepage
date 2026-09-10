@@ -1238,6 +1238,101 @@
     }
   }
 
+  function proposalRecipientLabel(customer){
+    return isProspectCustomer(customer)?"Interessenten":"Kunden";
+  }
+
+  function hasTransmittedProposal(wish){
+    const api=lib();
+    if(api&&typeof api.hasTransmittedWishProposal==="function"){
+      return api.hasTransmittedWishProposal(wish)===true;
+    }
+    return Boolean(text(wish&&wish.delivery&&wish.delivery.transmittedAt));
+  }
+
+  function proposalTransmitChannelLabel(channel){
+    const api=lib();
+    if(api&&typeof api.proposalTransmitChannelLabel==="function"){
+      return api.proposalTransmitChannelLabel(channel);
+    }
+    return text(channel).toLowerCase()==="whatsapp"?"WhatsApp":"";
+  }
+
+  function markProposalTransmitted(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    if(!customer||!wish||!isAdminWishProposalSent(wish))return;
+    if(hasTransmittedProposal(wish))return;
+    const confirmed=typeof window!=="undefined"&&typeof window.confirm==="function"
+      ?window.confirm(`Wurde der Vorschlag tatsächlich an den ${proposalRecipientLabel(customer)} übermittelt?`)
+      :false;
+    if(!confirmed)return;
+    const service=typeof window!=="undefined"?window.ACTFirebaseService:null;
+    if(!service||typeof service.markCustomerWishProposalTransmitted!=="function"){
+      setMessage("Die Übermittlung konnte nicht gespeichert werden.","error");
+      h().render();
+      return;
+    }
+    h().patchState({wishSaving:true});
+    h().render();
+    const finish=error=>{
+      h().patchState({wishSaving:false});
+      if(error){
+        setMessage("Die Übermittlung konnte nicht gespeichert werden.","error");
+        h().render();
+      }
+    };
+    Promise.resolve(h().withTimeout(
+      service.markCustomerWishProposalTransmitted({
+        customerId:customer.customerId,
+        wishId:wish.wishId,
+        channel:"whatsapp"
+      }),
+      h().AUTH_TIMEOUT_MS,
+      "markCustomerWishProposalTransmitted"
+    )).then(result=>{
+      const api=lib();
+      const nextWish=result&&result.wish
+        ?result.wish
+        :(api&&typeof api.markWishProposalTransmitted==="function"
+          ?api.markWishProposalTransmitted(wish,{now:result&&result.transmittedAt,channel:"whatsapp"}).value
+          :null);
+      if(!nextWish||!hasTransmittedProposal(nextWish))throw new Error("transmit-failed");
+      const next=replaceWish(customer,nextWish);
+      if(typeof h().updateLocalCustomer==="function")h().updateLocalCustomer(next);
+      h().patchState({wishSaving:false});
+      setMessage("Die Übermittlung wurde dokumentiert.","success");
+      h().render();
+    }).catch(error=>{
+      console.error("[ACT Admin V2] Vorschlag übermitteln:",error&&error.message?error.message:"Fehler");
+      finish(error||true);
+    });
+  }
+
+  function proposalTransmitMarkup(wish){
+    if(!isAdminWishProposalSent(wish))return "";
+    const recipient=proposalRecipientLabel(currentCustomer());
+    if(hasTransmittedProposal(wish)){
+      const at=text(wish.delivery&&wish.delivery.transmittedAt);
+      const channel=proposalTransmitChannelLabel(wish.delivery&&wish.delivery.transmittedChannel);
+      return `
+        <div class="v2-wish-proposal-transmit" data-wish-proposal-transmit="done">
+          <p class="v2-wish-proposal-transmitted" data-proposal-transmitted>✓ Übermittelt</p>
+          ${channel?`<p class="v2-muted" data-proposal-transmitted-channel>über ${escapeHtml(channel)}</p>`:""}
+          ${at?`<p class="v2-muted" data-proposal-transmitted-at>${escapeHtml(formatWishDateTime(at))}</p>`:""}
+        </div>
+      `;
+    }
+    return `
+      <div class="v2-wish-proposal-transmit" data-wish-proposal-transmit="open">
+        <p class="v2-muted" data-proposal-transmit-hint>Bestätigen Sie dies erst, nachdem der Vorschlag bzw. persönliche Link tatsächlich an den ${escapeHtml(recipient)} gesendet wurde.</p>
+        <div class="v2-wish-actions">
+          <button class="v2-button primary" type="button" data-wish-action="mark-proposal-transmitted" ${state().wishSaving?"disabled":""}>Als übermittelt markieren</button>
+        </div>
+      </div>
+    `;
+  }
+
   function queueWishSectionFocus(){
     if(typeof document==="undefined"||typeof document.querySelector!=="function")return;
     const scroll=()=>{
@@ -2627,6 +2722,7 @@
             ${items.map((item,index)=>proposalCardMarkup(item,index,items.length,false,true)).join("")||`<p class="v2-muted" data-proposal-empty>Noch kein Vorschlagspunkt.</p>`}
           </div>
           ${proposalGrantMarkup(currentCustomer(),wish)}
+          ${proposalTransmitMarkup(wish)}
           ${proposalPreviewMarkup(wish)}
         `:prepared?`
           <p class="v2-wish-proposal-ready" data-proposal-ready>Vorschlag vorbereitet</p>
@@ -2909,6 +3005,7 @@
     if(action==="recreate-proposal"){createProposalFromMarked(true);return true;}
     if(action==="prepare-proposal"){prepareProposalFromDraft();return true;}
     if(action==="send-proposal"){sendPreparedProposal();return true;}
+    if(action==="mark-proposal-transmitted"){markProposalTransmitted();return true;}
     if(action==="proposal-whatsapp"){openProposalWhatsapp();return true;}
     if(action==="proposal-grant-create"){createProposalGrantLink();return true;}
     if(action==="proposal-grant-copy"){copyProposalGrantLink();return true;}

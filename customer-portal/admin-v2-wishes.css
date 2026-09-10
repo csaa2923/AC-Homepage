@@ -86,6 +86,11 @@
   margin:0;width:fit-content;padding:4px 12px;border:1px solid #c5d4c8;border-radius:999px;
   background:#eef5ef;color:#355c3f;font-size:13px;font-weight:750
 }
+.v2-wish-proposal-transmit{display:grid;gap:8px;padding-top:4px}
+.v2-wish-proposal-transmitted{
+  margin:0;width:fit-content;padding:4px 12px;border:1px solid #c5d4c8;border-radius:999px;
+  background:#eef5ef;color:#355c3f;font-size:13px;font-weight:750
+}
 .v2-wish-proposal-ready{
   margin:0;width:fit-content;padding:4px 12px;border:1px solid #e2d4b8;border-radius:999px;
   background:#f7f1e4;color:#6a5428;font-size:13px;font-weight:750

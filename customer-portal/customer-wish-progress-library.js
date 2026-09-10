@@ -216,6 +216,20 @@
     return impliedByWorkflow(wish,"PROPOSAL_SENT");
   }
 
+  function proposalIsDelivered(wish){
+    return Boolean(text(deliveryOf(wish).transmittedAt));
+  }
+
+  function proposalDeliveredTimestamp(wish){
+    return text(deliveryOf(wish).transmittedAt);
+  }
+
+  function proposalDeliveredDetail(wish){
+    const channel=text(deliveryOf(wish).transmittedChannel).toLowerCase();
+    if(channel==="whatsapp")return "über WhatsApp";
+    return "";
+  }
+
   function step(key,label,state,options){
     const settings=options&&typeof options==="object"?options:{};
     return {
@@ -298,6 +312,7 @@
     const reviewStarted=impliedByWorkflow(wish,"IN_REVIEW")||hasWorkup;
     const proposalPrepared=proposalIsPrepared(wish);
     const proposalReleased=proposalIsReleased(wish);
+    const proposalDelivered=proposalIsDelivered(wish);
     const decisionDone=reachedStatus(wish,"CUSTOMER_DECISION")||reachedStatus(wish,"BOOKING");
     const bookingDone=reachedStatus(wish,"BOOKING");
     const completedDone=completed;
@@ -379,9 +394,10 @@
       {
         key:"proposalDelivered",
         label:"Vorschlag übermitteln",
-        done:false,
-        skipped:completed||cancelled,
-        timestamp:"",
+        done:proposalDelivered,
+        skipped:(completed||cancelled)&&!proposalDelivered,
+        timestamp:proposalDelivered?proposalDeliveredTimestamp(wish):"",
+        detail:proposalDelivered?proposalDeliveredDetail(wish):"",
         target:"proposal"
       },
       {

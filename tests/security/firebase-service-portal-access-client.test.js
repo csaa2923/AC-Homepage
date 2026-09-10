@@ -38,7 +38,7 @@ describe("firebase service admin portal access callable client",()=>{
     assert.equal(typeof service.createCustomerPortalAccess,"function");
     assert.equal(typeof service.disableCustomerPortalAccess,"function");
     assert.equal(typeof service.getCustomerPortalAccessAdmin,"function");
-    assert.match(adminHtml,/firebase-service\.js\?v=40/);
+    assert.match(adminHtml,/firebase-service\.js\?v=41/);
   });
 
   it("uses the default app Functions instance in europe-west1",()=>{

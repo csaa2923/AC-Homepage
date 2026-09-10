@@ -123,12 +123,12 @@ describe("admin v2 guest wishes",()=>{
     const html=read("customer-portal/admin-v2.html");
     const js=read("customer-portal/admin-v2.js");
     const module=read("customer-portal/admin-v2-wishes.js");
-    assert.match(html,/admin-v2-wishes\.js\?v=19/);
+    assert.match(html,/admin-v2-wishes\.js\?v=20/);
     assert.match(html,/admin-v2-wishes\.css\?v=15/);
-    assert.match(html,/customer-wish-progress-library\.js\?v=3/);
+    assert.match(html,/customer-wish-progress-library\.js\?v=4/);
     assert.match(html,/customer-inquiry-admin-library\.js\?v=1/);
     assert.match(html,/customer-proposal-admin-library\.js\?v=1/);
-    assert.match(html,/customer-wish-request-library\.js\?v=15/);
+    assert.match(html,/customer-wish-request-library\.js\?v=16/);
     assert.match(js,/ACTAdminV2Wishes\?\.bind/);
     assert.match(js,/ACTAdminV2Wishes\?\.sectionMarkup/);
     assert.match(js,/ACTAdminV2Wishes\?\.handleClick\?\.\(event\)===true/);

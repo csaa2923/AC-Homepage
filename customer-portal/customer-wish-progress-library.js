@@ -261,11 +261,8 @@
 
   function decisionTimestamp(wish){
     const current=currentDecision(wish);
-    return earliestTimestamp([
-      current&&current.receivedAt,
-      current&&current.recordedAt,
-      historyAt(wish,"CUSTOMER_DECISION")
-    ]);
+    if(!current)return "";
+    return text(current.receivedAt)||text(current.recordedAt);
   }
 
   function decisionDetail(wish){

@@ -338,6 +338,6 @@ describe("customer proposal admin UI (C4.1)",()=>{
     assert.match(portalAccess,/buildPortalWhatsappUrl|loginUrl|customer-portal\/login/);
     assert.doesNotMatch(adminLibSource,/customer-inquiry\/#token|customer-portal\/login/);
     assert.match(adminHtml,/customer-proposal-admin-library\.js\?v=1/);
-    assert.match(adminHtml,/admin-v2-wishes\.js\?v=19/);
+    assert.match(adminHtml,/admin-v2-wishes\.js\?v=20/);
   });
 });

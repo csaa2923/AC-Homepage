@@ -1393,6 +1393,17 @@
     return "Möchten Sie diese Rückmeldung wirklich speichern?";
   }
 
+  function decisionSaveErrorMessage(error){
+    const raw=text(error&&error.message);
+    if(/vor der Übermittlung des Vorschlags/.test(raw)||/vor der Uebermittlung des Vorschlags/.test(raw)){
+      return "Das eingegebene Datum liegt vor der Übermittlung des Vorschlags. Bitte prüfen Sie den Zeitpunkt.";
+    }
+    if(/bereits dokumentierten Rückmeldung/.test(raw)||/bereits dokumentierten Rueckmeldung/.test(raw)){
+      return "Das eingegebene Datum liegt vor einer bereits dokumentierten Rückmeldung. Bitte prüfen Sie den Zeitpunkt.";
+    }
+    return "Die Rückmeldung konnte nicht gespeichert werden.";
+  }
+
   function recordWishDecision(){
     const customer=currentCustomer();
     const wish=selectedWish(customer);
@@ -1419,7 +1430,7 @@
     const finish=error=>{
       h().patchState({wishSaving:false});
       if(error){
-        setMessage("Die Rückmeldung konnte nicht gespeichert werden.","error");
+        setMessage(decisionSaveErrorMessage(error),"error");
         h().render();
       }
     };

@@ -120,7 +120,11 @@ describe("customer wish decision",()=>{
     assert.match(wishesJs,/Rückmeldung speichern/);
     assert.match(wishesJs,/Hat der \$\{who\} den Vorschlag tatsächlich angenommen/);
     assert.match(adminHtml,/firebase-service\.js\?v=42/);
-    assert.match(adminHtml,/admin-v2-wishes\.js\?v=19/);
+    assert.match(adminHtml,/admin-v2-wishes\.js\?v=20/);
+    assert.match(adminHtml,/customer-wish-progress-library\.js\?v=4/);
+    assert.match(adminHtml,/customer-wish-request-library\.js\?v=16/);
+    assert.match(wishesJs,/Das eingegebene Datum liegt vor einer bereits dokumentierten Rückmeldung/);
+    assert.match(wishesJs,/Das eingegebene Datum liegt vor der Übermittlung des Vorschlags/);
     assert.doesNotMatch(wishesJs,/localStorage|sessionStorage/);
     assert.doesNotMatch(wishesJs,/data-wish-action="accept-proposal"|data-wish-action="reject-proposal"/);
   });
@@ -436,6 +440,199 @@ describe("customer wish decision",()=>{
     assert.equal(retry.wish.customerDecision.current.recordedAt,recordedAt);
     assert.equal(retry.wish.customerDecision.current.note,"Passt");
     assert.equal(retry.wish.statusHistory.filter(item=>item.status==="CUSTOMER_DECISION").length,1);
+  });
+
+  it("1) receivedAt after transmittedAt is allowed",()=>{
+    const receivedAt="2026-09-08T18:15:00.000Z";
+    const recorded=browser.recordWishCustomerDecision(transmittedWish(browser),{
+      type:"accepted",
+      channel:"whatsapp",
+      now:DECIDED,
+      receivedAt
+    });
+    assert.equal(recorded.ok,true);
+    assert.equal(recorded.value.customerDecision.current.receivedAt,receivedAt);
+    assert.equal(recorded.value.customerDecision.current.recordedAt,DECIDED);
+  });
+
+  it("2) receivedAt before transmittedAt is denied",async()=>{
+    const wish=transmittedWish(browser);
+    const {docs,persist}=persistDocs(wish);
+    const before="2026-09-08T18:00:00.000Z";
+    const denied=browser.recordWishCustomerDecision(wish,{
+      type:"accepted",
+      channel:"whatsapp",
+      now:DECIDED,
+      receivedAt:before
+    });
+    assert.equal(denied.ok,false);
+    assert.equal(denied.code,"failed-precondition");
+    assert.match(denied.errors.join(" "),/vor der Übermittlung des Vorschlags/);
+    await assert.rejects(
+      ()=>impl.recordCustomerWishDecision({
+        auth:adminAuth(),
+        data:{
+          customerId:"kunde-1",
+          wishId:"wr_proposal_1",
+          type:"accepted",
+          channel:"whatsapp",
+          receivedAt:before
+        }
+      },persist),
+      error=>{
+        assert.equal(httpCode(error),"failed-precondition");
+        assert.match(String(error.message),/vor der Übermittlung des Vorschlags/);
+        return true;
+      }
+    );
+    assert.equal(docs["kunde-1"].draftData.wishRequests[0].customerDecision,undefined);
+  });
+
+  it("3) question 13:31 then accepted 13:33 is allowed",()=>{
+    const asked=browser.recordWishCustomerDecision(transmittedWish(browser),{
+      type:"question",
+      channel:"whatsapp",
+      note:"Ist der Transfer enthalten?",
+      now:DECIDED,
+      receivedAt:"2026-09-10T13:31:00.000Z"
+    });
+    assert.equal(asked.ok,true);
+    const accepted=browser.recordWishCustomerDecision(asked.value,{
+      type:"accepted",
+      channel:"whatsapp",
+      note:"Passt für uns.",
+      now:DECIDED,
+      receivedAt:"2026-09-10T13:33:00.000Z"
+    });
+    assert.equal(accepted.ok,true);
+    assert.equal(accepted.value.customerDecision.current.type,"accepted");
+    assert.equal(accepted.value.customerDecision.current.receivedAt,"2026-09-10T13:33:00.000Z");
+    assert.equal(accepted.value.customerDecision.history.length,1);
+    assert.equal(accepted.value.customerDecision.history[0].type,"question");
+    assert.equal(accepted.value.customerDecision.history[0].receivedAt,"2026-09-10T13:31:00.000Z");
+  });
+
+  it("4) question 13:31 then accepted 13:30 is denied",()=>{
+    const asked=browser.recordWishCustomerDecision(transmittedWish(browser),{
+      type:"question",
+      channel:"whatsapp",
+      note:"Ist der Transfer enthalten?",
+      now:DECIDED,
+      receivedAt:"2026-09-10T13:31:00.000Z"
+    }).value;
+    const denied=browser.recordWishCustomerDecision(asked,{
+      type:"accepted",
+      channel:"whatsapp",
+      note:"Passt für uns.",
+      now:DECIDED,
+      receivedAt:"2026-09-10T13:30:00.000Z"
+    });
+    assert.equal(denied.ok,false);
+    assert.equal(denied.code,"failed-precondition");
+    assert.match(denied.errors.join(" "),/bereits dokumentierten Rückmeldung/);
+    assert.equal(asked.customerDecision.current.type,"question");
+    assert.equal(asked.customerDecision.history.length,0);
+  });
+
+  it("5) empty receivedAt uses server now and is allowed when chronological",async()=>{
+    const wish=transmittedWish(browser);
+    const {persist}=persistDocs(wish);
+    const recorded=await decisionLib.runRecordCustomerWishDecision({
+      customerId:"kunde-1",
+      wishId:"wr_proposal_1",
+      type:"question",
+      note:"Noch offen",
+      channel:"whatsapp"
+    },persist);
+    assert.equal(recorded.wish.customerDecision.current.receivedAt,DECIDED);
+    assert.equal(recorded.wish.customerDecision.current.recordedAt,DECIDED);
+  });
+
+  it("6) idempotent final retry stays allowed even with an earlier receivedAt",async()=>{
+    const wish=transmittedWish(browser);
+    const {persist}=persistDocs(wish);
+    const first=await decisionLib.runRecordCustomerWishDecision({
+      customerId:"kunde-1",
+      wishId:"wr_proposal_1",
+      type:"accepted",
+      note:"Passt",
+      channel:"whatsapp",
+      receivedAt:DECIDED
+    },persist);
+    persist.now="2026-09-10T17:00:00.000Z";
+    const retry=await decisionLib.runRecordCustomerWishDecision({
+      customerId:"kunde-1",
+      wishId:"wr_proposal_1",
+      type:"accepted",
+      note:"Passt erneut",
+      channel:"phone",
+      receivedAt:"2026-09-08T18:00:00.000Z"
+    },persist);
+    assert.equal(retry.wish.customerDecision.current.receivedAt,first.wish.customerDecision.current.receivedAt);
+    assert.equal(retry.wish.customerDecision.current.recordedAt,first.wish.customerDecision.current.recordedAt);
+    assert.equal(retry.wish.customerDecision.current.note,"Passt");
+    assert.equal(retry.wish.customerDecision.current.channel,"whatsapp");
+  });
+
+  it("7) timeline uses current.receivedAt when present",()=>{
+    const recorded=browser.recordWishCustomerDecision(transmittedWish(browser),{
+      type:"accepted",
+      channel:"whatsapp",
+      now:DECIDED,
+      receivedAt:"2026-09-10T13:31:00.000Z"
+    }).value;
+    recorded.customerDecision.current.recordedAt="2026-09-10T16:00:00.000Z";
+    const steps=progress.buildWishProgress(recorded,{isProspect:true,now:DECIDED});
+    assert.equal(byKey(steps,"decision").timestamp,"2026-09-10T13:31:00.000Z");
+  });
+
+  it("8) timeline falls back to current.recordedAt when receivedAt is missing",()=>{
+    const recorded=browser.recordWishCustomerDecision(transmittedWish(browser),{
+      type:"accepted",
+      channel:"whatsapp",
+      now:DECIDED
+    }).value;
+    recorded.customerDecision.current.receivedAt="";
+    const steps=progress.buildWishProgress(recorded,{isProspect:true,now:DECIDED});
+    assert.equal(byKey(steps,"decision").timestamp,DECIDED);
+  });
+
+  it("9) older statusHistory timestamps do not override the decision time",()=>{
+    const recorded=browser.recordWishCustomerDecision(transmittedWish(browser),{
+      type:"accepted",
+      channel:"whatsapp",
+      now:DECIDED,
+      receivedAt:DECIDED
+    }).value;
+    const older="2026-09-08T12:00:00.000Z";
+    recorded.statusHistory=recorded.statusHistory.map(item=>
+      item.status==="CUSTOMER_DECISION"?Object.assign({},item,{at:older}):item
+    );
+    const steps=progress.buildWishProgress(recorded,{isProspect:true,now:DECIDED});
+    assert.equal(byKey(steps,"decision").timestamp,DECIDED);
+    assert.notEqual(byKey(steps,"decision").timestamp,older);
+  });
+
+  it("10) question then accepted keeps history in the original order",()=>{
+    const asked=browser.recordWishCustomerDecision(transmittedWish(browser),{
+      type:"question",
+      channel:"whatsapp",
+      note:"Ist der Transfer enthalten?",
+      now:DECIDED,
+      receivedAt:"2026-09-10T13:31:00.000Z"
+    }).value;
+    const accepted=browser.recordWishCustomerDecision(asked,{
+      type:"accepted",
+      channel:"whatsapp",
+      note:"Passt für uns.",
+      now:DECIDED,
+      receivedAt:"2026-09-10T13:33:00.000Z"
+    }).value;
+    assert.equal(accepted.customerDecision.history.length,1);
+    assert.equal(accepted.customerDecision.history[0].type,"question");
+    assert.equal(accepted.customerDecision.current.type,"accepted");
+    assert.equal(accepted.status,"CUSTOMER_DECISION");
+    assert.deepEqual(accepted.customerDecision.history.map(item=>item.type),["question"]);
   });
 
   it("keeps browser and functions decision helpers aligned",()=>{

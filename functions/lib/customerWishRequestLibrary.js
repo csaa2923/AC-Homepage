@@ -2151,6 +2151,31 @@
     }
   }
 
+  function decisionTimestampMs(value){
+    const iso=parseDecisionTimestamp(value);
+    if(!iso)return NaN;
+    return new Date(iso).getTime();
+  }
+
+  function isDecisionTimestampBefore(left,right){
+    const start=decisionTimestampMs(left);
+    const end=decisionTimestampMs(right);
+    if(!Number.isFinite(start)||!Number.isFinite(end))return false;
+    return start<end;
+  }
+
+  function assertDecisionChronology(receivedAt,delivery,previous){
+    const transmittedAt=delivery&&text(delivery.transmittedAt);
+    if(transmittedAt&&isDecisionTimestampBefore(receivedAt,transmittedAt)){
+      return fail(["Der Zeitpunkt der Rückmeldung kann nicht vor der Übermittlung des Vorschlags liegen."],"failed-precondition");
+    }
+    const previousAt=previous&&(text(previous.receivedAt)||text(previous.recordedAt));
+    if(previousAt&&isDecisionTimestampBefore(receivedAt,previousAt)){
+      return fail(["Der Zeitpunkt der Rückmeldung liegt vor einer bereits dokumentierten Rückmeldung."],"failed-precondition");
+    }
+    return null;
+  }
+
   function recordWishCustomerDecision(wish,options){
     const settings=options&&typeof options==="object"?options:{};
     const current=cloneWish(wish);
@@ -2193,6 +2218,8 @@
     if(existing.current&&sameDecisionPayload(existing.current,nextEntry)){
       return ok(current);
     }
+    const chronology=assertDecisionChronology(receivedAt,delivery,existing.current);
+    if(chronology)return chronology;
     current.customerDecision={
       current:nextEntry,
       history:existing.current

@@ -107,8 +107,8 @@ function sentProposal(wish){
 
 describe("customer wish progress library",()=>{
   it("is pinned into Admin V2 without touching Functions or rules",()=>{
-    assert.match(adminHtml,/customer-wish-progress-library\.js\?v=3/);
-    assert.match(adminHtml,/admin-v2-wishes\.js\?v=19/);
+    assert.match(adminHtml,/customer-wish-progress-library\.js\?v=4/);
+    assert.match(adminHtml,/admin-v2-wishes\.js\?v=20/);
     assert.match(adminHtml,/admin-v2-wishes\.css\?v=15/);
     assert.match(css,/v2-wish-detail-layout/);
     assert.match(css,/position:sticky/);

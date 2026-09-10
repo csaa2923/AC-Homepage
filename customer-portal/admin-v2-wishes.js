@@ -55,6 +55,10 @@
     return window.ACTCustomerProposalAdminLibrary||null;
   }
 
+  function progressLib(){
+    return window.ACTCustomerWishProgressLibrary||null;
+  }
+
   function inquiryService(){
     return window.ACTFirebaseService||{};
   }
@@ -1666,7 +1670,7 @@
     const items=(wish.followUpQuestions||[]).filter(item=>item.status!=="WITHDRAWN");
     const locked=isFollowUpRoundLocked(wish);
     return `
-      <section class="v2-wish-panel">
+      <section class="v2-wish-panel" data-wish-questions>
         <div class="v2-workspace-section-head compact">
           <h4>Rückfragen an den Kunden</h4>
           ${locked?"":`<div class="v2-wish-actions">
@@ -2661,6 +2665,123 @@
     `;
   }
 
+  function progressTargetSelector(target){
+    const map={
+      original:"[data-wish-original]",
+      questions:"[data-wish-questions]",
+      answers:"[data-wish-answers]",
+      workup:"[data-wish-workup]",
+      proposal:"[data-wish-proposal]",
+      "proposal-grant":"[data-wish-proposal-grant]"
+    };
+    return map[text(target)]||"";
+  }
+
+  function progressContext(customer,wish){
+    const grant=proposalGrantSession();
+    const access=state().portalAccess||{};
+    const wishId=text(wish&&wish.wishId);
+    const grantMatches=text(grant.wishId)===wishId;
+    return {
+      isProspect:isProspectCustomer(customer),
+      now:new Date().toISOString(),
+      proposalGrant:grantMatches?{
+        wishId:text(grant.wishId),
+        hasActiveGrant:grant.hasActiveGrant===true,
+        status:text(grant.status),
+        expiresAt:text(grant.expiresAt)
+      }:null,
+      portalAccess:{
+        exists:access.exists===true,
+        status:text(access.status),
+        createdAt:text(access.createdAt),
+        activatedAt:text(access.activatedAt),
+        customerId:text(access.customerId)
+      }
+    };
+  }
+
+  function progressMarker(state){
+    if(state==="done")return "✓";
+    if(state==="current")return "●";
+    if(state==="skipped")return "–";
+    return "○";
+  }
+
+  function progressTargetAvailable(target,customer,wish){
+    const key=text(target);
+    if(key==="original"||key==="questions")return true;
+    if(key==="answers"){
+      return (wish.followUpQuestions||[]).some(item=>{
+        const status=text(item&&item.status).toUpperCase();
+        return status==="ANSWERED"||status==="SKIPPED";
+      });
+    }
+    if(key==="workup"||key==="proposal"){
+      return isAdminWishInReview(wish)||isAdminWishProposalPrepared(wish)||isAdminWishProposalSent(wish);
+    }
+    if(key==="proposal-grant")return shouldShowProposalGrantPanel(customer,wish);
+    return false;
+  }
+
+  function progressStepMarkup(step,customer,wish){
+    const api=progressLib();
+    const state=text(step&&step.state)||"open";
+    const selector=progressTargetSelector(step&&step.target);
+    const clickable=Boolean(selector)&&progressTargetAvailable(step&&step.target,customer,wish);
+    const tag=clickable?"button":"div";
+    const extras=clickable
+      ?` type="button" data-wish-progress-target="${escapeHtml(selector)}"`
+      :"";
+    const timestamp=text(step&&step.timestamp);
+    const formatted=timestamp
+      ?(api&&typeof api.formatWishProgressDateTime==="function"
+        ?api.formatWishProgressDateTime(timestamp)
+        :formatWishDateTime(timestamp))
+      :"";
+    const current=state==="current"?' aria-current="step"':"";
+    return `
+      <li class="v2-wish-progress-step is-${escapeHtml(state)}">
+        <${tag} class="v2-wish-progress-item"${extras}${current}>
+          <span class="v2-wish-progress-marker" aria-hidden="true">${progressMarker(state)}</span>
+          <span class="v2-wish-progress-copy">
+            <span class="v2-wish-progress-label">${escapeHtml(step&&step.label||"")}</span>
+            ${formatted?`<span class="v2-wish-progress-time">${escapeHtml(formatted)}</span>`:""}
+            ${text(step&&step.detail)?`<span class="v2-wish-progress-note">${escapeHtml(step.detail)}</span>`:""}
+            ${step&&step.next?`<span class="v2-wish-progress-next">Nächster Schritt</span>`:""}
+          </span>
+        </${tag}>
+      </li>
+    `;
+  }
+
+  function progressMarkup(customer,wish){
+    const api=progressLib();
+    if(!api||typeof api.buildWishProgress!=="function"||!wish)return "";
+    const steps=api.buildWishProgress(wish,progressContext(customer,wish));
+    if(!Array.isArray(steps)||!steps.length)return "";
+    return `
+      <aside class="v2-wish-progress" data-wish-progress>
+        <p class="v2-wish-progress-title">Wunsch-Verlauf</p>
+        <p class="v2-wish-progress-lead">Fortschritt dieses Kundenwunsches</p>
+        <ol class="v2-wish-progress-list">
+          ${steps.map(step=>progressStepMarkup(step,customer,wish)).join("")}
+        </ol>
+      </aside>
+    `;
+  }
+
+  function scrollToWishProgressTarget(selector){
+    if(!text(selector))return false;
+    const doc=typeof document!=="undefined"?document:null;
+    if(!doc||typeof doc.querySelector!=="function")return false;
+    const root=doc.querySelector("[data-wish-root]")||doc;
+    const target=typeof root.querySelector==="function"?root.querySelector(selector):null;
+    if(!target||typeof target.scrollIntoView!=="function")return false;
+    target.scrollIntoView({behavior:"smooth",block:"start"});
+    return true;
+  }
+
   function detailMarkup(customer){
     const wish=selectedWish(customer);
     if(!wish)return listMarkup(customer);
@@ -2676,34 +2797,39 @@
           <button class="v2-button soft" type="button" data-wish-action="cancel">Zur Übersicht</button>
         </div>
         ${messageMarkup()}
-        <article class="v2-wish-panel">
-          <h4>Originalanfrage</h4>
-          <blockquote data-wish-original>${escapeHtml(wish.originalRequest&&wish.originalRequest.text||"")}</blockquote>
-        </article>
-        <article class="v2-wish-panel">
-          <h4>Bereits bekannt</h4>
-          <div class="v2-read-fields">${knownSummaryMarkup(known)}</div>
-          ${knownEditorMarkup(known)}
-        </article>
-        ${questionsMarkup(wish)}
-        ${inquiryMarkup(customer,wish)}
-        ${customerAnswersMarkup(wish)}
-        ${workupMarkup(wish)}
-        ${proposalMarkup(wish)}
-        <article class="v2-wish-panel">
-          <h4>Notizen zum Kundenwunsch</h4>
-          <p class="v2-muted">Interner Vermerk zum Wunsch selbst, unabhängig von den Bausteinen.</p>
-          <label class="v2-edit-field full">
-            <textarea name="wishAdminNotes" data-wish-notes rows="4" maxlength="2000">${escapeHtml(state().wishNotesDraft||"")}</textarea>
-          </label>
-          <button class="v2-button soft" type="button" data-wish-action="save-notes">Notiz speichern</button>
-        </article>
-        <div class="v2-wish-actions">
-          <button class="v2-button soft" type="button" data-wish-action="preview">Kundensicht ansehen</button>
-          ${isAdminCustomerReplied(wish)?`<button class="v2-button primary" type="button" data-wish-action="start-review">Bearbeitung starten</button>`:""}
-          ${isFollowUpRoundLocked(wish)?"":`<button class="v2-button primary" type="button" data-wish-action="prepare">Für Kunden freigeben</button>`}
+        <div class="v2-wish-detail-layout">
+          ${progressMarkup(customer,wish)}
+          <div class="v2-wish-detail-main">
+            <article class="v2-wish-panel">
+              <h4>Originalanfrage</h4>
+              <blockquote data-wish-original>${escapeHtml(wish.originalRequest&&wish.originalRequest.text||"")}</blockquote>
+            </article>
+            <article class="v2-wish-panel">
+              <h4>Bereits bekannt</h4>
+              <div class="v2-read-fields">${knownSummaryMarkup(known)}</div>
+              ${knownEditorMarkup(known)}
+            </article>
+            ${questionsMarkup(wish)}
+            ${inquiryMarkup(customer,wish)}
+            ${customerAnswersMarkup(wish)}
+            ${workupMarkup(wish)}
+            ${proposalMarkup(wish)}
+            <article class="v2-wish-panel">
+              <h4>Notizen zum Kundenwunsch</h4>
+              <p class="v2-muted">Interner Vermerk zum Wunsch selbst, unabhängig von den Bausteinen.</p>
+              <label class="v2-edit-field full">
+                <textarea name="wishAdminNotes" data-wish-notes rows="4" maxlength="2000">${escapeHtml(state().wishNotesDraft||"")}</textarea>
+              </label>
+              <button class="v2-button soft" type="button" data-wish-action="save-notes">Notiz speichern</button>
+            </article>
+            <div class="v2-wish-actions">
+              <button class="v2-button soft" type="button" data-wish-action="preview">Kundensicht ansehen</button>
+              ${isAdminCustomerReplied(wish)?`<button class="v2-button primary" type="button" data-wish-action="start-review">Bearbeitung starten</button>`:""}
+              ${isFollowUpRoundLocked(wish)?"":`<button class="v2-button primary" type="button" data-wish-action="prepare">Für Kunden freigeben</button>`}
+            </div>
+            ${previewMarkup(wish)}
+          </div>
         </div>
-        ${previewMarkup(wish)}
       </section>
     `;
   }
@@ -2725,6 +2851,12 @@
   }
 
   function handleClick(event){
+    const progress=event.target.closest("[data-wish-progress-target]");
+    if(progress){
+      event.preventDefault();
+      scrollToWishProgressTarget(progress.getAttribute("data-wish-progress-target")||"");
+      return true;
+    }
     const button=event.target.closest("[data-wish-action]");
     if(!button)return false;
     event.preventDefault();

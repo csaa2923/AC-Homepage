@@ -161,6 +161,7 @@ function loadWishes(hostOverrides={}){
       ACTCustomerWishRequestLibrary:wishLib,
       ACTCustomerInquiryAdminLibrary:inquiry,
       ACTCustomerProposalAdminLibrary:proposal,
+      ACTCustomerWishProgressLibrary:require(join(root,"customer-portal/customer-wish-progress-library.js")),
       ACTFirebaseAuth:{
         getAuthDiagnostics:()=>({email:"nadja@alpineconcierge.info"}),
         requireAdmin:async()=>({allowed:true})
@@ -334,6 +335,6 @@ describe("customer proposal admin UI (C4.1)",()=>{
     assert.match(portalAccess,/buildPortalWhatsappUrl|loginUrl|customer-portal\/login/);
     assert.doesNotMatch(adminLibSource,/customer-inquiry\/#token|customer-portal\/login/);
     assert.match(adminHtml,/customer-proposal-admin-library\.js\?v=1/);
-    assert.match(adminHtml,/admin-v2-wishes\.js\?v=16/);
+    assert.match(adminHtml,/admin-v2-wishes\.js\?v=17/);
   });
 });

@@ -66,6 +66,7 @@ function loadWishes(hostOverrides={}){
   const sandbox={
     window:{
       ACTCustomerWishRequestLibrary:lib,
+      ACTCustomerWishProgressLibrary:require(join(root,"customer-portal/customer-wish-progress-library.js")),
       ACTFirebaseAuth:{
         getAuthDiagnostics:()=>({email:"nadja@alpineconcierge.info"}),
         requireAdmin:async()=>({allowed:true})
@@ -122,8 +123,9 @@ describe("admin v2 guest wishes",()=>{
     const html=read("customer-portal/admin-v2.html");
     const js=read("customer-portal/admin-v2.js");
     const module=read("customer-portal/admin-v2-wishes.js");
-    assert.match(html,/admin-v2-wishes\.js\?v=16/);
-    assert.match(html,/admin-v2-wishes\.css\?v=12/);
+    assert.match(html,/admin-v2-wishes\.js\?v=17/);
+    assert.match(html,/admin-v2-wishes\.css\?v=13/);
+    assert.match(html,/customer-wish-progress-library\.js\?v=1/);
     assert.match(html,/customer-inquiry-admin-library\.js\?v=1/);
     assert.match(html,/customer-proposal-admin-library\.js\?v=1/);
     assert.match(html,/customer-wish-request-library\.js\?v=13/);
@@ -468,6 +470,44 @@ describe("admin v2 guest wishes",()=>{
       options:[{id:"opt_red",label:"Weinrot"},{id:"opt_blue",label:"Nachtblau"}],
       answer:"opt_red"
     }),"Weinrot");
+  });
+
+  it("renders a wish-progress sidebar from existing wish data without tokens",()=>{
+    const TOKEN="Aa1_-".repeat(9);
+    const {wishes,customer,state}=loadWishes({
+      customer:{
+        customerId:"cust-100",
+        customerName:"Familie Berg",
+        lifecycle:"prospect",
+        wishStatement:"Ruhig bleiben.",
+        wishes:["Natur"],
+        wishRequests:[]
+      }
+    });
+    const wish=wishes.createWishFromDraft(customer,createDraft(),{wishId:"wr_progress_ui",now:"2026-09-08T07:00:00.000Z"}).value;
+    customer.wishRequests=[wish];
+    customer.lifecycle="prospect";
+    state.wishView="detail";
+    state.wishSelectedId=wish.wishId;
+    state.wishProposalGrant={
+      wishId:wish.wishId,
+      grantId:"pg_secret_id",
+      rawToken:TOKEN,
+      status:"active",
+      hasActiveGrant:true,
+      expiresAt:"2026-09-22T12:00:00.000Z"
+    };
+    const html=wishes.sectionMarkup(customer);
+    assert.match(html,/data-wish-progress/);
+    assert.match(html,/WUNSCH-VERLAUF|Wunsch-Verlauf/);
+    assert.match(html,/Fortschritt dieses Kundenwunsches/);
+    assert.match(html,/Nächster Schritt/);
+    assert.match(html,/Persönlicher Vorschlagslink/);
+    assert.match(html,/data-wish-questions/);
+    assert.match(html,/data-wish-progress-target="\[data-wish-questions\]"/);
+    assert.doesNotMatch(html,new RegExp(TOKEN));
+    assert.doesNotMatch(html,/pg_secret_id/);
+    assert.doesNotMatch(html,/hmac-sha256/);
   });
 });
 

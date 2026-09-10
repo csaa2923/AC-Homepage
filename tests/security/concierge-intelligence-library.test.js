@@ -312,4 +312,109 @@ describe("concierge intelligence library",()=>{
     assert.match(sent[0].description,/WhatsApp/);
     assert.doesNotMatch(sent[0].description,/CUSTOMER_DECISION|angenommen|gebucht/);
   });
+
+  it("uses the existing PROPOSAL_SENT insight for a documented question or change request",()=>{
+    const library=loadLibrary();
+    const question=library.getConciergeInsights({customerName:"Familie Berg"},{
+      wishRequests:[{
+        wishId:"wr_sent_1",
+        origin:"admin",
+        status:"PROPOSAL_SENT",
+        title:"Seefeld September",
+        customerDecision:{
+          current:{
+            type:"question",
+            note:"Transfer enthalten?",
+            receivedAt:"2026-09-10T14:30:00.000Z",
+            recordedAt:"2026-09-10T14:31:00.000Z",
+            recordedBy:"admin",
+            channel:"whatsapp"
+          },
+          history:[]
+        }
+      }]
+    });
+    const asked=question.filter(item=>item.reason==="wishProposalSent");
+    assert.equal(asked.length,1);
+    assert.equal(asked[0].title,"Rückfrage zum Vorschlag");
+    assert.match(asked[0].description,/Rückfrage \/ noch offen/);
+    const changed=library.getConciergeInsights({customerName:"Familie Berg"},{
+      wishRequests:[{
+        wishId:"wr_sent_1",
+        origin:"admin",
+        status:"PROPOSAL_SENT",
+        title:"Seefeld September",
+        customerDecision:{
+          current:{
+            type:"change_requested",
+            note:"Restaurant tauschen",
+            receivedAt:"2026-09-10T14:30:00.000Z",
+            recordedAt:"2026-09-10T14:31:00.000Z",
+            recordedBy:"admin",
+            channel:"phone"
+          },
+          history:[]
+        }
+      }]
+    }).filter(item=>item.reason==="wishProposalSent");
+    assert.equal(changed[0].title,"Änderungswunsch erhalten");
+    assert.match(changed[0].description,/Änderungswunsch/);
+  });
+
+  it("emits accepted and rejected insights without a new journey architecture",()=>{
+    const library=loadLibrary();
+    const insights=library.getConciergeInsights({customerName:"Familie Berg"},{
+      wishRequests:[
+        {
+          wishId:"wr_ok",
+          origin:"admin",
+          status:"CUSTOMER_DECISION",
+          title:"Seefeld September",
+          customerDecision:{
+            current:{
+              type:"accepted",
+              note:"Bitte organisieren",
+              receivedAt:"2026-09-10T15:00:00.000Z",
+              recordedAt:"2026-09-10T15:01:00.000Z",
+              recordedBy:"admin",
+              channel:"whatsapp"
+            },
+            history:[]
+          }
+        },
+        {
+          wishId:"wr_no",
+          origin:"admin",
+          status:"CANCELLED",
+          title:"Abendessen",
+          customerDecision:{
+            current:{
+              type:"rejected",
+              note:"Doch nicht",
+              receivedAt:"2026-09-10T15:10:00.000Z",
+              recordedAt:"2026-09-10T15:11:00.000Z",
+              recordedBy:"admin",
+              channel:"personal"
+            },
+            history:[]
+          }
+        }
+      ]
+    });
+    const accepted=insights.filter(item=>item.reason==="wishProposalAccepted");
+    const rejected=insights.filter(item=>item.reason==="wishProposalRejected");
+    assert.equal(accepted.length,1);
+    assert.equal(accepted[0].title,"Vorschlag angenommen");
+    assert.equal(rejected.length,1);
+    assert.equal(rejected[0].title,"Vorschlag abgelehnt");
+    assert.equal(
+      serverLibrary.getConciergeInsights({customerName:"Familie Berg"},{
+        wishRequests:[
+          {wishId:"wr_ok",origin:"admin",status:"CUSTOMER_DECISION",title:"Seefeld September",customerDecision:{current:{type:"accepted",note:"Bitte organisieren",receivedAt:"2026-09-10T15:00:00.000Z",recordedAt:"2026-09-10T15:01:00.000Z",recordedBy:"admin",channel:"whatsapp"},history:[]}},
+          {wishId:"wr_no",origin:"admin",status:"CANCELLED",title:"Abendessen",customerDecision:{current:{type:"rejected",note:"Doch nicht",receivedAt:"2026-09-10T15:10:00.000Z",recordedAt:"2026-09-10T15:11:00.000Z",recordedBy:"admin",channel:"personal"},history:[]}}
+        ]
+      }).filter(item=>item.reason==="wishProposalAccepted"||item.reason==="wishProposalRejected").map(item=>item.id).join(","),
+      "wish-proposal-accepted-wr_ok,wish-proposal-rejected-wr_no"
+    );
+  });
 });

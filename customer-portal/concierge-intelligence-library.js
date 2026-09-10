@@ -190,6 +190,22 @@
     });
   }
 
+  function currentWishDecision(wish){
+    const current=wish&&wish.customerDecision&&typeof wish.customerDecision==="object"
+      ?wish.customerDecision.current
+      :null;
+    return current&&typeof current==="object"?current:null;
+  }
+
+  function decisionChannelLabel(channel){
+    const key=text(channel).toLowerCase();
+    if(key==="whatsapp")return "WhatsApp";
+    if(key==="phone")return "Telefon";
+    if(key==="personal")return "Persönlich";
+    if(key==="other")return "Sonstiges";
+    return "";
+  }
+
   function wishProposalSentInsights(customer,wishRequests){
     const name=text(customer&&customer.customerName);
     return adminCustomerProposalSentWishes(wishRequests).map(wish=>{
@@ -201,16 +217,98 @@
       const transmitted=transmittedAt
         ?["Vorschlag übermittelt",transmittedChannel,formatInsightDateTime(transmittedAt)].filter(Boolean).join(" · ")
         :"";
+      const decision=currentWishDecision(wish);
+      const decisionType=text(decision&&decision.type).toLowerCase();
+      const decisionBits=[
+        decisionType==="question"?"Rückfrage / noch offen":"",
+        decisionType==="change_requested"?"Änderungswunsch":"",
+        decisionChannelLabel(decision&&decision.channel),
+        formatInsightDateTime(decision&&(decision.receivedAt||decision.recordedAt))
+      ].filter(Boolean).join(" · ");
+      const title=decisionType==="question"
+        ?"Rückfrage zum Vorschlag"
+        :decisionType==="change_requested"
+          ?"Änderungswunsch erhalten"
+          :"Vorschlag freigegeben";
       return makeInsight(
         `wish-proposal-sent-${wishId}`,
         "important",
-        "Vorschlag freigegeben",
+        title,
         [
           [name,text(wish.title)||"Wunsch"].filter(Boolean).join(" · "),
           "Der persönliche Vorschlag wurde für den Gast im Kundenportal freigegeben.",
-          transmitted
+          transmitted,
+          decisionBits
         ].filter(Boolean).join(" · "),
         "wishProposalSent",
+        "kunde",
+        "Vorschlag ansehen",
+        {source:"wishRequests",entityId:wishId}
+      );
+    });
+  }
+
+  function adminCustomerAcceptedWishes(wishRequests){
+    const seen=new Set();
+    return list(wishRequests).filter(wish=>{
+      const wishId=text(wish&&wish.wishId);
+      const type=text(currentWishDecision(wish)&&currentWishDecision(wish).type).toLowerCase();
+      if(!wish||text(wish.origin)!=="admin"||text(wish.status)!=="CUSTOMER_DECISION"||type!=="accepted"||!wishId||seen.has(wishId))return false;
+      seen.add(wishId);
+      return true;
+    });
+  }
+
+  function adminCustomerRejectedWishes(wishRequests){
+    const seen=new Set();
+    return list(wishRequests).filter(wish=>{
+      const wishId=text(wish&&wish.wishId);
+      const type=text(currentWishDecision(wish)&&currentWishDecision(wish).type).toLowerCase();
+      if(!wish||text(wish.origin)!=="admin"||text(wish.status)!=="CANCELLED"||type!=="rejected"||!wishId||seen.has(wishId))return false;
+      seen.add(wishId);
+      return true;
+    });
+  }
+
+  function wishAcceptedInsights(customer,wishRequests){
+    const name=text(customer&&customer.customerName);
+    return adminCustomerAcceptedWishes(wishRequests).map(wish=>{
+      const wishId=text(wish.wishId);
+      const decision=currentWishDecision(wish);
+      return makeInsight(
+        `wish-proposal-accepted-${wishId}`,
+        "important",
+        "Vorschlag angenommen",
+        [
+          [name,text(wish.title)||"Wunsch"].filter(Boolean).join(" · "),
+          "Vorschlag angenommen",
+          decisionChannelLabel(decision&&decision.channel),
+          formatInsightDateTime(decision&&(decision.receivedAt||decision.recordedAt))
+        ].filter(Boolean).join(" · "),
+        "wishProposalAccepted",
+        "kunde",
+        "Vorschlag ansehen",
+        {source:"wishRequests",entityId:wishId}
+      );
+    });
+  }
+
+  function wishRejectedInsights(customer,wishRequests){
+    const name=text(customer&&customer.customerName);
+    return adminCustomerRejectedWishes(wishRequests).map(wish=>{
+      const wishId=text(wish.wishId);
+      const decision=currentWishDecision(wish);
+      return makeInsight(
+        `wish-proposal-rejected-${wishId}`,
+        "recommendation",
+        "Vorschlag abgelehnt",
+        [
+          [name,text(wish.title)||"Wunsch"].filter(Boolean).join(" · "),
+          "Vorschlag abgelehnt",
+          decisionChannelLabel(decision&&decision.channel),
+          formatInsightDateTime(decision&&(decision.receivedAt||decision.recordedAt))
+        ].filter(Boolean).join(" · "),
+        "wishProposalRejected",
         "kunde",
         "Vorschlag ansehen",
         {source:"wishRequests",entityId:wishId}
@@ -501,6 +599,8 @@
     wishInReviewInsights(state.customer,wishRequests).forEach(insight=>insights.push(insight));
     wishProposalPreparedInsights(state.customer,wishRequests).forEach(insight=>insights.push(insight));
     wishProposalSentInsights(state.customer,wishRequests).forEach(insight=>insights.push(insight));
+    wishAcceptedInsights(state.customer,wishRequests).forEach(insight=>insights.push(insight));
+    wishRejectedInsights(state.customer,wishRequests).forEach(insight=>insights.push(insight));
 
     return insights.sort((a,b)=>SEVERITY_ORDER[a.severity]-SEVERITY_ORDER[b.severity]||a.id.localeCompare(b.id));
   }

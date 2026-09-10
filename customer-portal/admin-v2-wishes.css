@@ -91,6 +91,22 @@
   margin:0;width:fit-content;padding:4px 12px;border:1px solid #c5d4c8;border-radius:999px;
   background:#eef5ef;color:#355c3f;font-size:13px;font-weight:750
 }
+.v2-wish-decision{display:grid;gap:12px;padding-top:8px}
+.v2-wish-decision-current{display:grid;gap:6px}
+.v2-wish-decision-result{
+  margin:0;width:fit-content;padding:4px 12px;border:1px solid #c5d4c8;border-radius:999px;
+  background:#eef5ef;color:#355c3f;font-size:13px;font-weight:750
+}
+.v2-wish-decision-note{margin:0;font-size:15px;line-height:1.5;white-space:pre-wrap}
+.v2-wish-decision-form{display:grid;gap:12px}
+.v2-wish-decision-types{display:flex;flex-wrap:wrap;gap:8px}
+.v2-wish-decision-choice{
+  display:inline-flex;align-items:center;gap:8px;margin:0;padding:8px 12px;border:1px solid var(--line);
+  border-radius:999px;background:#fff;font-size:14px;font-weight:650;cursor:pointer
+}
+.v2-wish-decision-choice.is-selected{border-color:#0d3b2f;background:#eef5ef}
+.v2-wish-decision-choice input{margin:0}
+.v2-wish-decision-hint{margin:6px 0 0;font-size:13px;font-weight:750;color:#355c3f}
 .v2-wish-proposal-ready{
   margin:0;width:fit-content;padding:4px 12px;border:1px solid #e2d4b8;border-radius:999px;
   background:#f7f1e4;color:#6a5428;font-size:13px;font-weight:750

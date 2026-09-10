@@ -230,6 +230,56 @@
     return "";
   }
 
+  function currentDecision(wish){
+    const block=asObject(asObject(wish).customerDecision);
+    const current=asObject(block.current);
+    return text(current.type)?current:null;
+  }
+
+  function decisionChannelDetail(channel){
+    const key=text(channel).toLowerCase();
+    if(key==="whatsapp")return "über WhatsApp";
+    if(key==="phone")return "über Telefon";
+    if(key==="personal")return "persönlich";
+    if(key==="other")return "über sonstigen Weg";
+    return "";
+  }
+
+  function decisionTypeLabel(type){
+    const key=text(type).toLowerCase();
+    if(key==="accepted")return "Angenommen";
+    if(key==="change_requested")return "Änderungswunsch";
+    if(key==="question")return "Rückfrage / noch offen";
+    if(key==="rejected")return "Abgelehnt";
+    return "";
+  }
+
+  function decisionIsFinal(wish){
+    const type=text(currentDecision(wish)&&currentDecision(wish).type).toLowerCase();
+    return type==="accepted"||type==="rejected"||reachedStatus(wish,"CUSTOMER_DECISION")||reachedStatus(wish,"BOOKING");
+  }
+
+  function decisionTimestamp(wish){
+    const current=currentDecision(wish);
+    return earliestTimestamp([
+      current&&current.receivedAt,
+      current&&current.recordedAt,
+      historyAt(wish,"CUSTOMER_DECISION")
+    ]);
+  }
+
+  function decisionDetail(wish){
+    const current=currentDecision(wish);
+    if(!current)return "";
+    const parts=[
+      decisionTypeLabel(current.type),
+      decisionChannelDetail(current.channel)
+    ];
+    if(text(current.type)==="change_requested")parts.push("Überarbeitung des Vorschlags erforderlich");
+    if(text(current.note))parts.push(text(current.note));
+    return parts.filter(Boolean).join(" · ");
+  }
+
   function step(key,label,state,options){
     const settings=options&&typeof options==="object"?options:{};
     return {
@@ -313,7 +363,8 @@
     const proposalPrepared=proposalIsPrepared(wish);
     const proposalReleased=proposalIsReleased(wish);
     const proposalDelivered=proposalIsDelivered(wish);
-    const decisionDone=reachedStatus(wish,"CUSTOMER_DECISION")||reachedStatus(wish,"BOOKING");
+    const decision=currentDecision(wish);
+    const decisionDone=decisionIsFinal(wish);
     const bookingDone=reachedStatus(wish,"BOOKING");
     const completedDone=completed;
 
@@ -405,8 +456,10 @@
         label:"Rückmeldung / Entscheidung",
         done:decisionDone,
         skipped:completed&&!decisionDone,
-        timestamp:decisionDone?historyAt(wish,"CUSTOMER_DECISION"):"",
-        target:""
+        timestamp:decision||decisionDone?decisionTimestamp(wish):"",
+        detail:decisionDetail(wish),
+        keepTimestamp:Boolean(decision),
+        target:"proposal"
       },
       {
         key:"booking",
@@ -439,7 +492,7 @@
         state=STATES.done;
       }
       return step(def.key,def.label,state,{
-        timestamp:state===STATES.done?text(def.timestamp):"",
+        timestamp:state===STATES.done||def.keepTimestamp?text(def.timestamp):"",
         detail,
         target:text(def.target)
       });

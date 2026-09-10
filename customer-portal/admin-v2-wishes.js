@@ -148,8 +148,28 @@
     return text(wish&&wish.origin)==="admin"&&text(wish&&wish.status)==="PROPOSAL_SENT"&&Boolean(text(wish&&wish.wishId));
   }
 
+  function hasReleasedProposalDelivery(wish){
+    const delivery=wish&&wish.delivery&&typeof wish.delivery==="object"?wish.delivery:null;
+    if(!delivery||text(delivery.state)!=="sent")return false;
+    const items=delivery.proposalSnapshot&&Array.isArray(delivery.proposalSnapshot.items)
+      ?delivery.proposalSnapshot.items
+      :[];
+    return items.length>0;
+  }
+
+  function isAdminWishAfterProposalDecision(wish){
+    const status=text(wish&&wish.status);
+    if(text(wish&&wish.origin)!=="admin"||!text(wish&&wish.wishId))return false;
+    if(status!=="CUSTOMER_DECISION"&&status!=="CANCELLED")return false;
+    return hasReleasedProposalDelivery(wish);
+  }
+
+  function isAdminWishProposalReleasedView(wish){
+    return isAdminWishProposalSent(wish)||isAdminWishAfterProposalDecision(wish);
+  }
+
   function isFollowUpRoundLocked(wish){
-    return isAdminCustomerReplied(wish)||isAdminWishInReview(wish)||isAdminWishProposalPrepared(wish)||isAdminWishProposalSent(wish);
+    return isAdminCustomerReplied(wish)||isAdminWishInReview(wish)||isAdminWishProposalPrepared(wish)||isAdminWishProposalSent(wish)||isAdminWishAfterProposalDecision(wish);
   }
 
   function repliedAdminWishes(customer){
@@ -437,6 +457,10 @@
     };
   }
 
+  function emptyDecisionDraft(){
+    return {type:"",channel:"whatsapp",note:"",receivedAt:""};
+  }
+
   function emptyProposalItemDraft(){
     return {
       title:"",
@@ -473,6 +497,7 @@
       wishProposalDraft:emptyProposalItemDraft(),
       wishProposalIntroDraft:null,
       wishProposalPreviewOpen:false,
+      wishDecisionDraft:emptyDecisionDraft(),
       wishCustomDraft:emptyCustomDraft(),
       wishInquiry:inquiryLib()?inquiryLib().emptyInquirySession():null,
       wishProposalGrant:proposalLib()?proposalLib().emptyProposalGrantSession():null,
@@ -563,6 +588,7 @@
       wishProposalDraft:emptyProposalItemDraft(),
       wishProposalIntroDraft:null,
       wishProposalPreviewOpen:false,
+      wishDecisionDraft:emptyDecisionDraft(),
       wishCustomDraft:emptyCustomDraft(),
       wishInquiry:session,
       wishProposalGrant:grantSession,
@@ -1309,10 +1335,215 @@
     });
   }
 
-  function proposalTransmitMarkup(wish){
-    if(!isAdminWishProposalSent(wish))return "";
+  function currentDecisionOf(wish){
+    const api=lib();
+    if(api&&typeof api.currentWishDecision==="function")return api.currentWishDecision(wish);
+    const current=wish&&wish.customerDecision&&wish.customerDecision.current;
+    return current&&typeof current==="object"?current:null;
+  }
+
+  function canRecordDecision(wish){
+    const api=lib();
+    if(api&&typeof api.canRecordWishCustomerDecision==="function"){
+      return api.canRecordWishCustomerDecision(wish)===true;
+    }
+    return isAdminWishProposalSent(wish)&&hasTransmittedProposal(wish);
+  }
+
+  function decisionTypeLabel(type){
+    const api=lib();
+    if(api&&typeof api.customerDecisionTypeLabel==="function")return api.customerDecisionTypeLabel(type);
+    const labels={accepted:"Angenommen",change_requested:"Änderungswunsch",question:"Rückfrage / noch offen",rejected:"Abgelehnt"};
+    return labels[text(type)]||"";
+  }
+
+  function decisionChannelLabel(channel){
+    const api=lib();
+    if(api&&typeof api.customerDecisionChannelLabel==="function")return api.customerDecisionChannelLabel(channel);
+    const labels={whatsapp:"WhatsApp",phone:"Telefon",personal:"Persönlich",other:"Sonstiges"};
+    return labels[text(channel)]||"";
+  }
+
+  function decisionDraft(){
+    return state().wishDecisionDraft||emptyDecisionDraft();
+  }
+
+  function readDecisionDraftFromForm(form){
+    const current=decisionDraft();
+    if(!form)return current;
+    const selected=form.querySelector("[name='wishDecisionType']:checked");
+    return {
+      type:text(selected&&selected.value)||current.type,
+      channel:text(form.elements.wishDecisionChannel&&form.elements.wishDecisionChannel.value)||current.channel||"whatsapp",
+      note:text(form.elements.wishDecisionNote&&form.elements.wishDecisionNote.value),
+      receivedAt:text(form.elements.wishDecisionReceivedAt&&form.elements.wishDecisionReceivedAt.value)
+    };
+  }
+
+  function syncDecisionDraft(form){
+    h().patchState({wishDecisionDraft:readDecisionDraftFromForm(form)});
+  }
+
+  function decisionConfirmMessage(type,customer){
+    const who=isProspectCustomer(customer)?"Interessent":"Kunde";
+    if(type==="accepted")return `Hat der ${who} den Vorschlag tatsächlich angenommen?`;
+    if(type==="rejected")return `Hat der ${who} den Vorschlag tatsächlich abgelehnt?`;
+    if(type==="change_requested")return `Hat der ${who} einen Änderungswunsch zum Vorschlag mitgeteilt?`;
+    if(type==="question")return `Hat der ${who} eine Rückfrage zum Vorschlag gestellt, die noch offen ist?`;
+    return "Möchten Sie diese Rückmeldung wirklich speichern?";
+  }
+
+  function recordWishDecision(){
+    const customer=currentCustomer();
+    const wish=selectedWish(customer);
+    if(!customer||!wish||!canRecordDecision(wish))return;
+    const form=typeof document!=="undefined"?document.querySelector("[data-wish-decision-form]"):null;
+    const draft=readDecisionDraftFromForm(form);
+    if(!draft.type){
+      setMessage("Bitte die Art der Rückmeldung auswählen.","warning");
+      h().render();
+      return;
+    }
+    const confirmed=typeof window!=="undefined"&&typeof window.confirm==="function"
+      ?window.confirm(decisionConfirmMessage(draft.type,customer))
+      :false;
+    if(!confirmed)return;
+    const service=typeof window!=="undefined"?window.ACTFirebaseService:null;
+    if(!service||typeof service.recordCustomerWishDecision!=="function"){
+      setMessage("Die Rückmeldung konnte nicht gespeichert werden.","error");
+      h().render();
+      return;
+    }
+    h().patchState({wishSaving:true,wishDecisionDraft:draft});
+    h().render();
+    const finish=error=>{
+      h().patchState({wishSaving:false});
+      if(error){
+        setMessage("Die Rückmeldung konnte nicht gespeichert werden.","error");
+        h().render();
+      }
+    };
+    const payload={
+      customerId:customer.customerId,
+      wishId:wish.wishId,
+      type:draft.type,
+      note:draft.note,
+      channel:draft.channel||"whatsapp"
+    };
+    if(draft.receivedAt)payload.receivedAt=isoFromLocal(draft.receivedAt);
+    Promise.resolve(h().withTimeout(
+      service.recordCustomerWishDecision(payload),
+      h().AUTH_TIMEOUT_MS,
+      "recordCustomerWishDecision"
+    )).then(result=>{
+      const api=lib();
+      const nextWish=result&&result.wish
+        ?result.wish
+        :(api&&typeof api.recordWishCustomerDecision==="function"
+          ?api.recordWishCustomerDecision(wish,{
+            now:result&&result.recordedAt,
+            type:draft.type,
+            note:draft.note,
+            channel:draft.channel,
+            receivedAt:payload.receivedAt
+          }).value
+          :null);
+      if(!nextWish||!currentDecisionOf(nextWish))throw new Error("decision-failed");
+      const next=replaceWish(customer,nextWish);
+      if(typeof h().updateLocalCustomer==="function")h().updateLocalCustomer(next);
+      h().patchState({wishSaving:false,wishDecisionDraft:emptyDecisionDraft()});
+      setMessage("Die Rückmeldung wurde dokumentiert.","success");
+      h().render();
+    }).catch(error=>{
+      console.error("[ACT Admin V2] Rückmeldung speichern:",error&&error.message?error.message:"Fehler");
+      finish(error||true);
+    });
+  }
+
+  function decisionSummaryMarkup(decision){
+    if(!decision)return "";
+    const label=decisionTypeLabel(decision.type);
+    const channel=decisionChannelLabel(decision.channel);
+    const at=text(decision.receivedAt||decision.recordedAt);
+    const note=text(decision.note);
+    return `
+      <div class="v2-wish-decision-current" data-wish-decision-current="${escapeHtml(decision.type||"")}">
+        ${label?`<p class="v2-wish-decision-result" data-wish-decision-type>${escapeHtml(label)}</p>`:""}
+        ${channel?`<p class="v2-muted" data-wish-decision-channel>über ${escapeHtml(channel)}</p>`:""}
+        ${at?`<p class="v2-muted" data-wish-decision-at>${escapeHtml(formatWishDateTime(at))}</p>`:""}
+        ${note?`<p class="v2-wish-decision-note" data-wish-decision-note>${escapeHtml(note)}</p>`:""}
+      </div>
+    `;
+  }
+
+  function proposalDecisionMarkup(wish){
+    if(!isAdminWishProposalReleasedView(wish)||!hasTransmittedProposal(wish))return "";
+    const api=lib();
+    const types=api&&Array.isArray(api.CUSTOMER_DECISION_TYPES)?api.CUSTOMER_DECISION_TYPES:[
+      {id:"accepted",label:"Angenommen"},
+      {id:"change_requested",label:"Änderungswunsch"},
+      {id:"question",label:"Rückfrage / noch offen"},
+      {id:"rejected",label:"Abgelehnt"}
+    ];
+    const channels=api&&Array.isArray(api.CUSTOMER_DECISION_CHANNELS)?api.CUSTOMER_DECISION_CHANNELS:[
+      {id:"whatsapp",label:"WhatsApp"},
+      {id:"phone",label:"Telefon"},
+      {id:"personal",label:"Persönlich"},
+      {id:"other",label:"Sonstiges"}
+    ];
+    const decision=currentDecisionOf(wish);
+    const final=decision&&(decision.type==="accepted"||decision.type==="rejected");
     const recipient=proposalRecipientLabel(currentCustomer());
-    if(hasTransmittedProposal(wish)){
+    const draft=decisionDraft();
+    const form=canRecordDecision(wish)&&!final?`
+      <form class="v2-wish-decision-form" data-wish-decision-form>
+        <p class="v2-muted" data-wish-decision-prompt>Welche Rückmeldung haben Sie vom ${escapeHtml(recipient)} erhalten?</p>
+        <div class="v2-wish-decision-types" data-wish-decision-types>
+          ${types.map(item=>`
+            <label class="v2-wish-decision-choice${draft.type===item.id?" is-selected":""}">
+              <input type="radio" name="wishDecisionType" value="${escapeHtml(item.id)}" ${draft.type===item.id?"checked":""}>
+              <span>${escapeHtml(item.label)}</span>
+            </label>
+          `).join("")}
+        </div>
+        <label class="v2-edit-field">
+          <span>Über welchen Weg kam die Rückmeldung?</span>
+          <select name="wishDecisionChannel">${optionList(channels,draft.channel||"whatsapp")}</select>
+        </label>
+        <label class="v2-edit-field full">
+          <span>Notiz zur Rückmeldung</span>
+          <textarea name="wishDecisionNote" rows="4" maxlength="2000" placeholder="Kurze interne Notiz zur Rückmeldung">${escapeHtml(draft.note)}</textarea>
+        </label>
+        <label class="v2-edit-field">
+          <span>Rückmeldung erhalten am</span>
+          <input name="wishDecisionReceivedAt" type="datetime-local" value="${escapeHtml(draft.receivedAt)}">
+        </label>
+        <p class="v2-muted">Ohne manuelles Datum wird der aktuelle Zeitpunkt verwendet. Die Notiz bleibt intern.</p>
+        <div class="v2-wish-actions">
+          <button class="v2-button primary" type="button" data-wish-action="record-wish-decision" ${state().wishSaving?"disabled":""}>Rückmeldung speichern</button>
+        </div>
+      </form>
+    `:"";
+    return `
+      <article class="v2-wish-decision" data-wish-decision>
+        <div class="v2-workspace-section-head compact">
+          <div>
+            <h4>Rückmeldung / Entscheidung</h4>
+            <p class="v2-muted">${final
+              ?"Die dokumentierte Kundenrückmeldung."
+              :decision
+                ?"Die letzte Rückmeldung bleibt erhalten. Eine spätere endgültige Entscheidung kann weiterhin erfasst werden."
+                :"Dokumentieren Sie die Rückmeldung erst, nachdem sie tatsächlich vom Interessenten/Kunden gekommen ist."}</p>
+          </div>
+        </div>
+        ${decisionSummaryMarkup(decision)}
+        ${form}
+      </article>
+    `;
+  }
+
+  function proposalTransmitMarkup(wish){
+    if(isAdminWishProposalReleasedView(wish)&&hasTransmittedProposal(wish)){
       const at=text(wish.delivery&&wish.delivery.transmittedAt);
       const channel=proposalTransmitChannelLabel(wish.delivery&&wish.delivery.transmittedChannel);
       return `
@@ -1323,6 +1554,8 @@
         </div>
       `;
     }
+    if(!isAdminWishProposalSent(wish))return "";
+    const recipient=proposalRecipientLabel(currentCustomer());
     return `
       <div class="v2-wish-proposal-transmit" data-wish-proposal-transmit="open">
         <p class="v2-muted" data-proposal-transmit-hint>Bestätigen Sie dies erst, nachdem der Vorschlag bzw. persönliche Link tatsächlich an den ${escapeHtml(recipient)} gesendet wurde.</p>
@@ -1547,9 +1780,11 @@
           const inReview=isAdminWishInReview(wish);
           const prepared=isAdminWishProposalPrepared(wish);
           const sent=isAdminWishProposalSent(wish);
-          const openLabel=replied?"Antworten prüfen":inReview?"Bearbeitung fortsetzen":(prepared||sent)?"Vorschlag ansehen":"Wunsch öffnen";
+          const decided=isAdminWishAfterProposalDecision(wish);
+          const decision=currentDecisionOf(wish);
+          const openLabel=replied?"Antworten prüfen":inReview?"Bearbeitung fortsetzen":(prepared||sent||decided)?"Vorschlag ansehen":"Wunsch öffnen";
           return `
-          <article class="v2-wish-card${replied?" is-replied":""}${prepared?" is-proposal-prepared":""}${sent?" is-proposal-sent":""}" data-wish-card="${escapeHtml(wish.wishId)}">
+          <article class="v2-wish-card${replied?" is-replied":""}${prepared?" is-proposal-prepared":""}${sent||decided?" is-proposal-sent":""}" data-wish-card="${escapeHtml(wish.wishId)}">
             <div>
               <h4>${escapeHtml(wish.title||"Ohne Titel")}</h4>
               <p class="v2-muted">${escapeHtml(snippet(wish.originalRequest&&wish.originalRequest.text))}</p>
@@ -1557,6 +1792,10 @@
               ${inReview?`<p class="v2-muted">In Bearbeitung</p>`:""}
               ${prepared?`<p class="v2-wish-proposal-ready-hint">Vorschlag vorbereitet</p><p class="v2-muted">Noch nicht an den Gast gesendet</p>`:""}
               ${sent?`<p class="v2-wish-proposal-sent-hint">Vorschlag freigegeben</p><p class="v2-muted">Im Kundenportal verfügbar</p>`:""}
+              ${decision&&decision.type==="accepted"?`<p class="v2-wish-decision-hint" data-wish-decision-hint>Vorschlag angenommen</p>`:""}
+              ${decision&&decision.type==="change_requested"?`<p class="v2-wish-decision-hint" data-wish-decision-hint>Änderungswunsch erhalten</p>`:""}
+              ${decision&&decision.type==="question"?`<p class="v2-wish-decision-hint" data-wish-decision-hint>Rückfrage / noch offen</p>`:""}
+              ${decision&&decision.type==="rejected"?`<p class="v2-wish-decision-hint" data-wish-decision-hint>Vorschlag abgelehnt</p>`:""}
             </div>
             <dl>
               <div><dt>Quelle</dt><dd>${escapeHtml(sourceLabel(wish.source))}</dd></div>
@@ -1564,7 +1803,7 @@
               <div><dt>Status</dt><dd>${escapeHtml(wish.statusLabel||statusLabel(wish.status))}</dd></div>
               <div><dt>Offene Rückfragen</dt><dd>${escapeHtml(String(openFollowUpCount(wish)))}</dd></div>
             </dl>
-          <button class="v2-button ${replied||prepared||sent?"primary":"soft"}" type="button" data-wish-action="open" data-wish-id="${escapeHtml(wish.wishId)}">${openLabel}</button>
+          <button class="v2-button ${replied||prepared||sent||decided?"primary":"soft"}" type="button" data-wish-action="open" data-wish-id="${escapeHtml(wish.wishId)}">${openLabel}</button>
           </article>
         `;
         }).join("")}</div>`:`<p class="v2-muted" data-wish-empty>Noch kein Wunsch erfasst.</p>`}
@@ -2211,13 +2450,13 @@
   }
 
   function workupMarkup(wish){
-    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish)&&!isAdminWishProposalSent(wish))return "";
-    const readOnly=isAdminWishProposalPrepared(wish)||isAdminWishProposalSent(wish);
+    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish)&&!isAdminWishProposalReleasedView(wish))return "";
+    const readOnly=isAdminWishProposalPrepared(wish)||isAdminWishProposalReleasedView(wish);
     const workup=normalizedWorkup(wish);
     const editor=readOnly?"":text(state().wishWorkupEditor);
     const notes=readOnly?workup.notes:(state().wishWorkupNotesDraft==null?workup.notes:state().wishWorkupNotesDraft);
     return `
-      <article class="v2-wish-panel v2-wish-workup${readOnly?" is-readonly":""}" data-wish-workup ${readOnly?`data-workup-stage="${isAdminWishProposalSent(wish)?"sent":"prepared"}"`:""}>
+      <article class="v2-wish-panel v2-wish-workup${readOnly?" is-readonly":""}" data-wish-workup ${readOnly?`data-workup-stage="${isAdminWishProposalReleasedView(wish)?"sent":"prepared"}"`:""}>
         <div class="v2-workspace-section-head compact">
           <div>
             <h4>Ausarbeitung</h4>
@@ -2676,10 +2915,10 @@
   }
 
   function proposalMarkup(wish){
-    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish)&&!isAdminWishProposalSent(wish))return "";
+    if(!isAdminWishInReview(wish)&&!isAdminWishProposalPrepared(wish)&&!isAdminWishProposalReleasedView(wish))return "";
     const marked=markedProposalCount(wish);
     const draft=hasDraftProposal(wish);
-    const sent=isAdminWishProposalSent(wish);
+    const sent=isAdminWishProposalReleasedView(wish);
     const prepared=isAdminWishProposalPrepared(wish)&&hasPreparedProposal(wish);
     const frozen=prepared||sent;
     const proposal=normalizedProposal(wish);
@@ -2723,6 +2962,7 @@
           </div>
           ${proposalGrantMarkup(currentCustomer(),wish)}
           ${proposalTransmitMarkup(wish)}
+          ${proposalDecisionMarkup(wish)}
           ${proposalPreviewMarkup(wish)}
         `:prepared?`
           <p class="v2-wish-proposal-ready" data-proposal-ready>Vorschlag vorbereitet</p>
@@ -2814,7 +3054,7 @@
       });
     }
     if(key==="workup"||key==="proposal"){
-      return isAdminWishInReview(wish)||isAdminWishProposalPrepared(wish)||isAdminWishProposalSent(wish);
+      return isAdminWishInReview(wish)||isAdminWishProposalPrepared(wish)||isAdminWishProposalReleasedView(wish);
     }
     if(key==="proposal-grant")return shouldShowProposalGrantPanel(customer,wish);
     return false;
@@ -3006,6 +3246,7 @@
     if(action==="prepare-proposal"){prepareProposalFromDraft();return true;}
     if(action==="send-proposal"){sendPreparedProposal();return true;}
     if(action==="mark-proposal-transmitted"){markProposalTransmitted();return true;}
+    if(action==="record-wish-decision"){recordWishDecision();return true;}
     if(action==="proposal-whatsapp"){openProposalWhatsapp();return true;}
     if(action==="proposal-grant-create"){createProposalGrantLink();return true;}
     if(action==="proposal-grant-copy"){copyProposalGrantLink();return true;}
@@ -3099,6 +3340,11 @@
       h().patchState({wishProposalDraft:readProposalDraftFromForm(event.target.closest("[data-proposal-form]"))});
       return true;
     }
+    if(event.target.closest("[data-wish-decision-form]")){
+      syncDecisionDraft(event.target.closest("[data-wish-decision-form]"));
+      if(event.target.name==="wishDecisionType")h().render();
+      return true;
+    }
     return false;
   }
 
@@ -3129,6 +3375,10 @@
     }
     if(event.target.closest("[data-wish-custom-form]")){
       syncCustomDraft(event.target.closest("[data-wish-custom-form]"));
+      return true;
+    }
+    if(event.target.closest("[data-wish-decision-form]")){
+      syncDecisionDraft(event.target.closest("[data-wish-decision-form]"));
       return true;
     }
     if(event.target.closest("[data-wish-known-form]"))return true;

@@ -71,7 +71,9 @@
     proposalPriceText:80,
     proposalNote:2000,
     proposalSourceId:80,
-    maxProposalItems:40
+    maxProposalItems:40,
+    decisionNote:2000,
+    maxDecisionHistory:20
   };
 
   const WISH_SOURCES=[
@@ -2010,6 +2012,198 @@
     return ok(current);
   }
 
+  const CUSTOMER_DECISION_TYPES=[
+    {id:"accepted",label:"Angenommen"},
+    {id:"change_requested",label:"Änderungswunsch"},
+    {id:"question",label:"Rückfrage / noch offen"},
+    {id:"rejected",label:"Abgelehnt"}
+  ];
+
+  const CUSTOMER_DECISION_CHANNELS=[
+    {id:"whatsapp",label:"WhatsApp"},
+    {id:"phone",label:"Telefon"},
+    {id:"personal",label:"Persönlich"},
+    {id:"other",label:"Sonstiges"}
+  ];
+
+  const FINAL_CUSTOMER_DECISION_TYPES=["accepted","rejected"];
+
+  function resolveCustomerDecisionType(value){
+    const key=text(value).toLowerCase();
+    return CUSTOMER_DECISION_TYPES.some(item=>item.id===key)?key:"";
+  }
+
+  function customerDecisionTypeLabel(type){
+    const match=CUSTOMER_DECISION_TYPES.find(item=>item.id===text(type).toLowerCase());
+    return match?match.label:"";
+  }
+
+  function resolveCustomerDecisionChannel(value){
+    const key=text(value).toLowerCase();
+    return CUSTOMER_DECISION_CHANNELS.some(item=>item.id===key)?key:"";
+  }
+
+  function customerDecisionChannelLabel(channel){
+    const match=CUSTOMER_DECISION_CHANNELS.find(item=>item.id===text(channel).toLowerCase());
+    return match?match.label:"";
+  }
+
+  function isFinalCustomerDecisionType(type){
+    return FINAL_CUSTOMER_DECISION_TYPES.includes(text(type).toLowerCase());
+  }
+
+  function parseDecisionTimestamp(value){
+    const raw=text(value);
+    if(!raw)return "";
+    const date=new Date(raw);
+    if(Number.isNaN(date.getTime()))return "";
+    return date.toISOString();
+  }
+
+  function normalizeCustomerDecisionEntry(input){
+    const source=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
+    const type=resolveCustomerDecisionType(source.type);
+    const channel=resolveCustomerDecisionChannel(source.channel);
+    const receivedAt=parseDecisionTimestamp(source.receivedAt);
+    const recordedAt=parseDecisionTimestamp(source.recordedAt);
+    if(!type||!channel||!receivedAt||!recordedAt)return null;
+    return {
+      type,
+      note:clip(source.note,LIMITS.decisionNote),
+      receivedAt,
+      recordedAt,
+      recordedBy:"admin",
+      channel
+    };
+  }
+
+  function emptyCustomerDecision(){
+    return {current:null,history:[]};
+  }
+
+  function asCustomerDecision(wish){
+    const source=wish&&wish.customerDecision&&typeof wish.customerDecision==="object"&&!Array.isArray(wish.customerDecision)
+      ?wish.customerDecision
+      :null;
+    if(!source)return emptyCustomerDecision();
+    return {
+      current:normalizeCustomerDecisionEntry(source.current),
+      history:(Array.isArray(source.history)?source.history:[])
+        .map(normalizeCustomerDecisionEntry)
+        .filter(Boolean)
+        .slice(-LIMITS.maxDecisionHistory)
+    };
+  }
+
+  function currentWishDecision(wish){
+    return asCustomerDecision(wish).current;
+  }
+
+  function hasRecordedWishDecision(wish){
+    return Boolean(currentWishDecision(wish));
+  }
+
+  function sameDecisionPayload(left,right){
+    if(!left||!right)return false;
+    return left.type===right.type&&left.channel===right.channel&&text(left.note)===text(right.note);
+  }
+
+  function releasedProposalDelivery(wish){
+    const delivery=asDelivery(wish);
+    if(!delivery||text(delivery.state)!=="sent")return null;
+    const snapshot=customerSafeProposalSnapshot(delivery.proposalSnapshot);
+    if(!snapshot.items.length)return null;
+    if(!text(delivery.transmittedAt))return null;
+    return delivery;
+  }
+
+  function canRecordWishCustomerDecision(wish){
+    const source=wish&&typeof wish==="object"?wish:{};
+    if(text(source.origin)!=="admin")return false;
+    if(text(source.status)!=="PROPOSAL_SENT")return false;
+    return Boolean(releasedProposalDelivery(source));
+  }
+
+  function applyFinalDecisionStatus(wish,type,now){
+    if(type==="accepted"){
+      wish.status="CUSTOMER_DECISION";
+      wish.statusLabel=statusLabel(wish.status);
+      wish.statusHistory=appendStatusHistory(wish.statusHistory,{
+        status:"CUSTOMER_DECISION",
+        at:now,
+        actor:"admin"
+      });
+      return;
+    }
+    if(type==="rejected"){
+      wish.statusHistory=appendStatusHistory(wish.statusHistory,{
+        status:"CUSTOMER_DECISION",
+        at:now,
+        actor:"admin"
+      });
+      wish.status="CANCELLED";
+      wish.statusLabel=statusLabel(wish.status);
+      wish.statusHistory=appendStatusHistory(wish.statusHistory,{
+        status:"CANCELLED",
+        at:now,
+        actor:"admin"
+      });
+    }
+  }
+
+  function recordWishCustomerDecision(wish,options){
+    const settings=options&&typeof options==="object"?options:{};
+    const current=cloneWish(wish);
+    if(text(current.origin)!=="admin"){
+      return fail(["Nur Concierge-Wünsche können eine Kundenrückmeldung erhalten."],"failed-precondition");
+    }
+    const delivery=releasedProposalDelivery(current);
+    if(!delivery){
+      if(!hasTransmittedWishProposal(current)){
+        return fail(["Die Kundenrückmeldung kann erst nach der dokumentierten Übermittlung erfasst werden."],"failed-precondition");
+      }
+      return fail(["Es liegt keine freigegebene Auslieferung vor."],"failed-precondition");
+    }
+    const type=resolveCustomerDecisionType(settings.type);
+    if(!type)return fail(["Bitte eine gültige Rückmeldung auswählen."],"invalid-argument");
+    const channel=resolveCustomerDecisionChannel(settings.channel);
+    if(!channel)return fail(["Bitte den Weg der Rückmeldung angeben."],"invalid-argument");
+    const now=nowIso(settings.now);
+    const receivedAt=text(settings.receivedAt)?parseDecisionTimestamp(settings.receivedAt):now;
+    if(!receivedAt)return fail(["Der Zeitpunkt der Rückmeldung ist ungültig."],"invalid-argument");
+    const existing=asCustomerDecision(current);
+    const nextEntry={
+      type,
+      note:clip(settings.note,LIMITS.decisionNote),
+      receivedAt,
+      recordedAt:now,
+      recordedBy:"admin",
+      channel
+    };
+    const status=text(current.status);
+    if(status==="CUSTOMER_DECISION"||status==="CANCELLED"){
+      if(existing.current&&isFinalCustomerDecisionType(existing.current.type)&&existing.current.type===type){
+        return ok(current);
+      }
+      return fail(["Die Kundenentscheidung ist bereits dokumentiert."],"failed-precondition");
+    }
+    if(status!=="PROPOSAL_SENT"){
+      return fail(["Die Kundenrückmeldung kann in diesem Zustand nicht erfasst werden."],"failed-precondition");
+    }
+    if(existing.current&&sameDecisionPayload(existing.current,nextEntry)){
+      return ok(current);
+    }
+    current.customerDecision={
+      current:nextEntry,
+      history:existing.current
+        ?existing.history.concat([existing.current]).slice(-LIMITS.maxDecisionHistory)
+        :existing.history.slice()
+    };
+    current.updatedAt=now;
+    if(isFinalCustomerDecisionType(type))applyFinalDecisionStatus(current,type,now);
+    return ok(current);
+  }
+
   function publicProposal(wish){
     const proposal=normalizeProposal(wish&&wish.proposal);
     return {
@@ -2689,6 +2883,17 @@
     proposalTransmitChannelLabel,
     hasTransmittedWishProposal,
     markWishProposalTransmitted,
+    CUSTOMER_DECISION_TYPES,
+    CUSTOMER_DECISION_CHANNELS,
+    resolveCustomerDecisionType,
+    customerDecisionTypeLabel,
+    resolveCustomerDecisionChannel,
+    customerDecisionChannelLabel,
+    isFinalCustomerDecisionType,
+    currentWishDecision,
+    hasRecordedWishDecision,
+    canRecordWishCustomerDecision,
+    recordWishCustomerDecision,
     customerSafeProposalSnapshot,
     hasSentWishProposal,
     publicProposal,

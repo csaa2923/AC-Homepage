@@ -110,7 +110,7 @@ describe("customer wish proposal transmit",()=>{
     assert.match(serviceJs,/markCustomerWishProposalTransmitted/);
     assert.match(wishesJs,/Als übermittelt markieren/);
     assert.match(wishesJs,/Wurde der Vorschlag tatsächlich/);
-    assert.match(adminHtml,/firebase-service\.js\?v=41/);
+    assert.match(adminHtml,/firebase-service\.js\?v=42/);
     assert.match(wishesJs,/data-wish-action="proposal-whatsapp"/);
     assert.match(wishesJs,/data-wish-action="mark-proposal-transmitted"/);
     assert.doesNotMatch(wishesJs,/localStorage|sessionStorage/);

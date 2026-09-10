@@ -69,6 +69,12 @@ exports.markCustomerWishProposalTransmitted=onCall({
   invoker:"public"
 },(request)=>loadImpl().markCustomerWishProposalTransmitted(request));
 
+exports.recordCustomerWishDecision=onCall({
+  region:"europe-west1",
+  cors:true,
+  invoker:"public"
+},(request)=>loadImpl().recordCustomerWishDecision(request));
+
 exports.submitCustomerWishFollowUpAnswers=onCall({
   region:"europe-west1",
   cors:true,

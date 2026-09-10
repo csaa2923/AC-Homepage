@@ -1425,6 +1425,28 @@
     return callAdminPortalAccessCallable("markCustomerWishProposalTransmitted",{customerId,wishId,channel});
   }
 
+  async function recordCustomerWishDecision(input={}){
+    const customerId=String(input.customerId||"").trim();
+    const wishId=String(input.wishId||"").trim();
+    const type=String(input.type||"").trim();
+    const note=String(input.note||"");
+    const channel=String(input.channel||"").trim();
+    const receivedAt=String(input.receivedAt||"").trim();
+    if(!customerId){
+      const error=new Error("Kunden-ID fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    if(!wishId){
+      const error=new Error("Wunsch-ID fehlt.");
+      error.code="invalid-argument";
+      throw error;
+    }
+    const payload={customerId,wishId,type,note,channel};
+    if(receivedAt)payload.receivedAt=receivedAt;
+    return callAdminPortalAccessCallable("recordCustomerWishDecision",payload);
+  }
+
   async function submitCustomerWishFollowUpAnswers(publicPortalId,wishId,answers){
     return callPortalCustomerFunction("submitCustomerWishFollowUpAnswers",{
       publicPortalId,
@@ -1839,6 +1861,7 @@
     listCustomerPortalWishes,
     sendCustomerWishProposal,
     markCustomerWishProposalTransmitted,
+    recordCustomerWishDecision,
     submitCustomerWishFollowUpAnswers,
     saveConciergeAnalysis,
     listConciergeAnalyses,

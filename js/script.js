@@ -204,25 +204,20 @@ function renderConsentCopy(lang){
 }
 
 function renderLegalLanguage(lang){
-  const pairs=[["agbLangDe","agbLangEn"],["withdrawalLangDe","withdrawalLangEn"]];
-  const showEn=lang==="en";
-  let active=null;
-  pairs.forEach(([deId,enId])=>{
-    const de=document.getElementById(deId);
-    const en=document.getElementById(enId);
-    if(!de||!en)return;
-    active=deId;
-    de.hidden=showEn;
-    en.hidden=!showEn;
-  });
-  if(!active)return;
-  const dict=showEn?(T.en||T.de):T.de;
-  document.querySelectorAll("[data-i18n='legalLabel'],[data-i18n='agbTitle'],[data-i18n='agbSubtitle'],[data-i18n='agbStand'],[data-i18n='agbPdf'],[data-i18n='legalBack'],[data-i18n='withdrawalTitle'],[data-i18n='withdrawalSubtitle'],[data-i18n='withdrawalStand'],[data-i18n='withdrawalPdf'],[data-i18n='withdrawalFormPdf']").forEach(el=>{
-    const key=el.dataset.i18n;
-    if(dict[key])el.textContent=dict[key];
-  });
-  if(active==="withdrawalLangDe"&&dict.withdrawalPageTitle)document.title=dict.withdrawalPageTitle;
-  else if(active==="agbLangDe"&&dict.agbPageTitle)document.title=dict.agbPageTitle;
+  const languages=["de","en","it","fr"];
+  if(!languages.includes(lang))lang="de";
+  for(const prefix of ["agbLang","withdrawalLang"]){
+    for(const code of languages){
+      const el=document.getElementById(prefix+code[0].toUpperCase()+code.slice(1));
+      if(el)el.hidden=code!==lang;
+    }
+  }
+  const isAgb=!!document.getElementById("agbLangDe");
+  const dict=(T[lang]||T.en||T.de);
+  if(!isAgb){
+    document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(dict[key])el.textContent=dict[key]});
+  }
+  document.documentElement.lang=lang;
 }
 
 function setError(message){

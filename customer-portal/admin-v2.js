@@ -190,6 +190,7 @@
     ["buchungen","Buchungen"],
     ["dokumente","Dokumente"],
     ["kommunikation","Kommunikation"],
+    ["angebote","Angebote & Freigaben"],
     ["legalcomms","Kommunikation & Dokumente"],
     ["zahlung","Zahlung"],
     ["veroeffentlichung","Veröffentlichung"]
@@ -8995,7 +8996,7 @@
         </div>
         <div class="v2-workspace-overview-slot">${prospect?"":customerWorkspaceOverviewMarkup(customer,workspace)}</div>
         <section class="v2-tab-panel" role="tabpanel" id="panel-${tab}" aria-labelledby="tab-${tab}">
-          ${tab==="zahlung"?(window.ACTAdminV2Payment?.tabMarkup?.(customer)||placeholderTabMarkup()):tab==="legalcomms"?(window.ACTAdminV2LegalComms?.tabMarkup?.(customer)||placeholderTabMarkup()):tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
+          ${tab==="zahlung"?(window.ACTAdminV2Payment?.tabMarkup?.(customer)||placeholderTabMarkup()):tab==="legalcomms"?(window.ACTAdminV2LegalComms?.tabMarkup?.(customer)||placeholderTabMarkup()):tab==="angebote"?(window.ACTAdminV2Commercial?.tabMarkup?.(customer)||placeholderTabMarkup()):tab==="kunde"?customerTabMarkup(customer):tab==="reise"?tripTabMarkup(customer):tab==="programm"?programTabMarkup(customer):tab==="concierge"?conciergeTabMarkup(customer):tab==="buchungen"?(window.ACTAdminV2Bookings?.bookingsTabMarkup?.(customer)||placeholderTabMarkup()):tab==="dokumente"?documentsTabMarkup(customer):tab==="kommunikation"?(window.ACTAdminV2Communication?.communicationTabMarkup?.(customer)||placeholderTabMarkup()):tab==="veroeffentlichung"?publicationTabMarkup(customer):placeholderTabMarkup()}
         </section>
       </div>
     `;
@@ -11814,6 +11815,7 @@
       routeTo,
       render
     });
+    window.ACTAdminV2Commercial?.bind?.({getState:()=>state,escapeHtml,customerById,render});
     window.ACTAdminV2Wishes?.bind?.({
       getState:()=>state,
       patchState:patch=>Object.assign(state,patch||{}),

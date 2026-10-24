@@ -1392,6 +1392,30 @@
     return callPortalCustomerFunction("listCustomerPortalWishes",{publicPortalId});
   }
 
+  async function listCustomerCommercialActions(publicPortalId){
+    return callPortalCustomerFunction("listCustomerCommercialActions",{publicPortalId});
+  }
+
+  async function acceptCommercialOffer(publicPortalId,input={}){
+    return callPortalCustomerFunction("acceptCommercialOffer",{publicPortalId,...input});
+  }
+
+  async function decideThirdPartyApproval(publicPortalId,input={}){
+    return callPortalCustomerFunction("decideThirdPartyApproval",{publicPortalId,...input});
+  }
+
+  async function saveCommercialOffer(input={}){
+    return callAdminPortalAccessCallable("saveCommercialOffer",input);
+  }
+
+  async function listCommercialOffers(customerId){
+    return callAdminPortalAccessCallable("listCommercialOffers",{customerId:String(customerId||"").trim()});
+  }
+
+  async function saveThirdPartyApproval(input={}){
+    return callAdminPortalAccessCallable("saveThirdPartyApproval",input);
+  }
+
   async function sendCustomerWishProposal(input={}){
     const customerId=String(input.customerId||"").trim();
     const wishId=String(input.wishId||"").trim();
@@ -1858,6 +1882,12 @@
     requestCustomerPortalOtp,
     exchangePortalOtpForCustomToken,
     getCustomerPortalContext,
+    listCustomerCommercialActions,
+    acceptCommercialOffer,
+    decideThirdPartyApproval,
+    saveCommercialOffer,
+    listCommercialOffers,
+    saveThirdPartyApproval,
     listCustomerPortalWishes,
     sendCustomerWishProposal,
     markCustomerWishProposalTransmitted,

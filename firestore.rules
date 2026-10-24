@@ -224,6 +224,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /*
+     * Versioned commercial offers and third-party approvals contain binding
+     * customer evidence. All reads and writes go through authenticated
+     * callable functions; clients never receive direct collection access.
+     */
+    match /customerCommercialOffers/{offerId} {
+      allow read, write: if false;
+    }
+
+    match /thirdPartyBookingApprovals/{approvalId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

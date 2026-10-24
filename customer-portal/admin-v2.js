@@ -233,19 +233,34 @@
     const payment=customer?.payment&&typeof customer.payment==="object"?customer.payment:{};
     const release=String(payment.releaseStatus||"");
     const paid=payment.status==="paid"||payment.paymentStatus==="paid";
-    const accepted=process.offerAccepted===true||process.customerAccepted===true;
+    const legacyAccepted=process.offerAccepted===true||process.customerAccepted===true;
     const sent=process.offerSent===true||process.termsSent===true;
     const status=normalizeText(customer?.status);
-    if((paid||release==="released"||release==="manual_released")&&!accepted)return {label:"Status prüfen",tab:"zahlung",tone:"warning"};
     if(isProspectRecord(customer))return {label:"Wünsche vervollständigen",tab:"kunde",tone:"info"};
     if(!cleanValue(customer?.customerName)||(!cleanValue(customer?.tripName||customer?.tripTitle||customer?.service||customer?.serviceName)&&!primaryWishSummary(customer).originalRequest))return {label:"Wünsche vervollständigen",tab:"kunde",tone:"info"};
-    if(!sent&&!accepted&&/(angebot.*(entwurf|bearbeitung)|entwurf.*angebot)/.test(status))return {label:"Angebot fertigstellen",tab:"angebote",tone:"info"};
-    if(!sent&&!accepted&&/(angebot.*(versendet|ubermittelt)|entscheidung.*ausstehend)/.test(status))return {label:"Kundenentscheidung abwarten",tab:"angebote",tone:"muted"};
-    if(!accepted&&/(angebot.*(angenommen|bestatigt)|kunde.*angenommen)/.test(status))return {label:"Zahlung prüfen",tab:"zahlung",tone:"warning"};
-    if(sent&&!accepted)return {label:"Kundenentscheidung abwarten",tab:"angebote",tone:"muted"};
+    const commercial=window.ACTAdminV2Commercial?.statusSummary?.(customer?.customerId)||null;
+    if(commercial?.error||commercial?.ambiguous||commercial?.offerIntegrityOk===false||commercial?.approvalIntegrityOk===false)return {label:"Status prüfen",tab:"angebote",tone:"warning"};
+    let accepted=legacyAccepted;
+    if(commercial?.loaded){
+      const offerStatus=commercial.offerStatus;
+      accepted=offerStatus==="accepted";
+      if(!offerStatus||offerStatus==="draft")return {label:"Angebot fertigstellen",tab:"angebote",tone:"info"};
+      if(["pending","sent"].includes(offerStatus))return {label:"Kundenentscheidung abwarten",tab:"angebote",tone:"muted"};
+      if(["declined","expired","change_requested","superseded"].includes(offerStatus))return {label:"Status prüfen",tab:"angebote",tone:"warning"};
+      if(!accepted)return {label:"Status prüfen",tab:"angebote",tone:"warning"};
+    }else if(commercial?.attempted||commercial?.loading){
+      return {label:"Status prüfen",tab:"angebote",tone:"muted"};
+    }else{
+      if(!sent&&!accepted&&/(angebot.*(entwurf|bearbeitung)|entwurf.*angebot)/.test(status))return {label:"Angebot fertigstellen",tab:"angebote",tone:"info"};
+      if(!sent&&!accepted&&/(angebot.*(versendet|ubermittelt)|entscheidung.*ausstehend)/.test(status))return {label:"Kundenentscheidung abwarten",tab:"angebote",tone:"muted"};
+      if(!accepted&&/(angebot.*(angenommen|bestatigt)|kunde.*angenommen)/.test(status))accepted=true;
+      if(sent&&!accepted)return {label:"Kundenentscheidung abwarten",tab:"angebote",tone:"muted"};
+      if(!accepted)return {label:"Status prüfen",tab:"angebote",tone:"muted"};
+    }
+    if((paid||release==="released"||release==="manual_released")&&!accepted)return {label:"Status prüfen",tab:"zahlung",tone:"warning"};
     if(accepted&&!paid)return {label:"Zahlung prüfen",tab:"zahlung",tone:"warning"};
     if(paid&&release!=="released"&&release!=="manual_released")return {label:"Manuelle Planungsfreigabe prüfen",tab:"zahlung",tone:"warning"};
-    const openApproval=arrayValue(customer?.thirdPartyApprovals).some(item=>["pending","sent"].includes(String(item?.status||"")))||arrayValue(customer?.bookings).some(item=>item?.customerApproved===false&&item?.approvalRequired===true);
+    const openApproval=commercial?.loaded?commercial.pendingApproval:arrayValue(customer?.thirdPartyApprovals).some(item=>["pending","sent"].includes(String(item?.status||"")))||arrayValue(customer?.bookings).some(item=>item?.customerApproved===false&&item?.approvalRequired===true);
     if(openApproval)return {label:"Kundenentscheidung abwarten",tab:"buchungen",tone:"warning"};
     const publication=publicationStatus(customer);
     if(publication.key==="pending")return {label:"Veröffentlichung prüfen",tab:"veroeffentlichung",tone:"warning"};
@@ -4823,13 +4838,18 @@
   }
 
   function dashboardPriorityEntries(rows){
-    return rows.map(row=>{
+    const entries=rows.flatMap(row=>{
       const action=customerNextAction(row.customer);
       const category=isProspectRecord(row.customer)?"Neue Anfrage":action.tab==="angebote"?"Offenes Angebot":action.tab==="buchungen"?"Buchungsaufgabe":action.tab==="zahlung"?"Zahlungsbedarf":action.tab==="veroeffentlichung"?"Veröffentlichung":"Aufgabe";
       const rank=action.tone==="warning"?1:action.tone==="info"?2:3;
-      return {rank,tone:action.tone==="warning"?"warning":"",reason:action.label,urgency:category,tab:action.tab,row};
-    }).filter(item=>item.reason!=="Status prüfen")
-      .sort((a,b)=>a.rank-b.rank||(dashboardDateOffset(a.row.trip.start)??99)-(dashboardDateOffset(b.row.trip.start)??99)||timestampValue(b.row.customer)-timestampValue(a.row.customer));
+      const actionEntry=action.label==="Status prüfen"?[]:[{rank,tone:action.tone==="warning"?"warning":"",reason:action.label,urgency:category,tab:action.tab,row}];
+      const warnings=(row.workspace?.warnings||[]).map(item=>({rank:item.tone==="critical"?0:1,tone:item.tone||"warning",reason:item.title,urgency:item.tone==="critical"?"Kritisch":"Offene Aufgabe",tab:item.tab||"kunde",row}));
+      const insights=(row.intelligence?.insights||[]).filter(item=>item.severity!=="recommendation").map(item=>({rank:item.severity==="critical"?0:1,tone:item.severity==="critical"?"critical":"warning",reason:item.title,urgency:item.severity==="critical"?"Kritisch":"Concierge-Hinweis",tab:item.targetTab||"kunde",row}));
+      return [...warnings,...insights,...actionEntry];
+    });
+    const unique=new Map();
+    entries.forEach(item=>{const key=`${item.row.customer.customerId}|${item.tab}|${normalizeText(item.reason)}`;const existing=unique.get(key);if(!existing||item.rank<existing.rank)unique.set(key,item);});
+    return [...unique.values()].sort((a,b)=>a.rank-b.rank||(dashboardDateOffset(a.row.trip.start)??99)-(dashboardDateOffset(b.row.trip.start)??99)||timestampValue(b.row.customer)-timestampValue(a.row.customer));
   }
 
   function dashboardProspectEntries(){
@@ -4938,6 +4958,7 @@
 
   function renderOperationsDashboard(){
     const rows=dashboardCustomerRows();
+    window.setTimeout(()=>window.ACTAdminV2Commercial?.prime?.(rows.map(row=>row.customer.customerId)),0);
     const priorities=[...dashboardProspectEntries(),...dashboardPriorityEntries(rows)];
     renderDashboardHeader(rows,priorities);
     renderOperationsMetrics(rows,priorities);
@@ -8933,6 +8954,7 @@
       `;
       return;
     }
+    window.setTimeout(()=>window.ACTAdminV2Commercial?.prime?.([customer.customerId]),0);
     schedulePortalAccessLoad(customer.customerId);
     const tab=detailTabs.some(([key])=>key===state.selectedTab)?state.selectedTab:"kunde";
     const workspace=customerWorkspaceViewModel(customer);

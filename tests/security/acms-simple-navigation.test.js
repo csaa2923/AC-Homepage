@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {describe,it} from "node:test";
+import vm from "node:vm";
 import {fileURLToPath} from "node:url";
 
 const root=path.join(path.dirname(fileURLToPath(import.meta.url)),"../..");
@@ -46,6 +47,39 @@ describe("ACMS Simple navigation contracts",()=>{
     assert.match(js,/Manuelle Planungsfreigabe prüfen/);
     assert.match(js,/data-detail-tab="\$\{escapeHtml\(nextAction\.tab\)\}"/);
     assert.doesNotMatch(js,/customerNextAction[\s\S]{0,1500}(savePayment|saveCustomer|releaseStatus\s*=)/);
+  });
+
+  it("keeps legacy workspace warnings and Concierge Intelligence in dashboard priorities",()=>{
+    const js=read("customer-portal/admin-v2.js");
+    const priorityFn=js.match(/function dashboardPriorityEntries\(rows\)[\s\S]*?(?=\n  function dashboardProspectEntries)/)?.[0]||"";
+    assert.match(priorityFn,/row\.workspace\?\.warnings\|\|\[\]/);
+    assert.match(priorityFn,/row\.intelligence\?\.insights\|\|\[\]/);
+    assert.match(priorityFn,/item\.severity!=="recommendation"/);
+    assert.match(priorityFn,/item\.tone==="critical"\?0:1/);
+    assert.match(priorityFn,/const unique=new Map\(\)/);
+  });
+
+  it("reads server-side offer and approval status without mutating it",async()=>{
+    const source=read("customer-portal/admin-v2-commercial.js");
+    const responses=new Map([
+      ["accepted",{offers:[{version:2,status:"accepted",integrityOk:true}],approvals:[{status:"pending",integrityOk:true}]}],
+      ["broken",{offers:[{version:1,status:"accepted",integrityOk:false}],approvals:[]}],
+      ["ambiguous",{offers:[{version:2,status:"accepted",integrityOk:true},{version:2,status:"sent",integrityOk:true}],approvals:[]}]
+    ]);
+    const context={window:{ACTFirebaseService:{listCommercialOffers:async id=>{if(id==="unavailable")throw new Error("offline");return responses.get(id);}}},document:{documentElement:{dataset:{}},addEventListener:()=>{}}};
+    vm.runInNewContext(source,context);
+    let renders=0;
+    context.window.ACTAdminV2Commercial.bind({render:()=>{renders++;},escapeHtml:String,customerById:()=>null,getState:()=>({})});
+    await context.window.ACTAdminV2Commercial.prime(["accepted","broken","ambiguous","unavailable"]);
+    assert.deepEqual({...context.window.ACTAdminV2Commercial.statusSummary("accepted")},{loaded:true,error:false,ambiguous:false,offerStatus:"accepted",offerIntegrityOk:true,pendingApproval:true,approvedApproval:false,approvalIntegrityOk:true});
+    assert.equal(context.window.ACTAdminV2Commercial.statusSummary("broken").offerIntegrityOk,false);
+    assert.equal(context.window.ACTAdminV2Commercial.statusSummary("ambiguous").ambiguous,true);
+    assert.deepEqual({...context.window.ACTAdminV2Commercial.statusSummary("unavailable")},{loaded:false,loading:false,attempted:true,error:true});
+    assert.equal(renders,1);
+    assert.doesNotMatch(source,/status\s*=\s*"accepted"|releaseStatus\s*=/);
+    const nextAction=read("customer-portal/admin-v2.js").match(/function customerNextAction\(customer\)[\s\S]*?(?=\n  function normalizeText)/)?.[0]||"";
+    assert.match(nextAction,/commercial\?\.error\|\|commercial\?\.ambiguous[\s\S]*label:"Status prüfen"/);
+    assert.match(nextAction,/if\(!accepted\)return \{label:"Status prüfen"/);
   });
 
   it("marks compact services as optional-flow UI without introducing required fields",()=>{

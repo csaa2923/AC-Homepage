@@ -7,7 +7,7 @@
   const isoDate=value=>String(value||"").slice(0,10);
   const label={draft:"Entwurf",pending:"Zur Freigabe",sent:"Versendet",accepted:"Angenommen",declined:"Abgelehnt",expired:"Abgelaufen",superseded:"Ersetzt",approved:"Freigegeben",change_requested:"Änderung erforderlich",booking_commissioned:"Buchung beauftragt",provider_confirmed:"Anbieterbestätigung erhalten"};
   function customer(){return host?.customerById?.(host.getState().selectedCustomerId)||null;}
-  function recordState(customerId){if(!cache.has(customerId))cache.set(customerId,{loading:false,loaded:false,offers:[],approvals:[],message:"",kind:""});return cache.get(customerId);}
+  function recordState(customerId){if(!cache.has(customerId))cache.set(customerId,{loading:false,loaded:false,attempted:false,offers:[],approvals:[],message:"",kind:""});return cache.get(customerId);}
   function asIso(raw,endOfDay){
     const value=String(raw||"");
     if(!value)return "";
@@ -16,7 +16,9 @@
     if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))return `${value}:00.000Z`;
     return value;
   }
-  async function load(customerId,force=false){const state=recordState(customerId);if(state.loading||(state.loaded&&!force))return;state.loading=true;host.render();try{const result=await window.ACTFirebaseService.listCommercialOffers(customerId);state.offers=result.offers||[];state.approvals=result.approvals||[];state.loaded=true;}catch(error){state.message=error.message||"Angebote konnten nicht geladen werden.";state.kind="error";}finally{state.loading=false;host.render();}}
+  async function load(customerId,force=false,{quiet=false}={}){const state=recordState(customerId);if(state.loading||(state.loaded&&!force))return;state.loading=true;state.attempted=true;if(!quiet)host.render();try{const result=await window.ACTFirebaseService.listCommercialOffers(customerId);state.offers=result.offers||[];state.approvals=result.approvals||[];state.loaded=true;state.message="";state.kind="";}catch(error){state.loaded=false;state.message=error.message||"Angebote konnten nicht geladen werden.";state.kind="error";}finally{state.loading=false;if(!quiet)host.render();}}
+  async function prime(customerIds){const ids=[...new Set((customerIds||[]).map(String).filter(Boolean))].filter(id=>{const state=recordState(id);return !state.loaded&&!state.loading&&!state.attempted;});if(!ids.length)return;await Promise.all(ids.map(id=>load(id,false,{quiet:true})));host.render();}
+  function statusSummary(customerId){const state=recordState(customerId);if(!state.loaded)return {loaded:false,loading:state.loading,attempted:state.attempted,error:state.kind==="error"};const offers=state.offers.filter(item=>item&&item.status!=="superseded").sort((a,b)=>(Number(b.version)||0)-(Number(a.version)||0));const approvals=state.approvals.filter(Boolean);const offer=offers[0]||null;const ambiguous=offers.length>1&&(Number(offers[0]?.version)||0)===(Number(offers[1]?.version)||0);return {loaded:true,error:false,ambiguous,offerStatus:String(offer?.status||""),offerIntegrityOk:offer?offer.integrityOk!==false:true,pendingApproval:approvals.some(item=>["pending","sent"].includes(String(item.status||""))),approvedApproval:approvals.some(item=>item.status==="approved"),approvalIntegrityOk:approvals.every(item=>item.integrityOk!==false)};}
   function defaultOffer(c){return {offerNumber:`ACT-${new Date().getFullYear()}-`,version:1,status:"draft",language:c?.language||c?.preferredLanguage||"de",planningFee:"",planningDescription:"",includedServices:"",changeServices:"",preliminaryThirdPartyServices:"",validUntil:"",individualTerms:"",legal:{termsVersion:"AGB 2026",withdrawalVersion:"Rücktrittsinformation 2026"},trip:{start:c?.travel?.startDate||c?.arrival||"",end:c?.travel?.endDate||c?.departure||"",destination:c?.travel?.region||c?.region||""}};}
   function offerForm(c,offer){const o=offer||defaultOffer(c);return `<form class="v2-card v2-commercial-form" data-commercial-offer-form data-offer-id="${value(o,"offerId")}">
     <div class="v2-section-head"><div><p class="eyebrow">Kommunikation & Dokumente</p><h3>Persönliches Angebot ${o.offerId?`· Version ${Number(o.version)||1}`:"erstellen"}</h3><p>Gespeicherter SHA-256: ${o.snapshotHash?esc(o.snapshotHash):"wird beim Speichern erzeugt"}</p></div><span class="v2-badge">${esc(label[o.status]||o.status||"Entwurf")}</span></div>
@@ -64,5 +66,5 @@
       if(approvalPrint){const state=recordState(customer().customerId);const approval=state.approvals.find(item=>item.approvalId===approvalPrint.dataset.approvalPrint);if(approval?.printHtml&&approval.integrityOk!==false)openStoredPrint(approval.printHtml);}
     });
   }
-  window.ACTAdminV2Commercial={bind,tabMarkup,load};
+  window.ACTAdminV2Commercial={bind,tabMarkup,load,prime,statusSummary};
 })();

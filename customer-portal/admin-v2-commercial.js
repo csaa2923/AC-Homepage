@@ -1,0 +1,68 @@
+(function(){
+  "use strict";
+  let host=null;
+  const cache=new Map();
+  const esc=value=>host?.escapeHtml?host.escapeHtml(value):String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
+  const value=(record,key)=>esc(record?.[key]??"");
+  const isoDate=value=>String(value||"").slice(0,10);
+  const label={draft:"Entwurf",pending:"Zur Freigabe",sent:"Versendet",accepted:"Angenommen",declined:"Abgelehnt",expired:"Abgelaufen",superseded:"Ersetzt",approved:"Freigegeben",change_requested:"Änderung erforderlich",booking_commissioned:"Buchung beauftragt",provider_confirmed:"Anbieterbestätigung erhalten"};
+  function customer(){return host?.customerById?.(host.getState().selectedCustomerId)||null;}
+  function recordState(customerId){if(!cache.has(customerId))cache.set(customerId,{loading:false,loaded:false,offers:[],approvals:[],message:"",kind:""});return cache.get(customerId);}
+  function asIso(raw,endOfDay){
+    const value=String(raw||"");
+    if(!value)return "";
+    if(/[zZ]|[+-]\d{2}:\d{2}$/.test(value))return value;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(value))return `${value}T${endOfDay?"23:59:59.000Z":"00:00:00.000Z"}`;
+    if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))return `${value}:00.000Z`;
+    return value;
+  }
+  async function load(customerId,force=false){const state=recordState(customerId);if(state.loading||(state.loaded&&!force))return;state.loading=true;host.render();try{const result=await window.ACTFirebaseService.listCommercialOffers(customerId);state.offers=result.offers||[];state.approvals=result.approvals||[];state.loaded=true;}catch(error){state.message=error.message||"Angebote konnten nicht geladen werden.";state.kind="error";}finally{state.loading=false;host.render();}}
+  function defaultOffer(c){return {offerNumber:`ACT-${new Date().getFullYear()}-`,version:1,status:"draft",language:c?.language||c?.preferredLanguage||"de",planningFee:"",planningDescription:"",includedServices:"",changeServices:"",preliminaryThirdPartyServices:"",validUntil:"",individualTerms:"",legal:{termsVersion:"AGB 2026",withdrawalVersion:"Rücktrittsinformation 2026"},trip:{start:c?.travel?.startDate||c?.arrival||"",end:c?.travel?.endDate||c?.departure||"",destination:c?.travel?.region||c?.region||""}};}
+  function offerForm(c,offer){const o=offer||defaultOffer(c);return `<form class="v2-card v2-commercial-form" data-commercial-offer-form data-offer-id="${value(o,"offerId")}">
+    <div class="v2-section-head"><div><p class="eyebrow">Kommunikation & Dokumente</p><h3>Persönliches Angebot ${o.offerId?`· Version ${Number(o.version)||1}`:"erstellen"}</h3><p>Gespeicherter SHA-256: ${o.snapshotHash?esc(o.snapshotHash):"wird beim Speichern erzeugt"}</p></div><span class="v2-badge">${esc(label[o.status]||o.status||"Entwurf")}</span></div>
+    <div class="v2-form-grid"><label>Angebotsnummer<input name="offerNumber" required value="${value(o,"offerNumber")}"></label><label>Sprache<select name="language">${["de","en","it","fr"].map(lang=>`<option ${o.language===lang?"selected":""}>${lang}</option>`).join("")}</select></label><label>Reisebeginn<input name="tripStart" type="date" value="${isoDate(o.trip?.start)}"></label><label>Reiseende<input name="tripEnd" type="date" value="${isoDate(o.trip?.end)}"></label><label>Planungshonorar EUR<input name="planningFee" type="number" min="0" step="0.01" required value="${value(o,"planningFee")}"></label><label>Gültig bis<input name="validUntil" type="date" value="${isoDate(o.validUntil)}"></label></div>
+    <label>Leistungsbeschreibung<textarea name="planningDescription" required>${value(o,"planningDescription")}</textarea></label><label>Enthaltene Planungsleistungen<textarea name="includedServices">${value(o,"includedServices")}</textarea></label><label>Enthaltene Änderungen<textarea name="changeServices">${value(o,"changeServices")}</textarea></label><label>Vorläufige Drittleistungen<textarea name="preliminaryThirdPartyServices">${value(o,"preliminaryThirdPartyServices")}</textarea></label><label>Individuelle Bedingungen<textarea name="individualTerms">${value(o,"individualTerms")}</textarea></label>
+    <div class="v2-document-actions"><button class="v2-button soft" type="submit" name="intent" value="draft">Entwurf speichern</button><button class="v2-button primary" type="submit" name="intent" value="sent">Im Kundenportal bereitstellen</button>${o.offerId&&o.integrityOk!==false&&o.printHtml?`<button class="v2-button soft" type="button" data-commercial-print="${value(o,"offerId")}">Druck/PDF des gespeicherten Stands</button>`:""}</div></form>`;}
+  function offerList(items){if(!items.length)return "";return `<div class="v2-card"><h3>Gespeicherte Angebote</h3><div class="v2-list">${items.map(item=>`<article><strong>${value(item,"offerNumber")} · v${Number(item.version)||1}</strong> <span class="v2-badge">${esc(label[item.status]||item.status)}</span><p>${esc(item.planningDescription||"")}</p><p>${esc(item.snapshotHash||"")}</p><button class="v2-button small soft" type="button" data-commercial-edit="${value(item,"offerId")}">Öffnen</button></article>`).join("")}</div></div>`;}
+  function approvalList(items){if(!items.length)return "";return `<div class="v2-card"><h3>Drittbuchungsfreigaben</h3><div class="v2-list">${items.map(item=>`<article><strong>${esc(item.provider)} · ${esc(item.description)}</strong> <span class="v2-badge">${esc(label[item.status]||item.status)}</span><p>${esc(item.bookingId)} · v${Number(item.version)||1} · ${esc(item.snapshotHash||"")}</p>${item.printHtml&&item.integrityOk!==false?`<button class="v2-button small soft" type="button" data-approval-print="${esc(item.approvalId)}">Druck/PDF</button>`:""}</article>`).join("")}</div></div>`;}
+  function approvalForm(c){const bookings=(c?.bookings||[]).filter(item=>!item.archived);if(!bookings.length)return `<div class="v2-card"><h3>Drittbuchungsfreigabe</h3><p>Für diesen Kunden ist noch keine Buchung vorhanden.</p></div>`;return `<form class="v2-card v2-commercial-form" data-third-approval-form><h3>Drittbuchung zur Freigabe vorlegen</h3><p>Die Freigabe beauftragt noch keine Buchung und löst keine Zahlung aus. Der Kunde sieht vor der Entscheidung alle Angaben dieses Formulars.</p><div class="v2-form-grid"><label>Buchung<select name="bookingId">${bookings.map(item=>`<option value="${esc(item.bookingId||item.id)}">${esc(item.title||item.provider||item.type)}</option>`).join("")}</select></label><label>Anbieter<input name="provider" required></label><label>Vertragspartei<input name="contractingParty" required placeholder="Kunde und Anbieter"></label><label>Gesamtpreis EUR<input name="totalPrice" type="number" min="0" step="0.01" required></label><label>Sofort fälliger Betrag EUR<input name="amountDueNow" type="number" min="0" step="0.01" required></label><label>Restbetrag EUR<input name="balanceDueLater" type="number" min="0" step="0.01" value="0"></label><label>Fälligkeit Restbetrag<input name="balanceDueAt" type="date"></label><label>Leistungszeitpunkt<input name="serviceAt" type="datetime-local" required></label><label>Gebühren EUR<input name="additionalFees" type="number" min="0" step="0.01" value="0"></label><label>Zahlungsweg<select name="paymentRoute"><option value="provider">Direkt an Anbieter</option><option value="act">Über ACT (nur aktuell fälliger Betrag)</option></select></label><label>Freigabe gültig bis<input name="validUntil" type="datetime-local" required></label></div><label>Leistung<textarea name="description" required></textarea></label><label>Stornobedingungen<textarea name="cancellationTerms" required></textarea></label><label>Umbuchungsbedingungen<textarea name="rebookingTerms" required></textarea></label><label>Vollständige Anbieterbedingungen<textarea name="providerTerms" required></textarea></label><label>Anbieterbedingungen (Link)<input name="providerTermsUrl" type="url" required></label><label>Vermittlungshinweis<textarea name="agencyStatement" required>Die Drittleistung soll im Namen und auf Rechnung des Kunden beim genannten Anbieter gebucht werden. Diese Freigabe löst noch keine automatische Buchung und keine Zahlung aus.</textarea></label><button class="v2-button primary" type="submit">Zur Freigabe vorlegen</button></form>`;}
+  function tabMarkup(c){const state=recordState(c.customerId);if(!state.loaded&&!state.loading)setTimeout(()=>load(c.customerId),0);const editing=state.editing?state.offers.find(item=>item.offerId===state.editing):null;return `<div class="v2-stack">${state.message?`<p class="v2-edit-status ${esc(state.kind)}">${esc(state.message)}</p>`:""}${state.loading?`<div class="v2-card"><p>Angebote werden geladen …</p></div>`:offerForm(c,editing)}${offerList(state.offers)}${approvalList(state.approvals)}${approvalForm(c)}</div>`;}
+  function formObject(form){return Object.fromEntries(new FormData(form).entries());}
+  function openStoredPrint(html){const win=window.open("","_blank","noopener,noreferrer");if(!win)return;win.document.open();win.document.write(String(html||""));win.document.close();}
+  async function submitOffer(form,intent){
+    const c=customer(),data=formObject(form),state=recordState(c.customerId);
+    const existing=state.offers.find(item=>item.offerId===form.dataset.offerId)||{};
+    state.message="Wird gespeichert …";state.kind="";host.render();
+    try{
+      const result=await window.ACTFirebaseService.saveCommercialOffer({customerId:c.customerId,offerId:form.dataset.offerId||undefined,offerNumber:data.offerNumber,language:data.language,status:intent,planningFee:data.planningFee,planningDescription:data.planningDescription,includedServices:data.includedServices,changeServices:data.changeServices,preliminaryThirdPartyServices:data.preliminaryThirdPartyServices,individualTerms:data.individualTerms,validUntil:asIso(data.validUntil,true),trip:{...(existing.trip||{}),start:data.tripStart,end:data.tripEnd,destination:existing.trip?.destination||"",travellers:existing.trip?.travellers||""},legal:{termsUrl:"/agb.html",withdrawalUrl:"/ruecktritt.html",termsVersion:existing.legal?.termsVersion||"AGB 2026",withdrawalVersion:existing.legal?.withdrawalVersion||"Rücktrittsinformation 2026"}});
+      const saved=result.offer||{};
+      state.editing="";
+      state.message=intent==="sent"&&saved.status==="draft"?"Neue Version wurde als Entwurf gespeichert. Bitte das Angebot erneut im Kundenportal bereitstellen.":"Angebot gespeichert.";
+      state.kind="success";state.loaded=false;await load(c.customerId,true);
+    }catch(error){state.message=error.message||"Speichern fehlgeschlagen.";state.kind="error";host.render();}
+  }
+  async function submitApproval(form){
+    const c=customer(),data=formObject(form),booking=(c.bookings||[]).find(item=>(item.bookingId||item.id)===data.bookingId),state=recordState(c.customerId);
+    try{
+      const result=await window.ACTFirebaseService.saveThirdPartyApproval({customerId:c.customerId,bookingId:data.bookingId,status:"pending",language:c.language||"de",provider:data.provider||booking?.provider,contractingParty:data.contractingParty,description:data.description,serviceAt:asIso(data.serviceAt),totalPrice:data.totalPrice,amountDueNow:data.amountDueNow,balanceDueLater:data.balanceDueLater===""?0:data.balanceDueLater,balanceDueAt:asIso(data.balanceDueAt),additionalFees:data.additionalFees===""?0:data.additionalFees,currency:"EUR",paymentRoute:data.paymentRoute,cancellationTerms:data.cancellationTerms,rebookingTerms:data.rebookingTerms,providerTerms:data.providerTerms,providerTermsUrl:data.providerTermsUrl,validUntil:asIso(data.validUntil),agencyStatement:data.agencyStatement});
+      const saved=result.approval||{};
+      state.message=saved.status==="draft"?"Neue Version wurde als Entwurf gespeichert. Bitte die Freigabe erneut vorlegen.":"Drittbuchungsfreigabe wurde im Kundenportal bereitgestellt. Es erfolgt keine Buchung und keine Zahlung.";
+      state.kind="success";state.loaded=false;form.reset();await load(c.customerId,true);
+    }catch(error){state.message=error.message||"Freigabe konnte nicht gespeichert werden.";state.kind="error";host.render();}
+  }
+  function bind(nextHost){
+    host=nextHost;
+    if(document.documentElement.dataset.commercialBound)return;
+    document.documentElement.dataset.commercialBound="1";
+    document.addEventListener("submit",event=>{if(event.target.matches("[data-commercial-offer-form]")){event.preventDefault();submitOffer(event.target,event.submitter?.value||"draft");}if(event.target.matches("[data-third-approval-form]")){event.preventDefault();submitApproval(event.target);}});
+    document.addEventListener("click",event=>{
+      const edit=event.target.closest("[data-commercial-edit]");
+      if(edit){const c=customer();recordState(c.customerId).editing=edit.dataset.commercialEdit;host.render();return;}
+      const offerPrint=event.target.closest("[data-commercial-print]");
+      if(offerPrint){const state=recordState(customer().customerId);const offer=state.offers.find(item=>item.offerId===offerPrint.dataset.commercialPrint);if(offer?.printHtml&&offer.integrityOk!==false)openStoredPrint(offer.printHtml);return;}
+      const approvalPrint=event.target.closest("[data-approval-print]");
+      if(approvalPrint){const state=recordState(customer().customerId);const approval=state.approvals.find(item=>item.approvalId===approvalPrint.dataset.approvalPrint);if(approval?.printHtml&&approval.integrityOk!==false)openStoredPrint(approval.printHtml);}
+    });
+  }
+  window.ACTAdminV2Commercial={bind,tabMarkup,load};
+})();

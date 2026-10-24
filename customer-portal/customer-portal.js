@@ -244,6 +244,7 @@
     syncAppViewLabels();
     renderPortalFollowUpWishes();
     renderPortalProposals();
+    window.ACTCustomerCommercialActions?.render?.();
   }
 
   function syncPortalLanguageUI(lang){
@@ -3991,6 +3992,7 @@
     }
     renderPortalFollowUpWishes();
     renderPortalProposals();
+    window.ACTCustomerCommercialActions?.render?.();
   }
 
   function renderAdminVersionHint(){
@@ -4047,6 +4049,7 @@
       logoutButton.addEventListener("click",handlePortalLogout);
     }
     renderPortal();
+    if(isSessionAccess)window.ACTCustomerCommercialActions?.boot?.(publicPortalId).catch(()=>{});
     applyAppViewVisibility();
   }
 

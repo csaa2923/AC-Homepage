@@ -252,3 +252,36 @@ describe("firestore rules — proposal grants",()=>{
     await assertFails(ownerDb.doc(grantPath).set({status:"revoked"}));
   });
 });
+
+describe("firestore rules — commercial offers and approvals",()=>{
+  const offerPath="customerCommercialOffers/customer_a__offer_1";
+  const approvalPath="thirdPartyBookingApprovals/customer_a__approval_1";
+
+  it("denies client reads of offers and third-party approvals",async()=>{
+    const unauthedDb=testEnv.unauthenticatedContext().firestore();
+    const customerDb=testEnv.authenticatedContext("commercial-customer-read",{role:"customer"}).firestore();
+    const adminDb=testEnv.authenticatedContext("commercial-admin-read",{role:"admin",orgId:"act"}).firestore();
+    await assertFails(unauthedDb.doc(offerPath).get());
+    await assertFails(customerDb.doc(offerPath).get());
+    await assertFails(adminDb.doc(offerPath).get());
+    await assertFails(unauthedDb.doc(approvalPath).get());
+    await assertFails(customerDb.doc(approvalPath).get());
+    await assertFails(adminDb.doc(approvalPath).get());
+  });
+
+  it("denies a foreign customer access to another customer's offer and approval",async()=>{
+    const foreignDb=testEnv.authenticatedContext("commercial-foreign-customer",{role:"customer"}).firestore();
+    await assertFails(foreignDb.doc("customerCommercialOffers/customer_a__offer_1").get());
+    await assertFails(foreignDb.doc("thirdPartyBookingApprovals/customer_a__approval_1").get());
+    await assertFails(foreignDb.doc("customerCommercialOffers/customer_a__offer_1").set({customerId:"customer_a",status:"accepted",snapshotHash:"forged"}));
+  });
+
+  it("denies client writes of offers and third-party approvals",async()=>{
+    const customerDb=testEnv.authenticatedContext("commercial-customer-write",{role:"customer"}).firestore();
+    const adminDb=testEnv.authenticatedContext("commercial-admin-write",{role:"admin"}).firestore();
+    const ownerDb=testEnv.authenticatedContext("commercial-owner-write",{role:"owner"}).firestore();
+    await assertFails(customerDb.doc(offerPath).set({customerId:"customer_a",status:"accepted"}));
+    await assertFails(adminDb.doc(offerPath).set({customerId:"customer_a",status:"sent"}));
+    await assertFails(ownerDb.doc(approvalPath).set({customerId:"customer_a",status:"approved"}));
+  });
+});

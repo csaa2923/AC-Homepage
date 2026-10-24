@@ -45,6 +45,13 @@ exports.getCustomerPortalContext=onCall({
   invoker:"public"
 },(request)=>loadImpl().getCustomerPortalContext(request));
 
+exports.saveCommercialOffer=onCall({region:"europe-west1",cors:true,invoker:"public"},request=>loadImpl().saveCommercialOffer(request));
+exports.listCommercialOffers=onCall({region:"europe-west1",cors:true,invoker:"public"},request=>loadImpl().listCommercialOffers(request));
+exports.saveThirdPartyApproval=onCall({region:"europe-west1",cors:true,invoker:"public"},request=>loadImpl().saveThirdPartyApproval(request));
+exports.listCustomerCommercialActions=onCall({region:"europe-west1",cors:true,invoker:"public"},request=>loadImpl().listCustomerCommercialActions(request));
+exports.acceptCommercialOffer=onCall({region:"europe-west1",cors:true,invoker:"public"},request=>loadImpl().acceptCommercialOffer(request));
+exports.decideThirdPartyApproval=onCall({region:"europe-west1",cors:true,invoker:"public"},request=>loadImpl().decideThirdPartyApproval(request));
+
 exports.submitCustomerWishRequest=onCall({
   region:"europe-west1",
   cors:true,

@@ -143,6 +143,7 @@ const {
 }=require("./lib/customerProposalGrantStore");
 const proposalGrantAdmin=require("./lib/customerProposalGrantAdmin");
 const proposalGrantPublic=require("./lib/customerProposalGrantPublic");
+const commercialWorkflowApi=require("./lib/commercialWorkflowApi");
 
 const SIGNED_URL_TTL_MS=5*60*1000;
 const AI_ANALYSIS_HISTORY_PAGE_SIZE=5;
@@ -1507,6 +1508,56 @@ async function getCustomerProposalByToken(request,deps={}){
   return proposalGrantPublic.getCustomerProposalByToken(request,proposalGrantCallableDeps(deps,request));
 }
 
+function throwCommercialWorkflowError(error){
+  if(error instanceof HttpsError)throw error;
+  if(portalAccess.isPortalAccessDeny(error&&error.code)){
+    throw new HttpsError(portalAccess.portalAccessHttpsCode(error.code),portalAccess.portalAccessDenyMessage(error.code)||"Portalzugang nicht verfuegbar.");
+  }
+  const allowed=new Set(["invalid-argument","not-found","failed-precondition","deadline-exceeded","already-exists","permission-denied","unauthenticated"]);
+  const code=allowed.has(error&&error.code)?error.code:"internal";
+  throw new HttpsError(code,code==="internal"?"Vorgang konnte nicht verarbeitet werden.":error.message);
+}
+
+async function authorizedPortalCustomer(request,deps={}){
+  if(!request?.auth?.uid)throw new HttpsError("unauthenticated","Portalzugang nicht verfuegbar.");
+  const publicPortalId=String(request.data?.publicPortalId||"").trim();
+  if(!publicPortalId)throw new HttpsError("invalid-argument","publicPortalId fehlt.");
+  return runGetAuthorizedPortalContextAsync(deps.store||portalAccessStore(),request.auth,{publicPortalId},null);
+}
+
+function boundCommercialCustomer(request,context){
+  const requested=String(request.data?.customerId||"").trim();
+  if(requested&&requested!==context.customerId)throw new HttpsError("permission-denied","Kundenbindung stimmt nicht.");
+  return context.customerId;
+}
+
+async function saveCommercialOffer(request,deps={}){
+  const actorUid=requireAdminCallable(request);
+  try{return {offer:await commercialWorkflowApi.saveOffer(deps.db||getDb(),request.data||{},actorUid,deps.now)};}catch(error){throwCommercialWorkflowError(error);}
+}
+
+async function listCommercialOffers(request,deps={}){
+  requireAdminCallable(request);
+  try{const db=deps.db||getDb(),customerId=String(request.data?.customerId||"").trim();const [offers,approvals]=await Promise.all([commercialWorkflowApi.listOffersForAdmin(db,customerId),commercialWorkflowApi.listApprovalsForAdmin(db,customerId)]);return {offers,approvals};}catch(error){throwCommercialWorkflowError(error);}
+}
+
+async function saveThirdPartyApproval(request,deps={}){
+  const actorUid=requireAdminCallable(request);
+  try{return {approval:await commercialWorkflowApi.saveApproval(deps.db||getDb(),request.data||{},actorUid,deps.now)};}catch(error){throwCommercialWorkflowError(error);}
+}
+
+async function listCustomerCommercialActions(request,deps={}){
+  try{const context=await authorizedPortalCustomer(request,deps);const customerId=boundCommercialCustomer(request,context);return commercialWorkflowApi.listPortalRecords(deps.db||getDb(),customerId,request.data?.language);}catch(error){throwCommercialWorkflowError(error);}
+}
+
+async function acceptCommercialOffer(request,deps={}){
+  try{const context=await authorizedPortalCustomer(request,deps);const customerId=boundCommercialCustomer(request,context);return {offer:await commercialWorkflowApi.acceptPortalOffer(deps.db||getDb(),customerId,request.data||{},request.auth.uid,deps.now)};}catch(error){throwCommercialWorkflowError(error);}
+}
+
+async function decideThirdPartyApproval(request,deps={}){
+  try{const context=await authorizedPortalCustomer(request,deps);const customerId=boundCommercialCustomer(request,context);return {approval:await commercialWorkflowApi.decidePortalApproval(deps.db||getDb(),customerId,request.data||{},request.auth.uid,deps.now)};}catch(error){throwCommercialWorkflowError(error);}
+}
+
 async function getCustomerInquiryWish(request,deps={}){
   return inquiryGrantPublic.getCustomerInquiryWish(request,inquiryGrantCallableDeps(deps,request));
 }
@@ -1543,6 +1594,12 @@ module.exports={
   createCustomerPortalAccess,
   bindCustomerPortalMemberAuth,
   getCustomerPortalContext,
+  saveCommercialOffer,
+  listCommercialOffers,
+  saveThirdPartyApproval,
+  listCustomerCommercialActions,
+  acceptCommercialOffer,
+  decideThirdPartyApproval,
   submitCustomerWishRequest,
   listCustomerPortalWishes,
   sendCustomerWishProposal,

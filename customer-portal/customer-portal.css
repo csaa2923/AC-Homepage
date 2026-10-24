@@ -1210,6 +1210,10 @@ h3{font-size:24px;color:var(--green)}
 }
 .info-card,.mini-card,.document-card{padding:20px}
 .info-card p,.mini-card p,.document-card p{color:#415a53;line-height:1.6}
+.commercial-disclosure{display:grid;gap:8px;margin:12px 0}
+.commercial-terms,.commercial-provisional{white-space:pre-wrap;overflow-wrap:anywhere}
+.commercial-provisional{font-size:.92rem}
+.commercial-actions{margin-top:12px}
 .field-list{display:grid;gap:10px;margin-top:18px}
 .field-list div{
   display:grid;

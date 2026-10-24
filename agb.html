@@ -18,7 +18,26 @@
 <link rel="canonical" href="https://www.alpineconcierge.info/agb.html">
 <link rel="icon" href="favicon.ico">
 <link rel="stylesheet" href="css/style.css?v=5">
-</head>
+<style>
+.agb-pdf-actions{margin:1.2rem 0 0;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.agb-pdf-button{appearance:none;border:1px solid #b49b68;background:#18352f;color:#fff;padding:.8rem 1.3rem;border-radius:6px;font:inherit;font-weight:600;cursor:pointer}
+.agb-pdf-button:hover,.agb-pdf-button:focus-visible{background:#295347;outline-offset:3px}
+.agb-pdf-hint{font-size:.9rem;opacity:.8}
+@media print{
+ @page{size:A4;margin:18mm 17mm}
+ html,body{background:white!important;color:#171717!important;font:10.5pt/1.5 Georgia,"Times New Roman",serif!important}
+ .topbar,footer,.mobile-actions,.agb-pdf-actions,.legal-back,.section-label{display:none!important}
+ .legal-page,.legal-hero,.legal-content,.legal-prose{display:block!important;width:100%!important;max-width:none!important;min-height:0!important;margin:0!important;padding:0!important;background:white!important;box-shadow:none!important;border:0!important;color:#171717!important}
+ .legal-hero{margin-bottom:14mm!important}
+ .legal-hero h1{font-size:21pt!important;line-height:1.2!important;margin:0 0 5mm!important;color:#171717!important}
+ .legal-stand{font-size:9pt!important}
+ [hidden]{display:none!important}
+ .legal-prose h2{font-size:12pt!important;margin:7mm 0 2mm!important;break-after:avoid;page-break-after:avoid;color:#171717!important}
+ .legal-prose p{font-size:10.5pt!important;line-height:1.5!important;margin:0 0 3mm!important;orphans:3;widows:3;color:#171717!important}
+ .legal-provider{border-top:1px solid #999!important;margin-top:9mm!important;padding-top:4mm!important;break-inside:avoid}
+ a{color:#171717!important;text-decoration:none!important}
+}
+</style></head>
 <body>
 <header class="topbar">
   <a class="brand" href="index.html#home" aria-label="Alpine Concierge Tirol"><img class="site-logo" src="images/logo/alpine-concierge-logo-transparent.png?v=3" alt="Alpine Concierge Tirol Logo" width="230" height="153" decoding="async"></a>
@@ -45,6 +64,10 @@
     <p class="legal-stand" data-i18n="agbStand">Stand: 24. Oktober 2026</p>
     
     <a class="legal-back" href="index.html#home" data-i18n="legalBack">Zurück zur Startseite</a>
+    <div class="agb-pdf-actions">
+      <button type="button" id="agbSavePdf" class="agb-pdf-button" aria-label="AGB als PDF speichern">AGB als PDF speichern</button>
+      <span id="agbPdfHint" class="agb-pdf-hint">Im Druckdialog „Als PDF speichern“ wählen.</span>
+    </div>
   </section>
 
   <section class="legal-content legal-prose"><div id="agbLangDe" lang="de" ><h2>1. Geltungsbereich</h2><p>Diese AGB gelten für Angebote und Leistungen von ACT gegenüber Verbrauchern und Unternehmern. Individuelle Vereinbarungen und zwingendes Recht gehen vor.</p>
@@ -206,4 +229,4 @@
   <a href="tel:+4367761410679">Anrufen</a>
 </div>
 
-<script src="js/script.js?v=5"></script><script>(function(){const d={"de":["Allgemeine Geschäftsbedingungen","Stand: 24. Oktober 2026","Zurück zur Startseite","Rechtliches"],"en":["Terms and Conditions","Updated: 24 October 2026","Back to home","Legal"],"it":["Condizioni generali di contratto","Aggiornato: 24 ottobre 2026","Torna alla pagina iniziale","Informazioni legali"],"fr":["Conditions générales","Mise à jour : 24 octobre 2026","Retour à l’accueil","Mentions légales"]};function show(lang){if(!d[lang])lang="de";document.documentElement.lang=lang;["de","en","it","fr"].forEach(x=>{const el=document.getElementById("agbLang"+x[0].toUpperCase()+x.slice(1));if(el)el.hidden=x!==lang;});["agbTitle","agbStand","legalBack","legalLabel"].forEach((k,i)=>{const el=document.querySelector('[data-i18n="'+k+'"]');if(el)el.textContent=d[lang][i];});}document.querySelectorAll("[data-lang]").forEach(b=>b.addEventListener("click",()=>{localStorage.setItem("act_lang",b.dataset.lang);show(b.dataset.lang)}));show(localStorage.getItem("act_lang")||"de");})();</script></body></html>
+<script src="js/script.js?v=5"></script><script>(function(){const d={"de":["Allgemeine Geschäftsbedingungen","Stand: 24. Oktober 2026","Zurück zur Startseite","Rechtliches"],"en":["Terms and Conditions","Updated: 24 October 2026","Back to home","Legal"],"it":["Condizioni generali di contratto","Aggiornato: 24 ottobre 2026","Torna alla pagina iniziale","Informazioni legali"],"fr":["Conditions générales","Mise à jour : 24 octobre 2026","Retour à l’accueil","Mentions légales"]};function show(lang){if(!d[lang])lang="de";document.documentElement.lang=lang;const pdfLabels={de:["AGB als PDF speichern","Im Druckdialog „Als PDF speichern“ wählen."],en:["Save terms as PDF","Select “Save as PDF” in the print dialog."],it:["Salva le condizioni in PDF","Nel menu di stampa seleziona “Salva come PDF”."],fr:["Enregistrer les conditions en PDF","Dans la fenêtre d’impression, choisissez « Enregistrer au format PDF »." ]};const pdf=document.getElementById("agbSavePdf"),hint=document.getElementById("agbPdfHint");if(pdf){pdf.textContent=pdfLabels[lang][0];pdf.setAttribute("aria-label",pdfLabels[lang][0]);}if(hint)hint.textContent=pdfLabels[lang][1];["de","en","it","fr"].forEach(x=>{const el=document.getElementById("agbLang"+x[0].toUpperCase()+x.slice(1));if(el)el.hidden=x!==lang;});["agbTitle","agbStand","legalBack","legalLabel"].forEach((k,i)=>{const el=document.querySelector('[data-i18n="'+k+'"]');if(el)el.textContent=d[lang][i];});}document.querySelectorAll("[data-lang]").forEach(b=>b.addEventListener("click",()=>{localStorage.setItem("act_lang",b.dataset.lang);show(b.dataset.lang)}));document.getElementById("agbSavePdf")?.addEventListener("click",()=>window.print());show(localStorage.getItem("act_lang")||"de");})();</script></body></html>

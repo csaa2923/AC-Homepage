@@ -269,6 +269,13 @@ describe("firestore rules — commercial offers and approvals",()=>{
     await assertFails(adminDb.doc(approvalPath).get());
   });
 
+  it("denies a foreign customer access to another customer's offer and approval",async()=>{
+    const foreignDb=testEnv.authenticatedContext("commercial-foreign-customer",{role:"customer"}).firestore();
+    await assertFails(foreignDb.doc("customerCommercialOffers/customer_a__offer_1").get());
+    await assertFails(foreignDb.doc("thirdPartyBookingApprovals/customer_a__approval_1").get());
+    await assertFails(foreignDb.doc("customerCommercialOffers/customer_a__offer_1").set({customerId:"customer_a",status:"accepted",snapshotHash:"forged"}));
+  });
+
   it("denies client writes of offers and third-party approvals",async()=>{
     const customerDb=testEnv.authenticatedContext("commercial-customer-write",{role:"customer"}).firestore();
     const adminDb=testEnv.authenticatedContext("commercial-admin-write",{role:"admin"}).firestore();

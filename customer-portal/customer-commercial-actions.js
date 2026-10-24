@@ -1,19 +1,72 @@
 (function(){
   "use strict";
   const copy={
-    de:{title:"Angebote & Freigaben",empty:"Derzeit ist keine Bestätigung erforderlich.",accept:"Angebot verbindlich annehmen",terms:"Ich akzeptiere die AGB.",withdrawal:"Ich habe die Rücktrittsinformation erhalten und zur Kenntnis genommen.",early:"Ich verlange ausdrücklich, dass Alpine Concierge Tirol vor Ablauf einer gegebenenfalls bestehenden Rücktrittsfrist mit der Planung beginnt.",approve:"Drittbuchung freigeben",decline:"Ablehnen",change:"Änderung anfragen",agency:"Die Leistung wird in meinem Namen und auf meine Rechnung beim genannten Anbieter angefragt. Die Freigabe löst keine automatische Buchung aus."},
-    en:{title:"Offers & approvals",empty:"No confirmation is currently required.",accept:"Accept offer with obligation",terms:"I accept the terms and conditions.",withdrawal:"I have received and acknowledged the withdrawal information.",early:"I expressly request Alpine Concierge Tirol to begin planning before any applicable withdrawal period has expired.",approve:"Approve third-party booking",decline:"Decline",change:"Request a change",agency:"The service will be requested from the named provider in my name and for my account. Approval does not trigger an automatic booking."},
-    it:{title:"Offerte e approvazioni",empty:"Al momento non è richiesta alcuna conferma.",accept:"Accettare l'offerta in modo vincolante",terms:"Accetto i termini e le condizioni.",withdrawal:"Ho ricevuto e preso atto delle informazioni sul recesso.",early:"Chiedo espressamente ad Alpine Concierge Tirol di iniziare la pianificazione prima della scadenza dell'eventuale periodo di recesso.",approve:"Approvare la prenotazione di terzi",decline:"Rifiutare",change:"Richiedere una modifica",agency:"Il servizio sarà richiesto al fornitore indicato a mio nome e per mio conto. L'approvazione non attiva una prenotazione automatica."},
-    fr:{title:"Offres et autorisations",empty:"Aucune confirmation n'est requise actuellement.",accept:"Accepter l'offre de façon ferme",terms:"J'accepte les conditions générales.",withdrawal:"J'ai reçu et pris connaissance des informations relatives au droit de rétractation.",early:"Je demande expressément à Alpine Concierge Tirol de commencer la planification avant l'expiration d'un éventuel délai de rétractation.",approve:"Autoriser la réservation tierce",decline:"Refuser",change:"Demander une modification",agency:"La prestation sera demandée au fournisseur indiqué en mon nom et pour mon compte. L'autorisation ne déclenche aucune réservation automatique."}
+    de:{title:"Angebote & Freigaben",empty:"Derzeit ist keine Bestätigung erforderlich.",accept:"Angebot verbindlich annehmen",approve:"Drittbuchung freigeben",decline:"Ablehnen",change:"Änderung anfragen"},
+    en:{title:"Offers & approvals",empty:"No confirmation is currently required.",accept:"Accept offer with obligation",approve:"Approve third-party booking",decline:"Decline",change:"Request a change"},
+    it:{title:"Offerte e approvazioni",empty:"Al momento non è richiesta alcuna conferma.",accept:"Accettare l'offerta in modo vincolante",approve:"Approvare la prenotazione di terzi",decline:"Rifiutare",change:"Richiedere una modifica"},
+    fr:{title:"Offres et autorisations",empty:"Aucune confirmation n'est requise actuellement.",accept:"Accepter l'offre de façon ferme",approve:"Autoriser la réservation tierce",decline:"Refuser",change:"Demander une modification"}
   };
-  let portalId="",records={offers:[],approvals:[]};
-  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  let portalId="",records={offers:[],approvals:[],statements:null},loading=false;
   function lang(){const value=(document.documentElement.lang||"de").slice(0,2);return copy[value]?value:"de";}
-  function money(value,currency="EUR"){return new Intl.NumberFormat(lang()==="en"?"en-US":lang(),{style:"currency",currency}).format(Number(value)||0);}
-  function render(){const root=document.getElementById("commercialActionsRoot");if(!root)return;const t=copy[lang()];const offers=records.offers||[],approvals=records.approvals||[];root.innerHTML=`<div class="section-head"><div><p class="eyebrow">Alpine Concierge Tirol</p><h2>${esc(t.title)}</h2></div></div>${!offers.length&&!approvals.length?`<p class="muted">${esc(t.empty)}</p>`:""}${offers.map(offer=>`<article class="info-card commercial-action-card"><span class="tag">${esc(offer.offerNumber)} · v${Number(offer.version)||1}</span><h3>${esc(offer.planningDescription)}</h3><p>${esc(offer.includedServices||"")}</p><p><strong>${money(offer.planningFee)}</strong></p><p><a href="../agb.html" target="_blank" rel="noopener">AGB</a> · <a href="../ruecktritt.html" target="_blank" rel="noopener">Widerruf / recesso / rétractation</a></p>${offer.status==="sent"?`<form data-portal-offer="${esc(offer.offerId)}" data-version="${Number(offer.version)||1}" data-hash="${esc(offer.snapshotHash)}"><label><input type="checkbox" name="terms" required> ${esc(t.terms)}</label><label><input type="checkbox" name="withdrawal" required> ${esc(t.withdrawal)}</label><label><input type="checkbox" name="early"> ${esc(t.early)}</label><button class="button primary" type="submit">${esc(t.accept)}</button></form>`:`<p class="tag">${esc(offer.status)}</p>`}</article>`).join("")}${approvals.map(item=>`<article class="info-card commercial-action-card"><span class="tag">${esc(item.provider)}</span><h3>${esc(item.description)}</h3><p>${esc(item.contractingParty)} · ${money(item.totalPrice,item.currency)}</p><p>${esc(item.cancellationTerms)}</p><p><a href="${esc(item.providerTermsUrl)}" target="_blank" rel="noopener">Provider terms</a></p><p>${esc(t.agency)}</p>${item.status==="pending"?`<div class="button-row"><button class="button primary" data-approval-decision="approved" data-id="${esc(item.approvalId)}" data-version="${Number(item.version)||1}" data-hash="${esc(item.snapshotHash)}">${esc(t.approve)}</button><button class="button soft" data-approval-decision="declined" data-id="${esc(item.approvalId)}" data-version="${Number(item.version)||1}" data-hash="${esc(item.snapshotHash)}">${esc(t.decline)}</button><button class="button soft" data-approval-decision="change_requested" data-id="${esc(item.approvalId)}" data-version="${Number(item.version)||1}" data-hash="${esc(item.snapshotHash)}">${esc(t.change)}</button></div>`:`<p class="tag">${esc(item.status)}</p>`}</article>`).join("")}`;}
-  async function reload(){records=await window.ACTFirebaseService.listCustomerCommercialActions(portalId);render();}
+  function docs(){return window.ACTCommercialDocument;}
+  function texts(){
+    const t=copy[lang()];
+    const statements=records.statements&&records.statements.language===lang()?records.statements:null;
+    return statements?{...statements,acceptLabel:t.accept,approveLabel:t.approve,declineLabel:t.decline,changeLabel:t.change}:null;
+  }
+  function esc(value){return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));}
+  function render(){
+    const root=document.getElementById("commercialActionsRoot");
+    if(!root||!docs())return;
+    if(records.statements&&records.statements.language!==lang()){reload();return;}
+    const t=copy[lang()];
+    const pack=texts();
+    const offers=records.offers||[],approvals=records.approvals||[];
+    root.innerHTML=`<div class="section-head"><div><p class="eyebrow">Alpine Concierge Tirol</p><h2>${esc(t.title)}</h2></div></div>${!offers.length&&!approvals.length?`<p class="muted">${esc(t.empty)}</p>`:""}${offers.map(offer=>docs().renderOfferArticle(offer,pack||{language:lang()})).join("")}${approvals.map(item=>docs().renderApprovalArticle(item,pack||{language:item.language})).join("")}`;
+  }
+  function openPrint(html){
+    const win=window.open("","_blank","noopener,noreferrer");
+    if(!win)return;
+    win.document.open();
+    win.document.write(String(html||""));
+    win.document.close();
+  }
+  async function reload(){
+    if(!portalId||loading)return;
+    loading=true;
+    try{records=await window.ACTFirebaseService.listCustomerCommercialActions(portalId,lang());}
+    finally{loading=false;render();}
+  }
   async function boot(id){portalId=id;if(!portalId)return;await reload();}
-  document.addEventListener("submit",async event=>{const form=event.target.closest("[data-portal-offer]");if(!form)return;event.preventDefault();const t=copy[lang()],data=new FormData(form);form.querySelector("button").disabled=true;try{await window.ACTFirebaseService.acceptCommercialOffer(portalId,{offerId:form.dataset.portalOffer,version:Number(form.dataset.version),snapshotHash:form.dataset.hash,language:lang(),offerAccepted:true,termsAccepted:data.has("terms"),withdrawalInformationAcknowledged:data.has("withdrawal"),earlyStartRequested:data.has("early"),statements:{offerAccepted:t.accept,termsAccepted:t.terms,withdrawalInformationAcknowledged:t.withdrawal,earlyStartStatement:data.has("early")?t.early:""}});await reload();}catch(error){alert(error.message||"Action failed.");form.querySelector("button").disabled=false;}});
-  document.addEventListener("click",async event=>{const button=event.target.closest("[data-approval-decision]");if(!button)return;button.disabled=true;try{await window.ACTFirebaseService.decideThirdPartyApproval(portalId,{approvalId:button.dataset.id,version:Number(button.dataset.version),snapshotHash:button.dataset.hash,language:lang(),decision:button.dataset.approvalDecision,statement:copy[lang()].agency});await reload();}catch(error){alert(error.message||"Action failed.");button.disabled=false;}});
+  document.addEventListener("submit",async event=>{
+    const form=event.target.closest("[data-portal-offer]");
+    if(!form||!docs())return;
+    event.preventDefault();
+    const data=new FormData(form);
+    const button=form.querySelector("button");
+    button.disabled=true;
+    try{
+      await window.ACTFirebaseService.acceptCommercialOffer(portalId,docs().offerAcceptancePayload({
+        offerId:form.dataset.portalOffer,version:Number(form.dataset.version),snapshotHash:form.dataset.hash,language:lang(),statementVersion:form.dataset.statementVersion,
+        termsAccepted:data.has("terms"),withdrawalAccepted:data.has("withdrawal"),earlyStartRequested:data.has("early")
+      }));
+      await reload();
+    }catch(error){alert(error.message||"Action failed.");button.disabled=false;}
+  });
+  document.addEventListener("click",async event=>{
+    const printOffer=event.target.closest("[data-commercial-print]");
+    if(printOffer){const offer=(records.offers||[]).find(item=>item.offerId===printOffer.dataset.commercialPrint);if(offer?.printHtml)openPrint(offer.printHtml);return;}
+    const printApproval=event.target.closest("[data-approval-print]");
+    if(printApproval){const item=(records.approvals||[]).find(entry=>entry.approvalId===printApproval.dataset.approvalPrint);if(item?.printHtml)openPrint(item.printHtml);return;}
+    const button=event.target.closest("[data-approval-decision]");
+    if(!button||!docs())return;
+    button.disabled=true;
+    try{
+      await window.ACTFirebaseService.decideThirdPartyApproval(portalId,docs().approvalDecisionPayload({
+        approvalId:button.dataset.id,version:Number(button.dataset.version),snapshotHash:button.dataset.hash,language:lang(),statementVersion:button.dataset.statementVersion,decision:button.dataset.approvalDecision
+      }));
+      await reload();
+    }catch(error){alert(error.message||"Action failed.");button.disabled=false;}
+  });
   window.ACTCustomerCommercialActions={boot,render};
 })();

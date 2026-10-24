@@ -16,14 +16,15 @@
 - `customerCommercialOffers/{customerId}__{offerId}`: versionierter Angebotssnapshot, Hash, Statushistorie und optional unveränderlicher Annahmenachweis.
 - `thirdPartyBookingApprovals/{customerId}__{approvalId}`: versionierter Freigabesnapshot, Buchungsreferenz, Preise/Bedingungen, Statushistorie und optional Kundenentscheidung.
 - Firestore-Clients haben auf beide Collections keinen direkten Zugriff. Admin- und Kundenaktionen laufen ausschließlich über Callable Functions.
-- Bei Annahme bzw. Freigabe werden Version und SHA-256-Hash des tatsächlich angezeigten Snapshots geprüft. Doppelte Entscheidungen, abgelaufene Datensätze und unzulässige Statussprünge werden abgewiesen.
-- Eine Änderung verbindlicher Angebots- oder Freigabedaten erzeugt eine neue Entwurfsversion. Ein angenommenes Angebot ist nicht editierbar.
+- Bei Annahme bzw. Freigabe werden Version und SHA-256-Hash des gespeicherten Snapshots geprüft. Der Server speichert nur dann, wenn Versionsnummer, Snapshot und Hash zusammenpassen. Doppelte Entscheidungen, abgelaufene Datensätze und unzulässige Statussprünge werden abgewiesen.
+- Eine Änderung verbindlicher Angebots- oder Freigabedaten erzeugt eine neue Entwurfsversion. Diese muss erneut veröffentlicht bzw. vorgelegt werden. Ein angenommenes Angebot ist nicht editierbar.
+- Verbindliche Zustimmungstexte kommen aus dem serverseitigen Katalog `act-commercial-statements-2026-10-24` in Deutsch, Englisch, Italienisch und Französisch. Vom Browser gesendete Erklärungstexte werden abgelehnt. Die Texte sind bis zur anwaltlichen Freigabe als vorläufig gekennzeichnet.
 - Die gesonderte Zustimmung zum vorzeitigen Planungsbeginn ist optional, nicht vorausgewählt und behauptet keinen pauschalen Verlust gesetzlicher Rechte.
-- Drittbuchungsfreigaben aktualisieren nie automatisch den Buchungsstatus und lösen weder Anbieterbuchung noch Zahlung aus.
+- Drittbuchungsfreigaben aktualisieren nie automatisch den Buchungsstatus und lösen weder Anbieterbuchung noch Zahlung aus. Vor der Entscheidung sieht der Kunde Anbieter, Vertragspartei, Leistung, Preise, Fälligkeiten, Gebühren, Zahlungsweg, Storno- und Umbuchungsbedingungen sowie die vollständigen Anbieterbedingungen.
 
 ## Bedienung
 
-Im Kundenarbeitsbereich steht der Tab **Angebote & Freigaben** zur Verfügung. Dort können Angebote als Entwurf gespeichert, in das authentifizierte Portal gestellt und per Browser-Druck als PDF vorbereitet werden. Vorhandene Buchungen können einzeln zur Drittbuchungsfreigabe vorgelegt werden.
+Im Kundenarbeitsbereich steht der Tab **Angebote & Freigaben** zur Verfügung. Dort können Angebote als Entwurf gespeichert und in das authentifizierte Portal gestellt werden. Druck und PDF verwenden ausschließlich den gespeicherten Snapshot, nicht den ungespeicherten Formularstand. Vorhandene Buchungen können einzeln zur Drittbuchungsfreigabe vorgelegt werden.
 
 Im Kundenportal erscheinen offene Angebote und Freigaben im Bereich Service. AGB und Rücktrittsinformation sind verlinkt. Annahme, frühes Tätigwerden und Drittbuchungsentscheidung bleiben getrennte Handlungen.
 
@@ -31,6 +32,6 @@ Im Kundenportal erscheinen offene Angebote und Freigaben im Bereich Service. AGB
 
 - Die finalen, je Sprache anwaltlich geprüften Erklärungswortlaute und Versionskennungen müssen freigegeben werden.
 - Die Regel „Planungsbeginn erst nach bestätigtem Zahlungseingang“ benötigt einen serverseitigen Start-Workflow; diese Integration bestätigt weder Zahlung noch Planungsbeginn automatisch.
-- E-Mail/PDF-Artefakte können vorbereitet bzw. gedruckt werden. Ein revisionssicher archiviertes, serverseitig erzeugtes PDF und Versandnachweis benötigen eine freigegebene Dokumenten-/Mailstrategie.
+- Es gibt keine revisionssichere, serverseitig archivierte PDF-Datei und keinen Versandnachweis. Der Browserdruck gibt den gespeicherten Snapshot wieder, speichert das Dokument aber nicht als Nachweis in Firebase Storage oder einer anderen Ablage.
 - Für persönliche Begleitung sind 50/50-Fälligkeiten fachlich beschrieben, aber nicht automatisch eingezogen. Bestehende manuelle Zahlungsbestätigung bleibt maßgeblich.
 - Vor Deployment sind Emulator-Integrationstests mit echten Auth-Grants sowie die finalen Firestore-Indizes zu prüfen. Es wurde kein Deployment und keine Datenmigration durchgeführt.

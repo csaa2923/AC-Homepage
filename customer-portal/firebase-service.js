@@ -1392,8 +1392,10 @@
     return callPortalCustomerFunction("listCustomerPortalWishes",{publicPortalId});
   }
 
-  async function listCustomerCommercialActions(publicPortalId){
-    return callPortalCustomerFunction("listCustomerCommercialActions",{publicPortalId});
+  async function listCustomerCommercialActions(publicPortalId,language){
+    const payload={publicPortalId};
+    if(language)payload.language=String(language).slice(0,2);
+    return callPortalCustomerFunction("listCustomerCommercialActions",payload);
   }
 
   async function acceptCommercialOffer(publicPortalId,input={}){

@@ -1510,8 +1510,12 @@ async function getCustomerProposalByToken(request,deps={}){
 
 function throwCommercialWorkflowError(error){
   if(error instanceof HttpsError)throw error;
-  const allowed=new Set(["invalid-argument","not-found","failed-precondition","deadline-exceeded","already-exists"]);
-  throw new HttpsError(allowed.has(error&&error.code)?error.code:"internal",allowed.has(error&&error.code)?error.message:"Vorgang konnte nicht verarbeitet werden.");
+  if(portalAccess.isPortalAccessDeny(error&&error.code)){
+    throw new HttpsError(portalAccess.portalAccessHttpsCode(error.code),portalAccess.portalAccessDenyMessage(error.code)||"Portalzugang nicht verfuegbar.");
+  }
+  const allowed=new Set(["invalid-argument","not-found","failed-precondition","deadline-exceeded","already-exists","permission-denied","unauthenticated"]);
+  const code=allowed.has(error&&error.code)?error.code:"internal";
+  throw new HttpsError(code,code==="internal"?"Vorgang konnte nicht verarbeitet werden.":error.message);
 }
 
 async function authorizedPortalCustomer(request,deps={}){
@@ -1519,6 +1523,12 @@ async function authorizedPortalCustomer(request,deps={}){
   const publicPortalId=String(request.data?.publicPortalId||"").trim();
   if(!publicPortalId)throw new HttpsError("invalid-argument","publicPortalId fehlt.");
   return runGetAuthorizedPortalContextAsync(deps.store||portalAccessStore(),request.auth,{publicPortalId},null);
+}
+
+function boundCommercialCustomer(request,context){
+  const requested=String(request.data?.customerId||"").trim();
+  if(requested&&requested!==context.customerId)throw new HttpsError("permission-denied","Kundenbindung stimmt nicht.");
+  return context.customerId;
 }
 
 async function saveCommercialOffer(request,deps={}){
@@ -1537,15 +1547,15 @@ async function saveThirdPartyApproval(request,deps={}){
 }
 
 async function listCustomerCommercialActions(request,deps={}){
-  try{const context=await authorizedPortalCustomer(request,deps);return commercialWorkflowApi.listPortalRecords(deps.db||getDb(),context.customerId);}catch(error){throwCommercialWorkflowError(error);}
+  try{const context=await authorizedPortalCustomer(request,deps);const customerId=boundCommercialCustomer(request,context);return commercialWorkflowApi.listPortalRecords(deps.db||getDb(),customerId,request.data?.language);}catch(error){throwCommercialWorkflowError(error);}
 }
 
 async function acceptCommercialOffer(request,deps={}){
-  try{const context=await authorizedPortalCustomer(request,deps);return {offer:await commercialWorkflowApi.acceptPortalOffer(deps.db||getDb(),context.customerId,request.data||{},request.auth.uid,deps.now)};}catch(error){throwCommercialWorkflowError(error);}
+  try{const context=await authorizedPortalCustomer(request,deps);const customerId=boundCommercialCustomer(request,context);return {offer:await commercialWorkflowApi.acceptPortalOffer(deps.db||getDb(),customerId,request.data||{},request.auth.uid,deps.now)};}catch(error){throwCommercialWorkflowError(error);}
 }
 
 async function decideThirdPartyApproval(request,deps={}){
-  try{const context=await authorizedPortalCustomer(request,deps);return {approval:await commercialWorkflowApi.decidePortalApproval(deps.db||getDb(),context.customerId,request.data||{},request.auth.uid,deps.now)};}catch(error){throwCommercialWorkflowError(error);}
+  try{const context=await authorizedPortalCustomer(request,deps);const customerId=boundCommercialCustomer(request,context);return {approval:await commercialWorkflowApi.decidePortalApproval(deps.db||getDb(),customerId,request.data||{},request.auth.uid,deps.now)};}catch(error){throwCommercialWorkflowError(error);}
 }
 
 async function getCustomerInquiryWish(request,deps={}){

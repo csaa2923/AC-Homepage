@@ -44,40 +44,28 @@
       <nav class="v2-nav">
         <button class="v2-nav-item active" type="button" data-v2-route="dashboard">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/></svg>
-          <span>Dashboard</span>
+          <span>Übersicht</span>
         </button>
         <button class="v2-nav-item" type="button" data-v2-route="customers">
           <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19"/><path d="M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/><path d="M20 19v-1.2a3 3 0 0 0-2.2-2.9"/><path d="M16 5.3a3 3 0 0 1 0 5.4"/></svg>
           <span>Kunden</span>
         </button>
-        <button class="v2-nav-item" type="button" data-v2-route="bookings">
-          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
-          <span>Buchungen</span>
+        <button class="v2-nav-item" type="button" data-more-toggle aria-expanded="false" aria-controls="desktopMoreNav">
+          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+          <span>Mehr</span>
         </button>
-        <button class="v2-nav-item" type="button" data-v2-route="communication">
-          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v10H8l-4 3V6z"/><path d="M8 10h8M8 13h5"/></svg>
-          <span>Kommunikation</span>
-        </button>
-        <button class="v2-nav-item" type="button" data-v2-route="legalcomms">
-          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h7l4 4v12H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M14 4v5h5M8 13h8M8 17h6"/></svg>
-          <span>Kommunikation &amp; Dokumente</span>
-        </button>
-        <button class="v2-nav-item" type="button" data-v2-route="zahlung">
-          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v10H4z"/><path d="M4 11h16M8 15h3"/></svg>
-          <span>Zahlung</span>
-        </button>
-        <button class="v2-nav-item" type="button" data-v2-route="documents">
-          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v6h5M9 14h6M9 18h6"/></svg>
-          <span>Dokumente</span>
-        </button>
-        <button class="v2-nav-item" type="button" data-v2-route="demand">
-          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16l3.5-4.5 3 2.5L18 8"/><path d="M16 8h3v3"/></svg>
-          <span>Nachfrage Tirol</span>
-        </button>
-        <button class="v2-nav-item" type="button" data-v2-route="settings">
-          <svg class="v2-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a8 8 0 0 0 .1-2l2-1.5-2-3.5-2.4 1a8 8 0 0 0-1.7-1L15 5.5h-6L8.6 8a8 8 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a8 8 0 0 0 .1 2l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 1.7 1l.4 2.5h6l.4-2.5a8 8 0 0 0 1.7-1l2.4 1 2-3.5z"/></svg>
-          <span>Einstellungen</span>
-        </button>
+        <div class="v2-more-nav" id="desktopMoreNav" hidden>
+          <button type="button" data-dashboard-advanced>Erweiterte Übersicht</button>
+          <button type="button" data-v2-route="bookings">Globale Buchungen</button>
+          <button type="button" data-v2-route="documents">Zentrale Dokumente</button>
+          <button type="button" data-v2-route="communication">Kommunikation &amp; Vorlagen</button>
+          <button type="button" data-v2-route="legalcomms">Rechtliche Kommunikation</button>
+          <button type="button" data-v2-route="zahlung">Zahlungsübersicht</button>
+          <button type="button" data-v2-route="tasks">KI &amp; Aufgaben</button>
+          <button type="button" data-v2-route="demand">Tourist Demand Intelligence</button>
+          <button type="button" data-v2-route="settings">Einstellungen</button>
+          <a href="admin.html">Classic Admin &amp; Archiv</a>
+        </div>
       </nav>
       <a class="v2-classic-link" href="admin.html">Classic Admin – Uebergangsloesung</a>
     </aside>
@@ -100,7 +88,7 @@
       <header class="v2-topbar">
         <div>
           <p class="v2-eyebrow">Alpine Concierge Tirol</p>
-          <h1 id="pageTitle">Dashboard</h1>
+          <h1 id="pageTitle">Übersicht</h1>
         </div>
       </header>
 
@@ -109,7 +97,7 @@
       <section class="v2-view active" id="dashboardView" data-title="Dashboard">
         <header class="v2-dashboard-hero">
           <div>
-            <p class="v2-eyebrow">Concierge Cockpit</p>
+            <p class="v2-eyebrow">Heute im Blick</p>
             <h2 id="dashboardGreeting">Guten Tag</h2>
             <p class="v2-dashboard-date" id="dashboardDate"></p>
             <p id="dashboardSummary">Die operative Übersicht wird vorbereitet.</p>
@@ -267,13 +255,6 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
       <span>Neu</span>
     </button>
-    <button type="button" class="admin-mobile-nav-item" data-mobile-route="tasks" aria-label="Aufgaben">
-      <span class="admin-mobile-nav-icon-wrap">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h10M9 12h10M9 19h10"/><path d="m4 5 1 1 2-2M4 12l1 1 2-2M4 19l1 1 2-2"/></svg>
-        <small id="mobileTaskBadge" hidden>0</small>
-      </span>
-      <span>Aufgaben</span>
-    </button>
     <button type="button" class="admin-mobile-nav-item" data-mobile-sheet-open="mobileMoreSheet" aria-label="Mehr Bereiche öffnen" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
       <span>Mehr</span>
@@ -309,6 +290,8 @@
       <button type="button" data-mobile-route="documents"><strong>Dokumente</strong><span>Zentrale Dokumentenansicht</span></button>
       <button type="button" data-mobile-route="demand"><strong>Nachfrage Tirol</strong><span>Tourist Demand Intelligence</span></button>
       <button type="button" data-mobile-route="settings"><strong>Einstellungen</strong><span>System und Stammdaten</span></button>
+      <button type="button" data-mobile-route="tasks"><strong>KI &amp; Aufgaben</strong><span>Erweiterte Aufgabenverwaltung</span></button>
+      <a href="admin.html"><strong>Classic Admin &amp; Archiv</strong><span>Selten benötigte und technische Funktionen</span></a>
     </div>
   </section>
 </div>

@@ -540,13 +540,13 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/if\(state\.route==="dashboard"\)renderOperationsDashboard\(\)/);
   });
 
-  it("derives dashboard priorities from the shared concierge intelligence model",()=>{
+  it("derives dashboard priorities from the safe next-action presentation model",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     assert.match(js,/const workspace=customerWorkspaceViewModel\(customer\)/);
     assert.match(js,/intelligence:customerConciergeReadiness\(customer,workspace\)/);
-    assert.match(js,/row\.intelligence\?\.insights\|\|\[\]/);
-    assert.match(js,/insight\.severity!=="recommendation"/);
-    assert.match(js,/tab:insight\.targetTab/);
+    assert.match(js,/const action=customerNextAction\(row\.customer\)/);
+    assert.match(js,/isProspectRecord\(row\.customer\)\?"Neue Anfrage"/);
+    assert.match(js,/action\.tab==="zahlung"\?"Zahlungsbedarf"/);
     assert.match(js,/dashboardPriorityEntries\(rows\)/);
     assert.match(js,/\.sort\(\(a,b\)=>a\.rank-b\.rank/);
     assert.doesNotMatch(js,/loadCustomersForAdmin\([\s\S]{0,300}renderOperationsDashboard/);
@@ -665,7 +665,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-workspace-navigation\{position:sticky/);
   });
 
-  it("keeps all eight workspace tabs reachable across desktop, tablet and mobile",()=>{
+  it("keeps legacy workspace tabs reachable through four phases across desktop, tablet and mobile",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     const css=readProjectFile("customer-portal/admin-v2.css");
@@ -688,7 +688,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-workspace-content-flow\{min-width:0;max-width:100%/);
     assert.match(css,/\.v2-workspace-tabs\{flex-wrap:nowrap\}/);
     assert.match(css,/@media \(max-width:767px\),\(max-width:920px\) and \(max-height:520px\)/);
-    assert.equal((html.match(/class="admin-mobile-nav-item/g)||[]).length,5);
+    assert.equal((html.match(/class="admin-mobile-nav-item/g)||[]).length,4);
     assert.match(html,/class="v2-sidebar"/);
   });
 
@@ -711,7 +711,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.equal((html.match(/class="admin-mobile-nav-item/g)||[]).length,5);
+    assert.equal((html.match(/class="admin-mobile-nav-item/g)||[]).length,4);
     assert.match(html,/data-mobile-route="dashboard"[\s\S]*?>\s*<svg[\s\S]*?<span>Übersicht<\/span>/);
     assert.match(html,/class="admin-mobile-nav-item admin-mobile-nav-plus"/);
     assert.match(html,/data-mobile-route="tasks"/);
@@ -726,7 +726,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function workspaceStatusCard\(label,value,tone,tab\)/);
     assert.match(js,/function workspaceQuickAction\(label,tab,count,icon\)/);
     assert.doesNotMatch(js,/customerWorkspaceViewModel[\s\S]{0,1000}loadCustomersForAdmin/);
-    assert.match(css,/\.admin-mobile-nav\{position:fixed;[\s\S]*?repeat\(5,minmax\(0,1fr\)\)/);
+    assert.match(css,/\.admin-mobile-nav\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)\}/);
     assert.match(css,/\.v2-edit-actions\{bottom:calc\(var\(--mobile-nav-height\) \+ var\(--mobile-safe-bottom\) \+ 8px\)/);
     assert.match(css,/\.workspace-status-grid\{display:none\}/);
     assert.match(css,/\.v2-customer-journey-status\{grid-template-columns:1fr 1fr\}/);

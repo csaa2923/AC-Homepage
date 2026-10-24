@@ -9,6 +9,7 @@
     publication:"",
     region:"",
     sort:"arrival",
+    dashboardAdvanced:false,
     filtersExpanded:false,
     selectedCustomerId:"",
     selectedTab:"kunde",
@@ -195,6 +196,12 @@
     ["zahlung","Zahlung"],
     ["veroeffentlichung","Veröffentlichung"]
   ];
+  const workspacePhases=[
+    {id:"request",number:1,label:"Anfrage & Wünsche",tabs:["kunde","reise"]},
+    {id:"offer",number:2,label:"Angebot & Bezahlung",tabs:["angebote","legalcomms","zahlung"]},
+    {id:"planning",number:3,label:"Erlebnis planen",tabs:["programm","buchungen"]},
+    {id:"care",number:4,label:"Reise begleiten",tabs:["veroeffentlichung","dokumente","kommunikation","concierge"]}
+  ];
   let activeLoginAttempt=0;
   let customerSavePromise=null;
   let tripSavePromise=null;
@@ -206,6 +213,44 @@
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
+  }
+
+  function workspacePhaseForTab(tab){
+    return workspacePhases.find(phase=>phase.tabs.includes(tab))||workspacePhases[0];
+  }
+
+  function compactServiceScope(customer){
+    const title=normalizeText([customer?.tripName,customer?.tripTitle,customer?.service,customer?.serviceName,customer?.requestType].filter(Boolean).join(" "));
+    const explicit=/transfer|restaurant|beratung|begleitung|tagesausflug|aktivitat|einzelleistung/.test(title);
+    const start=dateValue(customer?.startDatePlain||customer?.travel?.startDate||customer?.arrival);
+    const end=dateValue(customer?.endDatePlain||customer?.travel?.endDate||customer?.departure);
+    const singleDay=Boolean(start&&end&&start.toDateString()===end.toDateString());
+    return explicit||singleDay?{compact:true,label:"Kompakter Einzelauftrag",hint:"Nur benötigte Bereiche bearbeiten; ein mehrtägiges Programm ist nicht erforderlich."}:{compact:false,label:"Individueller Auftrag",hint:"Die Phasen führen durch den bestehenden Kundenauftrag."};
+  }
+
+  function customerNextAction(customer){
+    const process=customer?.process&&typeof customer.process==="object"?customer.process:{};
+    const payment=customer?.payment&&typeof customer.payment==="object"?customer.payment:{};
+    const release=String(payment.releaseStatus||"");
+    const paid=payment.status==="paid"||payment.paymentStatus==="paid";
+    const accepted=process.offerAccepted===true||process.customerAccepted===true;
+    const sent=process.offerSent===true||process.termsSent===true;
+    const status=normalizeText(customer?.status);
+    if((paid||release==="released"||release==="manual_released")&&!accepted)return {label:"Status prüfen",tab:"zahlung",tone:"warning"};
+    if(isProspectRecord(customer))return {label:"Wünsche vervollständigen",tab:"kunde",tone:"info"};
+    if(!cleanValue(customer?.customerName)||(!cleanValue(customer?.tripName||customer?.tripTitle||customer?.service||customer?.serviceName)&&!primaryWishSummary(customer).originalRequest))return {label:"Wünsche vervollständigen",tab:"kunde",tone:"info"};
+    if(!sent&&!accepted&&/(angebot.*(entwurf|bearbeitung)|entwurf.*angebot)/.test(status))return {label:"Angebot fertigstellen",tab:"angebote",tone:"info"};
+    if(!sent&&!accepted&&/(angebot.*(versendet|ubermittelt)|entscheidung.*ausstehend)/.test(status))return {label:"Kundenentscheidung abwarten",tab:"angebote",tone:"muted"};
+    if(!accepted&&/(angebot.*(angenommen|bestatigt)|kunde.*angenommen)/.test(status))return {label:"Zahlung prüfen",tab:"zahlung",tone:"warning"};
+    if(sent&&!accepted)return {label:"Kundenentscheidung abwarten",tab:"angebote",tone:"muted"};
+    if(accepted&&!paid)return {label:"Zahlung prüfen",tab:"zahlung",tone:"warning"};
+    if(paid&&release!=="released"&&release!=="manual_released")return {label:"Manuelle Planungsfreigabe prüfen",tab:"zahlung",tone:"warning"};
+    const openApproval=arrayValue(customer?.thirdPartyApprovals).some(item=>["pending","sent"].includes(String(item?.status||"")))||arrayValue(customer?.bookings).some(item=>item?.customerApproved===false&&item?.approvalRequired===true);
+    if(openApproval)return {label:"Kundenentscheidung abwarten",tab:"buchungen",tone:"warning"};
+    const publication=publicationStatus(customer);
+    if(publication.key==="pending")return {label:"Veröffentlichung prüfen",tab:"veroeffentlichung",tone:"warning"};
+    if(isActiveTrip(customer))return {label:"Gäste betreuen",tab:"concierge",tone:"success"};
+    return {label:"Status prüfen",tab:"kunde",tone:"muted"};
   }
 
   function normalizeText(value){
@@ -4778,18 +4823,24 @@
   }
 
   function dashboardPriorityEntries(rows){
-    return rows.flatMap(row=>{
-      return (row.intelligence?.insights||[])
-        .filter(insight=>insight.severity!=="recommendation")
-        .map(insight=>({
-          rank:insight.severity==="critical"?1:3,
-          tone:insight.severity==="critical"?"critical":"warning",
-          reason:insight.title,
-          urgency:insight.severity==="critical"?"Kritisch":"Prüfen",
-          tab:insight.targetTab,
-          row
-        }));
-    }).sort((a,b)=>a.rank-b.rank||(dashboardDateOffset(a.row.trip.start)??99)-(dashboardDateOffset(b.row.trip.start)??99)||timestampValue(b.row.customer)-timestampValue(a.row.customer));
+    return rows.map(row=>{
+      const action=customerNextAction(row.customer);
+      const category=isProspectRecord(row.customer)?"Neue Anfrage":action.tab==="angebote"?"Offenes Angebot":action.tab==="buchungen"?"Buchungsaufgabe":action.tab==="zahlung"?"Zahlungsbedarf":action.tab==="veroeffentlichung"?"Veröffentlichung":"Aufgabe";
+      const rank=action.tone==="warning"?1:action.tone==="info"?2:3;
+      return {rank,tone:action.tone==="warning"?"warning":"",reason:action.label,urgency:category,tab:action.tab,row};
+    }).filter(item=>item.reason!=="Status prüfen")
+      .sort((a,b)=>a.rank-b.rank||(dashboardDateOffset(a.row.trip.start)??99)-(dashboardDateOffset(b.row.trip.start)??99)||timestampValue(b.row.customer)-timestampValue(a.row.customer));
+  }
+
+  function dashboardProspectEntries(){
+    return state.customers.filter(customer=>!isArchivedCustomer(customer)&&isProspectRecord(customer)).map(customer=>({
+      rank:1,
+      tone:"",
+      reason:"Wünsche vervollständigen",
+      urgency:"Neue Anfrage",
+      tab:"kunde",
+      row:{customer,workspace:customerWorkspaceViewModel(customer),publication:publicationStatus(customer),trip:buildTripViewModel(customer),intelligence:null}
+    }));
   }
 
   function dashboardTodayEntries(rows,priorities){
@@ -4887,7 +4938,7 @@
 
   function renderOperationsDashboard(){
     const rows=dashboardCustomerRows();
-    const priorities=dashboardPriorityEntries(rows);
+    const priorities=[...dashboardProspectEntries(),...dashboardPriorityEntries(rows)];
     renderDashboardHeader(rows,priorities);
     renderOperationsMetrics(rows,priorities);
     renderOperationsLists(rows,priorities);
@@ -8808,12 +8859,28 @@
       }
     });
     const moreButton=document.querySelector('[data-mobile-sheet-open="mobileMoreSheet"]');
-    const moreSelected=["bookings","communication","documents","settings"].includes(active);
+    const moreSelected=["bookings","communication","legalcomms","zahlung","documents","demand","tasks","settings"].includes(active);
     if(moreButton){
       moreButton.classList.toggle("active",moreSelected);
       if(moreSelected)moreButton.setAttribute("aria-current","page");
       else moreButton.removeAttribute("aria-current");
     }
+  }
+
+  function toggleMoreNavigation(force){
+    const panel=byId("desktopMoreNav");
+    const toggles=all("[data-more-toggle]");
+    if(!panel)return;
+    const open=typeof force==="boolean"?force:panel.hidden;
+    panel.hidden=!open;
+    toggles.forEach(toggle=>toggle.setAttribute("aria-expanded",open?"true":"false"));
+    if(open)panel.querySelector("button,a")?.focus();
+  }
+
+  function showAdvancedDashboard(){
+    state.dashboardAdvanced=true;
+    routeTo("dashboard");
+    byId("dashboardView")?.classList.add("show-advanced");
   }
 
   function openMobileSheet(id,trigger){
@@ -8870,6 +8937,9 @@
     const tab=detailTabs.some(([key])=>key===state.selectedTab)?state.selectedTab:"kunde";
     const workspace=customerWorkspaceViewModel(customer);
     const prospect=isProspectRecord(customer);
+    const activePhase=workspacePhaseForTab(tab);
+    const nextAction=customerNextAction(customer);
+    const serviceScope=compactServiceScope(customer);
     const wishSummary=primaryWishSummary(customer);
     const journey=customerJourneyViewModel(customer,workspace);
     const flash=state.detailFlashMessage?`<p class="v2-edit-status ${escapeHtml(state.detailFlashKind||"success")}" role="status">${escapeHtml(state.detailFlashMessage)}</p>`:"";
@@ -8902,6 +8972,11 @@
             <div class="v2-workspace-statusline" aria-label="${prospect?"Interessentenstatus":"Kundenstatus"}">
               ${workspace.statuses.map(item=>workspaceStatusChip(item)).join("")}
             </div>
+            <div class="v2-next-action ${escapeHtml(nextAction.tone)}">
+              <span>Nächste Aktion</span>
+              <button type="button" data-detail-tab="${escapeHtml(nextAction.tab)}">${escapeHtml(nextAction.label)} <span aria-hidden="true">→</span></button>
+            </div>
+            <p class="v2-service-scope ${serviceScope.compact?"compact":""}"><strong>${escapeHtml(serviceScope.label)}:</strong> ${escapeHtml(serviceScope.hint)}</p>
             ${prospect?`
             <dl class="workspace-customer-summary">
               <div><dt>WhatsApp / Mobilnummer</dt><dd>${escapeHtml(prospectPhone)}</dd></div>
@@ -8986,8 +9061,15 @@
       </header>
       <div class="v2-workspace-content-flow">
         <div class="v2-workspace-navigation">
-          <div class="v2-detail-tabs v2-workspace-tabs" role="tablist" aria-label="Kundendetailbereiche">
-            ${detailTabs.map(([key,label])=>`
+          <div class="v2-workspace-phases" aria-label="Arbeitsphasen">
+            ${workspacePhases.map(phase=>`
+              <button type="button" class="v2-workspace-phase ${phase.id===activePhase.id?"active":""} ${serviceScope.compact&&phase.id==="care"?"optional":""}" data-workspace-phase="${escapeHtml(phase.id)}" aria-current="${phase.id===activePhase.id?"step":"false"}">
+                <small>Phase ${phase.number}</small><strong>${escapeHtml(phase.label)}</strong>${serviceScope.compact&&phase.id==="care"?"<span>nach Bedarf</span>":""}
+              </button>
+            `).join("")}
+          </div>
+          <div class="v2-detail-tabs v2-workspace-tabs" role="tablist" aria-label="Bereiche in ${escapeHtml(activePhase.label)}">
+            ${detailTabs.filter(([key])=>activePhase.tabs.includes(key)).map(([key,label])=>`
               <button class="v2-tab" type="button" role="tab" id="tab-${key}" aria-selected="${key===tab?"true":"false"}" ${key===tab?'aria-current="page"':""} aria-controls="panel-${key}" data-detail-tab="${key}">
                 <span>${escapeHtml(label)}</span>${workspace.tabCounts[key]!==undefined?`<small>${escapeHtml(String(workspace.tabCounts[key]))}</small>`:""}
               </button>
@@ -10310,8 +10392,10 @@
       const active=parsed.route==="customerDetail"?button.dataset.v2Route==="customers":button.dataset.v2Route===parsed.route;
       button.classList.toggle("active",active);
     });
+    const moreActive=["bookings","communication","legalcomms","zahlung","documents","demand","tasks","settings"].includes(parsed.route);
+    all("[data-more-toggle]").forEach(button=>button.classList.toggle("active",moreActive));
     renderMobileNavigation();
-    const title=parsed.route==="customerDetail"?"Kundendetail":byId(viewId)?.dataset.title||"Dashboard";
+    const title=parsed.route==="customerDetail"?"Kundendetail":parsed.route==="dashboard"?"Übersicht":byId(viewId)?.dataset.title||"Übersicht";
     byId("pageTitle").textContent=title;
     if(replace)history.replaceState({route:parsed.route},"",nextHash);
     else if(location.hash!==nextHash)history.pushState({route:parsed.route},"",nextHash);
@@ -11858,6 +11942,9 @@
     byId("resetFiltersButton").addEventListener("click",resetFilters);
     byId("clearEmptyFiltersButton").addEventListener("click",resetFilters);
     document.addEventListener("click",event=>{
+      const moreToggle=event.target.closest("[data-more-toggle]");
+      if(moreToggle){toggleMoreNavigation();return;}
+      if(event.target.closest("[data-dashboard-advanced]")){toggleMoreNavigation(false);showAdvancedDashboard();return;}
       const sheetOpen=event.target.closest("[data-mobile-sheet-open]");
       if(sheetOpen){openMobileSheet(sheetOpen.dataset.mobileSheetOpen,sheetOpen);return;}
       if(event.target.closest("[data-mobile-sheet-close]")){closeMobileSheet();return;}
@@ -11889,6 +11976,12 @@
       }
       const workspaceQuick=event.target.closest("[data-workspace-quick-tab]");
       if(workspaceQuick){openWorkspaceQuickTab(workspaceQuick.dataset.workspaceQuickTab);return;}
+      const workspacePhase=event.target.closest("[data-workspace-phase]");
+      if(workspacePhase&&state.selectedCustomerId){
+        const phase=workspacePhases.find(item=>item.id===workspacePhase.dataset.workspacePhase);
+        if(phase)openWorkspaceTab(phase.tabs[0]);
+        return;
+      }
       if(event.target.closest("[data-workspace-more-toggle]")){
         const details=byId("workspaceMoreActions");
         const toggle=event.target.closest("[data-workspace-more-toggle]");
@@ -11928,7 +12021,7 @@
         return;
       }
       const route=event.target.closest("[data-v2-route]");
-      if(route){routeTo(route.dataset.v2Route);return;}
+      if(route){toggleMoreNavigation(false);routeTo(route.dataset.v2Route);return;}
       const preset=event.target.closest("[data-filter-preset]");
       if(preset){applyPreset(preset.dataset.filterPreset);return;}
       const editAction=event.target.closest("[data-customer-edit-action]");
@@ -12538,7 +12631,7 @@
     prepareAuth();
   }
 
-  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,tasksRouteHash,tasksDeepLinkHashOptions,applyAiTaskDeepLink,openAiTaskById,closeAiTaskDetail,toggleAiTaskActionWorkspace,trapAiTaskDetailFocus,rememberAiTaskDetailReturnFocus,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,dashboardDateOffset,dashboardProgramDate,dashboardBookingDueDate,dashboardPriorityEntries,dashboardTodayEntries,dashboardNextSevenEntries,dashboardActivityEntries,renderOperationsDashboard,workspacePanelStartVisible,customerWorkspaceStartVisible,scrollToCustomerWorkspaceStart,scheduleCustomerWorkspaceStartScroll,openCustomerDetail,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail,filteredAiTasks,aiTaskCustomerFilterOptions,aiTaskCustomerDisplayName,normalizeAiTaskCustomerFilter,setAiTaskCustomerFilter,openAiTasksForCustomer,isProspectRecord,validateProspectDraft,buildProspectCustomer,workspaceMissingRequired,customerJourneyViewModel,customerConciergeReadiness};
+  window.ACTAdminV2Test={normalizeText,dateValue,formatPeriod,publicationState,isActiveTrip,isUpcomingTrip,filteredCustomers,state,withTimeout,loginErrorMessage,parseRoute,detailHash,detailTabs,workspacePhases,workspacePhaseForTab,compactServiceScope,customerNextAction,tasksRouteHash,tasksDeepLinkHashOptions,applyAiTaskDeepLink,openAiTaskById,closeAiTaskDetail,toggleAiTaskActionWorkspace,trapAiTaskDetailFocus,rememberAiTaskDetailReturnFocus,classicEditorUrl,customerById,normalizeChildAgesFromSources,childAgeLabels,travelerSummary,programSource,programEditValues,normalizedProgramDraft,validateProgramEdit,mergeProgramEdit,sortProgramItems,safeWebUrl,mapSearchUrl,programTimeLabel,normalizeDocumentItem,normalizedDocuments,validateDocumentEdit,mergeDocumentEdit,documentMatchesProgramItem,filteredDocumentRecords,compareDocuments,nextInternalCustomerNumber,composeWizardPhone,isValidWizardEmail,buildCustomerFromWizard,validateWizardStep,isWizardPlaceholderDocument,wizardRealDocuments,WIZARD_EMAIL_ERROR,WIZARD_SUCCESS_MESSAGE,customerImage,customerImageUrl,customerInitials,applyCustomerImageToCustomer,mergeCustomerEdit,customerEditValues,isArchivedCustomer,confirmArchiveCustomer,confirmDeleteCustomer,resolvePortalLink,portalLinkBadgeLabel,adminPortalPreviewUrl,customerWorkspaceViewModel,dashboardDateOffset,dashboardProgramDate,dashboardBookingDueDate,dashboardPriorityEntries,dashboardTodayEntries,dashboardNextSevenEntries,dashboardActivityEntries,renderOperationsDashboard,workspacePanelStartVisible,customerWorkspaceStartVisible,scrollToCustomerWorkspaceStart,scheduleCustomerWorkspaceStartScroll,openCustomerDetail,openWorkspaceTab,openWorkspaceQuickTab,renderCustomerDetail,filteredAiTasks,aiTaskCustomerFilterOptions,aiTaskCustomerDisplayName,normalizeAiTaskCustomerFilter,setAiTaskCustomerFilter,openAiTasksForCustomer,isProspectRecord,validateProspectDraft,buildProspectCustomer,workspaceMissingRequired,customerJourneyViewModel,customerConciergeReadiness};
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);
   else init();

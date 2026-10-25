@@ -89,4 +89,16 @@ describe("ACMS Simple navigation contracts",()=>{
     assert.match(js,/ein mehrtägiges Programm ist nicht erforderlich/);
     assert.match(js,/phase\.id==="care"\?"optional"/);
   });
+
+  it("provides two anonymized emulator fixtures for manual desktop and mobile QA",()=>{
+    const seed=read("tests/security/seed-emulator.js");
+    assert.match(seed,/customerId:"qa-privater-transfer"/);
+    assert.match(seed,/service:"Privater Transfer"/);
+    assert.match(seed,/customerId:"qa-familienreise-tirol"/);
+    assert.match(seed,/service:"Mehrtägiges Familienprogramm"/);
+    assert.match(seed,/Planungsbeginn manuell freigeben/);
+    assert.match(seed,/manualQaOnly[\s\S]*FIRESTORE_EMULATOR_HOST!=="127\.0\.0\.1:8080"/);
+    assert.match(seed,/FIREBASE_AUTH_EMULATOR_HOST!=="127\.0\.0\.1:9099"/);
+    assert.doesNotMatch(seed,/@(?:gmail|outlook|icloud|gmx|yahoo)\./i);
+  });
 });

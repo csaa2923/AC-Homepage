@@ -260,6 +260,22 @@ p{color:var(--muted);line-height:1.55}
 .v2-customer-journey-next-title{margin:0;color:var(--ink);font-size:15px;font-weight:850;overflow-wrap:anywhere}
 .v2-customer-journey-next-detail{margin:0;color:var(--muted);font-size:13px;font-weight:700;overflow-wrap:anywhere}
 .v2-customer-journey-next .v2-button{flex:0 0 auto}
+.v2-customer-journey>summary,.v2-concierge-overview-card>summary,.workspace-ai-overview-panel>summary{cursor:pointer;list-style:none}
+.v2-customer-journey>summary::-webkit-details-marker,.v2-concierge-overview-card>summary::-webkit-details-marker,.workspace-ai-overview-panel>summary::-webkit-details-marker{display:none}
+.v2-customer-journey>summary{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.v2-customer-journey>summary span{display:grid;gap:2px}.v2-customer-journey>summary small{color:var(--muted)}
+.v2-customer-journey:not([open])>summary:after,.v2-concierge-overview-card:not([open])>summary:after,.workspace-ai-overview-panel:not([open])>summary:after{content:"Aufklappen";color:var(--green);font-size:12px;font-weight:850}
+.v2-customer-journey[open]>summary{margin-bottom:10px}
+.v2-view-mode{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.7)}
+.v2-view-mode>span{font-size:12px;font-weight:900;text-transform:uppercase;color:var(--muted)}
+.v2-view-mode>div{display:flex;padding:3px;border-radius:999px;background:#e8eeea}
+.v2-view-mode button{border:0;border-radius:999px;padding:7px 12px;background:transparent;color:var(--ink);font-weight:850;cursor:pointer}
+.v2-view-mode button[aria-pressed="true"]{background:#fff;color:var(--green);box-shadow:0 2px 8px rgba(16,40,32,.12)}
+.v2-view-mode small{flex:1 1 220px;color:var(--muted)}
+.v2-compact-navigation{display:flex;gap:8px;overflow:auto;padding-bottom:4px}.v2-compact-navigation .v2-tab{flex:0 0 auto}
+.v2-compact-more{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}.v2-compact-more>summary{cursor:pointer;color:var(--green);font-weight:850}
+.v2-compact-more:not([open])>.v2-workspace-phases,.v2-compact-more:not([open])>.v2-workspace-tabs{display:none}
+.v2-workspace-phases.is-secondary{margin-top:10px}
 .v2-wishes-card .v2-muted{margin:0}
 .v2-wishes-edit{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.72)}
 .v2-wishes-edit h3{margin:0;font-size:18px}

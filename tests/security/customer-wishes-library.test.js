@@ -225,7 +225,7 @@ describe("8.0b customer wishes library",()=>{
   });
 
   it("O) journey preview comes from the same wishes model",()=>{
-    assert.match(adminJs,/wishes:customerWishesViewModel\(customer\)\.preview/);
+    assert.match(adminJs,/wishes:arrayValue\(customerWishesViewModel\(customer\)\.preview\)\.map\(structuredText\)\.filter\(Boolean\)/);
     const lib=loadLibrary();
     const journeyLib=loadJourneyLibrary();
     const journey=journeyLib.buildCustomerJourney({
@@ -281,8 +281,8 @@ describe("8.0b customer wishes library",()=>{
 
   it("V) Admin V2 wires one visible wishes surface on the trip tab",()=>{
     assert.match(adminHtml,/customer-wishes-library\.js\?v=1/);
-    assert.match(adminHtml,/admin-v2\.js\?v=106/);
-    assert.match(adminHtml,/admin-v2\.css\?v=83/);
+    assert.match(adminHtml,/admin-v2\.js\?v=107/);
+    assert.match(adminHtml,/admin-v2\.css\?v=84/);
     assert.match(adminJs,/function tripWishesReadCard\(customer\)/);
     assert.match(adminJs,/function tripWishesEditMarkup\(draft\)/);
     assert.match(adminJs,/Wünsche & Interessen/);
@@ -296,7 +296,7 @@ describe("8.0b customer wishes library",()=>{
 
   it("W) 8.0a journey still uses a wishes array and does not gain a second detector",()=>{
     assert.match(journeySource,/statusRow\("wishes","Wünsche"/);
-    assert.match(adminJs,/function customerJourneyViewModel\(customer,workspace\)\{[\s\S]*?wishes:customerWishesViewModel\(customer\)\.preview/);
+    assert.match(adminJs,/function customerJourneyViewModel\(customer,workspace\)\{[\s\S]*?wishes:arrayValue\(customerWishesViewModel\(customer\)\.preview\)\.map\(structuredText\)\.filter\(Boolean\)/);
     assert.equal((adminJs.match(/function customerWishesViewModel/g)||[]).length,1);
   });
 

@@ -101,4 +101,27 @@ describe("ACMS Simple navigation contracts",()=>{
     assert.match(seed,/FIREBASE_AUTH_EMULATOR_HOST!=="127\.0\.0\.1:9099"/);
     assert.doesNotMatch(seed,/@(?:gmail|outlook|icloud|gmx|yahoo)\./i);
   });
+
+  it("adapts the customer workspace without persisting a new classification",()=>{
+    const js=read("customer-portal/admin-v2.js");
+    assert.match(js,/function suggestedCustomerViewMode\(customer\)/);
+    assert.match(js,/programCount\(customer\)>1\|\|arrayValue\(customer\?\.bookings\)\.length>1/);
+    assert.match(js,/return \{mode:"full",certain:false,reason:/);
+    assert.match(js,/data-customer-view-mode="compact"/);
+    assert.match(js,/data-customer-view-mode="full"/);
+    assert.match(js,/state\.customerViewModes\[state\.selectedCustomerId\]=mode/);
+    assert.doesNotMatch(js,/customerViewMode[\s\S]{0,1200}(saveDraftCustomer|setDoc|updateDoc)/);
+  });
+
+  it("uses consistent trip fields, readable wishes and one primary next action",()=>{
+    const js=read("customer-portal/admin-v2.js");
+    assert.match(js,/const trip=buildTripViewModel\(customer\)/);
+    assert.match(js,/displayValue\(trip\.period/);
+    assert.match(js,/displayValue\(trip\.region\|\|trip\.destination/);
+    assert.match(js,/function structuredText\(value\)/);
+    assert.match(js,/\.preview\)\.map\(structuredText\)\.filter\(Boolean\)/);
+    assert.match(js,/const primary=customerNextAction\(customer\)/);
+    assert.match(js,/source:"customerNextAction"/);
+    assert.doesNotMatch(js,/>Customer Journey</);
+  });
 });

@@ -55,7 +55,7 @@ describe("admin v2 prospect create (P1)",()=>{
     assert.match(adminHtml,/id="newProspectDialog"/);
     assert.match(adminHtml,/data-new-prospect/);
     assert.match(adminHtml,/customer-lifecycle-library\.js\?v=3/);
-    assert.match(adminHtml,/admin-v2\.js\?v=106/);
+    assert.match(adminHtml,/admin-v2\.js\?v=107/);
     assert.match(adminJs,/function openNewProspect\(/);
     assert.match(adminJs,/function buildProspectCustomer\(/);
     assert.match(adminJs,/function saveProspectCustomer\(/);

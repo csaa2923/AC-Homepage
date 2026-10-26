@@ -259,7 +259,7 @@ describe("customer portal document title typography (4.4D)", () => {
   });
 
   it("produces readable titles for raw filenames", () => {
-    const match = portalJs.match(/function formatDocumentDisplayTitle\(document\)\{[\s\S]*?\n  \}\n/);
+    const match = portalJs.match(/function formatDocumentDisplayTitle\(document\)\{[\s\S]*?\r?\n  \}\r?\n/);
     assert.ok(match, "formatDocumentDisplayTitle must exist");
     const formatDocumentDisplayTitle = new Function(`
       function t(key){return key==="documents.types.document"?"Dokument":key;}

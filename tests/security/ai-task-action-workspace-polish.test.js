@@ -121,7 +121,7 @@ describe("AI task action workspace polish (Ops Ready 6.6)",()=>{
   it("keeps mobile overflow, footer reachability and bottom-sheet height",()=>{
     const css=readProjectFile("customer-portal/admin-v2.css");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=83/);
+    assert.match(html,/admin-v2\.css\?v=84/);
     assert.match(html,/admin-v2\.js\?v=107/);
     assert.match(css,/\.ai-task-detail-panel\{[\s\S]*max-height:min\(90dvh/);
     assert.match(css,/\.ai-task-detail-body\{[\s\S]*overflow-y:auto/);
@@ -179,7 +179,7 @@ describe("AI task action workspace polish (Ops Ready 6.6)",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     assert.match(html,/ai-task-action-workspace\.js\?v=10/);
-    assert.match(html,/admin-v2\.js\?v=106/);
+    assert.match(html,/admin-v2\.js\?v=107/);
     assert.match(html,/admin-v2\.css\?v=84/);
     assert.match(js,/function aiTaskRestaurantModuleMarkup\(/);
     assert.match(js,/function aiTaskTransferModuleMarkup\(/);

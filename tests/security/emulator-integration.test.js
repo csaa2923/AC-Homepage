@@ -166,13 +166,13 @@ describe("callable admin auth emulator",()=>{
   });
 
   it("allows admin-test to create share",async()=>{
-    const result=await invokeCallable("createPortalShare","admin-test",{customerId:"kunde-emulator-test"});
+    const result=await invokeCallable("createPortalShare","admin-test",{customerId:"kunde-emulator-test",forceNew:true});
     assert.ok(result.data.shareId);
     assert.ok(result.data.rawToken);
   });
 
   it("allows admin-test to revoke share",async()=>{
-    const created=await invokeCallable("createPortalShare","admin-test",{customerId:"kunde-emulator-test"});
+    const created=await invokeCallable("createPortalShare","admin-test",{customerId:"kunde-emulator-test",forceNew:true});
     const revoked=await invokeCallable("revokePortalShare","admin-test",{shareId:created.data.shareId});
     assert.equal(revoked.data.shareId,created.data.shareId);
     const res=await fetch(`${BASE}?share=${encodeURIComponent(created.data.shareId)}&token=${encodeURIComponent(created.data.rawToken)}`);

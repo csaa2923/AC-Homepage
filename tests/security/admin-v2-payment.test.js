@@ -45,8 +45,8 @@ describe("admin v2 zahlung und freigabe",()=>{
     assert.match(html,/id="paymentSettingsRoot"/);
     assert.match(html,/admin-v2-payment\.js\?v=2/);
     assert.match(html,/admin-v2-payment\.css\?v=1/);
-    assert.match(html,/admin-v2\.js\?v=106/);
-    assert.match(html,/admin-v2\.css\?v=83/);
+    assert.match(html,/admin-v2\.js\?v=107/);
+    assert.match(html,/admin-v2\.css\?v=84/);
     assert.match(js,/\["zahlung","Zahlung"\]/);
     assert.match(js,/ACTAdminV2Payment\?\.bind/);
     assert.match(js,/function savePayment\(/);

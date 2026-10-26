@@ -33,10 +33,10 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/const MISSING_ROLE_ERROR="Dieses Konto besitzt keine Berechtigung f/);
     assert.match(js,/console\.error\("\[ACT Admin V2\] Anmeldung:"/);
     assert.match(html,/firebase-auth\.js\?v=10/);
-    assert.match(html,/admin-v2\.css\?v=83/);
+    assert.match(html,/admin-v2\.css\?v=84/);
     assert.match(html,/class="v2-login-logo"[^>]+src="\.\.\/images\/logo\/alpine-concierge-logo-transparent\.png"[^>]+alt="Alpine Concierge Tirol"[^>]+width="1536" height="1024"/);
     assert.match(css,/\.v2-login-logo\{[^}]*width:min\(100%,320px\)[^}]*height:clamp\(160px,28vw,214px\)[^}]*margin:0 auto 20px[^}]*object-fit:contain[^}]*object-position:center/);
-    assert.match(html,/admin-v2\.js\?v=106/);
+    assert.match(html,/admin-v2\.js\?v=107/);
     assert.match(html,/concierge-assistant-library\.js\?v=2/);
     assert.match(html,/concierge-intelligence-library\.js\?v=7/);
     assert.match(html,/customer-journey-library\.js\?v=5/);
@@ -389,7 +389,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const footerBlock=css.match(/\.ai-task-detail-footer\{[\s\S]*?\n\}/)?.[0]||"";
     const techPanelOpen=css.match(/\.ai-task-detail-tech\.is-open \.ai-task-detail-tech__panel\{[^}]+\}/)?.[0]||"";
 
-    assert.match(html,/admin-v2\.css\?v=83/);
+    assert.match(html,/admin-v2\.css\?v=84/);
     assert.match(panelBlock,/max-height:min\(90dvh/);
     assert.match(panelBlock,/display:flex/);
     assert.match(panelBlock,/flex-direction:column/);
@@ -484,7 +484,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const createFn=js.match(/async function createSelectedAiTask[\s\S]*?(?=\n  const AI_TASK_CUSTOMER_FILTER_KEY|\n  function |\n  async function )/)?.[0]||"";
     const saveFn=js.match(/async function saveSelectedAiAnalysis[\s\S]*?(?=\n  async function |\n  function )/)?.[0]||"";
     const analyzeFn=js.match(/async function analyzeSelectedCustomerWithAi[\s\S]*?(?=\n  async function |\n  function )/)?.[0]||"";
-    assert.match(html,/admin-v2\.js\?v=106/);
+    assert.match(html,/admin-v2\.js\?v=107/);
     assert.match(js,/aiAnalysisPersisted:false/);
     assert.match(js,/function currentAiAnalysisIsPersisted\(/);
     assert.match(analyzeFn,/state\.aiAnalysisPersisted=false/);
@@ -540,13 +540,13 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/if\(state\.route==="dashboard"\)renderOperationsDashboard\(\)/);
   });
 
-  it("derives dashboard priorities from the shared concierge intelligence model",()=>{
+  it("derives dashboard priorities from the safe next-action presentation model",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     assert.match(js,/const workspace=customerWorkspaceViewModel\(customer\)/);
     assert.match(js,/intelligence:customerConciergeReadiness\(customer,workspace\)/);
-    assert.match(js,/row\.intelligence\?\.insights\|\|\[\]/);
-    assert.match(js,/insight\.severity!=="recommendation"/);
-    assert.match(js,/tab:insight\.targetTab/);
+    assert.match(js,/const action=customerNextAction\(row\.customer\)/);
+    assert.match(js,/isProspectRecord\(row\.customer\)\?"Neue Anfrage"/);
+    assert.match(js,/action\.tab==="zahlung"\?"Zahlungsbedarf"/);
     assert.match(js,/dashboardPriorityEntries\(rows\)/);
     assert.match(js,/\.sort\(\(a,b\)=>a\.rank-b\.rank/);
     assert.doesNotMatch(js,/loadCustomersForAdmin\([\s\S]{0,300}renderOperationsDashboard/);
@@ -646,12 +646,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function customerJourneyViewModel\(customer,workspace\)/);
     assert.match(js,/function customerJourneyMarkup\(journey\)/);
     assert.match(js,/customerJourneyMarkup\(journey\)/);
-    assert.match(js,/Concierge Overview/);
-    assert.match(js,/Heute wichtig/);
+    assert.match(js,/Aufgaben & Hinweise/);
+    assert.match(js,/Handlungsbedarf/);
     assert.match(js,/function workspaceMissingRequired\(customer,trip\)/);
     assert.match(js,/function workspaceWeatherAvailable\(customer\)/);
     assert.match(js,/function workspaceLastCommunication\(customer\)/);
-    assert.match(js,/data-detail-tab="programm">Programm/);
+    assert.match(js,/compactView\?"buchungen":"programm"/);
     assert.match(js,/data-detail-tab="buchungen">Buchung/);
     assert.match(js,/data-detail-tab="dokumente">Dokument/);
     assert.match(js,/data-detail-tab="kommunikation">Nachricht/);
@@ -665,7 +665,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-workspace-navigation\{position:sticky/);
   });
 
-  it("keeps all eight workspace tabs reachable across desktop, tablet and mobile",()=>{
+  it("keeps legacy workspace tabs reachable through four phases across desktop, tablet and mobile",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     const css=readProjectFile("customer-portal/admin-v2.css");
@@ -688,7 +688,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(css,/\.v2-workspace-content-flow\{min-width:0;max-width:100%/);
     assert.match(css,/\.v2-workspace-tabs\{flex-wrap:nowrap\}/);
     assert.match(css,/@media \(max-width:767px\),\(max-width:920px\) and \(max-height:520px\)/);
-    assert.equal((html.match(/class="admin-mobile-nav-item/g)||[]).length,5);
+    assert.equal((html.match(/class="admin-mobile-nav-item/g)||[]).length,4);
     assert.match(html,/class="v2-sidebar"/);
   });
 
@@ -711,7 +711,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.equal((html.match(/class="admin-mobile-nav-item/g)||[]).length,5);
+    assert.equal((html.match(/class="admin-mobile-nav-item/g)||[]).length,4);
     assert.match(html,/data-mobile-route="dashboard"[\s\S]*?>\s*<svg[\s\S]*?<span>Übersicht<\/span>/);
     assert.match(html,/class="admin-mobile-nav-item admin-mobile-nav-plus"/);
     assert.match(html,/data-mobile-route="tasks"/);
@@ -726,7 +726,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(js,/function workspaceStatusCard\(label,value,tone,tab\)/);
     assert.match(js,/function workspaceQuickAction\(label,tab,count,icon\)/);
     assert.doesNotMatch(js,/customerWorkspaceViewModel[\s\S]{0,1000}loadCustomersForAdmin/);
-    assert.match(css,/\.admin-mobile-nav\{position:fixed;[\s\S]*?repeat\(5,minmax\(0,1fr\)\)/);
+    assert.match(css,/\.admin-mobile-nav\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)\}/);
     assert.match(css,/\.v2-edit-actions\{bottom:calc\(var\(--mobile-nav-height\) \+ var\(--mobile-safe-bottom\) \+ 8px\)/);
     assert.match(css,/\.workspace-status-grid\{display:none\}/);
     assert.match(css,/\.v2-customer-journey-status\{grid-template-columns:1fr 1fr\}/);
@@ -1054,12 +1054,12 @@ describe("admin v2 dashboard and customer overview",()=>{
     const html=readProjectFile("customer-portal/admin-v2.html");
     const js=readProjectFile("customer-portal/admin-v2.js");
     const css=readProjectFile("customer-portal/admin-v2.css");
-    assert.match(html,/admin-v2\.css\?v=83/);
+    assert.match(html,/admin-v2\.css\?v=84/);
     assert.match(html,/portal-share-library\.js\?v=3/);
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-storage\.js\?v=5/);
     assert.match(html,/firebase-service\.js\?v=42/);
-    assert.match(html,/admin-v2\.js\?v=106/);
+    assert.match(html,/admin-v2\.js\?v=107/);
     assert.match(js,/const MAX_UPLOAD_BYTES=24\*1024\*1024/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerDocument\(/);
     assert.match(js,/window\.ACTFirebaseStorage\.uploadCustomerImage\(/);
@@ -1184,7 +1184,7 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/publish-workflow\.js\?v=9/);
     assert.match(html,/firebase-service\.js\?v=42/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=106/);
+    assert.match(html,/admin-v2\.js\?v=107/);
     assert.match(js,/tab==="veroeffentlichung"\?publicationTabMarkup\(customer\):placeholderTabMarkup\(\)/);
     assert.match(js,/function publicationTabMarkup\(customer\)/);
     assert.match(js,/function portalLinkBadgeLabel\(status\)/);
@@ -1296,8 +1296,8 @@ describe("admin v2 dashboard and customer overview",()=>{
   it("opens the new-customer wizard in admin v2 without redirecting to classic admin",()=>{
     const js=readProjectFile("customer-portal/admin-v2.js");
     const html=readProjectFile("customer-portal/admin-v2.html");
-    assert.match(html,/admin-v2\.css\?v=83/);
-    assert.match(html,/admin-v2\.js\?v=106/);
+    assert.match(html,/admin-v2\.css\?v=84/);
+    assert.match(html,/admin-v2\.js\?v=107/);
     assert.match(html,/data-new-customer>Neuen Kunden anlegen/);
     assert.match(html,/id="newCustomerWizard"/);
     assert.match(html,/data-wizard-action="cancel">Abbrechen/);
@@ -1513,8 +1513,8 @@ describe("admin v2 dashboard and customer overview",()=>{
     assert.match(html,/id="communicationView"/);
     assert.match(html,/id="communicationRoot"/);
     assert.match(html,/admin-v2-communication\.js\?v=7/);
-    assert.match(html,/admin-v2\.js\?v=106/);
-    assert.match(html,/admin-v2\.css\?v=83/);
+    assert.match(html,/admin-v2\.js\?v=107/);
+    assert.match(html,/admin-v2\.css\?v=84/);
     assert.match(js,/\["kommunikation","Kommunikation"\]/);
     assert.match(js,/"communication"/);
     assert.match(js,/ACTAdminV2Communication\?\.bind/);

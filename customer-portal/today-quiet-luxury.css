@@ -1,0 +1,80 @@
+/* Alpine Quiet Luxury · Today v1. Scoped to guest-facing Today only.
+   No authentication, data loading, navigation or publishing logic is changed. */
+#viewToday.today-view{
+  --quiet-forest:#102a22;
+  --quiet-gold:#c8aa63;
+  --quiet-cream:#f8f5ee;
+  background:var(--quiet-cream);
+  color:var(--quiet-forest);
+}
+#viewToday .today-hero.portal-hero{
+  min-height:clamp(310px,40vh,470px);
+  align-items:center;
+  background-image:linear-gradient(90deg,rgba(8,32,25,.80),rgba(8,32,25,.28)),url("../images/hero/hero.jpg");
+  background-position:center 48%;
+}
+#viewToday .today-hero-stage{padding:clamp(28px,5vw,72px) clamp(20px,5vw,80px)}
+#viewToday .today-hero-panel{max-width:900px}
+#viewToday .today-hero-panel h1{font-size:clamp(36px,5.6vw,72px);max-width:19ch;letter-spacing:-.035em}
+#viewToday .today-hero-panel .hero-subtitle{font-size:clamp(15px,1.5vw,19px);max-width:55ch}
+#viewToday .today-hero-panel .hero-meta{grid-template-columns:repeat(3,minmax(0,1fr));max-width:780px}
+#viewToday .today-hero-panel .hero-meta .meta-item:nth-child(n+4){display:none}
+#viewToday .today-hero-panel .hero-actions{margin-top:22px}
+#viewToday .today-hero-panel .button{border-radius:12px}
+#viewToday .today-hero-panel .button.primary{background:var(--quiet-gold);color:var(--quiet-forest);border-color:var(--quiet-gold)}
+#viewToday .today-primary-grid.today-experience{
+  display:grid;
+  grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);
+  column-gap:clamp(20px,3vw,44px);
+  row-gap:22px;
+  width:min(1250px,100%);
+  padding:clamp(24px,4vw,52px) 24px 60px;
+  align-items:start;
+}
+#viewToday .today-main-column,#viewToday .today-side-column{display:contents}
+#viewToday .today-proposal-card{grid-column:1/-1;order:0}
+#viewToday .today-next-event{grid-column:1;order:1}
+#viewToday .today-quick-actions{grid-column:2;order:2}
+#viewToday .today-concierge{grid-column:1;order:3}
+#viewToday .today-weather{grid-column:2;order:4}
+#viewToday .today-concierge,#viewToday .today-next-event,#viewToday .today-weather,#viewToday .today-quick-actions{padding:0;margin:0;min-width:0}
+#viewToday .section-head{width:100%;margin:0 0 16px}
+#viewToday .section-head h2{max-width:none;font-size:clamp(27px,3vw,39px);letter-spacing:-.025em}
+#viewToday .today-next-card,#viewToday .today-weather-card,#viewToday .concierge-card{
+  width:100%;border:1px solid rgba(18,53,41,.10);
+  border-radius:19px;background:#fffefb;
+  box-shadow:0 14px 38px rgba(20,39,30,.065);
+}
+#viewToday .today-next-card{padding:clamp(22px,3vw,38px);gap:16px}
+#viewToday .today-next-card h3{font-size:clamp(26px,3vw,39px);max-width:none}
+#viewToday .today-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#viewToday .today-quick-btn{
+  min-height:118px;border-radius:16px;
+  background:var(--quiet-forest);color:#f8f5e9;
+  border:1px solid rgba(200,170,99,.23);
+  padding:20px;transition:transform .18s ease,box-shadow .18s ease;
+}
+#viewToday .today-quick-btn:hover{transform:translateY(-2px);box-shadow:0 10px 25px rgba(13,44,33,.15)}
+#viewToday .today-quick-icon{color:var(--quiet-gold)}
+#viewToday .today-quick-label{color:#f8f5e9}
+#viewToday .today-further{display:none}
+#viewToday .today-view .concierge-stack{width:100%}
+@media(max-width:800px){
+  #viewToday .today-primary-grid.today-experience{grid-template-columns:minmax(0,1fr);padding:24px 16px 44px;gap:28px}
+  #viewToday .today-proposal-card,#viewToday .today-next-event,#viewToday .today-quick-actions,#viewToday .today-concierge,#viewToday .today-weather{grid-column:1}
+  #viewToday .today-next-event{order:1}
+  #viewToday .today-quick-actions{order:2}
+  #viewToday .today-concierge{order:3}
+  #viewToday .today-weather{order:4}
+  #viewToday .today-hero.portal-hero{min-height:350px}
+  #viewToday .today-hero-panel .hero-meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #viewToday .today-hero-panel .hero-meta .meta-item:nth-child(n+3){display:none}
+  #viewToday .today-quick-btn{min-height:96px}
+}
+@media(max-width:420px){
+  #viewToday .today-hero-stage{padding:28px 18px}
+  #viewToday .today-hero-panel h1{font-size:clamp(34px,10vw,46px)}
+  #viewToday .today-hero-panel .hero-meta{grid-template-columns:1fr 1fr}
+  #viewToday .today-hero-panel .hero-actions{flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){#viewToday .today-quick-btn{transition:none}#viewToday .today-quick-btn:hover{transform:none}}

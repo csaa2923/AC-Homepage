@@ -8,6 +8,82 @@
 
   let host=null;
   const COMPANY_KEY="act_company_payment";
+  const readinessCache=new Map();
+
+  function readinessState(customerId){
+    const id=String(customerId||"");
+    if(!readinessCache.has(id))readinessCache.set(id,{loaded:false,loading:false,attempted:false,verdict:"review",label:"Status prüfen",planningState:"not_released",paymentState:"not_requested",revision:0,offer:null,pendingApproval:false});
+    return readinessCache.get(id);
+  }
+
+  function readinessSummary(customerId){
+    return {...readinessState(customerId)};
+  }
+
+  function storeReadiness(customerId,result){
+    const state=readinessState(customerId);
+    const assessment=result?.assessment||{};
+    state.loaded=true;
+    state.loading=false;
+    state.attempted=true;
+    state.verdict=assessment.verdict||"review";
+    state.label=assessment.label||"Status prüfen";
+    state.planningState=assessment.planningState||"not_released";
+    state.paymentState=assessment.paymentState||"not_requested";
+    state.revision=Number(result?.record?.revision)||0;
+    state.offer=assessment.offer||null;
+    state.pendingApproval=assessment.pendingApproval===true;
+    return readinessSummary(customerId);
+  }
+
+  async function refreshReadiness(customerId){
+    const state=readinessState(customerId);
+    const service=window.ACTFirebaseService;
+    if(!customerId||!service||typeof service.applyCommercialReadiness!=="function")return readinessSummary(customerId);
+    state.loading=true;
+    state.attempted=true;
+    try{
+      storeReadiness(customerId,await service.applyCommercialReadiness({customerId,action:"read"}));
+    }catch(_error){
+      state.loaded=false;
+      state.loading=false;
+      state.verdict="review";
+      state.label="Status prüfen";
+    }
+    return readinessSummary(customerId);
+  }
+
+  async function primeReadiness(customerIds){
+    const ids=[...new Set((customerIds||[]).map(String).filter(Boolean))].filter(id=>{const state=readinessState(id);return !state.loaded&&!state.loading;});
+    if(!ids.length)return;
+    await Promise.all(ids.map(id=>refreshReadiness(id)));
+    if(host&&typeof host.render==="function")host.render();
+  }
+
+  async function callReadiness(customer,action,extra={}){
+    const service=window.ACTFirebaseService;
+    if(!customer?.customerId||!service||typeof service.applyCommercialReadiness!=="function"){
+      setMessage("Status prüfen. Die verbindliche Freigabe ist nicht erreichbar.","warning");
+      return null;
+    }
+    if(!readinessState(customer.customerId).loaded)await refreshReadiness(customer.customerId);
+    const current=readinessState(customer.customerId);
+    if(!current.offer){
+      setMessage("Status prüfen. Es gibt keine eindeutige Angebotsannahme.","warning");
+      return null;
+    }
+    const result=await service.applyCommercialReadiness({
+      customerId:customer.customerId,
+      action,
+      offerId:current.offer.offerId,
+      version:current.offer.version,
+      snapshotHash:current.offer.snapshotHash,
+      expectedRevision:current.revision,
+      ...extra
+    });
+    storeReadiness(customer.customerId,result);
+    return result;
+  }
 
   const PAYMENT_STATUSES=[
     {id:"not_requested",label:"Noch nicht angefordert",tone:"muted"},
@@ -359,17 +435,8 @@
     return window.ACTAdminV2LegalComms?.normalizeLegalComms?.(customer?.legalComms)||customer?.legalComms||{};
   }
 
-  function suggestedRelease(customer,payment){
-    const process=legalProcess(customer);
-    const totals=computeTotals(payment);
-    const docsSent=Boolean(process.offerSent||process.termsSent||process.withdrawalInfoSent);
-    if(!process.offerAccepted||(process.earlyStartRequested&&!process.earlyStartConfirmed)||!docsSent){
-      return statusById(RELEASE_STATUSES,"legal_pending");
-    }
-    if(payment.status!=="cancelled"&&totals.outstanding>0){
-      return statusById(RELEASE_STATUSES,"payment_pending");
-    }
-    return statusById(RELEASE_STATUSES,"released");
+  function suggestedRelease(){
+    return statusById(RELEASE_STATUSES,"not_released");
   }
 
   function dueOverdueHint(payment){
@@ -393,16 +460,19 @@
       process,
       status,
       release,
-      offerAccepted:Boolean(process.offerAccepted),
+      offerAccepted:Boolean(readinessSummary(customer?.customerId).offer),
       paymentShort:payment.status==="paid"?"bezahlt":payment.status==="cancelled"?"storniert":totals.outstanding>0?"ausständig":status.label.toLowerCase(),
-      releaseShort:payment.releaseStatus==="released"?"freigegeben":payment.releaseStatus==="manual_released"?"manuell freigegeben":payment.releaseStatus==="payment_pending"?"wartet auf Zahlung":release.label
+      releaseShort:readinessSummary(customer?.customerId).loaded&&readinessSummary(customer?.customerId).verdict==="released"?"freigegeben":readinessSummary(customer?.customerId).loaded&&readinessSummary(customer?.customerId).verdict==="exception"?"Ausnahmefreigabe":"Status prüfen",
+      planningState:readinessSummary(customer?.customerId).planningState
     };
   }
 
   function dashboardFacts(customer){
     const summary=paymentSummary(customer);
+    const readiness=readinessSummary(customer?.customerId);
+    const paymentLabel=!readiness.loaded?"Status prüfen":readiness.paymentState==="confirmed"?"bestätigt":readiness.paymentState==="partial"?"Teilzahlung":readiness.paymentState==="requested"?"angefordert":"offen";
     return {
-      paymentLabel:summary.paymentShort,
+      paymentLabel,
       releaseLabel:summary.releaseShort,
       amountDueToAct:formatMoney(summary.totals.amountDueToAct),
       conciergeFee:formatMoney(summary.totals.conciergeFee),
@@ -651,9 +721,10 @@ Alpine Concierge Tirol`;
 
   function workspaceMarkup(customer){
     const summary=paymentSummary(customer);
-    const {payment,totals,status,release}=summary;
+    const {payment,totals,status}=summary;
     const company=loadCompanyConfig();
-    const suggestion=suggestedRelease(customer,payment);
+    const readiness=readinessSummary(customer?.customerId);
+    const release={label:readiness.loaded?readiness.label:"Status prüfen",tone:readiness.verdict==="released"||readiness.verdict==="exception"?"ok":"muted"};
     const overdueHint=dueOverdueHint(payment);
     const msg=state().paymentMessage||"";
     const msgKind=state().paymentMessageKind||"";
@@ -695,7 +766,7 @@ Alpine Concierge Tirol`;
               <label>Zahlungsziel<input type="date" data-payment-field="dueDate" value="${escapeHtml(payment.dueDate)}"></label>
               <label>Zahlungsdatum<input type="date" data-payment-field="paidAt" value="${escapeHtml(payment.paidAt)}"></label>
               <label>Bereits bezahlt${moneyInput("paidAmount",payment.paidAmount)}</label>
-              <label>Zahlungsstatus<select data-payment-field="status">${selectOptions(PAYMENT_STATUSES,payment.status)}</select></label>
+              <label>Früherer Zahlungsvermerk<select data-payment-field="status" disabled>${selectOptions(PAYMENT_STATUSES,payment.status)}</select></label>
               <label class="full">Interne Notiz<textarea data-payment-field="note" rows="3">${escapeHtml(payment.note)}</textarea></label>
             </div>
             ${overdueHint?`<p class="v2-pay-hint">${escapeHtml(overdueHint)}</p>`:""}
@@ -757,9 +828,9 @@ Alpine Concierge Tirol`;
               ${statusChip(release)}
             </div>
             <p class="v2-muted">Diese Anzeige ist keine automatische rechtliche Bewertung. Angebotsannahme, Rücktrittsrecht, Zahlung und Freigabe bleiben getrennte Schritte.</p>
-            <p class="v2-pay-hint">Vorschlag zur Orientierung: ${escapeHtml(suggestion.label)}</p>
-            <label>Freigabestatus
-              <select data-payment-field="releaseStatus">${selectOptions(RELEASE_STATUSES,payment.releaseStatus)}</select>
+            <p class="v2-pay-hint">Verbindlicher Stand: ${escapeHtml(readiness.loaded?readiness.label:"Status prüfen")}. Frühere Zahlungs- und Freigabewerte in diesem Kundenblatt sind nur nachlesbar.</p>
+            <label>Früherer Freigabevermerk
+              <select data-payment-field="releaseStatus" disabled>${selectOptions(RELEASE_STATUSES,payment.releaseStatus)}</select>
             </label>
             <label class="full">Interne Notiz zur Freigabe<textarea data-payment-field="releaseNote" rows="2">${escapeHtml(payment.releaseNote)}</textarea></label>
             <div class="v2-document-actions">
@@ -800,11 +871,13 @@ Alpine Concierge Tirol`;
 
   function dashboardCardMarkup(customer){
     const summary=paymentSummary(customer);
+    const readiness=readinessSummary(customer?.customerId);
+    const paymentLabel=!readiness.loaded?"Status prüfen":readiness.paymentState==="confirmed"?"bestätigt":readiness.paymentState==="partial"?"Teilzahlung":readiness.paymentState==="requested"?"angefordert":"offen";
     return `
       <a class="v2-pay-dash-card" href="${escapeHtml(h().detailHash(customer.customerId,"zahlung"))}">
         <span>
           <strong>${escapeHtml(customer.customerName||"Unbenannter Kunde")}</strong>
-          <small>${escapeHtml(summary.offerAccepted?"Angebot angenommen":"Angebot noch nicht angenommen")}</small>
+          <small>${escapeHtml(readinessSummary(customer?.customerId).loaded?summary.offerAccepted?"Angebot angenommen":"Angebot noch nicht angenommen":"Status prüfen")}</small>
         </span>
         <span class="v2-pay-dash-amounts">
           <small>${escapeHtml(formatMoney(summary.totals.amountDueToAct))} an ACT</small>
@@ -812,8 +885,8 @@ Alpine Concierge Tirol`;
           <small>${escapeHtml(formatMoney(summary.totals.thirdPartyAct))} über ACT</small>
         </span>
         <span class="v2-pay-dash-status">
-          ${statusChip({label:`Zahlung: ${summary.paymentShort}`,tone:summary.payment.status==="paid"?"ok":summary.totals.outstanding>0?"warn":"muted"})}
-          ${statusChip({label:`Freigabe: ${summary.releaseShort}`,tone:summary.payment.releaseStatus==="released"||summary.payment.releaseStatus==="manual_released"?"ok":"muted"})}
+          ${statusChip({label:`Zahlung: ${paymentLabel}`,tone:readiness.paymentState==="confirmed"?"ok":"muted"})}
+          ${statusChip({label:`Freigabe: ${summary.releaseShort}`,tone:summary.planningState==="released"||summary.planningState==="exception"?"ok":"muted"})}
         </span>
       </a>
     `;
@@ -866,37 +939,43 @@ Alpine Concierge Tirol`;
       return;
     }
     let payment=normalizePayment(customer.payment);
-    if(action==="request"){
-      payment.status="requested";
-      await persistWithHistory(customer,payment,"payment_request_created");
-      setMessage("Zahlungsaufforderung erstellt. Zahlung bleibt unbestätigt, bis der Eingang aktiv erfasst wird.","success");
-    }else if(action==="partial"){
-      payment.status="partial";
-      await persistWithHistory(customer,payment,"partial_payment_entered",`Teilbetrag ${formatMoney(payment.paidAmount)}`);
-      setMessage("Teilzahlung eingetragen. Der Auftrag gilt nicht automatisch als bezahlt.","success");
-    }else if(action==="confirm"){
-      const totals=computeTotals(payment);
-      if(!payment.paidAmount)payment.paidAmount=totals.amountDueToAct;
-      if(!payment.paidAt)payment.paidAt=todayInput();
-      payment.status="paid";
-      if(payment.paymentLink){
-        payment.paymentLinkStatus="paid";
-        if(!payment.paymentLinkPaidAt)payment.paymentLinkPaidAt=payment.paidAt;
+    if(action==="request"||action==="partial"||action==="confirm"){
+      try{
+        if(action==="request"){
+          const saved=await callReadiness(customer,"request");
+          if(saved)setMessage("Zahlungsaufforderung ist dokumentiert. Der Eingang bleibt unbestätigt.","success");
+        }else{
+          if(payment.paidAmount===null||payment.paidAmount===""){
+            setMessage("Bitte den tatsächlich eingegangenen Betrag eintragen. Er wird nicht aus dem Honorar ergänzt.","warning");
+            return;
+          }
+          const saved=await callReadiness(customer,"confirm",{amount:payment.paidAmount});
+          if(saved)setMessage(action==="partial"?"Teilzahlung ist dokumentiert. Die Planung ist nicht freigegeben.":"Zahlungseingang ist dokumentiert. Die Planung ist nicht freigegeben.","success");
+        }
+      }catch(error){
+        setMessage(error.message||"Status prüfen.","error");
       }
-      await persistWithHistory(customer,payment,"payment_confirmed",formatMoney(payment.paidAmount));
-      setMessage("Zahlungseingang bestätigt.","success");
     }else if(action==="correct"){
       await persistWithHistory(customer,payment,"payment_corrected",`Aktueller Stand ${formatMoney(payment.paidAmount)}`);
       setMessage("Zahlungsdaten als Korrektur dokumentiert.","success");
-    }else if(action==="release"){
-      payment.releaseStatus="released";
-      await persistWithHistory(customer,payment,"release_granted");
-      setMessage("Freigabe zur Organisation erteilt.","success");
-    }else if(action==="manual-release"){
-      if(!window.confirm("Manuelle Freigabe bewusst erteilen? Dies ist eine interne Arbeitshilfe und keine automatische rechtliche Bewertung."))return;
-      payment.releaseStatus="manual_released";
-      await persistWithHistory(customer,payment,"manual_release_granted",payment.releaseNote);
-      setMessage("Manuelle Freigabe erteilt.","success");
+    }else if(action==="release"||action==="manual-release"){
+      try{
+        if(action==="manual-release"){
+          if(!window.confirm("Manuelle Freigabe bewusst erteilen? Dies ist eine interne Arbeitshilfe und keine automatische rechtliche Bewertung."))return;
+          const reason=String(payment.releaseNote||"").trim();
+          if(!reason){
+            setMessage("Für die Ausnahmefreigabe ist eine Begründung erforderlich.","warning");
+            return;
+          }
+          const saved=await callReadiness(customer,"exception",{reason});
+          if(saved)setMessage("Ausnahmefreigabe ist dokumentiert. Sie ersetzt keine Drittbuchungsfreigabe.","success");
+        }else{
+          const saved=await callReadiness(customer,"release");
+          if(saved)setMessage("Planungsfreigabe ist serverseitig dokumentiert.","success");
+        }
+      }catch(error){
+        setMessage(error.message||"Status prüfen.","error");
+      }
     }else if(action==="add-act"||action==="add-third"){
       const kind=action==="add-third"?"third":"act";
       const seedAmount=kind==="third"
@@ -936,13 +1015,8 @@ Alpine Concierge Tirol`;
       await persistWithHistory(customer,payment,"payment_link_sent");
       setMessage("WhatsApp mit Zahlungslink wurde kopiert. Bitte vor dem Senden prüfen.","success");
     }else if(action.startsWith("release-item:")){
-      const id=action.slice("release-item:".length);
-      const item=payment.items.find(entry=>entry.id===id);
-      if(!item)return;
-      if(!window.confirm("Verbindliche Fremdbuchung trotz fehlender Kundendeckung freigeben? Es wird keine automatische Sperre gesetzt."))return;
-      item.bookingReleased=true;
-      await persistWithHistory(customer,payment,"third_party_released",item.title||item.provider||item.category);
-      setMessage("Fremdkosten manuell freigegeben.","success");
+      setMessage("Diese Schaltfläche erteilt keine Planungsfreigabe und keine Drittbuchungsfreigabe. Kostenpflichtige Drittbuchungen laufen über die versionierte Kundenfreigabe.","warning");
+      return;
     }else{
       return;
     }
@@ -955,6 +1029,10 @@ Alpine Concierge Tirol`;
     const previous=normalizePayment(customer.payment);
     const payment=normalizePayment(customer.payment);
     const key=input.dataset.paymentField;
+    if(key==="status"||key==="releaseStatus"){
+      setMessage("Zahlungsbestätigung und Planungsfreigabe werden nur serverseitig gespeichert.","warning");
+      return;
+    }
     if(!(key in payment))return;
     let historyType="";
     if(input.type==="checkbox")payment[key]=Boolean(input.checked);
@@ -1059,6 +1137,8 @@ Alpine Concierge Tirol`;
 
   window.ACTAdminV2Payment={
     bind(api){host=api||null;},
+    readinessSummary,
+    primeReadiness,
     renderView,
     renderDashboard,
     renderSettings,

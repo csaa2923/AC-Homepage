@@ -169,6 +169,7 @@ function normalizeOffer(input={},options={}){
     createdAt:stamp(input.createdAt)||now,updatedAt:now,history:Array.isArray(input.history)?input.history.slice(-100):[]
   };
   if(offer.planningFee===null)throw domainError("invalid-argument","Planungshonorar fehlt.");
+  if(input.advanceDue!==undefined&&input.advanceDue!==null&&input.advanceDue!=="")offer.advanceDue=money(input.advanceDue);
   if(status!=="draft"&&!offer.validUntil)throw domainError("invalid-argument","Angebotsgueltigkeit fehlt.");
   return offer;
 }
@@ -390,7 +391,7 @@ function renderOfferPrintHtml(offer){
     ["Angebotsnummer",snapshot.offerNumber],["Version",String(snapshot.version)],["SHA-256",offer.snapshotHash],["Status",offer.status],["Sprache",snapshot.language],
     ["Reisebeginn",snapshot.trip?.start],["Reiseende",snapshot.trip?.end],["Reiseziel",snapshot.trip?.destination],["Reisende",snapshot.trip?.travellers],
     ["Leistung",snapshot.planningDescription],["Enthaltene Planungsleistungen",snapshot.includedServices],["Enthaltene Änderungen",snapshot.changeServices],
-    ["Planungshonorar (EUR)",fee],["Persönliche Begleitung",assistance],["Vorläufige Drittleistungen",snapshot.preliminaryThirdPartyServices],
+    ["Planungshonorar (EUR)",fee],...(typeof snapshot.advanceDue==="number"?[["Vereinbarte Vorauszahlung (EUR)",moneyLabel(snapshot.advanceDue,"EUR")]]:[]),["Persönliche Begleitung",assistance],["Vorläufige Drittleistungen",snapshot.preliminaryThirdPartyServices],
     ["Gültig bis",snapshot.validUntil],["Individuelle Bedingungen",snapshot.individualTerms],["AGB-Version",snapshot.legal?.termsVersion],
     ["AGB",snapshot.legal?.termsUrl],["Rücktrittsversion",snapshot.legal?.withdrawalVersion],["Rücktrittsinformation",snapshot.legal?.withdrawalUrl]
   ]);

@@ -237,6 +237,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /*
+     * Payment confirmation and planning release. Clients, including admins,
+     * cannot read or write this collection. Callable functions use the Admin SDK.
+     */
+    match /customerCommercialReadiness/{customerId} {
+      allow read, write: if false;
+
+      match /audit/{eventId} {
+        allow read, write: if false;
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -1414,6 +1414,10 @@
     return callAdminPortalAccessCallable("listCommercialOffers",{customerId:String(customerId||"").trim()});
   }
 
+  async function applyCommercialReadiness(input={}){
+    return callAdminPortalAccessCallable("applyCommercialReadiness",input);
+  }
+
   async function saveThirdPartyApproval(input={}){
     return callAdminPortalAccessCallable("saveThirdPartyApproval",input);
   }
@@ -1889,6 +1893,7 @@
     decideThirdPartyApproval,
     saveCommercialOffer,
     listCommercialOffers,
+    applyCommercialReadiness,
     saveThirdPartyApproval,
     listCustomerPortalWishes,
     sendCustomerWishProposal,

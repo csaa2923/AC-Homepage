@@ -285,3 +285,22 @@ describe("firestore rules — commercial offers and approvals",()=>{
     await assertFails(ownerDb.doc(approvalPath).set({customerId:"customer_a",status:"approved"}));
   });
 });
+
+describe("firestore rules — commercial readiness",()=>{
+  const recordPath="customerCommercialReadiness/customer_a";
+  const auditPath="customerCommercialReadiness/customer_a/audit/evt_1";
+
+  it("denies every client read and write, including admins and audit history",async()=>{
+    const unauthedDb=testEnv.unauthenticatedContext().firestore();
+    const customerDb=testEnv.authenticatedContext("readiness-customer",{role:"customer"}).firestore();
+    const foreignDb=testEnv.authenticatedContext("readiness-foreign",{role:"customer"}).firestore();
+    const adminDb=testEnv.authenticatedContext("readiness-admin",{role:"admin",orgId:"act"}).firestore();
+    const ownerDb=testEnv.authenticatedContext("readiness-owner",{role:"owner",orgId:"act"}).firestore();
+    for(const db of [unauthedDb,customerDb,foreignDb,adminDb,ownerDb]){
+      await assertFails(db.doc(recordPath).get());
+      await assertFails(db.doc(auditPath).get());
+      await assertFails(db.doc(recordPath).set({planning:{state:"released"},payment:{state:"confirmed",amountConfirmed:1}}));
+      await assertFails(db.doc(auditPath).set({action:"release",actorUid:"forged"}));
+    }
+  });
+});

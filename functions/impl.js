@@ -144,6 +144,7 @@ const {
 const proposalGrantAdmin=require("./lib/customerProposalGrantAdmin");
 const proposalGrantPublic=require("./lib/customerProposalGrantPublic");
 const commercialWorkflowApi=require("./lib/commercialWorkflowApi");
+const commercialReadinessApi=require("./lib/commercialReadinessApi");
 
 const SIGNED_URL_TTL_MS=5*60*1000;
 const AI_ANALYSIS_HISTORY_PAGE_SIZE=5;
@@ -1558,6 +1559,13 @@ async function decideThirdPartyApproval(request,deps={}){
   try{const context=await authorizedPortalCustomer(request,deps);const customerId=boundCommercialCustomer(request,context);return {approval:await commercialWorkflowApi.decidePortalApproval(deps.db||getDb(),customerId,request.data||{},request.auth.uid,deps.now)};}catch(error){throwCommercialWorkflowError(error);}
 }
 
+async function applyCommercialReadiness(request,deps={}){
+  try{
+    const actorUid=requireAdminCallable(request);
+    return await commercialReadinessApi.apply(deps.db||getDb(),request.data||{},actorUid,deps.now);
+  }catch(error){throwCommercialWorkflowError(error);}
+}
+
 async function getCustomerInquiryWish(request,deps={}){
   return inquiryGrantPublic.getCustomerInquiryWish(request,inquiryGrantCallableDeps(deps,request));
 }
@@ -1600,6 +1608,7 @@ module.exports={
   listCustomerCommercialActions,
   acceptCommercialOffer,
   decideThirdPartyApproval,
+  applyCommercialReadiness,
   submitCustomerWishRequest,
   listCustomerPortalWishes,
   sendCustomerWishProposal,

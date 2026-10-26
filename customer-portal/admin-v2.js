@@ -250,9 +250,6 @@
 
   function customerNextAction(customer){
     const process=customer?.process&&typeof customer.process==="object"?customer.process:{};
-    const payment=customer?.payment&&typeof customer.payment==="object"?customer.payment:{};
-    const release=String(payment.releaseStatus||"");
-    const paid=payment.status==="paid"||payment.paymentStatus==="paid";
     const legacyAccepted=process.offerAccepted===true||process.customerAccepted===true;
     const sent=process.offerSent===true||process.termsSent===true;
     const status=normalizeText(customer?.status);
@@ -277,9 +274,10 @@
       if(sent&&!accepted)return {label:"Kundenentscheidung abwarten",tab:"angebote",tone:"muted"};
       if(!accepted)return {label:"Status prüfen",tab:"angebote",tone:"muted"};
     }
-    if((paid||release==="released"||release==="manual_released")&&!accepted)return {label:"Status prüfen",tab:"zahlung",tone:"warning"};
-    if(accepted&&!paid)return {label:"Zahlung prüfen",tab:"zahlung",tone:"warning"};
-    if(paid&&release!=="released"&&release!=="manual_released")return {label:"Manuelle Planungsfreigabe prüfen",tab:"zahlung",tone:"warning"};
+    const readiness=window.ACTAdminV2Payment?.readinessSummary?.(customer?.customerId)||null;
+    if(!readiness?.loaded||readiness.verdict==="review")return {label:"Status prüfen",tab:"zahlung",tone:"warning"};
+    if(readiness.verdict==="request"||readiness.verdict==="confirm")return {label:"Zahlung prüfen",tab:"zahlung",tone:"warning"};
+    if(readiness.verdict==="release")return {label:"Manuelle Planungsfreigabe prüfen",tab:"zahlung",tone:"warning"};
     const openApproval=commercial?.loaded?commercial.pendingApproval:arrayValue(customer?.thirdPartyApprovals).some(item=>["pending","sent"].includes(String(item?.status||"")))||arrayValue(customer?.bookings).some(item=>item?.customerApproved===false&&item?.approvalRequired===true);
     if(openApproval)return {label:"Kundenentscheidung abwarten",tab:"buchungen",tone:"warning"};
     const publication=publicationStatus(customer);
@@ -4986,7 +4984,7 @@
 
   function renderOperationsDashboard(){
     const rows=dashboardCustomerRows();
-    window.setTimeout(()=>window.ACTAdminV2Commercial?.prime?.(rows.map(row=>row.customer.customerId)),0);
+    window.setTimeout(()=>{const ids=rows.map(row=>row.customer.customerId);window.ACTAdminV2Commercial?.prime?.(ids);window.ACTAdminV2Payment?.primeReadiness?.(ids);},0);
     const priorities=[...dashboardProspectEntries(),...dashboardPriorityEntries(rows)];
     renderDashboardHeader(rows,priorities);
     renderOperationsMetrics(rows,priorities);
@@ -8993,7 +8991,7 @@
       `;
       return;
     }
-    window.setTimeout(()=>window.ACTAdminV2Commercial?.prime?.([customer.customerId]),0);
+    window.setTimeout(()=>{const ids=[customer.customerId];window.ACTAdminV2Commercial?.prime?.(ids);window.ACTAdminV2Payment?.primeReadiness?.(ids);},0);
     schedulePortalAccessLoad(customer.customerId);
     const tab=detailTabs.some(([key])=>key===state.selectedTab)?state.selectedTab:"kunde";
     const workspace=customerWorkspaceViewModel(customer);

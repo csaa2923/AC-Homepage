@@ -138,6 +138,24 @@ test("emulator readiness callable ignores historical release and rejects unautho
   const audit=await db.collection("customerCommercialReadiness").doc("customer_rdy_new").collection("audit").get();
   assert.ok(audit.docs.length>=2);
   assert.equal(audit.docs.filter(doc=>doc.data().action==="release").length,1);
+  const releaseDoc=audit.docs.find(doc=>doc.data().action==="release");
+  const releaseBefore=releaseDoc.data();
+  await db.collection("bookings").doc("booking_rdy_new").set({bookingId:"booking_rdy_new",customerId:"customer_rdy_new",status:"commissioned"});
+  const corrected=resultOf(await callFn("applyCommercialReadiness",adminToken,{customerId:"customer_rdy_new",action:"correct",reason:"Der Eingang war irrtümlich bestätigt.",offerId:storedOffer.offerId,version:storedOffer.version,snapshotHash:storedOffer.snapshotHash,expectedRevision:released.record.revision}));
+  assert.equal(corrected.record.payment.state,"corrected");
+  assert.equal(corrected.record.payment.amountConfirmed,null);
+  assert.equal(corrected.record.planning.state,"not_released");
+  assert.equal(corrected.audits.some(item=>item.action==="correct"&&item.bookingsUnchanged===true),true);
+  assert.equal(corrected.audits.filter(item=>item.action==="release").length,1);
+  const repeated=resultOf(await callFn("applyCommercialReadiness",adminToken,{customerId:"customer_rdy_new",action:"correct",reason:"Der Eingang war irrtümlich bestätigt.",offerId:storedOffer.offerId,version:storedOffer.version,snapshotHash:storedOffer.snapshotHash}));
+  assert.equal(repeated.idempotent,true);
+  const releaseAfter=(await db.collection("customerCommercialReadiness").doc("customer_rdy_new").collection("audit").doc(releaseDoc.id).get()).data();
+  assert.deepEqual(releaseAfter,releaseBefore);
+  const reconfirmed=resultOf(await callFn("applyCommercialReadiness",adminToken,{customerId:"customer_rdy_new",action:"confirm",amount:400,offerId:storedOffer.offerId,version:storedOffer.version,snapshotHash:storedOffer.snapshotHash}));
+  assert.equal(reconfirmed.record.payment.state,"confirmed");
+  assert.equal(reconfirmed.record.planning.state,"not_released");
+  assert.equal((await db.collection("bookings").doc("booking_rdy_new").get()).data().status,"commissioned");
+  assert.equal((await db.collection("customers").doc("customer_rdy_new").get()).data().payment.releaseStatus,"released");
 
   await db.collection("customers").doc("customer_rdy_race").set({customerId:"customer_rdy_race",orgId:"act"});
   const portalRace=await bindCustomer(db,"customer_rdy_race","rdy-customer-race");

@@ -20,6 +20,24 @@
     return {...readinessState(customerId)};
   }
 
+  function readinessPaymentLabel(readiness){
+    if(!readiness?.loaded)return "Status prüfen";
+    if(readiness.paymentState==="none_due")return "keine Vorauszahlung fällig";
+    if(readiness.paymentState==="corrected")return "korrigiert";
+    if(readiness.paymentState==="confirmed")return "bestätigt";
+    if(readiness.paymentState==="partial")return "Teilzahlung";
+    if(readiness.paymentState==="requested")return "angefordert";
+    return "offen";
+  }
+
+  function readinessAmountLabel(readiness){
+    if(!readiness?.loaded)return "Status prüfen";
+    if(readiness.paymentState==="none_due")return "kein Zahlungseingang";
+    if(readiness.paymentState==="corrected")return "korrigiert, kein bestätigter Eingang";
+    if((readiness.paymentState==="confirmed"||readiness.paymentState==="partial")&&readiness.amountConfirmed!==null&&readiness.amountConfirmed!==undefined)return formatMoney(readiness.amountConfirmed);
+    return "noch nicht bestätigt";
+  }
+
   function storeReadiness(customerId,result){
     const state=readinessState(customerId);
     const assessment=result?.assessment||{};
@@ -33,6 +51,8 @@
     state.revision=Number(result?.record?.revision)||0;
     state.offer=assessment.offer||null;
     state.pendingApproval=assessment.pendingApproval===true;
+    state.audits=Array.isArray(result?.audits)?result.audits:[];
+    state.amountConfirmed=result?.record?.payment?.amountConfirmed??null;
     return readinessSummary(customerId);
   }
 
@@ -439,8 +459,10 @@
     return statusById(RELEASE_STATUSES,"not_released");
   }
 
-  function dueOverdueHint(payment){
-    if(!payment.dueDate||payment.status==="paid"||payment.status==="cancelled")return "";
+  function dueOverdueHint(payment,readiness){
+    if(!payment.dueDate)return "";
+    if(readiness?.loaded&&["confirmed","none_due"].includes(readiness.paymentState))return "";
+    if(!readiness?.loaded&&(payment.status==="paid"||payment.status==="cancelled"))return "";
     const due=new Date(`${payment.dueDate}T12:00:00`);
     if(Number.isNaN(due.getTime()))return "";
     const today=new Date();
@@ -461,7 +483,7 @@
       status,
       release,
       offerAccepted:Boolean(readinessSummary(customer?.customerId).offer),
-      paymentShort:payment.status==="paid"?"bezahlt":payment.status==="cancelled"?"storniert":totals.outstanding>0?"ausständig":status.label.toLowerCase(),
+      paymentShort:readinessPaymentLabel(readinessSummary(customer?.customerId)),
       releaseShort:readinessSummary(customer?.customerId).loaded&&readinessSummary(customer?.customerId).verdict==="released"?"freigegeben":readinessSummary(customer?.customerId).loaded&&readinessSummary(customer?.customerId).verdict==="exception"?"Ausnahmefreigabe":"Status prüfen",
       planningState:readinessSummary(customer?.customerId).planningState
     };
@@ -470,7 +492,7 @@
   function dashboardFacts(customer){
     const summary=paymentSummary(customer);
     const readiness=readinessSummary(customer?.customerId);
-    const paymentLabel=!readiness.loaded?"Status prüfen":readiness.paymentState==="confirmed"?"bestätigt":readiness.paymentState==="partial"?"Teilzahlung":readiness.paymentState==="requested"?"angefordert":"offen";
+    const paymentLabel=readinessPaymentLabel(readiness);
     return {
       paymentLabel,
       releaseLabel:summary.releaseShort,
@@ -614,8 +636,7 @@
             ${h().summaryItem("Kundenfreigabe",item.customerApproved?(item.customerApprovedAt||"dokumentiert"):"noch nicht dokumentiert")}
           </div>
           ${outstanding&&item.bookingKind!=="research"?`<p class="v2-pay-alert">Kundenzahlung für diese verbindliche Fremdleistung noch ausständig.</p>`:""}
-          ${item.bookingReleased?`<p class="v2-muted">Manuell für die Buchung freigegeben${item.bookingReleaseNote?`: ${escapeHtml(item.bookingReleaseNote)}`:""}.</p>`:""}
-          ${outstanding&&item.bookingKind!=="research"&&!item.bookingReleased?`<div class="v2-document-actions"><button class="v2-button soft" type="button" data-payment-action="release-item:${escapeHtml(item.id)}">Verbindliche Fremdbuchung trotz fehlender Kundendeckung freigeben</button></div>`:""}
+          ${item.bookingReleased?`<p class="v2-muted">Früherer Buchungsvermerk, nicht mehr maßgeblich${item.bookingReleaseNote?`: ${escapeHtml(item.bookingReleaseNote)}`:""}. Die Kundenfreigabe einer Drittbuchung bleibt der versiegelte Freigabeprozess.</p>`:""}
         `:""}
         ${editable?`<div class="v2-document-actions"><button class="v2-button soft" type="button" data-payment-action="remove-item:${escapeHtml(item.id)}">Position entfernen</button></div>`:""}
       </article>
@@ -628,6 +649,14 @@
 
   function thirdPartyBookingMarkup(item){
     return itemEditorMarkup(item,{editable:false,showBooking:true});
+  }
+
+  function auditMarkup(readiness){
+    const items=Array.isArray(readiness?.audits)?readiness.audits:[];
+    if(!readiness?.loaded)return `<p class="v2-muted">Status prüfen. Das Protokoll ist noch nicht geladen.</p>`;
+    if(!items.length)return `<p class="v2-muted">Noch keine serverseitigen Ereignisse.</p>`;
+    const labels={request:"Zahlungsaufforderung",confirm:"Zahlung bestätigt",none_due:"Keine Vorauszahlung fällig, kein Zahlungseingang",partial:"Teilzahlung",release:"Planungsfreigabe",exception:"Ausnahmefreigabe",correct:"Korrektur, Planungsfreigabe gesperrt"};
+    return `<ol class="v2-pay-history">${items.map(item=>`<li><strong>${escapeHtml(labels[item.action]||item.action)}</strong> ${escapeHtml(item.at||"")} · ${escapeHtml(item.actorUid||"")}${item.reason?` · ${escapeHtml(item.reason)}`:""}${item.bookingsUnchanged?" · bereits beauftragte Buchungen bleiben unverändert":""}</li>`).join("")}</ol>`;
   }
 
   function historyMarkup(payment){
@@ -725,7 +754,7 @@ Alpine Concierge Tirol`;
     const company=loadCompanyConfig();
     const readiness=readinessSummary(customer?.customerId);
     const release={label:readiness.loaded?readiness.label:"Status prüfen",tone:readiness.verdict==="released"||readiness.verdict==="exception"?"ok":"muted"};
-    const overdueHint=dueOverdueHint(payment);
+    const overdueHint=dueOverdueHint(payment,readiness);
     const msg=state().paymentMessage||"";
     const msgKind=state().paymentMessageKind||"";
     const actItems=payment.items.filter(item=>item.kind==="act");
@@ -748,7 +777,7 @@ Alpine Concierge Tirol`;
                 <p class="v2-eyebrow">Zahlung</p>
                 <h3>Zahlungsübersicht</h3>
               </div>
-              ${statusChip(status)}
+              ${statusChip({label:readinessPaymentLabel(readiness),tone:readiness.paymentState==="confirmed"?"ok":readiness.paymentState==="corrected"?"warn":"muted"})}
             </div>
             <div class="v2-pay-facts">
               ${h().summaryItem("Angebotsnummer",payment.offerNumber||"Noch nicht vergeben")}
@@ -756,8 +785,9 @@ Alpine Concierge Tirol`;
               ${h().summaryItem("über ACT abzuwickelnde Fremdkosten",formatMoney(totals.thirdPartyAct))}
               ${h().summaryItem("Direktzahlung an Drittanbieter",formatMoney(totals.thirdPartyDirect))}
               ${h().summaryItem("Gesamtbetrag an Alpine Concierge Tirol",formatMoney(totals.amountDueToAct))}
-              ${h().summaryItem("Bereits bezahlt",formatMoney(totals.paidAmount))}
-              ${h().summaryItem("Noch offen",formatMoney(totals.outstanding))}
+              ${h().summaryItem("Verbindlicher Zahlungsstand",readinessAmountLabel(readiness))}
+              ${h().summaryItem("Früherer Zahlungsbetrag, nicht maßgeblich",formatMoney(totals.paidAmount))}
+              ${h().summaryItem("Noch offen laut früherem Vermerk",formatMoney(totals.outstanding))}
             </div>
             <p class="v2-muted">Direktzahlungen an Drittanbieter sind nicht im Betrag an Alpine Concierge Tirol enthalten.</p>
             <div class="v2-pay-grid">
@@ -765,7 +795,7 @@ Alpine Concierge Tirol`;
               <label>Zahlungsanbieter<select data-payment-field="paymentProvider">${selectOptions(PAYMENT_PROVIDERS,payment.paymentProvider)}</select></label>
               <label>Zahlungsziel<input type="date" data-payment-field="dueDate" value="${escapeHtml(payment.dueDate)}"></label>
               <label>Zahlungsdatum<input type="date" data-payment-field="paidAt" value="${escapeHtml(payment.paidAt)}"></label>
-              <label>Bereits bezahlt${moneyInput("paidAmount",payment.paidAmount)}</label>
+              <label>Eingegangener Betrag${moneyInput("paidAmount",payment.paidAmount)}</label>
               <label>Früherer Zahlungsvermerk<select data-payment-field="status" disabled>${selectOptions(PAYMENT_STATUSES,payment.status)}</select></label>
               <label class="full">Interne Notiz<textarea data-payment-field="note" rows="3">${escapeHtml(payment.note)}</textarea></label>
             </div>
@@ -774,7 +804,7 @@ Alpine Concierge Tirol`;
               <button class="v2-button soft" type="button" data-payment-action="request">Zahlungsaufforderung erstellen</button>
               <button class="v2-button soft" type="button" data-payment-action="partial">Teilzahlung eintragen</button>
               <button class="v2-button primary" type="button" data-payment-action="confirm">Zahlungseingang bestätigen</button>
-              <button class="v2-button soft" type="button" data-payment-action="correct">Zahlung korrigieren</button>
+              <button class="v2-button soft" type="button" data-payment-action="correct">Zahlungsbestätigung korrigieren</button>
             </div>
             <p class="v2-muted">Ein Zahlungseingang wird niemals automatisch angenommen. Bitte den Eingang bewusst bestätigen.</p>
           </section>
@@ -837,18 +867,19 @@ Alpine Concierge Tirol`;
               <button class="v2-button primary" type="button" data-payment-action="release">Freigabe erteilen</button>
               <button class="v2-button soft" type="button" data-payment-action="manual-release">Trotzdem manuell freigeben</button>
             </div>
+            ${auditMarkup(readiness)}
           </section>
 
           <section class="v2-pay-panel">
             <p class="v2-eyebrow">Drittbuchungen</p>
             <h3>Kostenpflichtige Fremdleistungen</h3>
-            <p class="v2-muted">Keine automatische Sperre. Wenn Alpine Concierge Tirol zahlen muss und die Kundenzahlung noch fehlt, bleibt die manuelle Freigabe bewusst bei Nadja.</p>
+            <p class="v2-muted">Kostenpflichtige Drittbuchungen laufen nur über die versiegelte Kundenfreigabe. Eine Zahlungskorrektur macht keine bereits beauftragte Buchung rückgängig.</p>
             ${thirdItems.length?thirdItems.map(thirdPartyBookingMarkup).join(""):`<p class="v2-muted">Noch keine kostenpflichtigen Fremdleistungen hinterlegt.</p>`}
           </section>
 
           <section class="v2-pay-panel">
             <p class="v2-eyebrow">Historie</p>
-            <h3>Zahlungs- und Freigabeereignisse</h3>
+            <h3>Frühere Vermerke, nicht maßgeblich</h3>
             ${historyMarkup(payment)}
           </section>
 
@@ -872,7 +903,7 @@ Alpine Concierge Tirol`;
   function dashboardCardMarkup(customer){
     const summary=paymentSummary(customer);
     const readiness=readinessSummary(customer?.customerId);
-    const paymentLabel=!readiness.loaded?"Status prüfen":readiness.paymentState==="confirmed"?"bestätigt":readiness.paymentState==="partial"?"Teilzahlung":readiness.paymentState==="requested"?"angefordert":"offen";
+    const paymentLabel=readinessPaymentLabel(readiness);
     return `
       <a class="v2-pay-dash-card" href="${escapeHtml(h().detailHash(customer.customerId,"zahlung"))}">
         <span>
@@ -950,14 +981,24 @@ Alpine Concierge Tirol`;
             return;
           }
           const saved=await callReadiness(customer,"confirm",{amount:payment.paidAmount});
-          if(saved)setMessage(action==="partial"?"Teilzahlung ist dokumentiert. Die Planung ist nicht freigegeben.":"Zahlungseingang ist dokumentiert. Die Planung ist nicht freigegeben.","success");
+          if(saved?.record?.payment?.state==="none_due")setMessage("Keine Vorauszahlung fällig. Es liegt kein Zahlungseingang vor. Die Planung ist nicht freigegeben.","success");
+          else if(saved)setMessage(action==="partial"||saved.record?.payment?.state==="partial"?"Teilzahlung ist dokumentiert. Die Planung ist nicht freigegeben.":"Zahlungseingang ist dokumentiert. Die Planung ist nicht freigegeben.","success");
         }
       }catch(error){
         setMessage(error.message||"Status prüfen.","error");
       }
     }else if(action==="correct"){
-      await persistWithHistory(customer,payment,"payment_corrected",`Aktueller Stand ${formatMoney(payment.paidAmount)}`);
-      setMessage("Zahlungsdaten als Korrektur dokumentiert.","success");
+      try{
+        const reason=String(payment.note||payment.releaseNote||"").trim();
+        if(!reason){
+          setMessage("Für die Korrektur ist eine Begründung erforderlich.","warning");
+          return;
+        }
+        const saved=await callReadiness(customer,"correct",{reason});
+        if(saved)setMessage("Zahlungsbestätigung korrigiert. Eine vorhandene Planungsfreigabe ist gesperrt. Bereits beauftragte Buchungen bleiben unverändert.","success");
+      }catch(error){
+        setMessage(error.message||"Status prüfen.","error");
+      }
     }else if(action==="release"||action==="manual-release"){
       try{
         if(action==="manual-release"){
@@ -1118,12 +1159,7 @@ Alpine Concierge Tirol`;
 
   async function onTemplateCopied(id,customer){
     if(!customer)return;
-    if(id==="payment-info"){
-      const payment=normalizePayment(customer.payment);
-      if(payment.status==="not_requested")payment.status="requested";
-      await persistWithHistory(customer,payment,"payment_request_sent");
-      if(typeof h().render==="function")h().render();
-    }
+    if(id==="payment-info")return;
     if(id==="payment-link"){
       const payment=normalizePayment(customer.payment);
       if(payment.paymentLink&&(payment.paymentLinkStatus==="not_created"||payment.paymentLinkStatus==="created")){

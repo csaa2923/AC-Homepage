@@ -45,12 +45,30 @@
   function approvalDecisionPayload(input){
     return {approvalId:input.approvalId,version:Number(input.version),snapshotHash:input.snapshotHash,language:input.language,statementVersion:input.statementVersion,decision:input.decision};
   }
+  function moneyRow(label,amount,code,attr){
+    return `<p ${attr}><strong>${esc(label)}</strong><br>${esc(money(amount,"EUR",code)||"—")}</p>`;
+  }
+  function offerMoneyRows(offer,code){
+    const assistance=offer.personalAssistance?.enabled?`${offer.personalAssistance.description||"Persönliche Begleitung"}: ${money(offer.personalAssistance.price,"EUR",code)}`:"nicht vereinbart";
+    const third=offer.preliminaryThirdPartyServices?String(offer.preliminaryThirdPartyServices):"nicht Bestandteil dieser Vorauszahlung";
+    const advanceKnown=typeof offer.advanceDue==="number"&&Number.isFinite(offer.advanceDue)&&offer.advanceDue>=0;
+    const advance=advanceKnown
+      ?offer.advanceDue===0?`${money(0,"EUR",code)}. Kein Zahlungseingang.`
+      :money(offer.advanceDue,"EUR",code)
+      :"Nicht festgelegt. Eine normale Planungsfreigabe ist damit nicht möglich.";
+    return [
+      moneyRow("Planungshonorar",offer.planningFee,code,`data-offer-fee="${esc(offer.offerId)}"`),
+      `<p data-offer-assistance="${esc(offer.offerId)}"><strong>Persönliche Begleitung</strong><br>${esc(assistance)}</p>`,
+      `<p data-offer-third="${esc(offer.offerId)}"><strong>Drittanbieterleistungen</strong><br>${esc(third)}</p>`,
+      `<p data-offer-advance="${esc(advanceKnown?offer.advanceDue:"missing")}"><strong>Vereinbarte Vorauszahlung</strong><br>${esc(advance)}</p>`
+    ].join("");
+  }
   function renderOfferArticle(offer,texts){
     const code=language(texts?.language);
     const statements=texts&&texts.offer?texts.offer:null;
     const actions=offer.status==="sent"&&statements?`<form data-portal-offer="${esc(offer.offerId)}" data-version="${Number(offer.version)||1}" data-hash="${esc(offer.snapshotHash)}" data-statement-version="${esc(texts.version)}"><p class="commercial-provisional">${esc(texts.notice||"")}</p><label><input type="checkbox" name="terms" required> ${esc(statements.termsAccepted)}</label><label><input type="checkbox" name="withdrawal" required> ${esc(statements.withdrawalInformationAcknowledged)}</label><label><input type="checkbox" name="early"> ${esc(statements.earlyStartStatement)}</label><button class="button primary" type="submit">${esc(texts.acceptLabel||statements.offerAccepted)}</button></form>`:`<p class="tag">${esc(offer.status||"")}</p>`;
     const print=offer.printHtml?`<button class="button soft" type="button" data-commercial-print="${esc(offer.offerId)}">${esc(labels[code].print)}</button>`:"";
-    return `<article class="info-card commercial-action-card"><span class="tag">${esc(offer.offerNumber)} · v${Number(offer.version)||1}</span><h3>${esc(offer.planningDescription)}</h3><p>${esc(offer.includedServices||"")}</p><p data-offer-fee="${esc(offer.offerId)}"><strong>${esc(money(offer.planningFee,"EUR",code))}</strong></p><p data-offer-hash="${esc(offer.snapshotHash)}">${esc(offer.snapshotHash||"")}</p><p><a href="../agb.html" target="_blank" rel="noopener">AGB ${esc(offer.legal?.termsVersion||"")}</a> · <a href="../ruecktritt.html" target="_blank" rel="noopener">Widerruf / recesso / rétractation ${esc(offer.legal?.withdrawalVersion||"")}</a></p>${print}${actions}</article>`;
+    return `<article class="info-card commercial-action-card"><span class="tag">${esc(offer.offerNumber)} · v${Number(offer.version)||1}</span><h3>${esc(offer.planningDescription)}</h3><p>${esc(offer.includedServices||"")}</p>${offerMoneyRows(offer,code)}<p data-offer-hash="${esc(offer.snapshotHash)}">${esc(offer.snapshotHash||"")}</p><p><a href="../agb.html" target="_blank" rel="noopener">AGB ${esc(offer.legal?.termsVersion||"")}</a> · <a href="../ruecktritt.html" target="_blank" rel="noopener">Widerruf / recesso / rétractation ${esc(offer.legal?.withdrawalVersion||"")}</a></p>${print}${actions}</article>`;
   }
   function renderApprovalArticle(item,texts){
     const code=language(texts?.language||item.language);

@@ -37,6 +37,17 @@ function memoryDb(initial={}){
           get:async()=>({exists:docs.has(docPath),data:()=>docs.has(docPath)?clone(docs.get(docPath)):undefined})
         };
       },
+      get:async()=>{
+        const found=[];
+        const needle=`${prefix}/`;
+        for(const [docPath,data] of docs){
+          if(!docPath.startsWith(needle))continue;
+          const rest=docPath.slice(needle.length);
+          if(rest.includes("/"))continue;
+          found.push({id:rest,data:()=>clone(data)});
+        }
+        return {docs:found};
+      },
       where(field,_op,value){
         return {get:async()=>{
           const found=[];
@@ -211,8 +222,122 @@ test("readers no longer treat the customer document as the release authority",()
   assert.match(nextAction,/readinessSummary/);
   assert.match(nextAction,/Manuelle Planungsfreigabe prüfen/);
   assert.doesNotMatch(nextAction,/releaseStatus|payment\.status/);
-  assert.doesNotMatch(payment,/releaseStatus="released"|releaseStatus="manual_released"|status="paid"|bookingReleased=true/);
+  assert.doesNotMatch(payment,/releaseStatus="released"|releaseStatus="manual_released"|status="paid"|bookingReleased=true|payment\.status="requested"|Verbindliche Fremdbuchung trotz/);
   assert.match(payment,/applyCommercialReadiness/);
+  assert.match(payment,/Früherer Zahlungsbetrag, nicht maßgeblich/);
+  assert.match(payment,/Früherer Buchungsvermerk, nicht mehr maßgeblich/);
+  assert.match(payment,/Zahlungsbestätigung korrigieren/);
   const phases=admin.match(/const workspacePhases=\[([\s\S]*?)\n  \];/)?.[1]||"";
   assert.equal((phases.match(/\{id:/g)||[]).length,4);
+});
+
+test("the acceptance card shows the sealed advance before the accept button",()=>{
+  const documents=require("../../customer-portal/commercial-document.js");
+  const workflowApi=require("../../functions/lib/commercialWorkflowApi.js");
+  const texts={version:"statements-1",notice:"Vorläufig",acceptLabel:"Angebot annehmen",offer:{termsAccepted:"AGB",withdrawalInformationAcknowledged:"Widerruf",earlyStartStatement:"Vorzeitiger Beginn",offerAccepted:"Ich nehme an"}};
+  const input=offerInput("customer_view","offer_view",{advanceDue:400,personalAssistance:{enabled:true,description:"Begleitung vor Ort",price:180},preliminaryThirdPartyServices:"Bergführer, nicht Bestandteil der Vorauszahlung"});
+  const prepared=workflow.prepareOfferRevision(null,input,"admin-1",NOW);
+  const offer=workflow.acceptOffer(prepared,{version:prepared.version,snapshotHash:prepared.snapshotHash,language:"de",statementVersion:workflow.STATEMENT_VERSION,offerAccepted:true,termsAccepted:true,withdrawalInformationAcknowledged:true,earlyStartRequested:false},{authUid:"customer-user",now:NOW});
+  assert.equal(offer.snapshot.advanceDue,400);
+  assert.equal(offer.snapshotHash,workflow.snapshotHash(offer.snapshot));
+  assert.equal(offer.snapshotHash,prepared.snapshotHash);
+  const changed=acceptedOffer("customer_view","offer_other",{advanceDue:401});
+  assert.notEqual(changed.snapshotHash,offer.snapshotHash);
+  const shown=workflowApi.publicOffer(prepared);
+  assert.equal(shown.status,"sent");
+  assert.equal(shown.advanceDue,400);
+  assert.equal(shown.snapshotHash,prepared.snapshotHash);
+  const html=documents.renderOfferArticle(shown,texts);
+  const advanceAt=html.indexOf('data-offer-advance="400"');
+  const submitAt=html.indexOf('type="submit"');
+  assert.ok(advanceAt>=0&&submitAt>advanceAt);
+  assert.match(html,/Planungshonorar/);
+  assert.match(html,/Persönliche Begleitung/);
+  assert.match(html,/Drittanbieterleistungen/);
+  assert.match(html,/Vereinbarte Vorauszahlung/);
+  assert.match(html,/data-offer-hash="[a-f0-9]{64}"/);
+  const zeroOffer=workflowApi.publicOffer(workflow.prepareOfferRevision(null,offerInput("customer_view","offer_zero_view",{advanceDue:0}),"admin-1",NOW));
+  const zero=documents.renderOfferArticle(zeroOffer,texts);
+  assert.match(zero,/data-offer-advance="0"/);
+  assert.match(zero,/Kein Zahlungseingang/);
+  assert.doesNotMatch(zero,/bezahlt|Zahlung bestätigt|Zahlungseingang bestätigt/);
+  const withoutAdvance={...shown};
+  delete withoutAdvance.advanceDue;
+  const missing=documents.renderOfferArticle(withoutAdvance,texts);
+  assert.match(missing,/data-offer-advance="missing"/);
+  assert.match(missing,/Nicht festgelegt/);
+  assert.throws(()=>workflow.prepareOfferRevision(null,offerInput("customer_bad","offer_bad",{advanceDue:-1}),"admin-1",NOW));
+  assert.throws(()=>workflow.prepareOfferRevision(null,offerInput("customer_bad","offer_bad",{advanceDue:"kein Betrag"}),"admin-1",NOW));
+});
+
+test("an explicit zero advance is not a payment receipt and still blocks release until recorded",async()=>{
+  const db=memoryDb();
+  const offer=acceptedOffer("customer_zero","offer_zero",{advanceDue:0});
+  seedCustomer(db,"customer_zero",{status:"paid",releaseStatus:"released",paidAmount:900});
+  storeOffer(db,offer);
+  storeApproval(db,pendingApproval("customer_zero"));
+  await rejectsCode(()=>api.apply(db,{...refOf(offer),action:"release"},"admin-1",NOW),"failed-precondition");
+  await rejectsCode(()=>api.apply(db,{...refOf(offer),action:"confirm",amount:10},"admin-1",NOW),"invalid-argument");
+  const none=await api.apply(db,{...refOf(offer),action:"confirm",amount:0},"admin-1",NOW);
+  assert.equal(none.record.payment.state,"none_due");
+  assert.equal(none.record.payment.amountConfirmed,null);
+  assert.equal(none.record.planning.state,"not_released");
+  assert.equal(none.assessment.verdict,"release");
+  assert.notEqual(none.assessment.paymentState,"confirmed");
+  assert.equal(none.audits.at(-1).action,"none_due");
+  assert.match(none.audits.at(-1).reason,/Kein Zahlungseingang/);
+  const released=await api.apply(db,{...refOf(offer),action:"release"},"admin-1",NOW);
+  assert.equal(released.record.planning.state,"released");
+  assert.equal(released.record.payment.state,"none_due");
+  assert.equal(db.docs.get("customers/customer_zero").payment.status,"paid");
+  assert.equal(db.docs.get("thirdPartyBookingApprovals/customer_zero__approval_1").status,"pending");
+});
+
+test("correction locks an existing release, keeps the audit, and does not touch bookings",async()=>{
+  const db=memoryDb();
+  const offer=acceptedOffer("customer_fix","offer_fix",{advanceDue:400});
+  seedCustomer(db,"customer_fix",{status:"paid",releaseStatus:"released",paidAmount:400});
+  storeOffer(db,offer);
+  storeApproval(db,pendingApproval("customer_fix"));
+  db.docs.set("bookings/booking_1",{bookingId:"booking_1",customerId:"customer_fix",status:"commissioned"});
+  await api.apply(db,{...refOf(offer),action:"confirm",amount:400},"admin-1",NOW);
+  const released=await api.apply(db,{...refOf(offer),action:"release"},"admin-1",NOW);
+  assert.equal(released.record.planning.state,"released");
+  const before=audits(db,"customer_fix").map(item=>JSON.stringify(item));
+  await rejectsCode(()=>api.apply(db,{...refOf(offer),action:"correct",reason:"   "},"admin-1",NOW),"invalid-argument");
+  await rejectsCode(()=>api.apply(db,{...refOf(offer),action:"correct",reason:"Irrtum",expectedRevision:0},"admin-1",NOW),"failed-precondition");
+  await rejectsCode(()=>api.apply(db,{...refOf(offer),offerId:offer.offerId,version:offer.version,snapshotHash:"0".repeat(64),action:"correct",reason:"Irrtum"},"admin-1",NOW),"failed-precondition");
+  const corrected=await api.apply(db,{...refOf(offer),action:"correct",reason:"Der Eingang war irrtümlich bestätigt."},"admin-1",NOW);
+  assert.equal(corrected.record.payment.state,"corrected");
+  assert.equal(corrected.record.payment.amountConfirmed,null);
+  assert.equal(corrected.record.planning.state,"not_released");
+  assert.equal(corrected.record.planning.suspensionReason,"Der Eingang war irrtümlich bestätigt.");
+  assert.equal(corrected.assessment.verdict,"confirm");
+  const correctAudit=corrected.audits.find(item=>item.action==="correct");
+  assert.equal(correctAudit.actorUid,"admin-1");
+  assert.equal(correctAudit.at,NOW);
+  assert.equal(correctAudit.previousPlanningState,"released");
+  assert.equal(correctAudit.bookingsUnchanged,true);
+  const stored=audits(db,"customer_fix");
+  before.forEach(raw=>assert.ok(stored.some(item=>JSON.stringify(item)===raw)));
+  assert.equal(stored.filter(item=>item.action==="release").length,1);
+  assert.equal(stored.filter(item=>item.action==="correct").length,1);
+  const repeated=await api.apply(db,{...refOf(offer),action:"correct",reason:"Der Eingang war irrtümlich bestätigt."},"admin-1",NOW);
+  assert.equal(repeated.idempotent,true);
+  assert.equal(audits(db,"customer_fix").filter(item=>item.action==="correct").length,1);
+  await rejectsCode(()=>api.apply(db,{...refOf(offer),action:"correct",reason:"Andere Begründung"},"admin-2",NOW),"failed-precondition");
+  const settled=await Promise.allSettled([
+    api.apply(db,{...refOf(offer),action:"correct",reason:"Parallel A"},"admin-1",NOW),
+    api.apply(db,{...refOf(offer),action:"correct",reason:"Parallel B"},"admin-2",NOW)
+  ]);
+  assert.equal(settled.filter(item=>item.status==="fulfilled").length,0);
+  assert.equal(audits(db,"customer_fix").filter(item=>item.action==="correct").length,1);
+  const again=await api.apply(db,{...refOf(offer),action:"confirm",amount:400},"admin-2",NOW);
+  assert.equal(again.record.payment.state,"confirmed");
+  assert.equal(again.record.planning.state,"not_released");
+  assert.equal(again.assessment.verdict,"release");
+  assert.equal(db.docs.get("bookings/booking_1").status,"commissioned");
+  assert.equal(db.docs.get("thirdPartyBookingApprovals/customer_fix__approval_1").status,"pending");
+  assert.equal(db.docs.get("customers/customer_fix").payment.releaseStatus,"released");
+  assert.equal(db.docs.get("customers/customer_fix").payment.status,"paid");
 });

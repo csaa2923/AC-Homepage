@@ -22,6 +22,11 @@ function emptyRecord(customerId){
 }
 function clone(value){return JSON.parse(JSON.stringify(value));}
 function covers(amount,advance){return Math.round(Number(amount)*100)>=Math.round(Number(advance)*100);}
+function advanceSettled(payment,offer,advance){
+  if(!sameRef(payment,offer)||advance===null)return false;
+  if(advance===0)return payment.state==="none_due";
+  return payment.state==="confirmed"&&covers(payment.amountConfirmed,advance);
+}
 function sameRef(part,offer){
   return Boolean(offer)&&part.offerId===offer.offerId&&Number(part.version)===Number(offer.version)&&part.snapshotHash===offer.snapshotHash;
 }
@@ -57,7 +62,7 @@ function assess(input={}){
   const advance=offer?definedAdvance(offer.snapshot):null;
   const paymentCurrent=sameRef(payment,offer);
   const planningCurrent=sameRef(planning,offer);
-  const paidEnough=paymentCurrent&&payment.state==="confirmed"&&covers(payment.amountConfirmed,advance);
+  const paidEnough=advanceSettled(payment,offer,advance);
   const approvals=(input.approvals||[]).filter(Boolean);
   const approvalIntegrityOk=approvals.every(approvalIntact);
   let verdict="review";
@@ -68,8 +73,9 @@ function assess(input={}){
   else if(advance===null){verdict="review";reason=reason||"advance-undefined";}
   else if(planningCurrent&&planning.state==="released"){verdict=paidEnough?"released":"review";if(!paidEnough)reason="release-without-payment";}
   else if(payment.snapshotHash&&!paymentCurrent&&payment.state!=="not_requested"){verdict="review";reason="stale-payment";}
+  else if(paymentCurrent&&payment.state==="corrected")verdict="confirm";
   else if(paidEnough)verdict="release";
-  else if(paymentCurrent&&["requested","partial","confirmed"].includes(payment.state))verdict="confirm";
+  else if(paymentCurrent&&["requested","partial","confirmed","none_due"].includes(payment.state))verdict="confirm";
   else verdict="request";
   return {
     verdict,
@@ -101,7 +107,10 @@ function auditOf(record,action,context){
     snapshotHash:context.offer.snapshotHash,
     advanceDue:record.payment.advanceDue,
     amountConfirmed:record.payment.amountConfirmed,
-    reason:action==="exception"?record.planning.exceptionReason:"",
+    previousPaymentState:context.previousPaymentState||"",
+    previousPlanningState:context.previousPlanningState||"",
+    bookingsUnchanged:action==="correct",
+    reason:action==="exception"?record.planning.exceptionReason:action==="correct"||action==="none_due"?context.reason||record.payment.correctionReason||"":"",
     paymentState:record.payment.state,
     planningState:record.planning.state,
     revision:record.revision
@@ -127,7 +136,7 @@ function transition(current,action,context){
   const planningCurrent=sameRef(planning,offer);
   if(action==="request"){
     const advance=requireAdvance(offer);
-    if(paymentCurrent&&["requested","partial","confirmed"].includes(payment.state)&&payment.advanceDue===advance)return {idempotent:true};
+    if(paymentCurrent&&["requested","partial","confirmed","none_due","corrected"].includes(payment.state)&&payment.advanceDue===advance)return {idempotent:true};
     record.payment={...emptyPayment(),state:"requested",offerId:offer.offerId,version:Number(offer.version),snapshotHash:offer.snapshotHash,advanceDue:advance,requestedAt:context.at,requestedBy:context.actorUid};
     return commit(record,"request",context);
   }
@@ -135,6 +144,25 @@ function transition(current,action,context){
     const advance=requireAdvance(offer);
     const amount=workflow.money(context.amount);
     if(amount===null)throw workflow.domainError("invalid-argument","Betrag fehlt.");
+    if(advance===0){
+      if(amount!==0)throw workflow.domainError("invalid-argument","Bei einer Vorauszahlung von 0 ist nur die Feststellung zulässig, dass kein Betrag fällig ist.");
+      if(paymentCurrent&&payment.state==="none_due")return {idempotent:true};
+      if(paymentCurrent&&payment.state==="confirmed"&&payment.amountConfirmed)throw workflow.domainError("failed-precondition","Der bestätigte Betrag kann nicht überschrieben werden.");
+      record.payment={
+        ...emptyPayment(),
+        state:"none_due",
+        offerId:offer.offerId,
+        version:Number(offer.version),
+        snapshotHash:offer.snapshotHash,
+        advanceDue:0,
+        amountConfirmed:null,
+        requestedAt:paymentCurrent?payment.requestedAt:"",
+        requestedBy:paymentCurrent?payment.requestedBy:"",
+        confirmedAt:context.at,
+        confirmedBy:context.actorUid
+      };
+      return commit(record,"none_due",{...context,reason:"Keine Vorauszahlung fällig. Kein Zahlungseingang.",previousPaymentState:payment.state,previousPlanningState:planning.state});
+    }
     if(paymentCurrent&&payment.state==="confirmed"&&covers(payment.amountConfirmed,amount)&&covers(amount,payment.amountConfirmed))return {idempotent:true};
     if(paymentCurrent&&payment.state==="confirmed")throw workflow.domainError("failed-precondition","Der bestätigte Betrag kann nicht überschrieben werden.");
     if(paymentCurrent&&payment.state==="partial"&&covers(payment.amountConfirmed,amount)&&covers(amount,payment.amountConfirmed))return {idempotent:true};
@@ -151,11 +179,44 @@ function transition(current,action,context){
       confirmedAt:context.at,
       confirmedBy:context.actorUid
     };
-    return commit(record,"confirm",context);
+    return commit(record,"confirm",{...context,previousPaymentState:payment.state,previousPlanningState:planning.state});
+  }
+  if(action==="correct"){
+    const reason=workflow.text(context.reason,500);
+    if(!reason)throw workflow.domainError("invalid-argument","Begründung fehlt.");
+    const recorded=paymentCurrent&&["confirmed","partial","none_due","corrected"].includes(payment.state);
+    const released=planningCurrent&&["released","exception"].includes(planning.state);
+    if(!recorded&&!released)throw workflow.domainError("failed-precondition","Es liegt keine bestätigte Zahlung und keine Planungsfreigabe zum Korrigieren vor.");
+    if(paymentCurrent&&payment.state==="corrected"&&payment.correctionReason===reason&&(!planningCurrent||planning.state==="not_released"))return {idempotent:true};
+    if(paymentCurrent&&payment.state==="corrected"&&planning.state==="not_released")throw workflow.domainError("failed-precondition","Die Korrektur ist bereits dokumentiert.");
+    const advance=definedAdvance(offer.snapshot);
+    record.payment={
+      ...emptyPayment(),
+      state:"corrected",
+      offerId:offer.offerId,
+      version:Number(offer.version),
+      snapshotHash:offer.snapshotHash,
+      advanceDue:advance,
+      amountConfirmed:null,
+      correctionReason:reason,
+      correctedAt:context.at,
+      correctedBy:context.actorUid
+    };
+    record.planning={
+      state:"not_released",
+      offerId:offer.offerId,
+      version:Number(offer.version),
+      snapshotHash:offer.snapshotHash,
+      releasedAt:"",
+      releasedBy:"",
+      exceptionReason:"",
+      suspensionReason:reason
+    };
+    return commit(record,"correct",{...context,reason,previousPaymentState:payment.state,previousPlanningState:planning.state});
   }
   if(action==="release"){
     const advance=requireAdvance(offer);
-    if(!(paymentCurrent&&payment.state==="confirmed"&&covers(payment.amountConfirmed,advance))){
+    if(!advanceSettled(payment,offer,advance)){
       throw workflow.domainError("failed-precondition","Die vereinbarte Vorauszahlung ist nicht nachgewiesen.");
     }
     if(planningCurrent&&planning.state==="released")return {idempotent:true};

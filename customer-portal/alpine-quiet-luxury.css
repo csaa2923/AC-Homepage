@@ -1,0 +1,52 @@
+/* ACT · Alpine Quiet Luxury · full customer experience
+   Presentation only. Keep existing DOM hooks, navigation, authentication and data rendering. */
+:root{--aql-forest:#102a22;--aql-deep:#071e17;--aql-gold:#c9ac69;--aql-paper:#faf7f0;--aql-ink:#142d25;--aql-muted:#60726a;--aql-border:rgba(21,51,39,.12)}
+body.app-shell{background:var(--aql-paper);color:var(--aql-ink)}
+.app-topbar.portal-header{background:var(--aql-forest);border-bottom:1px solid rgba(201,172,105,.22);box-shadow:0 8px 24px rgba(4,28,19,.1)}
+.app-desktop-nav button,.app-bottom-nav button{transition:background .2s ease,color .2s ease}
+.app-desktop-nav button:hover,.app-desktop-nav button:focus-visible{background:rgba(201,172,105,.13)}
+.app-view{background:var(--aql-paper);color:var(--aql-ink)}
+/* Unified editorial page openers; do not override visibility of inactive views */
+#viewItinerary .itinerary-hero,#discover .discover-hero,#viewDocuments .documents-hero,#viewService .service-hero{
+  min-height:clamp(220px,29vw,340px);
+  display:flex;align-items:center;
+  background:linear-gradient(110deg,rgba(7,30,23,.93),rgba(16,42,34,.83)),url("../images/hero/hero.jpg") center/cover;
+  color:#faf7ee;
+  border-bottom:3px solid var(--aql-gold);
+}
+#viewItinerary .itinerary-hero-stage,#discover .discover-hero-stage,#viewDocuments .documents-hero-stage,#viewService .service-hero-stage{
+  width:min(1190px,100%);margin:0 auto;padding:45px 24px;
+}
+#viewItinerary .itinerary-hero h1,#discover .discover-hero h1,#viewDocuments .documents-hero h1,#viewService .service-hero h1{
+  color:#fff8e9;font-size:clamp(38px,5.5vw,68px);line-height:1.05;letter-spacing:-.035em;
+  font-family:var(--act-font-serif,Georgia,serif);text-wrap:balance;max-width:20ch;
+}
+#viewItinerary .itinerary-hero-copy,#discover .discover-hero-copy,#viewDocuments .documents-hero-copy,#viewService .service-hero-copy{color:rgba(255,249,234,.82);font-size:clamp(15px,1.6vw,19px);line-height:1.6;max-width:56ch;margin-top:14px}
+#viewItinerary .itinerary-brand-eyebrow,#discover .discover-brand-eyebrow,#viewDocuments .documents-brand-eyebrow,#viewService .service-brand-eyebrow{color:var(--aql-gold);font-size:11px;letter-spacing:.2em;font-weight:700;margin-bottom:12px}
+#viewItinerary .portal-section,#discover .portal-section,#viewDocuments .portal-section,#viewService .portal-section{scroll-margin-top:96px}
+#viewItinerary .section-head h2,#discover .section-head h2,#viewDocuments .section-head h2,#viewService .section-head h2{font-family:var(--act-font-serif,Georgia,serif);font-size:clamp(28px,3.4vw,42px);line-height:1.16;letter-spacing:-.025em;color:var(--aql-forest)}
+#viewItinerary .section-head .eyebrow,#discover .section-head .eyebrow,#viewDocuments .section-head .eyebrow,#viewService .section-head .eyebrow{color:#a17d31;letter-spacing:.14em;font-size:11px;font-weight:700}
+#viewItinerary :is(.itinerary-overview-item,.detail-card,.booking-card,.calendar-panel),#discover :is(.discover-region-card,.discover-card,.recommendation-card),#viewDocuments :is(.document-card,.documents-note-card),#viewService :is(.info-card,.service-wish-card){
+  border:1px solid var(--aql-border);border-radius:18px;background:#fffefb;
+  box-shadow:0 12px 36px rgba(16,42,34,.065);
+}
+#viewItinerary :is(.itinerary-overview-item,.detail-card,.booking-card),#discover :is(.discover-region-card,.discover-card,.recommendation-card),#viewDocuments :is(.document-card,.documents-note-card),#viewService :is(.info-card,.service-wish-card){padding:clamp(18px,2.4vw,30px)}
+#viewItinerary :is(.itinerary-day-selector button,.segmented-control button),#discover .discover-category-nav button,#viewDocuments .documents-category-nav button{border-radius:999px}
+#viewItinerary :is(.button.primary,button.active),#discover .button.primary,#viewDocuments .button.primary,#viewService .button.primary{background:var(--aql-gold);color:var(--aql-deep);border-color:var(--aql-gold)}
+#viewItinerary :is(a,button),#discover :is(a,button),#viewDocuments :is(a,button),#viewService :is(a,button){outline-offset:3px}
+#viewItinerary :is(.itinerary-overview,.itinerary-day-nav,.itinerary-main-grid,.itinerary-closing,.itinerary-secondary),
+#discover :is(.discover-featured,.discover-categories,.discover-list,.discover-region),
+#viewDocuments :is(.documents-overview,.documents-center-section,.documents-notes),
+#viewService .service-main-grid{max-width:1190px;margin-left:auto;margin-right:auto}
+#viewItinerary .itinerary-overview{margin-top:clamp(24px,4vw,50px)}
+#viewItinerary .itinerary-main-grid{gap:clamp(18px,3vw,38px)}
+#discover .discover-featured{margin-top:clamp(24px,4vw,50px)}
+#viewDocuments .documents-overview{margin-top:clamp(24px,4vw,50px)}
+#viewService .service-main-grid{margin-top:clamp(24px,4vw,50px);gap:clamp(18px,3vw,38px)}
+#viewDocuments .documents-note-card{border-left:3px solid var(--aql-gold)}
+@media(max-width:760px){
+ #viewItinerary .itinerary-hero-stage,#discover .discover-hero-stage,#viewDocuments .documents-hero-stage,#viewService .service-hero-stage{padding:36px 18px}
+ #viewItinerary .itinerary-hero,#discover .discover-hero,#viewDocuments .documents-hero,#viewService .service-hero{min-height:210px}
+ #viewItinerary .itinerary-main-grid,#viewService .service-main-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(prefers-reduced-motion:reduce){.app-desktop-nav button,.app-bottom-nav button{transition:none}}

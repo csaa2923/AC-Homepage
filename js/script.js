@@ -363,9 +363,32 @@ function translatePhase4(lang){
   document.querySelectorAll("[data-phase4-placeholder]").forEach(el=>{const value=copy[el.dataset.phase4Placeholder];if(value)el.placeholder=value});
 }
 
+const ACT_SEO_META={
+  de:{title:"Alpine Concierge Tirol | Exklusive Concierge Services in Tirol",description:"Persönlicher Concierge-Service in Tirol: individuell kuratierte Erlebnisse, Kulinarik, private Transfers und maßgeschneiderte Betreuung.",locale:"de_AT",imageAlt:"Alpine Concierge Tirol – persönliche Erlebnisse in den Tiroler Alpen"},
+  en:{title:"Alpine Concierge Tirol | Private Concierge & Bespoke Experiences",description:"Your personal concierge in Tyrol. Discover bespoke alpine experiences, fine dining, private transfers and thoughtful local assistance.",locale:"en_US",imageAlt:"Alpine Concierge Tirol – bespoke experiences in the Tyrolean Alps"},
+  it:{title:"Alpine Concierge Tirol | Concierge Privato ed Esperienze Esclusive",description:"Il tuo concierge personale in Tirolo: esperienze alpine su misura, gastronomia, transfer privati e assistenza locale dedicata.",locale:"it_IT",imageAlt:"Alpine Concierge Tirol – esperienze personalizzate nelle Alpi tirolesi"},
+  fr:{title:"Alpine Concierge Tirol | Conciergerie Privée et Expériences Exclusives",description:"Votre conciergerie privée au Tyrol : expériences alpines sur mesure, gastronomie, transferts privés et accompagnement personnalisé.",locale:"fr_FR",imageAlt:"Alpine Concierge Tirol – expériences sur mesure dans les Alpes tyroliennes"}
+};
+function updateActSeoMeta(lang){
+  const seo=ACT_SEO_META[lang]||ACT_SEO_META.de;
+  document.title=seo.title;
+  const update=(selector,value)=>{
+    const node=document.querySelector(selector);
+    if(node)node.setAttribute("content",value);
+  };
+  update('meta[name="description"]',seo.description);
+  update('meta[property="og:title"]',seo.title);
+  update('meta[property="og:description"]',seo.description);
+  update('meta[property="og:locale"]',seo.locale);
+  update('meta[property="og:image:alt"]',seo.imageAlt);
+  update('meta[name="twitter:title"]',seo.title);
+  update('meta[name="twitter:description"]',seo.description);
+}
+
 function setLang(lang){
   const dict=T[lang]||T.de;
   document.documentElement.lang=lang;
+  updateActSeoMeta(lang);
   translateActMindmaps(lang);
   translateActAdditional(lang);
   translatePhase4(lang);

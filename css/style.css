@@ -116,6 +116,8 @@ legend{display:block;width:100%;color:var(--gold2);text-transform:uppercase;font
 .choice input,.check-choice input{width:auto;margin:0;accent-color:#d8b76a}
 .date-fields{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:14px}
 #singleDateWrap{grid-column:1/-1}
+/* Hidden date controls must override generic form label display rules. */
+.date-fields > [hidden]{display:none!important}
 .child-ages{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
 .more-details{border:1px solid rgba(216,183,106,.26);border-radius:12px;background:rgba(255,255,255,.035);overflow:hidden}
 .more-details summary{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px;color:var(--gold2);cursor:pointer;list-style:none}

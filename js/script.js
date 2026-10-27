@@ -412,6 +412,8 @@ function setLang(lang){
   renderConsentCopy(lang);
   renderLegalLanguage(lang);
   updateBindingConsent();
+  // A previous validation message belongs to the previous language and form state.
+  setError("");
 }
 
 function initHeroVideo(){

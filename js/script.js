@@ -29,7 +29,7 @@ const seoSelectors=[
   ".seo-regions .section-label",".seo-regions h2",".seo-regions .section-head p",
   ".region-grid article:nth-child(1) h3",".region-grid article:nth-child(1) p",".region-grid article:nth-child(2) h3",".region-grid article:nth-child(2) p",".region-grid article:nth-child(3) h3",".region-grid article:nth-child(3) p",".region-grid article:nth-child(4) h3",".region-grid article:nth-child(4) p",".region-grid article:nth-child(5) h3",".region-grid article:nth-child(5) p",".region-grid article:nth-child(6) h3",".region-grid article:nth-child(6) p",
   ".seo-audiences .section-label",".seo-audiences h2",".audience-list article:nth-child(1) h3",".audience-list article:nth-child(1) p",".audience-list article:nth-child(2) h3",".audience-list article:nth-child(2) p",".audience-list article:nth-child(3) h3",".audience-list article:nth-child(3) p",
-  ".seo-process .section-label",".seo-process h2",".process-wrap>div:first-child p:nth-of-type(1)",".process-wrap>div:first-child p:nth-of-type(2)",
+  ".seo-process .section-label",".seo-process h2",".process-wrap>div:first-child p:nth-of-type(2)",".process-wrap>div:first-child p:nth-of-type(1)",
   ".process-list article:nth-child(1) h3",".process-list article:nth-child(1) p",".process-list article:nth-child(2) h3",".process-list article:nth-child(2) p",".process-list article:nth-child(3) h3",".process-list article:nth-child(3) p",".process-list article:nth-child(4) h3",".process-list article:nth-child(4) p",
   ".seo-quality .section-label",".seo-quality h2",".quality-grid article:nth-child(1) h3",".quality-grid article:nth-child(1) p",".quality-grid article:nth-child(2) h3",".quality-grid article:nth-child(2) p",".quality-grid article:nth-child(3) h3",".quality-grid article:nth-child(3) p",
   ".seo-booked .section-label",".seo-booked .section-head h2",".seo-booked .section-head p",
@@ -98,6 +98,12 @@ for(const [language,pairs] of Object.entries(accentCorrections)){
   for(const [before,after] of pairs)value=value.replace(new RegExp("\\b"+before+"\\b","gi"),match=>match[0]===match[0].toUpperCase()?after[0].toUpperCase()+after.slice(1):after);
   return value;
  });
+}
+
+// Stable paragraph mapping: the process subtitle must not consume the body translation.
+const auditEditorialCorrections={"en":{"18":"Kitzbühel","22":"Ötztal and Stubaital","37":"Five simple steps to your own personal Tyrolean experience.","39":"Tell us about yourself, your fellow travellers and your wishes. What would make your time in Tyrol special?","41":"Explore our personal recommendations, choose your favourites and tell us what you would like to adjust.","43":"Confirm your selection and commission our planning. We check availability and agree the next steps with you.","45":"We take care of the details and prepare your personal experience plan."},"it":{"12":"Vivere il Tirolo: da Innsbruck a Kitzbühel.","18":"Kitzbühel","22":"Ötztal e Stubaital","37":"Cinque semplici passi verso la tua esperienza personale in Tirolo.","39":"Raccontaci di te, dei tuoi compagni di viaggio e dei tuoi desideri. Cosa renderebbe speciale il tuo soggiorno in Tirolo?","41":"Scopri le nostre proposte personali, scegli le tue preferite e comunicaci eventuali modifiche.","43":"Confermi la tua scelta e ci affidi la pianificazione. Verifichiamo le disponibilità e concordiamo insieme i prossimi passi.","45":"Ci occupiamo dei dettagli e prepariamo il tuo programma personalizzato."},"fr":{"12":"Vivre le Tyrol : d'Innsbruck à Kitzbühel.","18":"Kitzbühel","22":"Ötztal et Stubaital","27":"Conciergerie privée pour les familles, les couples et les entreprises.","29":"Des vacances familiales réussies au Tyrol demandent de l'équilibre : nature, sécurité, trajets courts, expériences adaptées aux enfants et temps pour les adultes. Nous organisons des programmes familiaux, des alternatives selon la météo, des promenades faciles, des restaurants et des journées détendues.","31":"Pour les couples, nous imaginons des escapades romantiques, des dîners privés, des moments de bien-être, des séjours en chalet, des levers de soleil, des anniversaires, des demandes en mariage et de petites attentions qui rendent chaque moment spécial.","33":"Les entreprises, les équipes et les voyageurs d'affaires bénéficient d'une coordination précise. Nous accompagnons les programmes de groupe, les voyages de motivation, les transferts, les réservations de restaurants, les découvertes culturelles et naturelles et l'accueil discret des invités.","36":"Pour que votre séjour soit simple et agréable, nous travaillons de manière structurée en coulisses. Après votre demande, nous précisons les dates, la région, les participants, l'occasion, le style, le budget et vos souhaits particuliers. Vous recevez ensuite des propositions adaptées.","37":"Cinq étapes simples vers votre expérience personnelle au Tyrol.","39":"Parlez-nous de vous, de vos compagnons de voyage et de vos envies. Qu'est-ce qui rendrait votre séjour au Tyrol exceptionnel ?","41":"Découvrez nos propositions personnalisées, choisissez vos préférées et indiquez-nous les ajustements souhaités.","43":"Vous confirmez votre sélection et nous confiez la préparation. Nous vérifions les disponibilités et convenons ensemble des prochaines étapes.","45":"Nous prenons en charge les détails et préparons votre programme personnalisé.","47":"Une préparation discrète, ancrée dans notre région.","54":"Services souvent réservés","70":"Nos clients apprécient la discrétion, la rapidité de communication, notre connaissance de la région et la tranquillité d'avoir un interlocuteur personnel qui anticipe leurs besoins."}};
+for(const [lang,entries] of Object.entries(auditEditorialCorrections)){
+  for(const [index,text] of Object.entries(entries))seoTranslations[lang][Number(index)]=text;
 }
 
 let seoDefaults;
@@ -295,33 +301,36 @@ function validateForm(){
   return true;
 }
 
+const WHATSAPP_COPY={"de":{"title":"Alpine Concierge Tirol Anfrage","flexible":"flexibel","to":"bis","people":"Personen","ages":"Alter der Kinder","child":"Alter Kind"},"en":{"title":"Alpine Concierge Tirol enquiry","flexible":"flexible","to":"to","people":"Guests","ages":"Children's ages","child":"Age of child"},"it":{"title":"Richiesta Alpine Concierge Tirol","flexible":"flessibile","to":"al","people":"Ospiti","ages":"Età dei bambini","child":"Età bambino"},"fr":{"title":"Demande Alpine Concierge Tirol","flexible":"flexible","to":"au","people":"Participants","ages":"Âge des enfants","child":"Âge de l'enfant"}};
 function dateSummary(){
+  const copy=WHATSAPP_COPY[currentLang()]||WHATSAPP_COPY.de;
   const mode=document.querySelector("input[name='dateMode']:checked")?.value||"single";
-  if(mode==="flexible")return "flexibel";
-  if(mode==="range")return `${formatDate(value("startDate"))} bis ${formatDate(value("endDate"))}`;
+  if(mode==="flexible")return copy.flexible;
+  if(mode==="range")return `${formatDate(value("startDate"))} ${copy.to} ${formatDate(value("endDate"))}`;
   return formatDate(value("singleDate"));
 }
 
 function buildWhatsAppMessage(){
+  const dict=T[currentLang()]||T.de;
+  const copy=WHATSAPP_COPY[currentLang()]||WHATSAPP_COPY.de;
   const adults=value("adults");
   const children=Number(value("children")||0);
-  const childAges=Array.from(document.querySelectorAll(".child-age")).map((select,index)=>`Alter Kind ${index+1}: ${select.value}`);
-  const lines=["Alpine Concierge Tirol Anfrage"];
-  lines.push("");
-  addLine(lines,"Service",selectedText("service"));
-  addLine(lines,"Gew\u00fcnschte Leistung",value("serviceDetail"));
-  addLine(lines,"Region",value("region"));
-  addLine(lines,"Genauer Ort",value("place"));
-  addLine(lines,"Datum / Zeitraum",dateSummary());
-  addLine(lines,"Personen",`${adults} Erwachsene${children>0?`\n${children} Kinder`:""}`);
-  addLine(lines,"Alter der Kinder",children>0?childAges.join("\n"):"");
-  addLine(lines,"Budget",selectedText("budget"));
-  addLine(lines,"Anlass",selectedText("occasion"));
-  addLine(lines,"Interessen",checkedValues("interests").join(", "));
-  addLine(lines,"Mobilit\u00e4t",selectedText("mobility"));
-  addLine(lines,"Besondere W\u00fcnsche",checkedValues("specialWishes").join(", "));
-  addLine(lines,"Stil",selectedText("experienceStyle"));
-  addLine(lines,"Nachricht",value("message"));
+  const childAges=Array.from(document.querySelectorAll(".child-age")).map((select,index)=>`${copy.child} ${index+1}: ${select.value}`);
+  const lines=[copy.title,""];
+  addLine(lines,dict.fieldService,selectedText("service"));
+  addLine(lines,dict.fieldServiceDetail,value("serviceDetail"));
+  addLine(lines,dict.fieldRegion,value("region"));
+  addLine(lines,dict.fieldPlace,value("place"));
+  addLine(lines,dict.fieldDate,dateSummary());
+  addLine(lines,copy.people,`${adults} ${dict.fieldAdults}${children>0?`\n${children} ${dict.fieldChildren}`:""}`);
+  addLine(lines,copy.ages,children>0?childAges.join("\n"):"");
+  addLine(lines,dict.fieldBudget,selectedText("budget"));
+  addLine(lines,dict.fieldOccasion,selectedText("occasion"));
+  addLine(lines,dict.fieldInterests,checkedValues("interests").join(", "));
+  addLine(lines,dict.fieldMobility,selectedText("mobility"));
+  addLine(lines,dict.fieldSpecialWishes,checkedValues("specialWishes").join(", "));
+  addLine(lines,dict.fieldStyle,selectedText("experienceStyle"));
+  addLine(lines,dict.fieldMessage,value("message"));
   return lines.join("\n").trim();
 }
 

@@ -197,3 +197,12 @@ html{scroll-padding-top:calc(var(--header-height-shrink) + 24px)}
   html{scroll-padding-top:calc(var(--header-height-mobile-shrink) + 44px)}
   #home,#about,#services,#contact,#request{scroll-margin-top:calc(var(--header-height-mobile-shrink) + 44px)}
 }
+
+/* Tighter editorial spacing on small screens; desktop layout unchanged. */
+@media(max-width:520px){
+  .intro{padding-top:52px;padding-bottom:30px}
+  .intro .section-head{margin-bottom:0}
+  .intro .section-head p{margin-top:18px}
+  .seo-story{padding-top:42px}
+  .services,.contact{padding-top:48px}
+}

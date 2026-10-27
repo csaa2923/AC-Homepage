@@ -206,3 +206,14 @@ html{scroll-padding-top:calc(var(--header-height-shrink) + 24px)}
   .seo-story{padding-top:42px}
   .services,.contact{padding-top:48px}
 }
+
+/* Compact mobile contact dock: preserve large touch targets and clear bottom content. */
+@media(max-width:920px){
+  .mobile-actions{left:12px;right:12px;bottom:max(8px,env(safe-area-inset-bottom));gap:8px;padding:6px;border-radius:14px}
+  .mobile-actions a{min-height:44px;border-radius:10px;font-size:.875rem;letter-spacing:.035em}
+  body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+}
+@media(max-width:520px){
+  .mobile-actions{left:10px;right:10px;padding:5px;gap:7px}
+  .mobile-actions a{min-height:44px;font-size:.8125rem}
+}

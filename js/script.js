@@ -399,6 +399,7 @@ function setLang(lang){
   document.documentElement.lang=lang;
   updateActSeoMeta(lang);
   translateActMindmaps(lang);
+  updateMindmapLanguageImages(lang);
   translateActAdditional(lang);
   translatePhase4(lang);
   document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(dict[key])el.textContent=dict[key]});
@@ -505,6 +506,39 @@ function initScrollReveal(){
   },{threshold:0.12,rootMargin:"0px 0px -48px 0px"});
   window.actObserveReveal=actObserveReveal;
   actObserveReveal(document);
+}
+
+const ACT_MINDMAP_BASES=[
+  "Elegante-Tirol-Reiseerlebnisse",
+  "Tiroler-Kultur-und-besondere-Erlebnisse"
+];
+function updateMindmapLanguageImages(lang){
+  const gallery=document.getElementById("actMindmaps");
+  if(!gallery)return;
+  const figures=Array.from(gallery.querySelectorAll("figure"));
+  const fallback=document.getElementById("actMindmapFallback");
+  const selected=["en","it","fr"].includes(lang)?lang:"de";
+  const requestId=(Number(gallery.dataset.imageRequestId)||0)+1;
+  gallery.dataset.imageRequestId=String(requestId);
+  const paths=ACT_MINDMAP_BASES.map(base=>"images/infographics/"+base+(selected==="de"?"":"-"+selected)+".png");
+  Promise.all(paths.map(path=>new Promise(resolve=>{
+    const test=new Image();
+    test.onload=()=>resolve(true);
+    test.onerror=()=>resolve(false);
+    test.src=path;
+  }))).then(results=>{
+    if(Number(gallery.dataset.imageRequestId)!==requestId)return;
+    // If translated assets are not deployed yet, retain the two German originals.
+    const actualPaths=results.every(Boolean)?paths:ACT_MINDMAP_BASES.map(base=>"images/infographics/"+base+".png");
+    figures.forEach((figure,i)=>{
+      const anchor=figure.querySelector("a");
+      const img=figure.querySelector("img");
+      if(anchor)anchor.href=actualPaths[i];
+      if(img)img.src=actualPaths[i];
+    });
+    gallery.hidden=false;
+    if(fallback)fallback.hidden=true;
+  });
 }
 
 function initActImages(){

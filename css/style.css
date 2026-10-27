@@ -177,3 +177,13 @@ legend{display:block;width:100%;color:var(--gold2);text-transform:uppercase;font
 .act-benefits p{font-size:.94rem;line-height:1.6;margin:0}
 @media(max-width:900px){.act-benefits{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.act-benefits{grid-template-columns:1fr;padding:20px 18px}}
+
+/* ACT: Mindmap-Originale, mit sicherem Text-Fallback bei fehlenden Assets */
+.act-mindmaps{max-width:1220px;margin:20px auto 34px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.act-mindmaps[hidden],#actMindmapFallback[hidden]{display:none!important}
+.act-mindmaps figure{margin:0;min-width:0;border-radius:14px;overflow:hidden;background:#fffaf0;border:1px solid rgba(216,183,106,.4)}
+.act-mindmaps a{display:block;cursor:zoom-in}
+.act-mindmaps img{width:100%;height:auto;display:block;object-fit:contain}
+.act-mindmaps figcaption{padding:12px 18px;color:#143a31;font-weight:600;text-align:center}
+.contact-card-whatsapp.act-contact-portrait{background-image:linear-gradient(90deg,rgba(5,35,27,.9),rgba(5,35,27,.35) 58%,rgba(5,35,27,.08)),url('../images/contact/Nadja_Counter_Anfrage_Annehmen.png');background-position:center,65% 36%;background-size:cover}
+@media(max-width:700px){.act-mindmaps{grid-template-columns:1fr}.contact-card-whatsapp.act-contact-portrait{background-position:center,67% center}}

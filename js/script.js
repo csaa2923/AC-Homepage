@@ -541,7 +541,23 @@ document.addEventListener("DOMContentLoaded",()=>{
   const burger=document.querySelector(".burger");
   const nav=document.querySelector("#primaryNav")||document.querySelector(".topbar nav.menu-links");
   if(burger&&nav)burger.addEventListener("click",()=>{const open=nav.classList.toggle("open");burger.setAttribute("aria-expanded",open?"true":"false")});
-  if(nav)nav.querySelectorAll("a").forEach(a=>a.addEventListener("click",()=>{nav.classList.remove("open");if(burger)burger.setAttribute("aria-expanded","false")}));
+  if(nav)nav.querySelectorAll("a").forEach(a=>a.addEventListener("click",event=>{
+    const hash=a.getAttribute("href");
+    const target=hash&&hash.startsWith("#")?document.getElementById(hash.slice(1)):null;
+    nav.classList.remove("open");
+    if(burger)burger.setAttribute("aria-expanded","false");
+    if(!target)return;
+    event.preventDefault();
+    // Use the real collapsed header height instead of a static CSS offset.
+    const header=document.getElementById("siteHeader");
+    if(header&&hash!=="#home")header.classList.add("is-scrolled");
+    const headerHeight=header?header.getBoundingClientRect().height:0;
+    const paddingTop=parseFloat(getComputedStyle(target).paddingTop)||0;
+    const visualInset=hash==="#home"?0:Math.max(0,paddingTop-20);
+    const y=hash==="#home"?0:Math.max(0,window.scrollY+target.getBoundingClientRect().top+visualInset-headerHeight-12);
+    window.scrollTo({top:y,behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth"});
+    history.replaceState(null,"",hash);
+  }));
   populateNumberSelect("adults",1,10);
   populateNumberSelect("children",0,10);
   document.querySelectorAll("input[name='dateMode']").forEach(input=>input.addEventListener("change",updateDateMode));

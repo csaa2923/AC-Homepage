@@ -234,6 +234,7 @@ function renderLegalLanguage(lang){
     document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(dict[key])el.textContent=dict[key]});
   }
   document.documentElement.lang=lang;
+  translateActMindmaps(lang);
 }
 
 function setError(message){
@@ -313,6 +314,19 @@ function sendWhatsApp(){
   if(!validateForm())return;
   const message=buildWhatsAppMessage();
   window.open(buildWhatsAppUrl(message),"_blank","noopener");
+}
+
+const actMindmapTranslations={
+  de:{gallery:"Tirol-Erlebnisse im Überblick",openExperiences:"Erlebnismindmap vergrößern",experiencesAlt:"Tiroler Erlebnisse: Natur, Kulinarik, Sport, Familie, Wellness und individuelle Services",experiencesCaption:"Deine Tirolmomente – im Überblick",openCulture:"Kulturmindmap vergrößern",cultureAlt:"Tiroler Kultur, Geschichte und besondere Erlebnisse für individuelle Bedürfnisse",cultureCaption:"Kultur, Geschichte & besondere Menschen"},
+  en:{gallery:"Tyrol experiences at a glance",openExperiences:"Enlarge the experiences map",experiencesAlt:"Experiences in Tyrol: nature, dining, sports, family, wellness and personalized services",experiencesCaption:"Your Tyrolean moments at a glance",openCulture:"Enlarge the culture map",cultureAlt:"Tyrolean culture, history and special experiences tailored to individual needs",cultureCaption:"Culture, history & extraordinary people"},
+  it:{gallery:"Esperienze in Tirolo in sintesi",openExperiences:"Ingrandisci la mappa delle esperienze",experiencesAlt:"Esperienze in Tirolo: natura, gastronomia, sport, famiglia, benessere e servizi personalizzati",experiencesCaption:"I tuoi momenti in Tirolo in sintesi",openCulture:"Ingrandisci la mappa culturale",cultureAlt:"Cultura e storia tirolese ed esperienze speciali per esigenze individuali",cultureCaption:"Cultura, storia e persone speciali"},
+  fr:{gallery:"Les expériences au Tyrol en un coup d'œil",openExperiences:"Agrandir la carte des expériences",experiencesAlt:"Expériences au Tyrol : nature, gastronomie, sport, famille, bien-être et services personnalisés",experiencesCaption:"Vos moments au Tyrol en un coup d'œil",openCulture:"Agrandir la carte culturelle",cultureAlt:"Culture et histoire tyroliennes et expériences adaptées aux besoins individuels",cultureCaption:"Culture, histoire et personnes extraordinaires"}
+};
+function translateActMindmaps(lang){
+  const copy=actMindmapTranslations[lang]||actMindmapTranslations.de;
+  document.querySelectorAll("[data-act-i18n]").forEach(el=>{const value=copy[el.dataset.actI18n];if(value)el.textContent=value});
+  document.querySelectorAll("[data-act-i18n-aria]").forEach(el=>{const value=copy[el.dataset.actI18nAria];if(value)el.setAttribute("aria-label",value)});
+  document.querySelectorAll("[data-act-i18n-alt]").forEach(el=>{const value=copy[el.dataset.actI18nAlt];if(value)el.setAttribute("alt",value)});
 }
 
 function setLang(lang){

@@ -1417,7 +1417,11 @@
     const response=await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params.toString()}`);
     if(!response.ok)throw new Error(`Open-Meteo Standortsuche nicht erreichbar: ${response.status}`);
     const data=await response.json();
-    const location=(data.results||[]).find(result=>validCoordinates(Number(result.latitude),Number(result.longitude)));
+    // ACT operates in Austrian Tirol: never silently accept a namesake elsewhere.
+    // Explicit coordinates above remain authoritative for individual destinations.
+    const candidates=(data.results||[]).filter(result=>validCoordinates(Number(result.latitude),Number(result.longitude)));
+    const location=candidates.find(result=>String(result.country_code||"").toUpperCase()==="AT")
+      || (candidates.length&&candidates.every(result=>String(result.country_code||"").toUpperCase()!=="AT")?null:candidates[0]);
     if(!location)throw new Error(t("today.weather.unavailable"));
     return {
       latitude:Number(location.latitude),

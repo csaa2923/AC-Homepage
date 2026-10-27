@@ -234,7 +234,6 @@ function renderLegalLanguage(lang){
     document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(dict[key])el.textContent=dict[key]});
   }
   document.documentElement.lang=lang;
-  translateActMindmaps(lang);
 }
 
 function setError(message){
@@ -332,6 +331,7 @@ function translateActMindmaps(lang){
 function setLang(lang){
   const dict=T[lang]||T.de;
   document.documentElement.lang=lang;
+  translateActMindmaps(lang);
   document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(dict[key])el.textContent=dict[key]});
   document.querySelectorAll("[data-placeholder]").forEach(el=>{const key=el.dataset.placeholder;if(dict[key])el.placeholder=dict[key]});
   document.querySelectorAll(".lang-switch button").forEach(button=>button.classList.toggle("active",button.dataset.lang===lang));

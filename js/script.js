@@ -422,7 +422,33 @@ function initScrollReveal(){
   actObserveReveal(document);
 }
 
+function initActImages(){
+  const gallery=document.getElementById("actMindmaps");
+  const fallback=document.getElementById("actMindmapFallback");
+  if(gallery){
+    const images=Array.from(gallery.querySelectorAll("img"));
+    Promise.all(images.map(img=>new Promise(resolve=>{
+      const test=new Image();
+      test.onload=()=>resolve(true);
+      test.onerror=()=>resolve(false);
+      test.src=img.getAttribute("src");
+    }))).then(results=>{
+      if(results.every(Boolean)){
+        gallery.hidden=false;
+        if(fallback)fallback.hidden=true;
+      }
+    });
+  }
+  const contact=document.querySelector(".contact-card-whatsapp");
+  if(contact){
+    const portrait=new Image();
+    portrait.onload=()=>contact.classList.add("act-contact-portrait");
+    portrait.src="images/contact/Nadja_Counter_Anfrage_Annehmen.png";
+  }
+}
+
 document.addEventListener("DOMContentLoaded",()=>{
+  initActImages();
   initHeroVideo();
   initHeaderScroll();
   initScrollReveal();

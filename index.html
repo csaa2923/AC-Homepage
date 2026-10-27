@@ -143,13 +143,13 @@
     <a href="#about" data-i18n="navAbout">&Uuml;ber uns</a>
     <a href="#contact" data-i18n="navContact">Kontakt</a>
   </nav>
-  <div class="lang-switch" aria-label="Sprache w&auml;hlen">
+  <div class="lang-switch" aria-label="Sprache wählen" data-phase4-aria="language">
     <button type="button" data-lang="de">DE</button>
     <button type="button" data-lang="en">EN</button>
     <button type="button" data-lang="it">IT</button>
     <button type="button" data-lang="fr">FR</button>
   </div>
-  <button class="burger" type="button" aria-label="Men&uuml; &ouml;ffnen" aria-expanded="false" aria-controls="primaryNav"><span></span><span></span><span></span></button>
+  <button class="burger" type="button" aria-label="Menü öffnen" data-phase4-aria="menu" aria-expanded="false" aria-controls="primaryNav"><span></span><span></span><span></span></button>
 </header>
 
 <main>
@@ -310,7 +310,7 @@
 <section class="contact" id="contact">
    <div class="contact-grid contact-grid-single">
     <a class="contact-card contact-card-whatsapp" href="https://wa.me/4367761410679" target="_blank" rel="noopener noreferrer">
-      <div><h3>WhatsApp / Kontakt</h3><p data-i18n="contactWa">Wir sind f&uuml;r Sie da.</p><span data-i18n="writeNow">Jetzt schreiben</span></div>
+      <div><h3 data-phase4="contactHeading">WhatsApp / Kontakt</h3><p data-i18n="contactWa">Wir sind f&uuml;r Sie da.</p><span data-i18n="writeNow">Jetzt schreiben</span></div>
     </a>
   </div>
   <p class="contact-note" data-i18n="enquiryNote">Ihre Anfrage ist unverbindlich. Eine Beauftragung erfolgt erst mit der Annahme eines individuellen Angebots.</p>
@@ -381,7 +381,7 @@
     </div>
 
     <div class="faq-search-wrap">
-      <input id="faqSearch" type="search" placeholder="FAQ durchsuchen ..." aria-label="FAQ durchsuchen">
+      <input id="faqSearch" type="search" placeholder="FAQ durchsuchen ..." aria-label="FAQ durchsuchen" data-phase4-placeholder="faqSearch" data-phase4-aria="faqSearch">
     </div>
 
     <div class="faq-list" id="faqList"></div>
@@ -406,22 +406,22 @@
       <p>+43 677 614 10 679<br>Innsbruck, Tirol</p>
     </div>
   </div>
-  <nav class="menu-links footer-legal" aria-label="Rechtliches">
-    <a href="impressum.html">Impressum</a>
-    <a href="datenschutz.html">Datenschutz</a>
-    <a href="agb.html">AGB</a>
-    <a href="ruecktritt.html">Rücktrittsrecht</a>
-    <a href="cookies.html">Cookies</a>
+  <nav class="menu-links footer-legal" aria-label="Rechtliches" data-phase4-aria="legalNav">
+    <a href="impressum.html" data-phase4="imprint">Impressum</a>
+    <a href="datenschutz.html" data-phase4="privacy">Datenschutz</a>
+    <a href="agb.html" data-phase4="terms">AGB</a>
+    <a href="ruecktritt.html" data-phase4="withdrawal">Rücktrittsrecht</a>
+    <a href="cookies.html" data-phase4="cookies">Cookies</a>
   </nav>
   <div class="legal" id="impressum">
-    <p><strong>Impressum:</strong> Dipl.-Ing. Nadja Holzer, BSc. &middot; Hunoldstra&szlig;e 12 &middot; 6020 Innsbruck &middot; &Ouml;sterreich</p>
+    <p><strong data-phase4="imprintLabel">Impressum:</strong> Dipl.-Ing. Nadja Holzer, BSc. &middot; Hunoldstra&szlig;e 12 &middot; 6020 Innsbruck &middot; &Ouml;sterreich</p>
   </div>
 </footer>
 
-<div class="cookie-notice" id="cookieNotice" role="dialog" aria-live="polite" aria-label="Cookie-Hinweis" hidden>
-  <p>Diese Website verwendet notwendige Cookies und lokale Speicherfunktionen, damit Grundfunktionen wie Spracheinstellung und Cookie-Hinweis funktionieren. Weitere Informationen finden Sie in der <a href="cookies.html">Cookie-Erkl&auml;rung</a>.</p>
+<div class="cookie-notice" id="cookieNotice" role="dialog" aria-live="polite" aria-label="Cookie-Hinweis" data-phase4-aria="cookieNotice" hidden>
+  <p><span data-phase4="cookieIntro">Diese Website verwendet notwendige Cookies und lokale Speicherfunktionen, damit Grundfunktionen wie Spracheinstellung und Cookie-Hinweis funktionieren. Weitere Informationen finden Sie in der</span> <a href="cookies.html" data-phase4="cookieLink">Cookie-Erklärung</a>.</p>
   <div class="cookie-actions">
-    <a class="btn ghost" href="cookies.html">Cookie-Erkl&auml;rung lesen</a>
+    <a class="btn ghost" href="cookies.html" data-phase4="cookieRead">Cookie-Erklärung lesen</a>
     <button class="btn primary" id="cookieAcceptButton" type="button">OK</button>
   </div>
 </div>

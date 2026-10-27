@@ -189,3 +189,11 @@ legend{display:block;width:100%;color:var(--gold2);text-transform:uppercase;font
 .act-mindmaps figcaption{padding:12px 18px;color:#143a31;font-weight:600;text-align:center}
 .contact-card-whatsapp.act-contact-portrait{background-image:linear-gradient(90deg,rgba(5,35,27,.9),rgba(5,35,27,.35) 58%,rgba(5,35,27,.08)),url('../images/contact/Nadja_Counter_Anfrage_Annehmen.png');background-position:center,65% 36%;background-size:cover}
 @media(max-width:700px){.act-mindmaps{grid-template-columns:1fr}.contact-card-whatsapp.act-contact-portrait{background-position:center,67% center}}
+
+/* Keep anchor targets visible below the fixed, shrinking navigation header. */
+html{scroll-padding-top:calc(var(--header-height-shrink) + 24px)}
+#home,#about,#services,#contact,#request{scroll-margin-top:calc(var(--header-height-shrink) + 24px)}
+@media(max-width:920px){
+  html{scroll-padding-top:calc(var(--header-height-mobile-shrink) + 44px)}
+  #home,#about,#services,#contact,#request{scroll-margin-top:calc(var(--header-height-mobile-shrink) + 44px)}
+}

@@ -335,11 +335,20 @@ function translateActAdditional(lang){
   document.querySelectorAll("[data-act-extra-aria]").forEach(el=>{const value=copy[el.dataset.actExtraAria];if(value)el.setAttribute("aria-label",value)});
 }
 
+const phase4Translations={"de":{"language":"Sprache wählen","menu":"Menü öffnen","contactHeading":"WhatsApp / Kontakt","faqSearch":"FAQ durchsuchen","legalNav":"Rechtliches","imprint":"Impressum","privacy":"Datenschutz","terms":"AGB","withdrawal":"Rücktrittsrecht","cookies":"Cookies","imprintLabel":"Impressum:","cookieNotice":"Cookie-Hinweis","cookieIntro":"Diese Website verwendet notwendige Cookies und lokale Speicherfunktionen, damit Grundfunktionen wie Spracheinstellung und Cookie-Hinweis funktionieren. Weitere Informationen finden Sie in der","cookieLink":"Cookie-Erklärung","cookieRead":"Cookie-Erklärung lesen"},"en":{"language":"Choose language","menu":"Open menu","contactHeading":"WhatsApp / Contact","faqSearch":"Search FAQs","legalNav":"Legal information","imprint":"Legal notice","privacy":"Privacy policy","terms":"Terms and conditions","withdrawal":"Right of withdrawal","cookies":"Cookies","imprintLabel":"Legal notice:","cookieNotice":"Cookie notice","cookieIntro":"This website uses essential cookies and local storage to support basic features such as language preferences and the cookie notice. Find out more in our","cookieLink":"Cookie policy","cookieRead":"Read cookie policy"},"it":{"language":"Seleziona la lingua","menu":"Apri il menu","contactHeading":"WhatsApp / Contatti","faqSearch":"Cerca nelle domande frequenti","legalNav":"Informazioni legali","imprint":"Note legali","privacy":"Informativa sulla privacy","terms":"Termini e condizioni","withdrawal":"Diritto di recesso","cookies":"Cookie","imprintLabel":"Note legali:","cookieNotice":"Informativa sui cookie","cookieIntro":"Questo sito utilizza cookie necessari e la memoria locale per funzioni essenziali come la scelta della lingua e l'avviso sui cookie. Maggiori informazioni nella nostra","cookieLink":"Informativa sui cookie","cookieRead":"Leggi l'informativa sui cookie"},"fr":{"language":"Choisir la langue","menu":"Ouvrir le menu","contactHeading":"WhatsApp / Contact","faqSearch":"Rechercher dans la FAQ","legalNav":"Informations juridiques","imprint":"Mentions légales","privacy":"Politique de confidentialité","terms":"Conditions générales","withdrawal":"Droit de rétractation","cookies":"Cookies","imprintLabel":"Mentions légales :","cookieNotice":"Avis relatif aux cookies","cookieIntro":"Ce site utilise des cookies essentiels et le stockage local pour assurer des fonctions de base comme le choix de la langue et l'affichage de l'avis relatif aux cookies. Plus d'informations dans notre","cookieLink":"Politique relative aux cookies","cookieRead":"Lire la politique relative aux cookies"}};
+function translatePhase4(lang){
+  const copy=phase4Translations[lang]||phase4Translations.de;
+  document.querySelectorAll("[data-phase4]").forEach(el=>{const value=copy[el.dataset.phase4];if(value)el.textContent=value});
+  document.querySelectorAll("[data-phase4-aria]").forEach(el=>{const value=copy[el.dataset.phase4Aria];if(value)el.setAttribute("aria-label",value)});
+  document.querySelectorAll("[data-phase4-placeholder]").forEach(el=>{const value=copy[el.dataset.phase4Placeholder];if(value)el.placeholder=value});
+}
+
 function setLang(lang){
   const dict=T[lang]||T.de;
   document.documentElement.lang=lang;
   translateActMindmaps(lang);
   translateActAdditional(lang);
+  translatePhase4(lang);
   document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(dict[key])el.textContent=dict[key]});
   document.querySelectorAll("[data-placeholder]").forEach(el=>{const key=el.dataset.placeholder;if(dict[key])el.placeholder=dict[key]});
   document.querySelectorAll(".lang-switch button").forEach(button=>button.classList.toggle("active",button.dataset.lang===lang));
